@@ -117,9 +117,35 @@ sudo systemctl restart office-app      # הפעלה מחדש
 
 ---
 
+## כתובת יפה + HTTPS (אופציונלי)
+
+כדי לקבל כתובת מאובטחת כמו `https://maor-test.duckdns.org` במקום `http://<IP>`:
+
+### 1. כתובת IP סטטית (כדי שהכתובת לא תשתנה)
+ב‑Console: [VPC network → IP addresses](https://console.cloud.google.com/networking/addresses) → מאתרים את ה‑IP של השרת → **RESERVE** (הופך אותו לקבוע).
+
+### 2. מכוונים דומיין ל‑IP
+- **חינמי (DuckDNS):** נכנסים ל‑[duckdns.org](https://www.duckdns.org), מתחברים, יוצרים שם (למשל `maor-test`) ומזינים בשדה ה‑IP את כתובת השרת.
+- **דומיין משלך:** מוסיפים אצל ספק ה‑DNS רשומת **A** שמצביעה מהתת‑דומיין (למשל `office`) ל‑IP של השרת.
+
+### 3. פותחים פורט 443 ב‑Firewall
+```bash
+gcloud compute firewall-rules create allow-https \
+  --allow=tcp:443 --target-tags=http-server 2>/dev/null || true
+```
+(או ב‑Console: עורכים את ה‑VM ומסמנים גם **Allow HTTPS traffic**.)
+
+### 4. מריצים את סקריפט ה‑HTTPS על השרת
+```bash
+cd /opt/office-app
+git pull
+sudo bash deploy/https-setup.sh maor-test.duckdns.org
+```
+הסקריפט מתקין Caddy, מעביר את האפליקציה לפורט פנימי, ומנפיק אישור SSL אוטומטית.
+בסיום — גש ל‑`https://maor-test.duckdns.org`. 🔒
+
 ## שדרוגים אפשריים בהמשך
 
-- **דומיין ו‑HTTPS** — לחבר דומיין משלך ולהוסיף אישור SSL (למשל עם Caddy או Nginx + Let's Encrypt) כדי לקבל `https://`.
 - **גיבוי אוטומטי** ל‑Google Cloud Storage.
 - **מסך התחברות ומשתמשים** — כשיהיו כמה עובדים שניגשים למערכת.
 
