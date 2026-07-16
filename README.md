@@ -30,6 +30,11 @@ npm start
 npm run dev
 ```
 
+## פריסה לענן (Google Cloud)
+
+מדריך פריסה מלא צעד‑אחר‑צעד ל‑Google Compute Engine נמצא ב‑[DEPLOY.md](DEPLOY.md).
+בקצרה: יוצרים שרת VM, מורידים את הקוד, ומריצים `sudo bash deploy/setup.sh` — והאפליקציה עולה אוטומטית עם שירות שמרים אותה מחדש אחרי אתחול או קריסה.
+
 ## מבנה הפרויקט
 
 ```
