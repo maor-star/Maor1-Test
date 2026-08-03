@@ -169,3 +169,56 @@ tbody tr:hover { background: #fafbfe; }
 
 .muted { color: var(--muted); }
 .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* ---- Home-management additions ---- */
+.stat-card.warn .value { color: var(--amber); }
+.stat-card.neutral .value { color: var(--primary-dark); }
+.stat-card .sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+.pill { display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; color:#fff; }
+.status-ok   { background:#dcfce7; color:#15803d; }
+.status-soon { background:#fef3c7; color:#b45309; }
+.status-late { background:#fee2e2; color:#b91c1c; }
+.status-none { background:#f1f5f9; color:#64748b; }
+
+.toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+.toolbar select, .toolbar input { padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:14px; background:#fff; }
+.spacer { flex:1; }
+
+.modal.wide { max-width: 640px; }
+.field-row-3 { display:flex; gap:12px; } .field-row-3 .field { flex:1; }
+@media (max-width:600px){ .field-row, .field-row-3 { flex-direction:column; } }
+
+.stars { color:#f59e0b; letter-spacing:2px; font-size:15px; }
+.stars .off { color:#d1d5db; }
+
+.link { color:var(--primary); text-decoration:none; font-weight:600; }
+.link:hover { text-decoration:underline; }
+
+/* Review / categorization cards */
+.review-card { border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:12px; background:var(--surface); box-shadow:var(--shadow); }
+.review-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:12px; }
+.review-merchant { font-weight:700; font-size:16px; }
+.review-meta { font-size:13px; color:var(--muted); margin-top:2px; }
+.review-amount { font-size:20px; font-weight:700; color:var(--red); white-space:nowrap; }
+.cat-chips { display:flex; flex-wrap:wrap; gap:8px; }
+.cat-chip { border:1px solid var(--border); background:#fff; border-radius:999px; padding:7px 14px; cursor:pointer; font-family:inherit; font-size:13px; font-weight:600; transition:.12s; }
+.cat-chip:hover { border-color:var(--primary); background:#f1f5ff; }
+.cat-chip .dot { width:9px; height:9px; border-radius:50%; display:inline-block; margin-left:6px; }
+.review-actions { display:flex; align-items:center; gap:12px; margin-top:12px; flex-wrap:wrap; }
+.chk { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--muted); }
+
+/* Import drop zone */
+.drop { border:2px dashed var(--border); border-radius:14px; padding:36px; text-align:center; color:var(--muted); background:var(--surface); transition:.15s; cursor:pointer; }
+.drop:hover, .drop.drag { border-color:var(--primary); background:#f1f5ff; color:var(--primary-dark); }
+.map-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin:16px 0; }
+.preview-table { max-height:320px; overflow:auto; border:1px solid var(--border); border-radius:10px; }
+.preview-table table { font-size:13px; }
+.preview-table th { position:sticky; top:0; }
+
+.section-title { font-size:15px; font-weight:700; margin:22px 0 12px; color:var(--text); }
+.grid-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; }
+.mini-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; box-shadow:var(--shadow); }
+.mini-card h4 { font-size:15px; margin-bottom:6px; }
+.mini-card .row { font-size:13px; color:var(--muted); margin:2px 0; }
+.contact-actions { margin-top:10px; display:flex; gap:8px; }
