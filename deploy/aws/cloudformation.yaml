@@ -8,6 +8,17 @@ Parameters:
     Type: String
     Default: home-management
     Description: בסיס לשם ה-bucket וה-resources.
+  DomainName:
+    Type: String
+    Default: ''
+    Description: (אופציונלי) דומיין מותאם, למשל bait.wonderfool.xyz. ריק = כתובת CloudFront בלבד.
+  HostedZoneId:
+    Type: String
+    Default: ''
+    Description: (אופציונלי) מזהה ה-Route53 Hosted Zone של הדומיין (לאימות התעודה ורשומת ה-DNS).
+
+Conditions:
+  HasDomain: !Not [!Equals [!Ref DomainName, '']]
 
 Resources:
   # ---- S3 bucket (private; served only via CloudFront) ----
@@ -24,6 +35,17 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+
+  # ---- ACM certificate (DNS-validated automatically via Route53) ----
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasDomain
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
 
   # ---- Origin Access Control (modern replacement for OAI) ----
   OriginAccessControl:
@@ -45,6 +67,13 @@ Resources:
         DefaultRootObject: index.html
         HttpVersion: http2and3
         PriceClass: PriceClass_100
+        Aliases: !If [HasDomain, [!Ref DomainName], !Ref 'AWS::NoValue']
+        ViewerCertificate: !If
+          - HasDomain
+          - AcmCertificateArn: !Ref Certificate
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
         Origins:
           - Id: s3origin
             DomainName: !GetAtt SiteBucket.RegionalDomainName
@@ -83,7 +112,35 @@ Resources:
               StringEquals:
                 AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
 
+  # ---- DNS records for the custom domain (alias to CloudFront) ----
+  DnsRecordA:
+    Type: AWS::Route53::RecordSet
+    Condition: HasDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2   # קבוע גלובלי ל-CloudFront aliases
+        EvaluateTargetHealth: false
+  DnsRecordAAAA:
+    Type: AWS::Route53::RecordSet
+    Condition: HasDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
+
 Outputs:
+  SiteURL:
+    Description: הכתובת היפה (אם הוגדר דומיין)
+    Condition: HasDomain
+    Value: !Sub 'https://${DomainName}'
   BucketName:
     Description: שם ה-S3 bucket שאליו מעלים את index.html
     Value: !Ref SiteBucket
