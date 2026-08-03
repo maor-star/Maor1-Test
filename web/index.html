@@ -310,6 +310,7 @@ code{background:var(--chip); padding:2px 7px; border-radius:6px; font-size:13px;
       <a data-view="transactions"><span class="ico">💳</span> <span>עסקאות</span></a>
       <a data-view="review"><span class="ico">🏷️</span> <span>סיווג עסקאות</span></a>
       <a data-view="import"><span class="ico">📥</span> <span>ייבוא תדפיסים</span></a>
+      <a data-view="monthly"><span class="ico">📅</span> <span>לפי חודש</span></a>
       <a data-view="reconcile"><span class="ico">✅</span> <span>השלמות אשראי</span></a>
       <a data-view="recurring"><span class="ico">🔁</span> <span>הוצאות קבועות</span></a>
       <a data-view="maintenance"><span class="ico">🛠️</span> <span>תחזוקה</span></a>
@@ -686,6 +687,7 @@ const money=(n)=>ILS.format(Number(n)||0);
 const money2=(n)=>ILS2.format(Number(n)||0);
 const fmtDate=(s)=>{ if(!s) return ''; const [y,m,d]=String(s).slice(0,10).split('-'); return d?`${d}/${m}/${y}`:s; };
 const todayISO=()=>new Date().toISOString().slice(0,10);
+const fmtMonth=(ym)=>{ const [y,m]=String(ym).split('-'); const names=['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר']; return `${names[+m]||m} ${y}`; };
 const esc=(s)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const state={month:''};
 const monthParam=(extra='')=>{ const q=[]; if(state.month)q.push('month='+state.month); if(extra)q.push(extra); return q.length?'?'+q.join('&'):''; };
@@ -1451,8 +1453,54 @@ views.settings=async()=>{
   return el;
 };
 
+// ===== Monthly breakdown: missing statements + unclassified, per month =====
+views.monthly=async()=>{
+  const rows=await api('/transactions');
+  const isAgg=(r)=> r.source!=='credit_card' && !!detectIssuer(r.merchant||r.description);
+  const detailIssuers=new Set(); rows.forEach(r=>{ if(r.source==='credit_card'){ const k=detectIssuer(r.account)||detectIssuer(r.merchant); if(k) detailIssuers.add(k); } });
+  const months={}; const M=(ym)=>(months[ym]=months[ym]||{ym,agg:{},uncCount:0,uncSum:0,expSum:0,incSum:0,txCount:0});
+  rows.forEach(r=>{ const ym=String(r.tx_date).slice(0,7); if(ym.length!==7) return; const mm=M(ym); mm.txCount++;
+    if(r.kind==='income'){ mm.incSum+=r.amount; return; }
+    mm.expSum+=r.amount;
+    if(isAgg(r)){ const k=detectIssuer(r.merchant)||detectIssuer(r.description); mm.agg[k]=(mm.agg[k]||0)+r.amount; }
+    else if(!r.category_id){ mm.uncCount++; mm.uncSum+=r.amount; } });
+  const list=Object.values(months).sort((a,b)=>b.ym.localeCompare(a.ym));
+  const el=document.createElement('div');
+  if(!list.length){ el.innerHTML='<div class="card"><div class="empty">אין עדיין עסקאות. ייבאו תדפיס במסך «ייבוא תדפיסים».</div></div>'; return el; }
+  const totalMissing=list.reduce((s,m)=>s+Object.entries(m.agg).filter(([k])=>!detailIssuers.has(k)).length,0);
+  const totalUnc=list.reduce((s,m)=>s+m.uncCount,0);
+  el.innerHTML=`
+    <div class="stats-grid">
+      <div class="stat-card accent"><div class="label">📅 חודשים</div><div class="value tnum">${list.length}</div></div>
+      <div class="stat-card ${totalMissing?'warn':'accent'}"><div class="label">🔗 תדפיסי אשראי חסרים</div><div class="value tnum">${totalMissing}</div></div>
+      <div class="stat-card ${totalUnc?'expense':'accent'}"><div class="label">🔴 עסקאות לא מסווגות</div><div class="value tnum">${totalUnc}</div></div>
+    </div>
+    <p class="hintbar">לכל חודש: אילו <strong>פירוטי כרטיסי אשראי חסרים</strong> — העלה אותם כדי לפרק את החיוב הכללי לעסקאות בודדות ולסווג אחת-אחת — וכמה <strong>עסקאות עדיין לא סווגו</strong>. חיוב אשראי כללי לא ניתן לסיווג כי הוא מכיל תשלומים רבים.</p>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>חודש</th><th class="wrap">תדפיסי אשראי חסרים (העלה פירוט)</th><th>עסקאות לא מסווגות</th><th>הוצאות</th><th>הכנסות</th></tr></thead>
+      <tbody>${list.map(m=>{ const aggEntries=Object.entries(m.agg).sort((a,b)=>b[1]-a[1]);
+        return `<tr>
+          <td><strong style="font-size:15px">${fmtMonth(m.ym)}</strong><div class="hint">${m.txCount} עסקאות</div></td>
+          <td class="wrap">${aggEntries.length? aggEntries.map(([k,v])=>{ const has=detailIssuers.has(k);
+            return `<div style="display:flex;align-items:center;gap:8px;margin:4px 0;flex-wrap:wrap">${has?'<span class="pill status-ok">✓ יש פירוט</span>':'<span class="pill status-late">חסר</span>'}<strong>${esc(k)}</strong><span class="muted tnum">${money(v)}</span>${has?'':`<label class="btn-ghost" style="cursor:pointer;padding:4px 11px;font-size:12px">⬆️ העלה פירוט<input type="file" hidden accept=".csv,.pdf,text/csv,application/pdf" data-issuer="${esc(k)}" /></label>`}</div>`;
+          }).join('') : '<span class="muted">— אין חיובי אשראי —</span>'}</td>
+          <td>${m.uncCount? `<span class="pill status-late">${m.uncCount} לא מסווגות</span> <span class="muted tnum">${money(m.uncSum)}</span> <button class="link" data-month="${m.ym}" style="border:none;background:none;cursor:pointer">סווג ←</button>` : '<span class="pill status-ok">הכל מסווג ✓</span>'}</td>
+          <td class="tnum amount-neg">${money(m.expSum)}</td>
+          <td class="tnum amount-pos">${m.incSum?money(m.incSum):'—'}</td>
+        </tr>`; }).join('')}</tbody>
+    </table></div></div>`;
+  el.querySelectorAll('input[type=file][data-issuer]').forEach(inp=>inp.onchange=async()=>{
+    const file=inp.files[0]; if(!file) return; const issuer=inp.dataset.issuer;
+    const lbl=inp.closest('label'); if(lbl) lbl.firstChild.textContent='מעבד… ⏳';
+    try{ const res=await quickImportFile(file,'credit_card',issuer); if(res.error){ toast(res.error,true); if(lbl) lbl.firstChild.textContent='⬆️ העלה פירוט'; return; }
+      toast(`יובאו ${res.added} עסקאות מפירוט ${issuer}`); render();
+    }catch(e){ toast('שגיאה: '+e.message,true); if(lbl) lbl.firstChild.textContent='⬆️ העלה פירוט'; } });
+  el.querySelectorAll('[data-month]').forEach(b=>b.onclick=()=>{ state.month=b.dataset.month; const mf=document.getElementById('month-filter'); if(mf) mf.value=b.dataset.month; location.hash='#/review'; });
+  return el;
+};
+
 /* ============================ Router ============================ */
-const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',transactions:'עסקאות',review:'סיווג עסקאות',import:'ייבוא תדפיסים',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי'};
+const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',transactions:'עסקאות',review:'סיווג עסקאות',import:'ייבוא תדפיסים',monthly:'לפי חודש',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי'};
 function currentView(){ const hash=location.hash.replace('#/','')||'dashboard'; return views[hash]?hash:'dashboard'; }
 async function render(){
   const name=currentView();
