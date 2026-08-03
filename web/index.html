@@ -365,11 +365,48 @@ function loadDB(){
   return fresh;
 }
 let saveTimer;
+function persistLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(db)); }catch(e){} }
 function save(){
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(db));
-    const s=document.getElementById('save-state'); if(s){ s.textContent='נשמר ✔'; clearTimeout(saveTimer); saveTimer=setTimeout(()=>s.textContent='נשמר בדפדפן',1500);} }
-  catch(e){ /* storage unavailable — stays in memory for session */ }
+  db.updatedAt=Date.now();
+  persistLocal();
+  const s=document.getElementById('save-state');
+  if(s && !syncCode){ s.textContent='נשמר ✔'; clearTimeout(saveTimer); saveTimer=setTimeout(()=>s.textContent='נשמר בדפדפן',1500); }
+  scheduleSync();
 }
+/* ---------- Cloud sync (S3 + Lambda) ---------- */
+const SYNC_API='https://cu3nr7fq95.execute-api.us-east-1.amazonaws.com';
+const SYNC_LS='home-sync-code';
+let syncCode=(()=>{ try{ return localStorage.getItem(SYNC_LS)||''; }catch(e){ return ''; } })();
+let syncTimer=null, syncBusy=false, syncPending=false;
+function syncBadge(txt){ const s=document.getElementById('save-state'); if(s) s.textContent=txt; }
+async function pullRemote(){
+  const r=await fetch(SYNC_API+'/data?code='+encodeURIComponent(syncCode));
+  if(!r.ok) throw new Error('טעינה מהענן נכשלה ('+r.status+')');
+  return r.json();
+}
+async function pushRemote(){
+  if(!syncCode) return;
+  if(syncBusy){ syncPending=true; return; }
+  syncBusy=true; syncBadge('מסנכרן…☁️');
+  try{
+    const r=await fetch(SYNC_API+'/data',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({code:syncCode,data:db})});
+    if(!r.ok) throw new Error(r.status);
+    syncBadge('מסונכרן ☁️✓');
+  }catch(e){ syncBadge('שגיאת סנכרון ⚠️'); }
+  finally{ syncBusy=false; if(syncPending){ syncPending=false; scheduleSync(); } }
+}
+function scheduleSync(){ if(!syncCode) return; clearTimeout(syncTimer); syncTimer=setTimeout(pushRemote,1500); }
+function newSyncCode(){ const a=new Uint8Array(9); (crypto&&crypto.getRandomValues)?crypto.getRandomValues(a):a.forEach((_,i)=>a[i]=Math.floor(Math.random()*256));
+  const s=btoa(String.fromCharCode(...a)).replace(/[^a-zA-Z0-9]/g,'').slice(0,12); return 'bait-'+s; }
+async function enableSync(code, {adopt}={}){
+  syncCode=code; try{ localStorage.setItem(SYNC_LS,code); }catch(e){}
+  const remote=await pullRemote();
+  if(remote && remote.data && (adopt || (remote.data.updatedAt||0) > (db.updatedAt||0))){
+    db=remote.data; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'].forEach(k=>{ if(!Array.isArray(db[k])) db[k]=[]; });
+    persistLocal();
+  } else { await pushRemote(); }
+}
+function disableSync(){ syncCode=''; try{ localStorage.removeItem(SYNC_LS); }catch(e){} syncBadge('נשמר בדפדפן'); }
 db = loadDB();
 const uid = ()=> ++db.seq;
 const clone = (x)=> JSON.parse(JSON.stringify(x));
@@ -1412,6 +1449,10 @@ views.settings=async()=>{
     <div class="stats-grid">
       ${Object.entries(counts).map(([k,v])=>`<div class="stat-card accent"><div class="label">${esc(k)}</div><div class="value tnum">${v}</div></div>`).join('')}
     </div>
+    <div class="panel" style="margin-bottom:18px; border-color:color-mix(in srgb,var(--accent) 35%,var(--border))">
+      <h3>☁️ סנכרון בין מכשירים</h3>
+      <div id="sync-box"></div>
+    </div>
     <div class="panels">
       <div class="panel">
         <h3>💾 גיבוי ושחזור</h3>
@@ -1450,6 +1491,46 @@ views.settings=async()=>{
   el.querySelector('#reset').onclick=()=>confirmDelete('למחוק את כל הנתונים ולהתחיל מחדש? פעולה בלתי הפיכה (ייצא גיבוי קודם!).',async()=>{
     try{ localStorage.removeItem(LS_KEY); }catch(e){} location.reload();
   });
+
+  // ---- cloud sync UI ----
+  const box=el.querySelector('#sync-box');
+  const renderSync=()=>{
+    if(syncCode){
+      box.innerHTML=`
+        <p class="hint" style="margin-bottom:12px">✅ הסנכרון פעיל. הנתונים נשמרים בענן ומסתנכרנים אוטומטית בין כל המכשירים עם אותו קוד.</p>
+        <div class="field" style="max-width:420px"><label>קוד הסנכרון שלך</label>
+          <div style="display:flex;gap:8px"><input id="sync-code-show" readonly value="${esc(syncCode)}" style="font-family:ui-monospace,monospace;font-weight:700" /><button class="btn-ghost" id="sync-copy">העתק</button></div></div>
+        <p class="hint" style="margin:12px 0">כדי לחבר מכשיר נוסף: פתח בו את האתר → «הגדרות וגיבוי» → הזן את הקוד הזה.</p>
+        <button class="btn-ghost" id="sync-off" style="color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,var(--border))">נתק סנכרון (הנתונים יישארו במכשיר זה)</button>`;
+      box.querySelector('#sync-copy').onclick=()=>{ navigator.clipboard?.writeText(syncCode); toast('הקוד הועתק'); };
+      box.querySelector('#sync-off').onclick=()=>{ disableSync(); toast('הסנכרון נותק'); renderSync(); };
+    } else {
+      box.innerHTML=`
+        <p class="hint" style="margin-bottom:14px">הפעל סנכרון כדי שהנתונים יישמרו בענן ויופיעו בכל המכשירים שלך (מחשב, טלפון). צור קוד חדש במכשיר הראשון, והזן אותו בשאר המכשירים.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+          <button class="btn" id="sync-new">✨ צור קוד סנכרון והפעל</button>
+          <div class="field" style="max-width:280px"><label>או הזן קוד קיים ממכשיר אחר</label>
+            <div style="display:flex;gap:8px"><input id="sync-code-in" placeholder="bait-…" /><button class="btn-ghost" id="sync-connect">התחבר</button></div></div>
+        </div>`;
+      box.querySelector('#sync-new').onclick=async()=>{
+        try{ const code=newSyncCode(); await enableSync(code); toast('סנכרון הופעל ☁️ — שמור את הקוד!'); renderSync(); }
+        catch(e){ toast('שגיאה: '+e.message,true); }
+      };
+      box.querySelector('#sync-connect').onclick=async()=>{
+        const code=box.querySelector('#sync-code-in').value.trim();
+        if(code.length<6){ toast('קוד קצר מדי',true); return; }
+        try{
+          syncCode=code; let remote; try{ remote=await pullRemote(); }catch(e){ syncCode=''; toast('חיבור נכשל: '+e.message,true); return; }
+          let adopt=false;
+          if(remote && remote.data && Array.isArray(remote.data.transactions)){
+            adopt=confirm('נמצאו נתונים בענן עבור הקוד הזה.\n\nאישור = לטעון אותם למכשיר זה (יחליף את הנתונים כאן)\nביטול = להעלות את הנתונים שבמכשיר זה לענן');
+          }
+          await enableSync(code,{adopt}); toast('סנכרון הופעל ☁️'); render();
+        }catch(e){ toast('שגיאה: '+e.message,true); }
+      };
+    }
+  };
+  renderSync();
   return el;
 };
 
@@ -1524,7 +1605,18 @@ try{ const saved=localStorage.getItem('home-theme'); if(saved) document.document
 document.getElementById('theme-toggle').onclick=()=>{ const cur=document.documentElement.getAttribute('data-theme'); const isDark = cur? cur==='dark' : matchMedia('(prefers-color-scheme: dark)').matches; applyTheme(isDark?'light':'dark'); };
 
 if(!location.hash) location.hash='#/dashboard';
-render();
+async function boot(){
+  if(syncCode){
+    syncBadge('טוען מהענן…☁️');
+    try{ const remote=await pullRemote();
+      if(remote && remote.data && (remote.data.updatedAt||0) > (db.updatedAt||0)){
+        db=remote.data; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'].forEach(k=>{ if(!Array.isArray(db[k])) db[k]=[]; }); persistLocal(); syncBadge('מסונכרן ☁️✓');
+      } else { syncBadge('מסונכרן ☁️✓'); pushRemote(); }
+    }catch(e){ syncBadge('לא מקוון'); }
+  }
+  render();
+}
+boot();
 </script>
 
 </body>
