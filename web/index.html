@@ -201,6 +201,10 @@ td.wrap, th.wrap{white-space:normal}
 .img-prev{width:96px; height:96px; flex-shrink:0; border:1px solid var(--border); border-radius:11px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; overflow:hidden; color:var(--muted); font-size:12px}
 .img-prev img{width:100%; height:100%; object-fit:cover}
 .img-file{font-size:13px; color:var(--text)}
+.pro-avatar{width:54px; height:54px; border-radius:50%; object-fit:cover; border:1px solid var(--border); flex-shrink:0; background:var(--surface-2)}
+.pro-avatar.ph{display:inline-flex; align-items:center; justify-content:center; font-size:24px}
+.docs-list{display:flex; flex-direction:column; gap:6px}
+.doc-item{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 11px; border:1px solid var(--border); border-radius:9px; background:var(--surface-2)}
 code{background:var(--chip); padding:2px 6px; border-radius:5px; font-size:13px}
 
 /* Toast */
@@ -514,10 +518,11 @@ function h_professionals(m,id,b){
       components_count:db.components.filter(c=>c.professional_id==p.id).length,
       warranties_count:db.warranties.filter(w=>w.professional_id==p.id).length}))
       .sort((a,c)=> strv(a.trade).localeCompare(strv(c.trade),'he')||strv(a.name).localeCompare(strv(c.name),'he'));
+  const pFields=(b)=>({name:strv(b.name),trade:strv(b.trade),specialty:strv(b.specialty),company:strv(b.company),phone:strv(b.phone),email:strv(b.email),rating:numv(b.rating),notes:strv(b.notes),image:strv(b.image),documents:Array.isArray(b.documents)?b.documents:[]});
   if(m==='POST'){ if(!strv(b.name)) throw new Error('שם בעל המקצוע הוא שדה חובה');
-    const p={id:uid(),name:strv(b.name),trade:strv(b.trade),company:strv(b.company),phone:strv(b.phone),email:strv(b.email),rating:numv(b.rating),notes:strv(b.notes)}; db.professionals.push(p); return {id:p.id}; }
+    const p={id:uid(),...pFields(b)}; db.professionals.push(p); return {id:p.id}; }
   if(m==='PUT'){ const p=proById(id); if(!p) throw new Error('לא נמצא'); if(!strv(b.name)) throw new Error('שם בעל המקצוע הוא שדה חובה');
-    Object.assign(p,{name:strv(b.name),trade:strv(b.trade),company:strv(b.company),phone:strv(b.phone),email:strv(b.email),rating:numv(b.rating),notes:strv(b.notes)}); return {ok:true}; }
+    Object.assign(p,pFields(b)); return {ok:true}; }
   if(m==='DELETE'){ db.professionals=db.professionals.filter(p=>p.id!=id);
     db.components.forEach(c=>{if(c.professional_id==id)c.professional_id=null}); db.warranties.forEach(w=>{if(w.professional_id==id)w.professional_id=null}); return {ok:true}; }
 }
@@ -1135,17 +1140,49 @@ views.warranties=async()=>{
 views.professionals=async()=>{
   const rows=await api('/professionals');
   const el=document.createElement('div');
+  const avatar=(r)=> r.image?`<img src="${esc(r.image)}" class="pro-avatar" alt="${esc(r.name)}" />`:`<span class="pro-avatar ph">🔧</span>`;
+  const docsLine=(r)=> (r.documents&&r.documents.length)?`<div class="row">📎 ${r.documents.map(d=>`<a class="link" href="${esc(d.url)}" target="_blank" rel="noopener" download="${esc(d.name||'מסמך')}">${esc(d.name||'מסמך')}</a>`).join(' · ')}</div>`:'';
   el.innerHTML=`<div class="card-header" style="border:none;padding:0 0 16px"><h2 style="margin:0">בעלי מקצוע</h2><button class="btn" id="add">+ בעל מקצוע</button></div>
-    ${rows.length?`<div class="grid-cards">${rows.map(r=>`<div class="mini-card"><h4>${esc(r.name)} ${r.rating?stars(r.rating):''}</h4>
-      <div class="row">🔧 ${esc(r.trade)||'—'}${r.company?' · '+esc(r.company):''}</div>${r.phone?`<div class="row">📞 ${esc(r.phone)}</div>`:''}${r.email?`<div class="row">✉️ ${esc(r.email)}</div>`:''}
+    ${rows.length?`<div class="grid-cards">${rows.map(r=>`<div class="mini-card">
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">${avatar(r)}<div><h4 style="margin:0">${esc(r.name)} ${r.rating?stars(r.rating):''}</h4><div class="row" style="margin:2px 0">🔧 ${esc(r.trade)||'—'}${r.company?' · '+esc(r.company):''}</div></div></div>
+      ${r.specialty?`<div class="row">🎯 ${esc(r.specialty)}</div>`:''}${r.phone?`<div class="row">📞 ${esc(r.phone)}</div>`:''}${r.email?`<div class="row">✉️ ${esc(r.email)}</div>`:''}
+      ${docsLine(r)}
       <div class="row">🧩 ${r.components_count} רכיבים · 📜 ${r.warranties_count} תעודות</div>${r.notes?`<div class="row">${esc(r.notes)}</div>`:''}
       <div class="contact-actions">${r.phone?`<a class="btn-ghost" href="tel:${esc(r.phone)}">חיוג</a><a class="btn-ghost" href="https://wa.me/972${esc(r.phone.replace(/\D/g,'').replace(/^0/,''))}" target="_blank" rel="noopener">וואטסאפ</a>`:''}<span class="spacer"></span><button class="icon-btn" data-edit="${r.id}">✏️</button><button class="btn-danger" data-del="${r.id}">🗑</button></div></div>`).join('')}</div>`:'<div class="card"><div class="empty">אין בעלי מקצוע. הוסיפו חשמלאי, אינסטלטור, גנן, טכנאי בריכה וכו׳.</div></div>'}${datalist('trades',TRADES)}`;
-  const form=(r={})=>`<div class="field-row"><div class="field"><label>שם *</label><input name="name" value="${esc(r.name||'')}" required /></div><div class="field"><label>תחום</label><input name="trade" list="trades" value="${esc(r.trade||'')}" /></div></div>
-    <div class="field-row"><div class="field"><label>חברה</label><input name="company" value="${esc(r.company||'')}" /></div><div class="field"><label>טלפון</label><input name="phone" value="${esc(r.phone||'')}" /></div></div>
-    <div class="field-row"><div class="field"><label>אימייל</label><input name="email" type="email" value="${esc(r.email||'')}" /></div><div class="field"><label>דירוג (0‑5)</label><input name="rating" type="number" min="0" max="5" value="${r.rating??0}" /></div></div>
-    <div class="field"><label>הערות</label><input name="notes" value="${esc(r.notes||'')}" /></div>`;
-  el.querySelector('#add').onclick=()=>openModal('בעל מקצוע',form(),async fd=>{await api('/professionals',{method:'POST',body:fd});toast('נוסף');render();});
-  el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.id==b.dataset.edit);openModal('עריכת בעל מקצוע',form(r),async fd=>{await api('/professionals/'+r.id,{method:'PUT',body:fd});toast('עודכן');render();});});
+
+  function openProModal(title,r,onSave){
+    let img=r.image||''; let docs=Array.isArray(r.documents)?[...r.documents]:[];
+    const form=`
+      <div class="field"><label>תמונה</label><div class="img-uploader"><div class="img-prev" id="p-prev">${img?`<img src="${esc(img)}" alt="" />`:'<span>אין תמונה</span>'}</div>
+        <div><input type="file" id="p-file" accept="image/*" class="img-file" /><div class="hint">תמונת פרופיל של בעל המקצוע.</div>${img?'<button type="button" class="btn-ghost" id="p-clear" style="margin-top:8px;padding:5px 12px">הסר תמונה</button>':''}</div></div></div>
+      <div class="field-row"><div class="field"><label>שם *</label><input name="name" value="${esc(r.name||'')}" required /></div><div class="field"><label>תחום</label><input name="trade" list="trades" value="${esc(r.trade||'')}" /></div></div>
+      <div class="field"><label>תחום התמחות</label><input name="specialty" value="${esc(r.specialty||'')}" placeholder="לדוגמה: מזגנים מרכזיים, דוד שמש, תיקוני חירום…" /></div>
+      <div class="field-row"><div class="field"><label>חברה</label><input name="company" value="${esc(r.company||'')}" /></div><div class="field"><label>טלפון</label><input name="phone" value="${esc(r.phone||'')}" /></div></div>
+      <div class="field-row"><div class="field"><label>אימייל</label><input name="email" type="email" value="${esc(r.email||'')}" /></div><div class="field"><label>דירוג (0‑5)</label><input name="rating" type="number" min="0" max="5" value="${r.rating??0}" /></div></div>
+      <div class="field"><label>מסמכים נוספים (רישיון, ביטוח, הצעת מחיר…)</label>
+        <div id="p-docs" class="docs-list"></div>
+        <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><label class="btn-ghost" style="cursor:pointer;padding:6px 12px">⬆️ העלה קובץ<input type="file" id="p-docfile" accept="image/*,application/pdf" hidden /></label><button type="button" class="btn-ghost" id="p-doclink" style="padding:6px 12px">🔗 הוסף קישור</button></div>
+        <div class="hint">קבצים נשמרים בדפדפן. לקובץ גדול (מעל ~3MB) עדיף להוסיף קישור.</div></div>
+      <div class="field"><label>הערות</label><input name="notes" value="${esc(r.notes||'')}" /></div>`;
+    openModal(title,form,async fd=>{ await onSave({...fd,image:img,documents:docs}); },{wide:true});
+    setTimeout(()=>{
+      const q=(s)=>document.querySelector('.modal '+s);
+      const renderDocs=()=>{ const c=q('#p-docs'); if(!c) return; c.innerHTML=docs.length?docs.map((d,i)=>`<div class="doc-item"><a class="link" href="${esc(d.url)}" target="_blank" rel="noopener">📄 ${esc(d.name||'מסמך')}</a><button type="button" class="btn-danger" data-doc="${i}">🗑</button></div>`).join(''):'<span class="hint">אין מסמכים עדיין.</span>';
+        c.querySelectorAll('[data-doc]').forEach(b=>b.onclick=()=>{ docs.splice(+b.dataset.doc,1); renderDocs(); }); };
+      renderDocs();
+      const pf=q('#p-file'), prev=q('#p-prev');
+      const setClear=()=>{ let clr=q('#p-clear'); if(img&&!clr){ clr=document.createElement('button'); clr.type='button'; clr.className='btn-ghost'; clr.id='p-clear'; clr.style.cssText='margin-top:8px;padding:5px 12px'; clr.textContent='הסר תמונה'; pf.parentElement.appendChild(clr); }
+        q('#p-clear') && (q('#p-clear').onclick=()=>{ img=''; prev.innerHTML='<span>אין תמונה</span>'; q('#p-clear').remove(); }); };
+      if(pf) pf.onchange=()=>{ const f=pf.files[0]; if(!f) return; resizeImage(f,320,(u)=>{ img=u; prev.innerHTML=`<img src="${u}" alt="" />`; setClear(); }); };
+      setClear();
+      const df=q('#p-docfile'); if(df) df.onchange=()=>{ const f=df.files[0]; if(!f) return; if(f.size>3*1024*1024){ toast('הקובץ גדול מדי (מעל 3MB) — הוסיפו קישור במקום',true); df.value=''; return; }
+        const rd=new FileReader(); rd.onload=()=>{ docs.push({name:f.name,url:rd.result}); renderDocs(); }; rd.readAsDataURL(f); df.value=''; };
+      const dl=q('#p-doclink'); if(dl) dl.onclick=()=>{ const url=prompt('הדביקו קישור למסמך (https://…)'); if(!url) return; const name=prompt('שם המסמך:')||url; docs.push({name,url}); renderDocs(); };
+    },0);
+  }
+
+  el.querySelector('#add').onclick=()=>openProModal('בעל מקצוע',{},async body=>{await api('/professionals',{method:'POST',body});toast('נוסף');render();});
+  el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.id==b.dataset.edit);openProModal('עריכת בעל מקצוע',r,async body=>{await api('/professionals/'+r.id,{method:'PUT',body});toast('עודכן');render();});});
   el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>confirmDelete('למחוק בעל מקצוע זה?',async()=>{await api('/professionals/'+b.dataset.del,{method:'DELETE'});toast('נמחק');render();}));
   return el;
 };
