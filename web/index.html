@@ -373,10 +373,11 @@ function save(){
   if(s && !syncCode){ s.textContent='נשמר ✔'; clearTimeout(saveTimer); saveTimer=setTimeout(()=>s.textContent='נשמר בדפדפן',1500); }
   scheduleSync();
 }
-/* ---------- Cloud sync (S3 + Lambda) ---------- */
+/* ---------- Cloud sync (S3 + Lambda) — אוטומטי, ללא קוד ---------- */
 const SYNC_API='https://cu3nr7fq95.execute-api.us-east-1.amazonaws.com';
-const SYNC_LS='home-sync-code';
-let syncCode=(()=>{ try{ return localStorage.getItem(SYNC_LS)||''; }catch(e){ return ''; } })();
+const FIXED_SYNC_KEY='bait-home-7c3f9a1e5b2d4680c1a94f28d6'; // מפתח קבוע: כל המכשירים מסתנכרנים אוטומטית
+let syncCode=FIXED_SYNC_KEY;
+const hasRealData=(d)=> !!d && ['transactions','professionals','warranties','components','lighting','recurring','maintenance'].some(k=>Array.isArray(d[k])&&d[k].length>0);
 let syncTimer=null, syncBusy=false, syncPending=false;
 function syncBadge(txt){ const s=document.getElementById('save-state'); if(s) s.textContent=txt; }
 async function pullRemote(){
@@ -396,17 +397,15 @@ async function pushRemote(){
   finally{ syncBusy=false; if(syncPending){ syncPending=false; scheduleSync(); } }
 }
 function scheduleSync(){ if(!syncCode) return; clearTimeout(syncTimer); syncTimer=setTimeout(pushRemote,1500); }
-function newSyncCode(){ const a=new Uint8Array(9); (crypto&&crypto.getRandomValues)?crypto.getRandomValues(a):a.forEach((_,i)=>a[i]=Math.floor(Math.random()*256));
-  const s=btoa(String.fromCharCode(...a)).replace(/[^a-zA-Z0-9]/g,'').slice(0,12); return 'bait-'+s; }
-async function enableSync(code, {adopt}={}){
-  syncCode=code; try{ localStorage.setItem(SYNC_LS,code); }catch(e){}
-  const remote=await pullRemote();
-  if(remote && remote.data && (adopt || (remote.data.updatedAt||0) > (db.updatedAt||0))){
-    db=remote.data; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'].forEach(k=>{ if(!Array.isArray(db[k])) db[k]=[]; });
-    persistLocal();
-  } else { await pushRemote(); }
+function adoptRemote(rdata){ db=rdata; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'].forEach(k=>{ if(!Array.isArray(db[k])) db[k]=[]; }); persistLocal(); }
+async function syncNow(){ // מיזוג יזום: הנתונים העדכניים ביותר מנצחים, אך נתונים אמיתיים לא נדרסים ע"י ריקים
+  if(document.querySelector('.modal-backdrop')) return; // לא מפריעים בזמן עריכה
+  try{ const remote=await pullRemote(); const localReal=hasRealData(db), remoteReal=remote.data&&hasRealData(remote.data);
+    if(remoteReal && !localReal){ adoptRemote(remote.data); syncBadge('מסונכרן ☁️✓'); render(); }
+    else if(remoteReal && localReal && (remote.data.updatedAt||0) > (db.updatedAt||0)){ adoptRemote(remote.data); syncBadge('מסונכרן ☁️✓'); render(); }
+    else { await pushRemote(); }
+  }catch(e){ syncBadge('לא מקוון'); }
 }
-function disableSync(){ syncCode=''; try{ localStorage.removeItem(SYNC_LS); }catch(e){} syncBadge('נשמר בדפדפן'); }
 db = loadDB();
 const uid = ()=> ++db.seq;
 const clone = (x)=> JSON.parse(JSON.stringify(x));
@@ -1492,45 +1491,16 @@ views.settings=async()=>{
     try{ localStorage.removeItem(LS_KEY); }catch(e){} location.reload();
   });
 
-  // ---- cloud sync UI ----
+  // ---- cloud sync UI (אוטומטי) ----
   const box=el.querySelector('#sync-box');
-  const renderSync=()=>{
-    if(syncCode){
-      box.innerHTML=`
-        <p class="hint" style="margin-bottom:12px">✅ הסנכרון פעיל. הנתונים נשמרים בענן ומסתנכרנים אוטומטית בין כל המכשירים עם אותו קוד.</p>
-        <div class="field" style="max-width:420px"><label>קוד הסנכרון שלך</label>
-          <div style="display:flex;gap:8px"><input id="sync-code-show" readonly value="${esc(syncCode)}" style="font-family:ui-monospace,monospace;font-weight:700" /><button class="btn-ghost" id="sync-copy">העתק</button></div></div>
-        <p class="hint" style="margin:12px 0">כדי לחבר מכשיר נוסף: פתח בו את האתר → «הגדרות וגיבוי» → הזן את הקוד הזה.</p>
-        <button class="btn-ghost" id="sync-off" style="color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,var(--border))">נתק סנכרון (הנתונים יישארו במכשיר זה)</button>`;
-      box.querySelector('#sync-copy').onclick=()=>{ navigator.clipboard?.writeText(syncCode); toast('הקוד הועתק'); };
-      box.querySelector('#sync-off').onclick=()=>{ disableSync(); toast('הסנכרון נותק'); renderSync(); };
-    } else {
-      box.innerHTML=`
-        <p class="hint" style="margin-bottom:14px">הפעל סנכרון כדי שהנתונים יישמרו בענן ויופיעו בכל המכשירים שלך (מחשב, טלפון). צור קוד חדש במכשיר הראשון, והזן אותו בשאר המכשירים.</p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-          <button class="btn" id="sync-new">✨ צור קוד סנכרון והפעל</button>
-          <div class="field" style="max-width:280px"><label>או הזן קוד קיים ממכשיר אחר</label>
-            <div style="display:flex;gap:8px"><input id="sync-code-in" placeholder="bait-…" /><button class="btn-ghost" id="sync-connect">התחבר</button></div></div>
-        </div>`;
-      box.querySelector('#sync-new').onclick=async()=>{
-        try{ const code=newSyncCode(); await enableSync(code); toast('סנכרון הופעל ☁️ — שמור את הקוד!'); renderSync(); }
-        catch(e){ toast('שגיאה: '+e.message,true); }
-      };
-      box.querySelector('#sync-connect').onclick=async()=>{
-        const code=box.querySelector('#sync-code-in').value.trim();
-        if(code.length<6){ toast('קוד קצר מדי',true); return; }
-        try{
-          syncCode=code; let remote; try{ remote=await pullRemote(); }catch(e){ syncCode=''; toast('חיבור נכשל: '+e.message,true); return; }
-          let adopt=false;
-          if(remote && remote.data && Array.isArray(remote.data.transactions)){
-            adopt=confirm('נמצאו נתונים בענן עבור הקוד הזה.\n\nאישור = לטעון אותם למכשיר זה (יחליף את הנתונים כאן)\nביטול = להעלות את הנתונים שבמכשיר זה לענן');
-          }
-          await enableSync(code,{adopt}); toast('סנכרון הופעל ☁️'); render();
-        }catch(e){ toast('שגיאה: '+e.message,true); }
-      };
-    }
-  };
-  renderSync();
+  box.innerHTML=`
+    <p class="hint" style="margin-bottom:12px">✅ <strong>הסנכרון אוטומטי ופעיל</strong>. כל מה שמוזן בכל מכשיר נשמר בענן ומופיע בכל שאר המכשירים — <strong>ללא צורך בקוד</strong>. הכל קורה מאליו.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button class="btn" id="sync-now">🔄 סנכרן עכשיו</button>
+      <span class="hint" style="margin:0">הנתונים מסתנכרנים אוטומטית עם כל שינוי, וגם כל ~45 שניות.</span>
+    </div>
+    <p class="hint" style="margin-top:12px">🔒 ההגנה על הנתונים היא הכתובת הפרטית של האתר. מי שיש לו את הלינק — רואה את הנתונים. (ניתן להוסיף סיסמה בעתיד.)</p>`;
+  box.querySelector('#sync-now').onclick=async()=>{ toast('מסנכרן…'); await syncNow(); toast('סונכרן ☁️✓'); };
   return el;
 };
 
@@ -1606,15 +1576,11 @@ document.getElementById('theme-toggle').onclick=()=>{ const cur=document.documen
 
 if(!location.hash) location.hash='#/dashboard';
 async function boot(){
-  if(syncCode){
-    syncBadge('טוען מהענן…☁️');
-    try{ const remote=await pullRemote();
-      if(remote && remote.data && (remote.data.updatedAt||0) > (db.updatedAt||0)){
-        db=remote.data; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'].forEach(k=>{ if(!Array.isArray(db[k])) db[k]=[]; }); persistLocal(); syncBadge('מסונכרן ☁️✓');
-      } else { syncBadge('מסונכרן ☁️✓'); pushRemote(); }
-    }catch(e){ syncBadge('לא מקוון'); }
-  }
   render();
+  syncBadge('מסתנכרן…☁️');
+  await syncNow();
+  // רענון תקופתי כדי לקלוט שינויים ממכשירים אחרים
+  setInterval(syncNow, 45000);
 }
 boot();
 </script>
