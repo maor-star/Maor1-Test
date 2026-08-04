@@ -595,6 +595,12 @@ function h_transactions(m,id,sub,b,qp){
     let n=0; db.transactions.forEach(t=>{ if(!t.category_id){ const c=matchCategory((t.description||'')+' '+(t.merchant||''), t.kind); if(c){ t.category_id=c; n++; } } });
     return {classified:n};
   }
+  if(id==='classify-similar'){ // סיווג כל העסקאות מאותו מקור (גם אלו שכבר סווגו אחרת) + כלל לעתיד
+    const key=strv(b.merchant); const cat=intOrNull(b.category_id); if(!key) return {count:0};
+    let n=0; db.transactions.forEach(t=>{ if((t.merchant||t.description||'').trim()===key){ t.category_id=cat; n++; } });
+    if(b.make_rule && cat && !db.rules.some(r=>r.match_text===key && r.category_id===cat)) db.rules.push({id:uid(),match_text:key,category_id:cat});
+    return {count:n};
+  }
   if(m==='GET' && !id){
     let rows=db.transactions.filter(t=> inMonth(t.tx_date,qp.month)
       && (!qp.category_id || t.category_id==qp.category_id)
@@ -855,9 +861,15 @@ views.transactions=async()=>{
     el.querySelectorAll('.cat-select').forEach(sel=>sel.onchange=async()=>{
       const id=sel.dataset.id, catId=sel.value, r=rows.find(x=>x.id==id), remember=el.querySelector('#remember').checked;
       try{
-        await api('/transactions/'+id,{method:'PATCH',body:{category_id:catId||null, make_rule: remember&&!!catId, rule_text:(r.merchant||r.description)}});
-        if(remember&&catId) await api('/transactions/auto',{method:'POST',body:{}});
-        toast(catId?'סווג ✓':'הוסר סיווג');
+        if(remember && catId){
+          const key=(r.merchant||r.description||'').trim();
+          const res=await api('/transactions/classify-similar',{method:'POST',body:{merchant:key,category_id:catId,make_rule:true}});
+          const others=Math.max(0,(res.count||1)-1);
+          toast(others? `סווג ✓ ועוד ${others} מאותו מקור` : 'סווג ✓');
+        } else {
+          await api('/transactions/'+id,{method:'PATCH',body:{category_id:catId||null}});
+          toast(catId?'סווג ✓':'הוסר סיווג');
+        }
         await load(); renderStats(); renderTable();
       }catch(e){ toast(e.message,true); }
     });
