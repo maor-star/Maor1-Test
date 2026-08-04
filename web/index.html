@@ -504,9 +504,9 @@ ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
 const proById = (id)=> db.professionals.find(p=>p.id==id);
 
-// זיהוי חברות אשראי (לצורך מסך השלמות)
-const CARD_ISSUERS=['ישראכרט','אמריקן אקספרס','אמריקן','אמקס','לאומי קארד','דיינרס','כאל','מקס','ויזה'];
-function normIssuer(k){ return (k==='אמריקן'||k==='אמקס')?'אמריקן אקספרס':k; }
+// זיהוי חברות/חיובי אשראי (לצורך זיהוי חיוב מרוכז והשלמות)
+const CARD_ISSUERS=['ישראכרט','אמריקן אקספרס','אמריקן','אמקס','לאומי קארד','דיינרס','כאל','מקס','ויזה','כרטיסי אשראי','כרטיס אשראי','כ.אשראי','כ. אשראי'];
+function normIssuer(k){ if(k==='אמריקן'||k==='אמקס') return 'אמריקן אקספרס'; if(k==='כרטיס אשראי'||k==='כ.אשראי'||k==='כ. אשראי') return 'כרטיסי אשראי'; return k; }
 function detectIssuer(text){ const t=strv(text); for(const k of CARD_ISSUERS){ if(k && t.includes(k)) return normIssuer(k); } return null; }
 const AGG_CAT='כרטיסי אשראי (חיוב מרוכז)';
 // השוואת חיוב-בנק מול פירוט-אשראי לכל חברה
