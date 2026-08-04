@@ -1066,16 +1066,17 @@ views.import=async()=>{
     </div></div>`;
   el.innerHTML=missingHTML+`<div class="card" style="padding:22px">
     <h2 style="margin:0 0 8px">📥 ייבוא תדפיס אשראי / בנק</h2>
-    <p class="hint" style="margin-bottom:16px">גררו לכאן קובץ <strong>אקסל (XLSX)</strong>, <strong>CSV</strong> או <strong>PDF</strong> שהורדתם מאתר חברת האשראי או הבנק, או לחצו לבחירה. נזהה אוטומטית את <strong>חברת האשראי</strong> ואת <strong>חודש החיוב</strong>, ונתאים לחיוב שירד בחשבון הבנק. עסקאות כפולות יסוננו אוטומטית.<br><span class="muted">💡 אקסל ו‑CSV מדויקים ביותר. חילוץ מ‑PDF הוא מיטבי — בדקו את התצוגה המקדימה לפני ייבוא.</span></p>
+    <p class="hint" style="margin-bottom:16px">גררו לכאן <strong>קובץ אחד או כמה קבצים יחד</strong> — <strong>אקסל (XLSX)</strong>, <strong>CSV</strong> או <strong>PDF</strong> שהורדתם מאתר חברת האשראי או הבנק, או לחצו לבחירה. בכל קובץ נזהה אוטומטית את <strong>חברת האשראי</strong> ואת <strong>חודש החיוב</strong>, ונתאים לחיוב שירד בחשבון הבנק. עסקאות כפולות יסוננו אוטומטית.<br><span class="muted">💡 קובץ בודד → תצוגה מקדימה לאישור. כמה קבצים → ייובאו ישירות עם סיכום לכל קובץ. אקסל ו‑CSV מדויקים ביותר; PDF מיטבי.</span></p>
     <div class="field-row" style="margin-bottom:14px"><div class="field"><label>מקור</label><select id="imp-source"><option value="credit_card">💳 כרטיס אשראי</option><option value="bank">🏦 חשבון בנק</option></select></div><div class="field"><label>שם הכרטיס / החשבון <span class="muted">(מזוהה אוטומטית)</span></label><input id="imp-account" placeholder="לדוגמה: ויזה לאומי / עו״ש הפועלים" /></div></div>
-    <div class="drop" id="drop">📄 גררו קובץ אקסל (XLSX), CSV או PDF לכאן, או לחצו לבחירה<input type="file" id="file" accept=".csv,text/csv,.txt,.pdf,application/pdf,.xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden /></div>
+    <div class="drop" id="drop">📄 גררו קובץ אחד או <strong>כמה קבצים יחד</strong> (אקסל / CSV / PDF), או לחצו לבחירה<input type="file" id="file" multiple accept=".csv,text/csv,.txt,.pdf,application/pdf,.xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden /></div>
     <div id="mapper"></div></div>`;
   const drop=el.querySelector('#drop'), fileInput=el.querySelector('#file');
+  const dispatch=(files)=>{ const arr=[...files]; if(arr.length>1) handleMultiple(arr); else if(arr.length) handleFile(arr[0]); };
   drop.onclick=()=>fileInput.click();
   drop.ondragover=e=>{e.preventDefault();drop.classList.add('drag');};
   drop.ondragleave=()=>drop.classList.remove('drag');
-  drop.ondrop=e=>{e.preventDefault();drop.classList.remove('drag');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);};
-  fileInput.onchange=()=>fileInput.files[0]&&handleFile(fileInput.files[0]);
+  drop.ondrop=e=>{e.preventDefault();drop.classList.remove('drag');dispatch(e.dataTransfer.files);};
+  fileInput.onchange=()=>dispatch(fileInput.files);
   const applyDetected=(meta)=>{ if(meta&&meta.issuer){ const s=el.querySelector('#imp-source'); if(s) s.value='credit_card'; const a=el.querySelector('#imp-account'); if(a&&!a.value.trim()) a.value=meta.issuer; } };
   function processTabular(parsed, file){
     const grid = parsed.grid || [parsed.headers, ...parsed.rows];
@@ -1087,6 +1088,47 @@ views.import=async()=>{
       return;
     }
     const meta=autoDetectStatement(parsed.headers,parsed.rows,file?file.name:''); applyDetected(meta); showMapper(parsed,{detected:meta});
+  }
+  // קריאת קובץ בודד לרשומות + זיהוי אוטומטי (לשימוש בייבוא מרובה-קבצים)
+  function readFileRows(file){
+    return new Promise((resolve)=>{
+      const isPdf=/\.pdf$/i.test(file.name)||file.type==='application/pdf';
+      const isXlsx=/\.xls[xm]$/i.test(file.name)||/spreadsheetml/.test(file.type||'');
+      if(/\.xls$/i.test(file.name)&&!isXlsx){ resolve({rows:[],meta:{},error:'קובץ .xls ישן — שמרו כ‑XLSX/CSV'}); return; }
+      const reader=new FileReader();
+      reader.onload=async()=>{ try{
+        let rows=[], gridText='';
+        if(isPdf){ const items=await extractPdfTransactions(reader.result); rows=items.map(i=>({date:i.date,description:i.description,merchant:i.description,amount:i.amount,kind:i.kind||'expense',ref:i.ref})); gridText=items.map(i=>i.description).join(' '); }
+        else { const parsed = isXlsx? await parseXLSX(reader.result) : parseCSV(reader.result);
+          const grid=parsed.grid||[parsed.headers,...parsed.rows]; gridText=grid.map(r=>r.join(' ')).join(' ');
+          const stmt=extractStatementTransactions(grid);
+          if(stmt.length>=3){ rows=stmt.map(i=>({date:i.date,description:i.description,merchant:i.merchant,amount:i.amount,kind:'expense',ref:i.ref})); }
+          else { const g=guessColumns(parsed.headers); rows=parsed.rows.map(r=>({date:normDate(r[g.date]),description:String(r[g.desc]||'').trim(),merchant:String(r[g.desc]||'').trim(),amount:Math.abs(parseAmount(r[g.amount])),kind:'expense'})).filter(r=>r.date&&r.amount>0); }
+        }
+        resolve({rows,meta:{issuer:detectIssuer(file.name+' '+gridText)||'',month:dominantMonth(rows)}});
+      }catch(e){ resolve({rows:[],meta:{},error:e.message}); } };
+      if(isPdf||isXlsx) reader.readAsArrayBuffer(file); else reader.readAsText(file,'utf-8');
+    });
+  }
+  async function handleMultiple(files){
+    const mapper=el.querySelector('#mapper');
+    const defSource=el.querySelector('#imp-source').value; const defAccount=el.querySelector('#imp-account').value.trim();
+    const results=[];
+    for(let k=0;k<files.length;k++){ const file=files[k];
+      mapper.innerHTML=`<div class="empty">מעבד קובץ ${k+1} מתוך ${files.length}… ⏳<br><span class="hint">${esc(file.name)}</span></div>`;
+      const {rows,meta,error}=await readFileRows(file);
+      if(error||!rows.length){ results.push({name:file.name,error:error||'לא זוהו עסקאות בקובץ'}); continue; }
+      const source= meta.issuer? 'credit_card' : defSource;
+      const account= meta.issuer || defAccount || file.name.replace(/\.[^.]+$/,'');
+      try{ const res=await api('/transactions/import',{method:'POST',body:{source,account,rows}});
+        results.push({name:file.name,issuer:meta.issuer,month:meta.month,added:res.added,skipped:res.skipped,autoCategorized:res.autoCategorized});
+      }catch(e){ results.push({name:file.name,error:e.message}); } }
+    const totalAdded=results.reduce((s,r)=>s+(r.added||0),0), totalDup=results.reduce((s,r)=>s+(r.skipped||0),0), totalCat=results.reduce((s,r)=>s+(r.autoCategorized||0),0);
+    mapper.innerHTML=`<div class="section-title">יובאו ${totalAdded} עסקאות מ‑${files.length} קבצים</div>
+      <div class="hint" style="margin:-6px 0 10px;padding:9px 12px;background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:9px;color:var(--accent)">✓ ${totalAdded} נוספו · ${totalCat} סווגו אוטומטית · ${totalDup} כפולות סוננו. כל קובץ זוהה לפי חברת האשראי/חודש בנפרד.</div>
+      <div class="preview-table"><table><thead><tr><th>קובץ</th><th>זוהה</th><th>חודש</th><th>נוספו</th><th>כפולות</th><th>סווגו</th></tr></thead>
+      <tbody>${results.map(r=>`<tr><td style="word-break:break-word">${esc(r.name)}</td>${r.error?`<td colspan="5" style="color:var(--amber)">⚠️ ${esc(r.error)}</td>`:`<td>${r.issuer?`<span class="pill status-ok">💳 ${esc(r.issuer)}</span>`:'<span class="muted">—</span>'}</td><td>${r.month?fmtMonth(r.month):'—'}</td><td class="tnum amount-pos">${r.added}</td><td class="tnum muted">${r.skipped||0}</td><td class="tnum">${r.autoCategorized||0}</td>`}</tr>`).join('')}</tbody></table></div>
+      <div class="empty" style="margin-top:16px">✔ הושלם. <a class="link" data-nav="review">עברו לסיווג העסקאות ←</a></div>`;
   }
   function handleFile(file){
     const isPdf = /\.pdf$/i.test(file.name) || file.type==='application/pdf';
