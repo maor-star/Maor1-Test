@@ -1802,7 +1802,9 @@ views.analytics=async()=>{
   const srcColors={credit_card:'#6366f1',bank:'#0ea5e9',cash:'#16a34a',manual:'#a855f7'};
   const srcMap={}; exp.forEach(t=>{ if(!srcMap[t.source])srcMap[t.source]={label:srcLabel(t.source),value:0,color:srcColors[t.source]||'#94a3b8'}; srcMap[t.source].value+=t.amount; });
   const bySrc=Object.values(srcMap).sort((a,b)=>b.value-a.value);
-  const mMap={}; exp.forEach(t=>{ const m=(t.merchant||t.description||'—'); mMap[m]=(mMap[m]||0)+t.amount; });
+  // הכי הרבה הוצאתי אצל — רק בתי עסק אמיתיים. לא כוללים חיובי אשראי מרוכזים
+  // (ישראכרט/אמריקן/כאל/כרטיסי אשראי) שהם סכומים חסרי-מהות המכילים עשרות עסקאות.
+  const mMap={}; exp.forEach(t=>{ if(detectIssuer(t.merchant||t.description)) return; const m=(t.merchant||t.description||'—'); mMap[m]=(mMap[m]||0)+t.amount; });
   const topMerch=Object.entries(mMap).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value).slice(0,10);
   const uncat=exp.filter(t=>!t.category_id).reduce((s,t)=>s+t.amount,0);
   // הכנסות
