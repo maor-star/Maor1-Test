@@ -586,22 +586,29 @@ function route(parts, method, b, qp){
 }
 
 function h_categories(m,id,b){
-  if(m==='GET') return clone(db.categories).sort((a,c)=> a.kind.localeCompare(c.kind)||a.name.localeCompare(c.name,'he'));
+  if(m==='GET') return clone(db.categories).map(c=>({...c,parent_name:c.parent_id?(catById(c.parent_id)?.name||null):null})).sort((a,c)=> a.kind.localeCompare(c.kind)||a.name.localeCompare(c.name,'he'));
   if(m==='POST'){ if(!strv(b.name)) throw new Error('שם הקטגוריה הוא שדה חובה');
-    const c={id:uid(),name:strv(b.name),kind:b.kind==='income'?'income':'expense',is_home:(b.is_home===false||b.is_home===0)?0:1,color:strv(b.color)||'#0f766e',monthly_budget:numv(b.monthly_budget)};
+    const parent = intOrNull(b.parent_id); const p=parent?catById(parent):null;
+    const c={id:uid(),name:strv(b.name),kind:p?p.kind:(b.kind==='income'?'income':'expense'),is_home:p?p.is_home:((b.is_home===false||b.is_home===0)?0:1),color:strv(b.color)||(p?p.color:'#0f766e'),monthly_budget:numv(b.monthly_budget),parent_id:(p&&!p.parent_id)?parent:null};
     db.categories.push(c); return c; }
   if(m==='PUT'){ const c=catById(id); if(!c) throw new Error('לא נמצא'); if(!strv(b.name)) throw new Error('שם הקטגוריה הוא שדה חובה');
-    Object.assign(c,{name:strv(b.name),kind:b.kind==='income'?'income':'expense',is_home:(b.is_home===false||b.is_home===0)?0:1,color:strv(b.color)||'#0f766e',monthly_budget:numv(b.monthly_budget)}); return c; }
-  if(m==='DELETE'){ db.categories=db.categories.filter(c=>c.id!=id); db.rules=db.rules.filter(r=>r.category_id!=id);
-    db.transactions.forEach(t=>{ if(t.category_id==id) t.category_id=null; }); return {ok:true}; }
+    const parent = intOrNull(b.parent_id); const p=(parent&&parent!=id)?catById(parent):null;
+    Object.assign(c,{name:strv(b.name),kind:p?p.kind:(b.kind==='income'?'income':'expense'),is_home:p?p.is_home:((b.is_home===false||b.is_home===0)?0:1),color:strv(b.color)||'#0f766e',monthly_budget:numv(b.monthly_budget),parent_id:(p&&!p.parent_id)?parent:null}); return c; }
+  if(m==='DELETE'){ const subs=db.categories.filter(c=>c.parent_id==id).map(c=>c.id); const ids=[id,...subs];
+    db.categories=db.categories.filter(c=>!ids.includes(c.id)&&c.id!=id); db.rules=db.rules.filter(r=>!ids.includes(r.category_id));
+    db.transactions.forEach(t=>{ if(ids.includes(t.category_id)) t.category_id=null; }); return {ok:true}; }
 }
+// קטגוריה ראשית (אב) של סיווג — לצורך פילוח בגרפים; קטגוריה עם שם מלא "ראשי › משנה"
+function catMain(id){ const c=catById(id); if(!c) return null; return (c.parent_id&&catById(c.parent_id))?catById(c.parent_id):c; }
+function catLabel(id){ const c=catById(id); if(!c) return null; if(c.parent_id){ const p=catById(c.parent_id); return (p?p.name+' › ':'')+c.name; } return c.name; }
 function h_rules(m,id,b){
   if(m==='GET') return db.rules.map(r=>({...r, category_name:catById(r.category_id)?.name, color:catById(r.category_id)?.color})).sort((a,c)=>strv(a.match_text).localeCompare(strv(c.match_text),'he'));
   if(m==='POST'){ if(!strv(b.match_text)) throw new Error('יש להזין טקסט לזיהוי'); if(!intOrNull(b.category_id)) throw new Error('יש לבחור קטגוריה');
     const r={id:uid(),match_text:strv(b.match_text),category_id:intOrNull(b.category_id)}; db.rules.push(r); return {id:r.id}; }
   if(m==='DELETE'){ db.rules=db.rules.filter(r=>r.id!=id); return {ok:true}; }
 }
-function txView(t){ const c=catById(t.category_id); return {...t, category_name:c?.name||null, category_color:c?.color||null, is_home:c?c.is_home:null}; }
+function txView(t){ const c=catById(t.category_id); const mc=c?catMain(t.category_id):null;
+  return {...t, category_name:c?.name||null, category_color:c?.color||null, category_full:c?catLabel(t.category_id):null, sub_name:(c&&c.parent_id)?c.name:null, main_name:mc?.name||null, main_color:mc?.color||null, is_home:c?c.is_home:null}; }
 function h_transactions(m,id,sub,b,qp){
   if(id==='import'){ // POST
     if(!Array.isArray(b.rows)||!b.rows.length) throw new Error('אין שורות לייבוא');
@@ -775,7 +782,7 @@ function h_dashboard(qp){
   const uncategorized=expEss.filter(t=>!t.category_id && !isMortgage(t)).length;
   // פילוח לפי קטגוריה — לפי מהות, ללא משכנתא
   const catMap={};
-  expEss.filter(t=>t.category_id&&!isMortgage(t)).forEach(t=>{const c=catById(t.category_id); if(!c)return; if(!catMap[c.id])catMap[c.id]={name:c.name,color:c.color,total:0}; catMap[c.id].total+=t.amount;});
+  expEss.filter(t=>t.category_id&&!isMortgage(t)).forEach(t=>{const c=catMain(t.category_id); if(!c)return; if(!catMap[c.id])catMap[c.id]={name:c.name,color:c.color,total:0}; catMap[c.id].total+=t.amount;});
   const byCategory=Object.values(catMap).filter(x=>x.total>0).sort((a,c)=>c.total-a.total);
   const perMonth={monthly:1,bimonthly:0.5,quarterly:1/3,yearly:1/12};
   const recurringMonthly=db.recurring.filter(recActive).reduce((s,r)=>s+r.amount*(perMonth[r.frequency]||1),0);
@@ -835,7 +842,13 @@ function openModal(title,fieldsHTML,onSubmit,{wide=false,submitLabel='שמירה
   backdrop.querySelector('input,select,textarea')?.focus();
 }
 async function confirmDelete(msg,fn){ if(!confirm(msg)) return; try{ await fn(); }catch(err){ toast(err.message,true); } }
-function categoryOptions(cats,selectedId,kind){ const list=kind?cats.filter(c=>c.kind===kind):cats; return `<option value="">— ללא —</option>`+list.map(c=>`<option value="${c.id}" ${c.id==selectedId?'selected':''}>${esc(c.name)}${c.kind==='income'?' (הכנסה)':''}</option>`).join(''); }
+function categoryOptions(cats,selectedId,kind){ const list=kind?cats.filter(c=>c.kind===kind):cats;
+  const mains=list.filter(c=>!c.parent_id).sort((a,c)=>a.name.localeCompare(c.name,'he'));
+  const subsOf=(pid)=>list.filter(c=>c.parent_id==pid).sort((a,c)=>a.name.localeCompare(c.name,'he'));
+  let out=`<option value="">— ללא —</option>`;
+  mains.forEach(m=>{ out+=`<option value="${m.id}" ${m.id==selectedId?'selected':''}>${esc(m.name)}${m.kind==='income'?' (הכנסה)':''}</option>`;
+    subsOf(m.id).forEach(s=>{ out+=`<option value="${s.id}" ${s.id==selectedId?'selected':''}> ↳ ${esc(s.name)}</option>`; }); });
+  return out; }
 function professionalOptions(pros,selectedId){ return `<option value="">— ללא —</option>`+pros.map(p=>`<option value="${p.id}" ${p.id==selectedId?'selected':''}>${esc(p.name)}${p.trade?' · '+esc(p.trade):''}</option>`).join(''); }
 
 /* ============================ Views ============================ */
@@ -1817,14 +1830,20 @@ function lightbox(src){ const bd=document.createElement('div'); bd.className='mo
 views.categories=async()=>{
   const [cats,rules]=await Promise.all([api('/categories'),api('/rules')]);
   const el=document.createElement('div');
-  el.innerHTML=`<div class="card" style="margin-bottom:22px"><div class="card-header"><h2>קטגוריות</h2><button class="btn" id="add-cat">+ קטגוריה</button></div>
-    <div class="table-wrap"><table><thead><tr><th>שם</th><th>סוג</th><th>אחזקת בית?</th><th>תקציב חודשי</th><th></th></tr></thead><tbody>${cats.map(c=>`<tr>
-      <td><span class="dot" style="background:${esc(c.color)};margin-left:7px"></span><strong>${esc(c.name)}</strong></td><td>${c.kind==='income'?'הכנסה':'הוצאה'}</td><td>${c.is_home?'✔':'—'}</td><td class="tnum">${c.monthly_budget?money(c.monthly_budget):'—'}</td>
+  // סידור היררכי: ראשית ואז תת-קטגוריות מתחתיה
+  const mains=cats.filter(c=>!c.parent_id).sort((a,c)=>a.kind.localeCompare(c.kind)||a.name.localeCompare(c.name,'he'));
+  const ordered=[]; mains.forEach(mc=>{ ordered.push({c:mc,sub:false}); cats.filter(s=>s.parent_id==mc.id).sort((a,c)=>a.name.localeCompare(c.name,'he')).forEach(s=>ordered.push({c:s,sub:true})); });
+  el.innerHTML=`<div class="card" style="margin-bottom:22px"><div class="card-header"><h2>קטגוריות ותת-קטגוריות</h2><button class="btn" id="add-cat">+ קטגוריה</button></div>
+    <p class="hint" style="padding:0 19px 4px">הגרפים מציגים לפי <strong>קטגוריה ראשית</strong>; תת-קטגוריות מאפשרות פירוט נוסף (למשל «רכב» → «דלק», «ביטוח», «טיפולים»).</p>
+    <div class="table-wrap"><table><thead><tr><th>שם</th><th>סוג</th><th>אחזקת בית?</th><th>תקציב חודשי</th><th></th></tr></thead><tbody>${ordered.map(({c,sub})=>`<tr>
+      <td style="${sub?'padding-inline-start:26px':''}"><span class="dot" style="background:${esc(c.color)};margin-left:7px"></span>${sub?'<span class="muted">↳ </span>':''}<strong>${esc(c.name)}</strong></td><td>${c.kind==='income'?'הכנסה':'הוצאה'}</td><td>${c.is_home?'✔':'—'}</td><td class="tnum">${c.monthly_budget?money(c.monthly_budget):'—'}</td>
       <td style="text-align:left"><button class="icon-btn" data-edit="${c.id}">✏️</button><button class="btn-danger" data-del="${c.id}">🗑</button></td></tr>`).join('')}</tbody></table></div></div>
     <div class="card"><div class="card-header"><h2>כללי סיווג אוטומטי</h2><button class="btn" id="add-rule">+ כלל</button></div>
     <p class="hint" style="padding:0 19px">כשמופיע הטקסט בתיאור עסקה מיובאת, היא תסווג אוטומטית. נוצרים גם אוטומטית כשמסמנים «זכור» במסך הסיווג.</p>
     ${rules.length?`<div class="table-wrap"><table><thead><tr><th>טקסט לזיהוי</th><th>קטגוריה</th><th></th></tr></thead><tbody>${rules.map(r=>`<tr><td><code>${esc(r.match_text)}</code></td><td><span class="badge" style="background:var(--chip)">${esc(r.category_name)}</span></td><td style="text-align:left"><button class="btn-danger" data-delrule="${r.id}">🗑</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">אין כללים עדיין.</div>'}</div>`;
+  const mainOpts=(sel)=>cats.filter(c=>!c.parent_id).sort((a,b)=>a.name.localeCompare(b.name,'he')).map(mc=>`<option value="${mc.id}" ${mc.id==sel?'selected':''}>${esc(mc.name)}${mc.kind==='income'?' (הכנסה)':''}</option>`).join('');
   const catForm=(c={})=>`<div class="field-row"><div class="field"><label>שם *</label><input name="name" value="${esc(c.name||'')}" required /></div><div class="field"><label>צבע</label><input name="color" type="color" value="${esc(c.color||'#0f766e')}" /></div></div>
+    <div class="field"><label>תת-קטגוריה של… (השאירו «ללא» לקטגוריה ראשית)</label><select name="parent_id"><option value="">— קטגוריה ראשית —</option>${mainOpts(c.parent_id)}</select><div class="hint">תת-קטגוריה יורשת את הסוג והשיוך של הראשית; הגרפים יאחדו אותה תחת הראשית.</div></div>
     <div class="field-row"><div class="field"><label>סוג</label><select name="kind"><option value="expense" ${c.kind!=='income'?'selected':''}>הוצאה</option><option value="income" ${c.kind==='income'?'selected':''}>הכנסה</option></select></div><div class="field"><label>תקציב חודשי (₪)</label><input name="monthly_budget" type="number" step="0.01" min="0" value="${c.monthly_budget??''}" /></div></div>
     <div class="field"><label><input type="checkbox" name="is_home" ${c.is_home===0?'':'checked'} /> נספר בעלות אחזקת הבית</label></div>`;
   el.querySelector('#add-cat').onclick=()=>openModal('קטגוריה',catForm(),async fd=>{await api('/categories',{method:'POST',body:{...fd,is_home:fd.is_home==='on'}});toast('נוסף');render();});
@@ -1841,7 +1860,7 @@ views.analytics=async()=>{
   const expCash=rows.filter(t=>t.kind==='expense'&&countsInTotal(t)); // תזרים מזומנים (עלות)
   const exp=rows.filter(t=>t.kind==='expense'&&countsEssence(t));       // מהות (פילוח/סיווג)
   const totalExp=expCash.reduce((s,t)=>s+t.amount,0);
-  const catMap={}; exp.forEach(t=>{ const name=t.category_name||'ללא סיווג'; if(!catMap[name])catMap[name]={label:name,value:0,color:t.category_color||'#94a3b8'}; catMap[name].value+=t.amount; });
+  const catMap={}; exp.forEach(t=>{ const name=t.main_name||'ללא סיווג'; if(!catMap[name])catMap[name]={label:name,value:0,color:t.main_color||'#94a3b8'}; catMap[name].value+=t.amount; });
   const byCat=Object.values(catMap).sort((a,b)=>b.value-a.value);
   const srcColors={credit_card:'#6366f1',bank:'#0ea5e9',cash:'#16a34a',manual:'#a855f7'};
   const srcMap={}; expCash.forEach(t=>{ if(!srcMap[t.source])srcMap[t.source]={label:srcLabel(t.source),value:0,color:srcColors[t.source]||'#94a3b8'}; srcMap[t.source].value+=t.amount; });
@@ -1853,8 +1872,8 @@ views.analytics=async()=>{
   const homeCost=totalExp-mortSum;
   // הכי הרבה הוצאתי על… — מקובץ לפי קטגוריה (מסעדות/דלק/ביטוח יחד). לא-מסווג מוצג לפי בית עסק.
   const spendMap={}; exp.forEach(t=>{ if(/משכנתא/.test((t.merchant||'')+(t.description||''))) return;
-    const label = t.category_name ? t.category_name : ((t.merchant||t.description||'—').trim()+' · ללא סיווג');
-    const color = t.category_id ? (t.category_color||'#7c3aed') : '#f59e0b';
+    const label = t.main_name ? t.main_name : ((t.merchant||t.description||'—').trim()+' · ללא סיווג');
+    const color = t.category_id ? (t.main_color||'#7c3aed') : '#f59e0b';
     if(!spendMap[label]) spendMap[label]={label,value:0,color}; spendMap[label].value+=t.amount; });
   const topMerch=Object.values(spendMap).sort((a,b)=>b.value-a.value).slice(0,12);
   const uncat=exp.filter(t=>!t.category_id).reduce((s,t)=>s+t.amount,0);
@@ -1865,8 +1884,8 @@ views.analytics=async()=>{
   const byInc=Object.values(incMap).sort((a,b)=>b.value-a.value);
   const net=totalInc-totalExp;
   // תקציב מול ביצוע (לפי תקציב חודשי שהוגדר לקטגוריה)
-  const actualByCat={}; exp.forEach(t=>{ if(t.category_id) actualByCat[t.category_id]=(actualByCat[t.category_id]||0)+t.amount; });
-  const budgetRows=cats.filter(c=>c.kind==='expense'&&c.monthly_budget>0).map(c=>({name:c.name,color:c.color,budget:c.monthly_budget,actual:actualByCat[c.id]||0})).sort((a,b)=>b.actual/b.budget-a.actual/a.budget);
+  const actualByCat={}; exp.forEach(t=>{ if(t.category_id){ const mc=catMain(t.category_id); const k=mc?mc.id:t.category_id; actualByCat[k]=(actualByCat[k]||0)+t.amount; } });
+  const budgetRows=cats.filter(c=>c.kind==='expense'&&c.monthly_budget>0&&!c.parent_id).map(c=>({name:c.name,color:c.color,budget:c.monthly_budget,actual:actualByCat[c.id]||0})).sort((a,b)=>b.actual/b.budget-a.actual/a.budget);
   const budgetHTML = budgetRows.length ? budgetRows.map(b=>{ const pct=Math.min(100,Math.round(b.actual/b.budget*100)); const over=b.actual>b.budget;
     return `<div class="bar-row" style="margin-bottom:14px"><div class="bar-label" title="${esc(b.name)}">${esc(b.name)}</div>
       <div class="bar-track" style="height:12px"><div class="bar-fill" style="width:${pct}%;background:${over?'linear-gradient(90deg,#f0883e,var(--red))':'var(--grad)'}"></div></div>
@@ -1988,57 +2007,65 @@ views.settings=async()=>{
   return el;
 };
 
-// ===== Monthly breakdown: פירוט חודשי מלא לפי קטגוריה ותת-קטגוריה (בית עסק) =====
+// ===== Monthly workspace: כל ההוצאות לפי חודש, עם סיווג (קטגוריה + תת-קטגוריה) בשורה =====
 views.monthly=async()=>{
-  const rows=await api('/transactions');
+  const [rows,cats]=await Promise.all([api('/transactions'),api('/categories')]);
   const curYM=new Date().toISOString().slice(0,7);
   const detailIssuers=new Set(rows.filter(t=>t.kind==='expense'&&isCardDetail(t)).map(t=>detectIssuer(t.account)));
   const isMort=(t)=>/משכנתא/.test((t.merchant||'')+' '+(t.description||''));
   const months={};
-  const M=(ym)=>(months[ym]=months[ym]||{ym,txCount:0,incSum:0,expSum:0,mortgage:0,pending:0,cats:{},uncat:{total:0,count:0,mer:{}}});
-  rows.forEach(r=>{ const ym=String(r.tx_date).slice(0,7); if(ym.length!==7||ym>curYM) return; // בלי חודשים עתידיים
+  const M=(ym)=>(months[ym]=months[ym]||{ym,txCount:0,incSum:0,expSum:0,mortgage:0,pending:0,mer:{},classified:0,unclSum:0,unclCount:0});
+  rows.forEach(r=>{ const ym=String(r.tx_date).slice(0,7); if(ym.length!==7||ym>curYM) return;
     const mm=M(ym); mm.txCount++;
     if(r.kind==='income'){ mm.incSum+=r.amount; return; }
     if(countsInTotal(r)){ mm.expSum+=r.amount; if(isMort(r)) mm.mortgage+=r.amount;
       if(isAggLump(r) && !detailIssuers.has(detectIssuer(r.merchant||r.description))) mm.pending+=r.amount; }
-    // פילוח מהות (ללא חיובים מרוכזים, ללא משכנתא)
-    if(countsEssence(r) && !isMort(r)){ const merch=(r.merchant||r.description||'—').trim()||'—';
-      if(r.category_id){ const c=catById(r.category_id); const key=c?c.name:'אחר'; const col=c?c.color:'#94a3b8';
-        const g=mm.cats[key]=mm.cats[key]||{name:key,color:col,total:0,mer:{}}; g.total+=r.amount; g.mer[merch]=(g.mer[merch]||0)+r.amount; }
-      else { mm.uncat.total+=r.amount; mm.uncat.count++; mm.uncat.mer[merch]=(mm.uncat.mer[merch]||0)+r.amount; } } });
+    if(countsEssence(r) && !isMort(r)){ const key=(r.merchant||r.description||'—').trim()||'—';
+      const g=mm.mer[key]=mm.mer[key]||{key,total:0,count:0,cat:r.category_id||null};
+      g.total+=r.amount; g.count++; if(r.category_id) g.cat=r.category_id;
+      if(r.category_id) mm.classified+=r.amount; else { mm.unclSum+=r.amount; mm.unclCount++; } } });
   const list=Object.values(months).sort((a,b)=>b.ym.localeCompare(a.ym));
   const el=document.createElement('div');
   if(!list.length){ el.innerHTML='<div class="card"><div class="empty">אין עדיין עסקאות. ייבאו תדפיס במסך «ייבוא תדפיסים».</div></div>'; return el; }
-  const totalUncCount=list.reduce((s,m)=>s+m.uncat.count,0);
-  const merRows=(obj)=>Object.entries(obj).sort((a,b)=>b[1]-a[1]).map(([n,v])=>`<div class="bar-row" style="justify-content:space-between;padding:2px 0 2px 14px"><span class="muted" title="${esc(n)}">${esc(n)}</span><span class="tnum">${money(v)}</span></div>`).join('');
+  const totalUncCount=list.reduce((s,m)=>s+m.unclCount,0);
+  const openSet = state.monthlyOpen || (state.monthlyOpen=new Set());
+  if(!openSet.size && list[0]) openSet.add(list[0].ym); // ברירת מחדל: החודש האחרון פתוח
+  const optsFor=(sel)=>categoryOptions(cats,sel,'expense');
   el.innerHTML=`
     <div class="stats-grid">
       <div class="stat-card accent"><div class="label">📅 חודשים</div><div class="value tnum">${list.length}</div></div>
       <div class="stat-card ${totalUncCount?'expense':'accent'}"><div class="label">🔴 עסקאות לא מסווגות</div><div class="value tnum">${totalUncCount}</div></div>
+      <div class="stat-card accent"><div class="label">🗂️ קטגוריות</div><div class="value tnum">${cats.filter(c=>c.kind==='expense'&&!c.parent_id).length}</div><div class="sub"><a class="link" data-nav="categories">נהל קטגוריות ותת-קטגוריות ←</a></div></div>
     </div>
-    <p class="hintbar">פירוט חודשי מלא: לחצו על חודש כדי לפתוח את כל ההוצאות שלו <strong>לפי קטגוריה</strong> ובתוך כל קטגוריה <strong>לפי בית עסק (תת-סעיף)</strong>. כך תוכלו לעבור ולוודא שהכול מסווג נכון. «לא פורט» = חיוב אשראי מרוכז שצריך להעלות לו תדפיס.</p>
+    <p class="hintbar">לחצו על חודש כדי לראות את <strong>כל ההוצאות</strong> שלו. לכל בית עסק בחרו <strong>קטגוריה או תת-קטגוריה</strong> ישירות מהרשימה — הסיווג חל על אותו בית עסק בכל החודשים ומתעדכן מיד בכל הגרפים. אדום = עדיין לא מסווג.</p>
     <div id="mlist">${list.map(m=>{
-      const cats=Object.values(m.cats).sort((a,b)=>b.total-a.total);
-      const home=m.expSum-m.mortgage;
+      const mers=Object.values(m.mer).sort((a,b)=>b.total-a.total);
+      const home=m.expSum-m.mortgage; const pct=(m.classified+m.unclSum)>0?Math.round(m.classified/(m.classified+m.unclSum)*100):100;
       return `<div class="card" style="margin-bottom:12px">
         <div class="mrow" data-ym="${m.ym}" style="display:flex;align-items:center;gap:14px;cursor:pointer;padding:4px 2px">
-          <span class="mchev" style="transition:.2s;display:inline-block">▶</span>
+          <span class="mchev" style="transition:.2s;display:inline-block;${openSet.has(m.ym)?'transform:rotate(90deg)':''}">▶</span>
           <div style="flex:1"><strong style="font-size:16px">${fmtMonth(m.ym)}</strong> <span class="hint">· ${m.txCount} עסקאות</span>
-            ${m.uncat.count?`<span class="pill status-late" style="margin-inline-start:8px">${m.uncat.count} לא מסווגות · ${money(m.uncat.total)}</span>`:'<span class="pill status-ok" style="margin-inline-start:8px">הכל מסווג ✓</span>'}
+            ${m.unclCount?`<span class="pill status-late" style="margin-inline-start:8px">${m.unclCount} לא מסווגות · ${money(m.unclSum)}</span>`:'<span class="pill status-ok" style="margin-inline-start:8px">הכל מסווג ✓</span>'}
             ${m.pending?`<span class="pill status-soon" style="margin-inline-start:6px">🔗 ${money(m.pending)} לא פורט</span>`:''}</div>
-          <div style="text-align:end"><div class="tnum amount-neg" style="font-size:16px">${money(m.expSum)}</div><div class="hint">אחזקת בית ${money(home)}${m.mortgage?` · משכנתא ${money(m.mortgage)}`:''}${m.incSum?` · הכנסות ${money(m.incSum)}`:''}</div></div>
+          <div style="text-align:end"><div class="tnum amount-neg" style="font-size:16px">${money(m.expSum)}</div><div class="hint">אחזקת בית ${money(home)}${m.mortgage?` · משכנתא ${money(m.mortgage)}`:''} · מסווג ${pct}%</div></div>
         </div>
-        <div class="mbody" data-body="${m.ym}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-          ${cats.length?cats.map(c=>`<div style="margin-bottom:10px">
-            <div class="bar-row" style="justify-content:space-between;font-weight:600"><span><span class="cdot" style="background:${esc(c.color)}"></span> ${esc(c.name)}</span><span class="tnum">${money(c.total)}</span></div>
-            ${merRows(c.mer)}</div>`).join(''):'<div class="hint" style="padding:6px 0">אין עסקאות מסווגות בחודש זה.</div>'}
-          ${m.uncat.count?`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
-            <div class="bar-row" style="justify-content:space-between;font-weight:600;color:var(--red)"><span>🔴 ללא סיווג — <button class="link" data-month="${m.ym}" style="border:none;background:none;cursor:pointer">סווג עכשיו ←</button></span><span class="tnum">${money(m.uncat.total)}</span></div>
-            ${merRows(m.uncat.mer)}</div>`:''}
-          ${m.pending?`<div class="hint" style="margin-top:8px;padding:8px;background:color-mix(in srgb,var(--amber) 10%,transparent);border-radius:8px">🔗 <strong>${money(m.pending)}</strong> בחיובי אשראי מרוכזים שטרם פורטו — <a class="link" data-nav="import">העלה תדפיסים</a> כדי לפרק אותם לקטגוריות.</div>`:''}
+        <div class="mbody" data-body="${m.ym}" style="display:${openSet.has(m.ym)?'block':'none'};margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+          <div class="table-wrap"><table style="width:100%"><thead><tr><th>בית עסק</th><th style="width:44%">קטגוריה / תת-קטגוריה</th><th>סכום</th></tr></thead>
+          <tbody>${mers.map(g=>`<tr class="${g.cat?'':'unclrow'}" style="${g.cat?'':'background:color-mix(in srgb,var(--red) 6%,transparent)'}">
+            <td><strong>${esc(g.key)}</strong>${g.count>1?`<span class="hint"> ×${g.count}</span>`:''}</td>
+            <td><div style="display:flex;gap:6px;align-items:center"><select class="mcat" data-merch="${esc(g.key)}" style="flex:1;min-width:0">${optsFor(g.cat)}</select><button class="btn-ghost mnew" data-merch="${esc(g.key)}" title="קטגוריה/תת-קטגוריה חדשה" style="padding:4px 9px">➕</button></div></td>
+            <td class="tnum amount-neg">${money(g.total)}</td></tr>`).join('')}</tbody></table></div>
+          ${m.pending?`<div class="hint" style="margin-top:10px;padding:8px;background:color-mix(in srgb,var(--amber) 10%,transparent);border-radius:8px">🔗 <strong>${money(m.pending)}</strong> בחיובי אשראי מרוכזים שטרם פורטו — <a class="link" data-nav="import">העלה תדפיסים</a> כדי לפרק אותם לבתי עסק ולסווג.</div>`:''}
         </div></div>`; }).join('')}</div>`;
-  el.querySelectorAll('.mrow').forEach(row=>row.onclick=(e)=>{ if(e.target.closest('[data-month]')||e.target.closest('[data-nav]'))return; const ym=row.dataset.ym; const body=el.querySelector(`[data-body="${ym}"]`); const chev=row.querySelector('.mchev'); const open=body.style.display!=='none'; body.style.display=open?'none':'block'; chev.style.transform=open?'':'rotate(90deg)'; });
-  el.querySelectorAll('[data-month]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); state.month=b.dataset.month; const mf=document.getElementById('month-filter'); if(mf) mf.value=b.dataset.month; location.hash='#/review'; });
+  el.querySelectorAll('.mrow').forEach(row=>row.onclick=(e)=>{ if(e.target.closest('[data-nav]'))return; const ym=row.dataset.ym; const body=el.querySelector(`[data-body="${ym}"]`); const chev=row.querySelector('.mchev'); const open=body.style.display!=='none'; body.style.display=open?'none':'block'; chev.style.transform=open?'':'rotate(90deg)'; if(open) openSet.delete(ym); else openSet.add(ym); });
+  const classifyMerch=async(key,catId)=>{ try{ await api('/transactions/classify-similar',{method:'POST',body:{merchant:key,category_id:catId||null,make_rule:!!catId}}); toast(catId?'סווג ✓':'הוסר סיווג'); render(); }catch(err){ toast(err.message,true); } };
+  el.querySelectorAll('select.mcat').forEach(sel=>sel.onchange=()=>classifyMerch(sel.dataset.merch, sel.value));
+  el.querySelectorAll('button.mnew').forEach(btn=>btn.onclick=()=>{
+    const mains=cats.filter(c=>c.kind==='expense'&&!c.parent_id).sort((a,c)=>a.name.localeCompare(c.name,'he'));
+    const form=`<div class="field"><label>שם הקטגוריה / תת-קטגוריה *</label><input name="name" required placeholder="לדוגמה: ביטוח רכב" /></div>
+      <div class="field"><label>תחת קטגוריה ראשית (לתת-קטגוריה) — או «ללא» לקטגוריה ראשית</label><select name="parent_id"><option value="">— קטגוריה ראשית —</option>${mains.map(mc=>`<option value="${mc.id}">${esc(mc.name)}</option>`).join('')}</select></div>`;
+    openModal('קטגוריה חדשה',form,async fd=>{ const c=await api('/categories',{method:'POST',body:{name:fd.name,parent_id:fd.parent_id||null,kind:'expense'}}); await classifyMerch(btn.dataset.merch,c.id); });
+  });
   return el;
 };
 
