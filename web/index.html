@@ -545,6 +545,30 @@ function ensureDefaults(){
     db.transactions.forEach(t=>{ if(t.kind==='expense'&&!t.category_id){ const c=lMatch((t.description||'')+' '+(t.merchant||''),'expense'); if(c) t.category_id=c; } });
     db.defaultsV=7; save();
   }
+  // v8: כללי סיווג רחבים לבתי עסק נפוצים (מודיעין והסביבה) + סיווג-אוטומטי מחדש
+  if((db.defaultsV||0) < 8){
+    const REST='מסעדות, פנאי ובילויים', FOOD='מזון וסופר', TRANSF='העברה בין חשבונות', CLOTH='ביגוד והנעלה', HEALTH='בריאות ותרופות', CAR='דלק ורכב', TV='טלוויזיה ומנויים', SPORT='כושר וספורט', VAC='נופש וחופשות', INSUR='ביטוח דירה ומבנה', WATER='מים וביוב', SEC='אבטחה ומיגון', ARN='ארנונה', KIDS='חינוך וחוגים לילדים';
+    const R8=[
+      ["העב' לאחר",TRANSF],["העברה ב BIT",TRANSF],["העברה בBIT",TRANSF],["PAYBOX",TRANSF],["שיק",TRANSF],["הפקדה",TRANSF],["poalim wonder",TRANSF],["הי ביז",TRANSF],["היי ביז",TRANSF],
+      ["הטבות פיס",REST],["מפעל הפיס",REST],["פיס פלוס",REST],["פיס מנויים",REST],["טיקטמאסטר",REST],["משרד כרטיסים",REST],["קופת כרטיסים",REST],["סינמה",REST],["היכל התרבות",REST],["מגנוליה",REST],["הפקות",REST],["מועדון הים",REST],
+      ["playstation",TV],["gamsgo",TV],["google one",TV],["amazon",TV],["amzn",TV],
+      ["מרקט",FOOD],["פיצוצי",FOOD],["מאפיי",FOOD],["מאפה",FOOD],["רולדין",FOOD],["ממתקים",FOOD],["קצפת",FOOD],["גלידה",FOOD],["מרשמלו",FOOD],["סל מתוק",FOOD],["חומוס",FOOD],["מעדני",FOOD],["מעדנים",FOOD],["תבליני",FOOD],["קליית",FOOD],["אורגני",FOOD],["פניני טבע",FOOD],["האיכרים",FOOD],["נספרסו",FOOD],["שוק שילת",FOOD],["התאנה",FOOD],["הכל מהכל",FOOD],["פינוקים",FOOD],["קונדיטור",FOOD],["דני בתי",FOOD],["מאפה נאמן",FOOD],["ניר מעדנים",FOOD],
+      ["פיצה",REST],["pizza",REST],["דומינוס",REST],["בורגר",REST],["מקדונלד",REST],["ביסטרו",REST],["בנדיקט",REST],["בליקר",REST],["קורסיה",REST],["תאילנד",REST],["סושי",REST],["מזנון",REST],["בראנץ",REST],["קייטרינג",REST],["מסעד",REST],["קפה",REST],
+      ["חניון",CAR],["חניה",CAR],["צמיגי",CAR],["איתוראן",CAR],
+      ["zara",CLOTH],["זארה",CLOTH],["ברשקה",CLOTH],["קסטרו",CLOTH],["הוניגמן",CLOTH],["אורבניקה",CLOTH],["גולף",CLOTH],["פול אנד בר",CLOTH],["קרביץ",CLOTH],["הנעלה",CLOTH],["temu",CLOTH],["shein",CLOTH],["אדידס",CLOTH],["ריבוק",CLOTH],["הסטוק",CLOTH],["גוטקס",CLOTH],["קידס",CLOTH],
+      ["דנט",HEALTH],["השן",HEALTH],["מרפאה",HEALTH],["pharmacy",HEALTH],["iherb",HEALTH],["מדיקל",HEALTH],["אופטיק",HEALTH],
+      ["פילאטיס",SPORT],["fitness",SPORT],["אקווה ספורט",SPORT],["דייפ",SPORT],["diving",SPORT],["צלילה",SPORT],
+      ["ביטוח",INSUR],["בטוח",INSUR],["כלל רכב",INSUR],
+      ["מלון",VAC],["hotel",VAC],["resort",VAC],["booking",VAC],["duty free",VAC],["king power",VAC],["נתב",VAC],["ישראייר",VAC],
+      ["מי מודיעין",WATER],["מי מודעין",WATER],["מוקד אמון",SEC],["עיריי",ARN],["עירייה",ARN],["התוכנית לנוער",KIDS],["סחלבים",KIDS]
+    ];
+    const byName={}; db.categories.forEach(c=>{ byName[c.name]=c.id; });
+    for(const [kw,name] of R8){ const cid=byName[name]; if(cid && !db.rules.some(r=>r.match_text===kw && r.category_id===cid)) db.rules.push({id:++db.seq,match_text:kw,category_id:cid}); }
+    const lById2=(id)=>db.categories.find(c=>c.id==id);
+    const lMatch2=(text,kind)=>{ const hay=strv(text).toLowerCase(); let rules=db.rules.filter(r=>{const c=lById2(r.category_id);return c&&(!kind||c.kind===kind);}); rules.sort((a,b)=>strv(b.match_text).length-strv(a.match_text).length); for(const r of rules){const mt=strv(r.match_text).toLowerCase(); if(mt&&hay.includes(mt)) return r.category_id;} return null; };
+    db.transactions.forEach(t=>{ if(t.kind==='expense'&&!t.category_id){ const c=lMatch2((t.description||'')+' '+(t.merchant||''),'expense'); if(c) t.category_id=c; } });
+    db.defaultsV=8; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
@@ -2040,12 +2064,13 @@ views.monthly=async()=>{
   const detailIssuers=new Set(rows.filter(t=>t.kind==='expense'&&isCardDetail(t)).map(t=>detectIssuer(t.account)));
   const isMort=(t)=>/משכנתא/.test((t.merchant||'')+' '+(t.description||''));
   const months={};
-  const M=(ym)=>(months[ym]=months[ym]||{ym,txCount:0,incSum:0,expSum:0,mortgage:0,pending:0,mer:{},classified:0,unclSum:0,unclCount:0});
+  const M=(ym)=>(months[ym]=months[ym]||{ym,txCount:0,incSum:0,expSum:0,mortgage:0,pending:0,mer:{},lumps:{},classified:0,unclSum:0,unclCount:0});
   rows.forEach(r=>{ const ym=String(r.tx_date).slice(0,7); if(ym.length!==7||ym>curYM) return;
     const mm=M(ym); mm.txCount++;
     if(r.kind==='income'){ mm.incSum+=r.amount; return; }
     if(countsInTotal(r)){ mm.expSum+=r.amount; if(isMort(r)) mm.mortgage+=r.amount;
       if(isAggLump(r) && !detailIssuers.has(detectIssuer(r.merchant||r.description))) mm.pending+=r.amount; }
+    if(isAggLump(r)){ const k=detectIssuer(r.merchant||r.description)||'אשראי'; const g=mm.lumps[k]=mm.lumps[k]||{total:0,count:0,hasDetail:detailIssuers.has(k)}; g.total+=r.amount; g.count++; }
     if(countsEssence(r) && !isMort(r)){ const key=(r.merchant||r.description||'—').trim()||'—';
       const g=mm.mer[key]=mm.mer[key]||{key,total:0,count:0,cat:r.category_id||null};
       g.total+=r.amount; g.count++; if(r.category_id) g.cat=r.category_id;
@@ -2081,6 +2106,10 @@ views.monthly=async()=>{
             <td><strong>${esc(g.key)}</strong>${g.count>1?`<span class="hint"> ×${g.count}</span>`:''}</td>
             <td><div style="display:flex;gap:6px;align-items:center"><select class="mcat" data-merch="${esc(g.key)}" style="flex:1;min-width:0">${optsFor(g.cat)}</select><button class="btn-ghost mnew" data-merch="${esc(g.key)}" title="קטגוריה/תת-קטגוריה חדשה" style="padding:4px 9px">➕</button></div></td>
             <td class="tnum amount-neg">${money(g.total)}</td></tr>`).join('')}</tbody></table></div>
+          ${Object.keys(m.lumps).length?`<div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--border)">
+            <div style="font-weight:600;margin-bottom:6px">💳 חיובי אשראי מרוכזים בחודש (החשבוניות)</div>
+            <div class="hint" style="margin:-2px 0 6px">אלו סכומי החיוב החודשי לכל כרטיס. «מפורט» = כבר פורק לבתי העסק שלמעלה; «להעלאה» = צריך תדפיס פירוט.</div>
+            ${Object.entries(m.lumps).sort((a,b)=>b[1].total-a[1].total).map(([k,o])=>`<div class="bar-row" style="justify-content:space-between;padding:2px 0"><span>${esc(k)} <span class="hint">×${o.count}</span> ${o.hasDetail?'<span class="pill status-ok" style="font-size:10px">מפורט ✓</span>':'<span class="pill status-soon" style="font-size:10px">להעלאה</span>'}</span><span class="tnum">${money(o.total)}</span></div>`).join('')}</div>`:''}
           ${m.pending?`<div class="hint" style="margin-top:10px;padding:8px;background:color-mix(in srgb,var(--amber) 10%,transparent);border-radius:8px">🔗 <strong>${money(m.pending)}</strong> בחיובי אשראי מרוכזים שטרם פורטו — <a class="link" data-nav="import">העלה תדפיסים</a> כדי לפרק אותם לבתי עסק ולסווג.</div>`:''}
         </div></div>`; }).join('')}</div>`;
   el.querySelectorAll('.mrow').forEach(row=>row.onclick=(e)=>{ if(e.target.closest('[data-nav]'))return; const ym=row.dataset.ym; const body=el.querySelector(`[data-body="${ym}"]`); const chev=row.querySelector('.mchev'); const open=body.style.display!=='none'; body.style.display=open?'none':'block'; chev.style.transform=open?'':'rotate(90deg)'; if(open) openSet.delete(ym); else openSet.add(ym); });
