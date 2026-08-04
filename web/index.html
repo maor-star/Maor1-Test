@@ -825,8 +825,9 @@ function h_dashboard(qp){
   const cashFlowTotal=totalExpenses-rentalIncome;
   // חברות אשראי שכבר יובא עבורן פירוט
   const detailIssuers=new Set(db.transactions.filter(t=>t.kind==='expense'&&isCardDetail(t)).map(t=>detectIssuer(t.account)));
+  const compDetail=detailIssuers.size>0; // הועלו תדפיסי פירוט — מכסים את כל הכרטיסים
   // חיובים מרוכזים שעדיין אין להם פירוט (חסרי-מהות) — נספרים בעלות אבל לא מפורטים
-  const pendingLumps=exp.filter(t=>isAggLump(t) && !detailIssuers.has(detectIssuer(t.merchant||t.description)));
+  const pendingLumps=compDetail? [] : exp.filter(t=>isAggLump(t) && !detailIssuers.has(detectIssuer(t.merchant||t.description)));
   const pendingCredit=pendingLumps.reduce((s,t)=>s+t.amount,0);
   // לא מסווג (מתוך סט המהות — לא כולל חיובים מרוכזים)
   const uncategorized=expEss.filter(t=>!t.category_id && !isMortgage(t)).length;
@@ -1918,7 +1919,7 @@ views.analytics=async()=>{
   // משכנתא + חיובים מרוכזים שטרם פורטו (מסבירים את הפער בין תזרים לפילוח)
   const mortSum=expCash.filter(t=>/משכנתא/.test((t.merchant||'')+(t.description||''))).reduce((s,t)=>s+t.amount,0);
   const detailIssuers=new Set(rows.filter(t=>t.kind==='expense'&&isCardDetail(t)).map(t=>detectIssuer(t.account)));
-  const pendingSum=expCash.filter(t=>isAggLump(t)&&!detailIssuers.has(detectIssuer(t.merchant||t.description))).reduce((s,t)=>s+t.amount,0);
+  const pendingSum=detailIssuers.size>0? 0 : expCash.filter(t=>isAggLump(t)&&!detailIssuers.has(detectIssuer(t.merchant||t.description))).reduce((s,t)=>s+t.amount,0);
   const homeCost=totalExp-mortSum;
   // הכי הרבה הוצאתי על… — מקובץ לפי קטגוריה (מסעדות/דלק/ביטוח יחד). לא-מסווג מוצג לפי בית עסק.
   const spendMap={}; exp.forEach(t=>{ if(/משכנתא/.test((t.merchant||'')+(t.description||''))) return;
@@ -2062,6 +2063,7 @@ views.monthly=async()=>{
   const [rows,cats]=await Promise.all([api('/transactions'),api('/categories')]);
   const curYM=new Date().toISOString().slice(0,7);
   const detailIssuers=new Set(rows.filter(t=>t.kind==='expense'&&isCardDetail(t)).map(t=>detectIssuer(t.account)));
+  const compDetail=detailIssuers.size>0; // תדפיסי פירוט הועלו — מכסים את כל הכרטיסים בתדפיס המשולב
   const isMort=(t)=>/משכנתא/.test((t.merchant||'')+' '+(t.description||''));
   const months={};
   const M=(ym)=>(months[ym]=months[ym]||{ym,txCount:0,incSum:0,expSum:0,mortgage:0,pending:0,mer:{},lumps:{},classified:0,unclSum:0,unclCount:0});
@@ -2069,8 +2071,8 @@ views.monthly=async()=>{
     const mm=M(ym); mm.txCount++;
     if(r.kind==='income'){ mm.incSum+=r.amount; return; }
     if(countsInTotal(r)){ mm.expSum+=r.amount; if(isMort(r)) mm.mortgage+=r.amount;
-      if(isAggLump(r) && !detailIssuers.has(detectIssuer(r.merchant||r.description))) mm.pending+=r.amount; }
-    if(isAggLump(r)){ const k=detectIssuer(r.merchant||r.description)||'אשראי'; const g=mm.lumps[k]=mm.lumps[k]||{total:0,count:0,hasDetail:detailIssuers.has(k)}; g.total+=r.amount; g.count++; }
+      if(isAggLump(r) && !compDetail && !detailIssuers.has(detectIssuer(r.merchant||r.description))) mm.pending+=r.amount; }
+    if(isAggLump(r)){ const k=detectIssuer(r.merchant||r.description)||'אשראי'; const g=mm.lumps[k]=mm.lumps[k]||{total:0,count:0,hasDetail:compDetail||detailIssuers.has(k)}; g.total+=r.amount; g.count++; }
     if(countsEssence(r) && !isMort(r)){ const key=(r.merchant||r.description||'—').trim()||'—';
       const g=mm.mer[key]=mm.mer[key]||{key,total:0,count:0,cat:r.category_id||null};
       g.total+=r.amount; g.count++; if(r.category_id) g.cat=r.category_id;
@@ -2081,7 +2083,10 @@ views.monthly=async()=>{
   const totalUncCount=list.reduce((s,m)=>s+m.unclCount,0);
   const openSet = state.monthlyOpen || (state.monthlyOpen=new Set());
   if(!openSet.size && list[0]) openSet.add(list[0].ym); // ברירת מחדל: החודש האחרון פתוח
-  const optsFor=(sel)=>categoryOptions(cats,sel,'expense');
+  const mainList=cats.filter(c=>c.kind==='expense'&&!c.parent_id).sort((a,b)=>a.name.localeCompare(b.name,'he'));
+  const subsOf=(mid)=>cats.filter(c=>c.parent_id==mid).sort((a,b)=>a.name.localeCompare(b.name,'he'));
+  const mainOpts=(sel)=>`<option value="">— קטגוריה —</option>`+mainList.map(mc=>`<option value="${mc.id}" ${mc.id==sel?'selected':''}>${esc(mc.name)}</option>`).join('');
+  const subOpts=(mid,sel)=>{ const subs=mid?subsOf(mid):[]; return `<option value="">${subs.length?'— תת-קטגוריה —':'(אין תת-קטגוריות)'}</option>`+subs.map(s=>`<option value="${s.id}" ${s.id==sel?'selected':''}>${esc(s.name)}</option>`).join(''); };
   el.innerHTML=`
     <div class="stats-grid">
       <div class="stat-card accent"><div class="label">📅 חודשים</div><div class="value tnum">${list.length}</div></div>
@@ -2101,11 +2106,12 @@ views.monthly=async()=>{
           <div style="text-align:end"><div class="tnum amount-neg" style="font-size:16px">${money(m.expSum)}</div><div class="hint">אחזקת בית ${money(home)}${m.mortgage?` · משכנתא ${money(m.mortgage)}`:''} · מסווג ${pct}%</div></div>
         </div>
         <div class="mbody" data-body="${m.ym}" style="display:${openSet.has(m.ym)?'block':'none'};margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-          <div class="table-wrap"><table style="width:100%"><thead><tr><th>בית עסק</th><th style="width:44%">קטגוריה / תת-קטגוריה</th><th>סכום</th></tr></thead>
-          <tbody>${mers.map(g=>`<tr class="${g.cat?'':'unclrow'}" style="${g.cat?'':'background:color-mix(in srgb,var(--red) 6%,transparent)'}">
+          <div class="table-wrap"><table style="width:100%"><thead><tr><th>בית עסק</th><th style="width:52%">קטגוריה + תת-קטגוריה</th><th>סכום</th></tr></thead>
+          <tbody>${mers.map(g=>{ const cat=g.cat?catById(g.cat):null; const mid=cat?(cat.parent_id||cat.id):''; const sid=(cat&&cat.parent_id)?cat.id:'';
+            return `<tr class="${g.cat?'':'unclrow'}" style="${g.cat?'':'background:color-mix(in srgb,var(--red) 6%,transparent)'}">
             <td><strong>${esc(g.key)}</strong>${g.count>1?`<span class="hint"> ×${g.count}</span>`:''}</td>
-            <td><div style="display:flex;gap:6px;align-items:center"><select class="mcat" data-merch="${esc(g.key)}" style="flex:1;min-width:0">${optsFor(g.cat)}</select><button class="btn-ghost mnew" data-merch="${esc(g.key)}" title="קטגוריה/תת-קטגוריה חדשה" style="padding:4px 9px">➕</button></div></td>
-            <td class="tnum amount-neg">${money(g.total)}</td></tr>`).join('')}</tbody></table></div>
+            <td><div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap"><select class="mmain" data-merch="${esc(g.key)}" style="flex:1;min-width:110px">${mainOpts(mid)}</select><select class="msub" data-merch="${esc(g.key)}" data-main="${mid}" style="flex:1;min-width:110px">${subOpts(mid,sid)}</select><button class="btn-ghost mnew" data-merch="${esc(g.key)}" title="קטגוריה/תת-קטגוריה חדשה" style="padding:4px 8px">➕</button></div></td>
+            <td class="tnum amount-neg">${money(g.total)}</td></tr>`; }).join('')}</tbody></table></div>
           ${Object.keys(m.lumps).length?`<div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--border)">
             <div style="font-weight:600;margin-bottom:6px">💳 חיובי אשראי מרוכזים בחודש (החשבוניות)</div>
             <div class="hint" style="margin:-2px 0 6px">אלו סכומי החיוב החודשי לכל כרטיס. «מפורט» = כבר פורק לבתי העסק שלמעלה; «להעלאה» = צריך תדפיס פירוט.</div>
@@ -2114,7 +2120,8 @@ views.monthly=async()=>{
         </div></div>`; }).join('')}</div>`;
   el.querySelectorAll('.mrow').forEach(row=>row.onclick=(e)=>{ if(e.target.closest('[data-nav]'))return; const ym=row.dataset.ym; const body=el.querySelector(`[data-body="${ym}"]`); const chev=row.querySelector('.mchev'); const open=body.style.display!=='none'; body.style.display=open?'none':'block'; chev.style.transform=open?'':'rotate(90deg)'; if(open) openSet.delete(ym); else openSet.add(ym); });
   const classifyMerch=async(key,catId)=>{ try{ await api('/transactions/classify-similar',{method:'POST',body:{merchant:key,category_id:catId||null,make_rule:!!catId}}); toast(catId?'סווג ✓':'הוסר סיווג'); render(); }catch(err){ toast(err.message,true); } };
-  el.querySelectorAll('select.mcat').forEach(sel=>sel.onchange=()=>classifyMerch(sel.dataset.merch, sel.value));
+  el.querySelectorAll('select.mmain').forEach(sel=>sel.onchange=()=>classifyMerch(sel.dataset.merch, sel.value));
+  el.querySelectorAll('select.msub').forEach(sel=>sel.onchange=()=>classifyMerch(sel.dataset.merch, sel.value||sel.dataset.main));
   el.querySelectorAll('button.mnew').forEach(btn=>btn.onclick=()=>{
     const mains=cats.filter(c=>c.kind==='expense'&&!c.parent_id).sort((a,c)=>a.name.localeCompare(c.name,'he'));
     const form=`<div class="field"><label>שם הקטגוריה / תת-קטגוריה *</label><input name="name" required placeholder="לדוגמה: ביטוח רכב" /></div>
