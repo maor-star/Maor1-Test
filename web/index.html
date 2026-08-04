@@ -685,13 +685,19 @@ function h_components(m,id,sub,b){
   if(m==='PUT'){ const c=db.components.find(x=>x.id==id); if(!c) throw new Error('לא נמצא'); if(!strv(b.name)) throw new Error('שם הרכיב הוא שדה חובה'); fields(c); return {ok:true}; }
   if(m==='DELETE'){ db.components=db.components.filter(c=>c.id!=id); db.maintenance=db.maintenance.filter(x=>x.component_id!=id); return {ok:true}; }
 }
+const recActive=(r)=> (r.active===0?0:1) && (!r.end_date || r.end_date>=todayISO()) ? 1 : 0;
 function h_recurring(m,id,b){
-  if(m==='GET') return db.recurring.map(r=>({...r,category_name:catById(r.category_id)?.name,color:catById(r.category_id)?.color,professional_name:proById(r.professional_id)?.name}))
-      .sort((a,c)=> (c.active-a.active)||strv(a.name).localeCompare(strv(c.name),'he'));
+  if(m==='GET') return db.recurring.map(r=>{ const src=db.transactions.find(t=>t.id==r.source_tx_id);
+      return {...r,category_name:catById(r.category_id)?.name,color:catById(r.category_id)?.color,professional_name:proById(r.professional_id)?.name,
+        source_merchant:src?(src.merchant||src.description):'',source_date:src?src.tx_date:'',eff_active:recActive(r)}; })
+      .sort((a,c)=> (c.eff_active-a.eff_active)||strv(a.name).localeCompare(strv(c.name),'he'));
   const fields=(r)=>{ const freq=['monthly','bimonthly','quarterly','yearly'].includes(b.frequency)?b.frequency:'monthly';
-    r.name=strv(b.name); r.category_id=intOrNull(b.category_id); r.provider=strv(b.provider); r.amount=numv(b.amount); r.frequency=freq; r.due_day=intOrNull(b.due_day); r.professional_id=intOrNull(b.professional_id); r.active=(b.active===false||b.active===0)?0:1; r.notes=strv(b.notes); return r; };
-  if(m==='POST'){ if(!strv(b.name)) throw new Error('שם החשבון הוא שדה חובה'); const r=fields({id:uid()}); db.recurring.push(r); return {id:r.id}; }
-  if(m==='PUT'){ const r=db.recurring.find(x=>x.id==id); if(!r) throw new Error('לא נמצא'); if(!strv(b.name)) throw new Error('שם החשבון הוא שדה חובה'); fields(r); return {ok:true}; }
+    r.name=strv(b.name); r.category_id=intOrNull(b.category_id); r.provider=strv(b.provider); r.amount=numv(b.amount); r.frequency=freq; r.due_day=intOrNull(b.due_day); r.professional_id=intOrNull(b.professional_id); r.active=(b.active===false||b.active===0)?0:1; r.notes=strv(b.notes);
+    r.source_tx_id=intOrNull(b.source_tx_id); r.match_text=strv(b.match_text);
+    r.start_date=strv(b.start_date)||null; r.term=b.term==='until'?'until':'forever'; r.end_date=r.term==='until'?(strv(b.end_date)||null):null; return r; };
+  if(m==='POST'){ if(!strv(b.name)) throw new Error('שם החשבון הוא שדה חובה'); if(!intOrNull(b.source_tx_id)) throw new Error('יש לשייך את ההוצאה הקבועה לחיוב מתוך ההוצאות');
+    const r=fields({id:uid()}); db.recurring.push(r); return {id:r.id}; }
+  if(m==='PUT'){ const r=db.recurring.find(x=>x.id==id); if(!r) throw new Error('לא נמצא'); if(!strv(b.name)) throw new Error('שם החשבון הוא שדה חובה'); if(!intOrNull(b.source_tx_id)) throw new Error('יש לשייך את ההוצאה הקבועה לחיוב מתוך ההוצאות'); fields(r); return {ok:true}; }
   if(m==='DELETE'){ db.recurring=db.recurring.filter(r=>r.id!=id); return {ok:true}; }
 }
 function h_lighting(m,id,b){
@@ -750,7 +756,7 @@ function h_dashboard(qp){
   exp.filter(t=>t.category_id&&!isMortgage(t)).forEach(t=>{const c=catById(t.category_id); if(!c)return; if(!catMap[c.id])catMap[c.id]={name:c.name,color:c.color,total:0}; catMap[c.id].total+=t.amount;});
   const byCategory=Object.values(catMap).filter(x=>x.total>0).sort((a,c)=>c.total-a.total);
   const perMonth={monthly:1,bimonthly:0.5,quarterly:1/3,yearly:1/12};
-  const recurringMonthly=db.recurring.filter(r=>r.active).reduce((s,r)=>s+r.amount*(perMonth[r.frequency]||1),0);
+  const recurringMonthly=db.recurring.filter(recActive).reduce((s,r)=>s+r.amount*(perMonth[r.frequency]||1),0);
   // trend last 6 months (כל ההוצאות פחות משכנתא)
   const now=new Date(); const trend=[];
   for(let i=5;i>=0;i--){ const d=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()-i,1)); const m=d.toISOString().slice(0,7);
@@ -1286,24 +1292,47 @@ async function extractPdfTransactions(arrayBuffer){
 }
 
 views.recurring=async()=>{
-  const [rows,cats,pros]=await Promise.all([api('/recurring'),api('/categories'),api('/professionals')]);
+  const [rows,cats,pros,txs]=await Promise.all([api('/recurring'),api('/categories'),api('/professionals'),api('/transactions')]);
   const FREQ={monthly:'חודשי',bimonthly:'דו‑חודשי',quarterly:'רבעוני',yearly:'שנתי'};
   const perMonth={monthly:1,bimonthly:0.5,quarterly:1/3,yearly:1/12};
-  const monthlyTotal=rows.filter(r=>r.active).reduce((s,r)=>s+r.amount*perMonth[r.frequency],0);
+  const monthlyTotal=rows.filter(r=>r.eff_active).reduce((s,r)=>s+r.amount*perMonth[r.frequency],0);
+  // חיובי הוצאה לבחירה (החדשים ביותר קודם)
+  const expTx=txs.filter(t=>t.kind==='expense').sort((a,c)=>String(c.tx_date).localeCompare(String(a.tx_date))).slice(0,400);
+  const termLabel=(r)=>{ if(r.term==='until'&&r.end_date){ const ended=r.end_date<todayISO(); return `<span class="pill ${ended?'status-late':'status-soon'}">${ended?'הסתיים':'עד'} ${fmtDate(r.end_date)}</span>`; } return '<span class="pill status-ok">לתמיד ∞</span>'; };
   const el=document.createElement('div');
-  el.innerHTML=`<div class="stats-grid"><div class="stat-card expense"><div class="label">🔁 סך חודשי משוער</div><div class="value tnum">${money(monthlyTotal)}</div></div><div class="stat-card accent"><div class="label">📅 תחזית שנתית</div><div class="value tnum">${money(monthlyTotal*12)}</div></div></div>
+  el.innerHTML=`<div class="stats-grid"><div class="stat-card expense"><div class="label">🔁 סך חודשי משוער</div><div class="value tnum">${money(monthlyTotal)}</div><div class="sub">רק הוצאות בתוקף</div></div><div class="stat-card accent"><div class="label">📅 תחזית שנתית</div><div class="value tnum">${money(monthlyTotal*12)}</div></div></div>
     <div class="card"><div class="card-header"><h2>הוצאות קבועות</h2><button class="btn" id="add">+ הוצאה קבועה</button></div>
-    ${rows.length?`<div class="table-wrap"><table><thead><tr><th>שם</th><th>ספק</th><th>קטגוריה</th><th>סכום</th><th>תדירות</th><th>לחודש</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr style="${r.active?'':'opacity:.5'}">
-      <td><strong>${esc(r.name)}</strong>${r.due_day?`<div class="hint">חיוב ב‑${r.due_day} לחודש</div>`:''}</td><td>${esc(r.provider)||'—'}</td><td>${r.category_name?`<span class="badge" style="background:var(--chip)">${esc(r.category_name)}</span>`:'—'}</td>
+    <p class="hintbar" style="margin:0 0 12px">כל הוצאה קבועה <strong>משויכת לחיוב אמיתי מתוך ההוצאות</strong> — בחרו את החיוב שירד, וקבעו אם ההוצאה קבועה <strong>לתמיד</strong> או <strong>עד תאריך</strong>.</p>
+    ${rows.length?`<div class="table-wrap"><table><thead><tr><th>שם</th><th>מקושר לחיוב</th><th>קטגוריה</th><th>סכום</th><th>תדירות</th><th>לחודש</th><th>תוקף</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr style="${r.eff_active?'':'opacity:.5'}">
+      <td><strong>${esc(r.name)}</strong>${r.provider?`<div class="hint">${esc(r.provider)}</div>`:''}${r.due_day?`<div class="hint">חיוב ב‑${r.due_day} לחודש</div>`:''}</td>
+      <td>${r.source_merchant?`<span class="pill status-ok">🔗 ${esc(r.source_merchant)}</span>${r.source_date?`<div class="hint tnum">${fmtDate(r.source_date)}</div>`:''}`:'<span class="pill status-late">לא מקושר</span>'}</td>
+      <td>${r.category_name?`<span class="badge" style="background:var(--chip)">${esc(r.category_name)}</span>`:'—'}</td>
       <td class="tnum amount-neg">${money2(r.amount)}</td><td>${FREQ[r.frequency]}</td><td class="tnum">${money(r.amount*perMonth[r.frequency])}</td>
-      <td style="text-align:left"><button class="icon-btn" data-edit="${r.id}">✏️</button><button class="btn-danger" data-del="${r.id}">🗑</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">אין הוצאות קבועות. הוסיפו חשמל, מים, ארנונה, אינטרנט, גנן, בריכה וכו׳.</div>'}</div>`;
-  const form=(r={})=>`<div class="field"><label>שם *</label><input name="name" value="${esc(r.name||'')}" placeholder="חשמל / ארנונה / גנן…" required /></div>
-    <div class="field-row"><div class="field"><label>ספק</label><input name="provider" value="${esc(r.provider||'')}" /></div><div class="field"><label>סכום (₪)</label><input name="amount" type="number" step="0.01" min="0" value="${r.amount??''}" /></div></div>
-    <div class="field-row"><div class="field"><label>תדירות</label><select name="frequency">${Object.entries(FREQ).map(([k,v])=>`<option value="${k}" ${r.frequency===k?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>יום חיוב בחודש</label><input name="due_day" type="number" min="1" max="31" value="${r.due_day??''}" /></div></div>
-    <div class="field-row"><div class="field"><label>קטגוריה</label><select name="category_id">${categoryOptions(cats,r.category_id,'expense')}</select></div><div class="field"><label>בעל מקצוע קשור</label><select name="professional_id">${professionalOptions(pros,r.professional_id)}</select></div></div>
+      <td>${termLabel(r)}</td>
+      <td style="text-align:left"><button class="icon-btn" data-edit="${r.id}">✏️</button><button class="btn-danger" data-del="${r.id}">🗑</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">אין הוצאות קבועות. הוסיפו חשמל, מים, ארנונה, אינטרנט, גנן, בריכה וכו׳ — מתוך חיוב שכבר ירד.</div>'}</div>`;
+  const txOptions=(sel)=>`<option value="">— בחרו חיוב מההוצאות —</option>`+expTx.map(t=>{ const mc=t.merchant||t.description||'—'; return `<option value="${t.id}" data-merchant="${esc(mc)}" data-amount="${t.amount}" data-cat="${t.category_id||''}" data-date="${esc(t.tx_date||'')}" data-day="${t.tx_date?(+String(t.tx_date).slice(8,10)||''):''}" ${sel==t.id?'selected':''}>${fmtDate(t.tx_date)} · ${esc(mc)} · ${money2(t.amount)}</option>`; }).join('');
+  const form=(r={})=>`
+    <div class="field"><label>שייכו לחיוב מתוך ההוצאות *</label><select name="source_tx_id" id="rec-src">${txOptions(r.source_tx_id)}</select>
+      <input type="hidden" name="match_text" id="rec-match" value="${esc(r.match_text||'')}" /><div class="hint">בחרו את החיוב שירד בפועל — הפרטים ימולאו אוטומטית וניתן לערוך.</div></div>
+    <div class="field"><label>שם *</label><input name="name" id="rec-name" value="${esc(r.name||'')}" placeholder="חשמל / ארנונה / גנן…" required /></div>
+    <div class="field-row"><div class="field"><label>ספק</label><input name="provider" id="rec-prov" value="${esc(r.provider||'')}" /></div><div class="field"><label>סכום (₪)</label><input name="amount" id="rec-amount" type="number" step="0.01" min="0" value="${r.amount??''}" /></div></div>
+    <div class="field-row"><div class="field"><label>תדירות</label><select name="frequency">${Object.entries(FREQ).map(([k,v])=>`<option value="${k}" ${r.frequency===k?'selected':''}>${v}</option>`).join('')}</select></div><div class="field"><label>יום חיוב בחודש</label><input name="due_day" id="rec-day" type="number" min="1" max="31" value="${r.due_day??''}" /></div></div>
+    <div class="field-row"><div class="field"><label>קטגוריה</label><select name="category_id" id="rec-cat">${categoryOptions(cats,r.category_id,'expense')}</select></div><div class="field"><label>בעל מקצוע קשור</label><select name="professional_id">${professionalOptions(pros,r.professional_id)}</select></div></div>
+    <div class="field-row"><div class="field"><label>בתוקף מ‑</label><input name="start_date" id="rec-start" type="date" value="${esc(r.start_date||'')}" /></div><div class="field"><label>משך</label><select name="term" id="rec-term"><option value="forever" ${r.term!=='until'?'selected':''}>לתמיד</option><option value="until" ${r.term==='until'?'selected':''}>עד תאריך</option></select></div></div>
+    <div class="field" id="rec-endwrap" style="${r.term==='until'?'':'display:none'}"><label>בתוקף עד</label><input name="end_date" id="rec-end" type="date" value="${esc(r.end_date||'')}" /></div>
     <div class="field"><label><input type="checkbox" name="active" ${r.active===0?'':'checked'} /> פעיל</label></div><div class="field"><label>הערות</label><input name="notes" value="${esc(r.notes||'')}" /></div>`;
-  el.querySelector('#add').onclick=()=>openModal('הוצאה קבועה',form(),async fd=>{await api('/recurring',{method:'POST',body:{...fd,active:fd.active==='on'}});toast('נוסף');render();});
-  el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.id==b.dataset.edit);openModal('עריכת הוצאה קבועה',form(r),async fd=>{await api('/recurring/'+r.id,{method:'PUT',body:{...fd,active:fd.active==='on'}});toast('עודכן');render();});});
+  const wire=()=>{ const q=(s)=>document.querySelector('.modal '+s);
+    const src=q('#rec-src');
+    if(src) src.onchange=()=>{ const o=src.selectedOptions[0]; if(!o||!o.value) return; const d=o.dataset;
+      const set=(sel,v,onlyIfEmpty)=>{ const e=q(sel); if(e&&(!onlyIfEmpty||!e.value)) e.value=v; };
+      q('#rec-match')&&(q('#rec-match').value=d.merchant||'');
+      set('#rec-name',d.merchant||'',true); set('#rec-prov',d.merchant||'',true);
+      set('#rec-amount',d.amount||''); set('#rec-day',d.day||'',true); set('#rec-start',d.date||'',true);
+      if(d.cat){ const c=q('#rec-cat'); if(c&&!c.value) c.value=d.cat; } };
+    const term=q('#rec-term'); if(term) term.onchange=()=>{ const w=q('#rec-endwrap'); if(w) w.style.display=term.value==='until'?'':'none'; };
+  };
+  el.querySelector('#add').onclick=()=>{ openModal('הוצאה קבועה',form(),async fd=>{await api('/recurring',{method:'POST',body:{...fd,active:fd.active==='on'}});toast('נוסף');render();}); setTimeout(wire,0); };
+  el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.id==b.dataset.edit);openModal('עריכת הוצאה קבועה',form(r),async fd=>{await api('/recurring/'+r.id,{method:'PUT',body:{...fd,active:fd.active==='on'}});toast('עודכן');render();}); setTimeout(wire,0);});
   el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>confirmDelete('למחוק?',async()=>{await api('/recurring/'+b.dataset.del,{method:'DELETE'});toast('נמחק');render();}));
   return el;
 };
