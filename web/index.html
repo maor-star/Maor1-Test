@@ -995,7 +995,7 @@ views.review=async()=>{
         <p class="hint" style="margin-bottom:14px">אלו <strong>חיובים מרוכזים</strong> של כרטיסי האשראי — כל אחד מכיל עשרות עסקאות בתוכו, ולכן <strong>אין טעם לסווג את הסכום הכולל</strong>. כדי לסווג את מה שבתוכם, <strong>העלה את תדפיס הפירוט</strong> מאתר חברת האשראי (CSV / PDF).</p>
         ${issuers.map(p=>`<div class="bar-row" style="justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px">
           <div><strong>${esc(p.issuer)}</strong> <span class="muted">· ${p.count} חיובים · ${money(p.total)}</span></div>
-          <label class="btn" style="cursor:pointer;white-space:nowrap">⬆️ העלה תדפיס ${esc(p.issuer)}<input type="file" accept=".csv,.pdf,text/csv,application/pdf" hidden data-issuer="${esc(p.issuer)}" /></label>
+          <label class="btn" style="cursor:pointer;white-space:nowrap">⬆️ העלה תדפיס ${esc(p.issuer)}<input type="file" accept=".csv,.pdf,text/csv,application/pdf,.xlsx,.xlsm" hidden data-issuer="${esc(p.issuer)}" /></label>
         </div>`).join('')}
       </div>
     </div>` : '';
@@ -1058,16 +1058,16 @@ views.import=async()=>{
       ${monthRows.map(r=>`<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <strong style="min-width:110px">${fmtMonth(r.ym)}</strong>
         ${r.noData? '<span class="pill status-late">אין נתונים — העלה תדפיס בנק</span>'
-          : r.needed.length? r.needed.map(p=>`<span style="display:inline-flex;align-items:center;gap:6px"><span class="pill status-soon">${esc(p.issuer)} · ${money(p.total)}</span><label class="btn-ghost" style="cursor:pointer;padding:4px 10px;font-size:12px">⬆️ ייבוא מסמך<input type="file" hidden accept=".csv,.pdf,text/csv,application/pdf" data-issuer="${esc(p.issuer)}" /></label></span>`).join('')
+          : r.needed.length? r.needed.map(p=>`<span style="display:inline-flex;align-items:center;gap:6px"><span class="pill status-soon">${esc(p.issuer)} · ${money(p.total)}</span><label class="btn-ghost" style="cursor:pointer;padding:4px 10px;font-size:12px">⬆️ ייבוא מסמך<input type="file" hidden accept=".csv,.pdf,text/csv,application/pdf,.xlsx,.xlsm" data-issuer="${esc(p.issuer)}" /></label></span>`).join('')
           : '<span class="pill status-ok">מלא ✓</span>'}
       </div>`).join('')}
       ${!anyMissing?'<div class="empty" style="padding:16px">הכל מלא — אין תדפיסים חסרים 🎉</div>':''}
     </div></div>`;
   el.innerHTML=missingHTML+`<div class="card" style="padding:22px">
     <h2 style="margin:0 0 8px">📥 ייבוא תדפיס אשראי / בנק</h2>
-    <p class="hint" style="margin-bottom:16px">גררו לכאן קובץ <strong>CSV</strong> או <strong>PDF</strong> שהורדתם מאתר חברת האשראי או הבנק, או לחצו לבחירה. נזהה את השורות ותאשרו את הייבוא. עסקאות כפולות יסוננו אוטומטית.<br><span class="muted">💡 CSV הוא המדויק ביותר. חילוץ מ‑PDF הוא מיטבי — תמיד בדקו את התצוגה המקדימה לפני ייבוא.</span></p>
-    <div class="field-row" style="margin-bottom:14px"><div class="field"><label>מקור</label><select id="imp-source"><option value="credit_card">💳 כרטיס אשראי</option><option value="bank">🏦 חשבון בנק</option></select></div><div class="field"><label>שם הכרטיס / החשבון</label><input id="imp-account" placeholder="לדוגמה: ויזה לאומי / עו״ש הפועלים" /></div></div>
-    <div class="drop" id="drop">📄 גררו קובץ CSV או PDF לכאן, או לחצו לבחירה<input type="file" id="file" accept=".csv,text/csv,.txt,.pdf,application/pdf" hidden /></div>
+    <p class="hint" style="margin-bottom:16px">גררו לכאן קובץ <strong>אקסל (XLSX)</strong>, <strong>CSV</strong> או <strong>PDF</strong> שהורדתם מאתר חברת האשראי או הבנק, או לחצו לבחירה. נזהה אוטומטית את <strong>חברת האשראי</strong> ואת <strong>חודש החיוב</strong>, ונתאים לחיוב שירד בחשבון הבנק. עסקאות כפולות יסוננו אוטומטית.<br><span class="muted">💡 אקסל ו‑CSV מדויקים ביותר. חילוץ מ‑PDF הוא מיטבי — בדקו את התצוגה המקדימה לפני ייבוא.</span></p>
+    <div class="field-row" style="margin-bottom:14px"><div class="field"><label>מקור</label><select id="imp-source"><option value="credit_card">💳 כרטיס אשראי</option><option value="bank">🏦 חשבון בנק</option></select></div><div class="field"><label>שם הכרטיס / החשבון <span class="muted">(מזוהה אוטומטית)</span></label><input id="imp-account" placeholder="לדוגמה: ויזה לאומי / עו״ש הפועלים" /></div></div>
+    <div class="drop" id="drop">📄 גררו קובץ אקסל (XLSX), CSV או PDF לכאן, או לחצו לבחירה<input type="file" id="file" accept=".csv,text/csv,.txt,.pdf,application/pdf,.xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden /></div>
     <div id="mapper"></div></div>`;
   const drop=el.querySelector('#drop'), fileInput=el.querySelector('#file');
   drop.onclick=()=>fileInput.click();
@@ -1075,24 +1075,62 @@ views.import=async()=>{
   drop.ondragleave=()=>drop.classList.remove('drag');
   drop.ondrop=e=>{e.preventDefault();drop.classList.remove('drag');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);};
   fileInput.onchange=()=>fileInput.files[0]&&handleFile(fileInput.files[0]);
+  const applyDetected=(meta)=>{ if(meta&&meta.issuer){ const s=el.querySelector('#imp-source'); if(s) s.value='credit_card'; const a=el.querySelector('#imp-account'); if(a&&!a.value.trim()) a.value=meta.issuer; } };
+  function processTabular(parsed, file){ const meta=autoDetectStatement(parsed.headers,parsed.rows,file?file.name:''); applyDetected(meta); showMapper(parsed,{detected:meta}); }
   function handleFile(file){
     const isPdf = /\.pdf$/i.test(file.name) || file.type==='application/pdf';
+    const isXlsx = /\.xls[xm]$/i.test(file.name) || /spreadsheetml/.test(file.type||'');
+    const isXls = /\.xls$/i.test(file.name);
+    const mapper=el.querySelector('#mapper');
+    if(isXls){ mapper.innerHTML='<div class="empty">קובץ <strong>.xls</strong> ישן אינו נתמך לקריאה ישירה 😕<br><span class="hint">פתחו אותו באקסל ושמרו כ‑<strong>.xlsx</strong> או <strong>CSV</strong>, ואז העלו שוב.</span></div>'; return; }
+    if(isXlsx){
+      mapper.innerHTML='<div class="empty">קורא את קובץ האקסל… ⏳</div>';
+      const reader=new FileReader();
+      reader.onload=async()=>{ try{ const parsed=await parseXLSX(reader.result);
+        if(!parsed.rows.length){ mapper.innerHTML='<div class="empty">לא זוהו שורות בקובץ האקסל 😕<br><span class="hint">ודאו שיש כותרות ושורות נתונים, או ייצאו כ‑CSV.</span></div>'; return; }
+        processTabular(parsed,file);
+      }catch(err){ mapper.innerHTML=`<div class="empty">שגיאה בקריאת האקסל: ${esc(err.message)}<br><span class="hint">נסו לשמור כ‑CSV ולהעלות שוב.</span></div>`; } };
+      reader.readAsArrayBuffer(file); return;
+    }
     if(isPdf){
-      const mapper=el.querySelector('#mapper'); mapper.innerHTML='<div class="empty">מחלץ עסקאות מה‑PDF… ⏳</div>';
+      mapper.innerHTML='<div class="empty">מחלץ עסקאות מה‑PDF… ⏳</div>';
       const reader=new FileReader();
       reader.onload=async()=>{ try{
         const items=await extractPdfTransactions(reader.result);
         if(!items.length){ mapper.innerHTML=`<div class="empty">לא הצלחתי לחלץ עסקאות מה‑PDF הזה 😕<br><span class="hint">ייתכן שהוא סרוק כתמונה או בפורמט לא נתמך. הדרך הבטוחה: באתר האשראי/בנק לחצו «ייצוא ל‑CSV/אקסל» וייבאו את הקובץ הזה.</span></div>`; return; }
-        showPdfPreview(items);
+        const meta={issuer:detectIssuer(file.name)||'', month:(function(){const c={};items.forEach(i=>{const d=normDate(i.date);if(d){const y=d.slice(0,7);c[y]=(c[y]||0)+1;}});const e=Object.entries(c).sort((a,b)=>b[1]-a[1]);return e.length?e[0][0]:'';})()};
+        applyDetected(meta); showPdfPreview(items,meta);
       }catch(err){ mapper.innerHTML=`<div class="empty">שגיאה בחילוץ ה‑PDF: ${esc(err.message)}<br><span class="hint">נסו לייצא כ‑CSV מאתר האשראי/בנק.</span></div>`; } };
       reader.readAsArrayBuffer(file); return;
     }
-    const reader=new FileReader(); reader.onload=()=>{ try{ showMapper(parseCSV(reader.result)); }catch(err){ toast(err.message,true); } }; reader.readAsText(file,'utf-8');
+    const reader=new FileReader(); reader.onload=()=>{ try{ processTabular(parseCSV(reader.result),file); }catch(err){ toast(err.message,true); } }; reader.readAsText(file,'utf-8');
   }
-  function showMapper({headers,rows}, {pdf=false}={}){ if(!rows.length) return toast('הקובץ ריק',true);
+  // בונה כרטיס "זוהה אוטומטית" עם התאמה לחיוב שירד בבנק
+  function detectBanner(meta, detailTotal){
+    if(!meta) return '';
+    const iss=meta.issuer?detectIssuer(meta.issuer):'';
+    let parts=[];
+    if(iss) parts.push(`💳 כרטיס: <strong>${esc(iss)}</strong>`);
+    if(meta.month) parts.push(`📅 חודש חיוב: <strong>${fmtMonth(meta.month)}</strong>`);
+    let matchLine='';
+    if(iss && detailTotal>0){
+      const lumps=txs.filter(t=>t.kind==='expense'&&isCard(t)&&detectIssuer(t.merchant||t.description)===iss);
+      let best=null; lumps.forEach(t=>{ const diff=Math.abs(t.amount-detailTotal); if(best===null||diff<best.diff) best={t,diff}; });
+      const tol=Math.max(2,detailTotal*0.02);
+      if(best&&best.diff<=tol){ matchLine=`<div class="row" style="margin:6px 0 0;color:var(--green,#2f9e6f)">✓ תואם לחיוב בבנק על סך <strong>${money2(best.t.amount)}</strong>${best.t.tx_date?` (${fmtDate(best.t.tx_date)})`:''} — הפירוט יחליף את החיוב המרוכז.</div>`; }
+      else if(best){ matchLine=`<div class="row" style="margin:6px 0 0;color:var(--amber)">⚠️ סכום הפירוט (${money2(detailTotal)}) קרוב אך לא זהה לחיוב בבנק (${money2(best.t.amount)}). בדקו שאין עסקאות חסרות.</div>`; }
+      else { matchLine=`<div class="row" style="margin:6px 0 0;color:var(--muted)">סכום הפירוט: <strong>${money2(detailTotal)}</strong> · לא נמצא חיוב תואם בבנק (ייתכן שעדיין לא יובא תדפיס הבנק).</div>`; }
+    }
+    if(!parts.length&&!matchLine) return '';
+    return `<div class="card" style="padding:12px 16px;margin:-4px 0 12px;border-color:color-mix(in srgb,var(--accent) 40%,var(--border));background:color-mix(in srgb,var(--accent) 7%,transparent)">
+      <div class="row" style="margin:0;gap:16px;flex-wrap:wrap">🔎 זוהה אוטומטית — ${parts.join(' · ')||'לא זוהתה חברת אשראי'}</div>${matchLine}</div>`;
+  }
+  function showMapper({headers,rows}, {pdf=false,detected=null}={}){ if(!rows.length) return toast('הקובץ ריק',true);
     const mapper=el.querySelector('#mapper'); const guess=guessColumns(headers);
     const opts=sel=>headers.map((h,i)=>`<option value="${i}" ${i===sel?'selected':''}>${esc(h||'עמודה '+(i+1))}</option>`).join('');
+    const detailTotal=rows.reduce((s,r)=>s+Math.abs(parseAmount(r[guess.amount])),0);
     mapper.innerHTML=`<div class="section-title">התאמת עמודות · נמצאו ${rows.length} שורות</div>
+      ${detectBanner(detected,detailTotal)}
       ${pdf?'<div class="hint" style="margin:-6px 0 10px;padding:9px 12px;background:color-mix(in srgb,var(--amber) 12%,transparent);border-radius:9px;color:var(--amber)">⚠️ חולץ מ‑PDF (מיטבי). עברו על התצוגה המקדימה — ודאו שהתאריכים והסכומים נכונים. שורות שגויות אפשר להתעלם מהן, וכפילויות יסוננו.</div>':''}
       <div class="map-grid"><div class="field"><label>תאריך</label><select id="m-date">${opts(guess.date)}</select></div><div class="field"><label>תיאור / בית עסק</label><select id="m-desc">${opts(guess.desc)}</select></div><div class="field"><label>סכום</label><select id="m-amount">${opts(guess.amount)}</select></div></div>
       <label class="chk" style="margin-bottom:12px"><input type="checkbox" id="m-allexp" checked /> ההוצאות בקובץ הן חיוב (הוצאה). בטלו אם עמודת הסכום כוללת גם זיכויים בסימן ±</label>
@@ -1111,11 +1149,12 @@ views.import=async()=>{
       mapper.innerHTML=`<div class="empty" style="margin-top:20px">✔ הושלם. <a class="link" data-nav="review">עברו לסיווג העסקאות ←</a></div>`;
     };
   }
-  function showPdfPreview(items){
+  function showPdfPreview(items,meta){
     const mapper=el.querySelector('#mapper');
     const detected=items.some(i=>i.kind); const inc=items.filter(i=>i.kind==='income').length; const exp=items.length-inc;
     const total=items.filter(i=>i.kind!=='income').reduce((s,i)=>s+Number(i.amount),0);
     mapper.innerHTML=`<div class="section-title">חולצו ${items.length} עסקאות מה‑PDF</div>
+      ${detectBanner(meta,total)}
       <div class="hint" style="margin:-6px 0 10px;padding:9px 12px;background:color-mix(in srgb,var(--amber) 12%,transparent);border-radius:9px;color:var(--amber)">⚠️ חולץ אוטומטית — עברו על הרשימה וודאו שהתאריכים והסכומים נכונים. כפילויות יסוננו בייבוא, ותוכלו לתקן/לסווג הכל אחר כך.</div>
       ${detected?`<div class="hint" style="margin-bottom:10px">זוהו אוטומטית <strong>${inc}</strong> הכנסות ו‑<strong>${exp}</strong> הוצאות (לפי עמודות זכות/חובה).</div>`:''}
       <label class="chk" style="margin-bottom:12px"><input type="checkbox" id="pdf-allexp" ${detected?'':'checked'} /> התייחס לכל השורות כהוצאה (בטלו כדי לשמור על זיהוי הכנסות/הוצאות)</label>
@@ -1150,27 +1189,93 @@ function guessColumns(headers){ const find=(words,def)=>{ const i=headers.findIn
 function parseAmount(v){ if(v==null) return 0; let s=String(v).replace(/[₪,\s]/g,'').replace(/["']/g,''); let neg=false;
   if(/^\(.*\)$/.test(s)){neg=true;s=s.slice(1,-1);} if(s.includes('-')){neg=true;s=s.replace(/-/g,'');}
   const n=parseFloat(s); if(isNaN(n))return 0; return neg?-n:n; }
-function normDate(v){ if(!v) return ''; const s=String(v).trim(); let m;
+function normDate(v){ if(v==null||v==='') return ''; const s=String(v).trim(); let m;
   if((m=s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/))) return `${m[1]}-${p2(m[2])}-${p2(m[3])}`;
   if((m=s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/))){ let y=m[3]; if(y.length===2)y='20'+y; return `${y}-${p2(m[2])}-${p2(m[1])}`; }
+  // מספר סריאלי של אקסל (ימים מ‑1899‑12‑30) — טווח סביר לתאריכי תדפיס
+  if(/^\d{4,6}(\.\d+)?$/.test(s)){ const n=Math.floor(parseFloat(s)); if(n>=25569&&n<=60000){ const d=new Date(Date.UTC(1899,11,30)+n*86400000); return `${d.getUTCFullYear()}-${p2(d.getUTCMonth()+1)}-${p2(d.getUTCDate())}`; } }
   return ''; }
 const p2=n=>String(n).padStart(2,'0');
+
+/* ===== XLSX parsing (native, no external libraries) ===== */
+async function inflateRaw(u8){ if(typeof DecompressionStream==='undefined') return null;
+  try{ const ds=new DecompressionStream('deflate-raw'); const buf=await new Response(new Blob([u8]).stream().pipeThrough(ds)).arrayBuffer(); return new Uint8Array(buf); }catch(e){ return null; } }
+async function readZip(u8, wantFn){
+  const dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);
+  let eocd=-1; const lim=Math.max(0,u8.length-22-65536);
+  for(let i=u8.length-22;i>=lim;i--){ if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; } }
+  if(eocd<0) throw new Error('קובץ אקסל לא תקין (לא נמצא ZIP)');
+  const cdCount=dv.getUint16(eocd+10,true), cdOffset=dv.getUint32(eocd+16,true);
+  const out={}; let p=cdOffset;
+  for(let n=0;n<cdCount;n++){
+    if(dv.getUint32(p,true)!==0x02014b50) break;
+    const method=dv.getUint16(p+10,true), compSize=dv.getUint32(p+20,true), fnLen=dv.getUint16(p+28,true), extraLen=dv.getUint16(p+30,true), commentLen=dv.getUint16(p+32,true), localOff=dv.getUint32(p+42,true);
+    const name=new TextDecoder('utf-8').decode(u8.subarray(p+46,p+46+fnLen));
+    p=p+46+fnLen+extraLen+commentLen;
+    if(!wantFn(name)) continue;
+    const lfnLen=dv.getUint16(localOff+26,true), lexLen=dv.getUint16(localOff+28,true);
+    const dataStart=localOff+30+lfnLen+lexLen; const comp=u8.subarray(dataStart,dataStart+compSize);
+    const data = method===0? comp : await inflateRaw(comp);
+    if(data) out[name]=data;
+  }
+  return out;
+}
+function colIndex(ref){ const m=String(ref||'').match(/^([A-Za-z]+)/); if(!m)return 0; let n=0; for(const ch of m[1].toUpperCase()) n=n*26+(ch.charCodeAt(0)-64); return n-1; }
+function xmlDecode(s){ return String(s).replace(/&#x([0-9a-fA-F]+);/g,(_,h)=>String.fromCodePoint(parseInt(h,16))).replace(/&#(\d+);/g,(_,d)=>String.fromCodePoint(+d)).replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&'); }
+function xmlTexts(frag){ let o=''; const re=/<t\b[^>]*>([\s\S]*?)<\/t>/g; let m; while((m=re.exec(frag))) o+=xmlDecode(m[1]); return o; }
+async function parseXLSX(buf){
+  const u8=new Uint8Array(buf);
+  const files=await readZip(u8, name=>/^xl\/(sharedStrings\.xml|worksheets\/.+\.xml)$/i.test(name));
+  const dec=(b)=>new TextDecoder('utf-8').decode(b);
+  const ss=[]; if(files['xl/sharedStrings.xml']){ const xml=dec(files['xl/sharedStrings.xml']); const re=/<si\b[^>]*>([\s\S]*?)<\/si>/g; let m; while((m=re.exec(xml))) ss.push(xmlTexts(m[1])); }
+  const sheetName=Object.keys(files).filter(n=>/^xl\/worksheets\/.+\.xml$/i.test(n)).sort()[0];
+  if(!sheetName) return {headers:[],rows:[]};
+  const xml=dec(files[sheetName]); const rowsArr=[];
+  const rowRe=/<row\b[^>]*>([\s\S]*?)<\/row>/g; let rm;
+  const cellRe=/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
+  while((rm=rowRe.exec(xml))){ const inner=rm[1]; const cells=[]; let maxc=0; let cm;
+    cellRe.lastIndex=0;
+    while((cm=cellRe.exec(inner))){ const attrs=cm[1]||'', body=cm[2]||''; const rMatch=attrs.match(/\br="([A-Za-z]+\d+)"/); const col=colIndex(rMatch?rMatch[1]:''); const tMatch=attrs.match(/\bt="([^"]+)"/); const t=tMatch?tMatch[1]:''; let val='';
+      if(t==='s'){ const v=body.match(/<v[^>]*>([\s\S]*?)<\/v>/); val=v?(ss[+xmlDecode(v[1])]||''):''; }
+      else if(t==='inlineStr'){ val=xmlTexts(body); }
+      else { const v=body.match(/<v[^>]*>([\s\S]*?)<\/v>/); val=v?xmlDecode(v[1]):''; }
+      cells[col]=val; if(col>maxc)maxc=col; }
+    for(let i=0;i<=maxc;i++) if(cells[i]==null)cells[i]='';
+    rowsArr.push(cells); }
+  const data=rowsArr.filter(r=>r.some(c=>c&&String(c).trim()));
+  if(!data.length) return {headers:[],rows:[]};
+  let hIdx=data.findIndex(r=>r.filter(c=>c&&String(c).trim()).length>=2); if(hIdx<0)hIdx=0;
+  return {headers:data[hIdx].map(h=>String(h).trim()), rows:data.slice(hIdx+1).map(r=>r.map(c=>String(c==null?'':c)))};
+}
+// זיהוי אוטומטי של חברת האשראי וחודש החיוב מתוך תוכן הקובץ
+function autoDetectStatement(headers, rows, filename){
+  const sample=[filename||'', headers.join(' '), rows.slice(0,40).map(r=>r.join(' ')).join(' ')].join(' ');
+  const issuer=detectIssuer(sample);
+  const g=guessColumns(headers); const mCount={};
+  rows.forEach(r=>{ const d=normDate(r[g.date]); if(d){ const ym=d.slice(0,7); mCount[ym]=(mCount[ym]||0)+1; } });
+  const months=Object.entries(mCount).sort((a,b)=>b[1]-a[1]);
+  return {issuer, month: months.length?months[0][0]:'', amountCol:g.amount};
+}
 
 // ייבוא מהיר של קובץ (CSV/PDF) ללא מסך התאמה — לשימוש בכפתור "העלה פירוט"
 function quickImportFile(file, source, account){
   return new Promise((resolve,reject)=>{
     const isPdf=/\.pdf$/i.test(file.name)||file.type==='application/pdf';
+    const isXlsx=/\.xls[xm]$/i.test(file.name)||/spreadsheetml/.test(file.type||'');
+    if(/\.xls$/i.test(file.name)&&!isXlsx){ resolve({added:0,error:'קובץ .xls ישן אינו נתמך — שמרו כ‑.xlsx או CSV.'}); return; }
+    const fromTable=({headers,rows:data})=>{ const g=guessColumns(headers);
+      return data.map(r=>({date:normDate(r[g.date]),description:String(r[g.desc]||'').trim(),merchant:String(r[g.desc]||'').trim(),amount:Math.abs(parseAmount(r[g.amount])),kind:'expense'})).filter(r=>r.date&&r.amount>0); };
     const reader=new FileReader();
     reader.onload=async()=>{ try{
       let rows;
       if(isPdf){ const items=await extractPdfTransactions(reader.result); rows=items.map(i=>({date:i.date,description:i.description,merchant:i.description,amount:i.amount,kind:i.kind||'expense'})); }
-      else { const {headers,rows:data}=parseCSV(reader.result); const g=guessColumns(headers);
-        rows=data.map(r=>({date:normDate(r[g.date]),description:(r[g.desc]||'').trim(),merchant:(r[g.desc]||'').trim(),amount:Math.abs(parseAmount(r[g.amount])),kind:'expense'})).filter(r=>r.date&&r.amount>0); }
+      else if(isXlsx){ rows=fromTable(await parseXLSX(reader.result)); }
+      else { rows=fromTable(parseCSV(reader.result)); }
       if(!rows||!rows.length){ resolve({added:0,error:'לא זוהו עסקאות בקובץ — נסו לייצא כ‑CSV, או השתמשו במסך «ייבוא תדפיסים».'}); return; }
       const res=await api('/transactions/import',{method:'POST',body:{source,account,rows}});
       resolve(res);
     }catch(e){ reject(e); } };
-    if(isPdf) reader.readAsArrayBuffer(file); else reader.readAsText(file,'utf-8');
+    if(isPdf||isXlsx) reader.readAsArrayBuffer(file); else reader.readAsText(file,'utf-8');
   });
 }
 
