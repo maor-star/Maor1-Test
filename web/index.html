@@ -508,6 +508,17 @@ function ensureDefaults(){
     for(const [match,cat] of RF){ const c=findCat(cat); if(c && !db.rules.some(r=>r.match_text===match)) db.rules.push({id:++db.seq,match_text:match,category_id:c.id}); }
     db.defaultsV=5; save();
   }
+  // v6: ניקוי זבל שנוצר מפענוח שגוי של תדפיסים (שורות סיכום ללא בית עסק / תאריך לא-סביר),
+  // וניקוי הערות "אסמכתא NNN" שנשמרו אוטומטית (משמשות רק למניעת כפילויות דרך ה-hash).
+  if((db.defaultsV||0) < 6){
+    const yr=(t)=>+String(t.tx_date||'').slice(0,4);
+    if(Array.isArray(db.transactions)){
+      db.transactions=db.transactions.filter(t=>{ const mer=strv(t.merchant)||strv(t.description); const y=yr(t);
+        if(t.kind==='expense'&&!mer) return false; if(y<2010||y>2027) return false; return true; });
+      db.transactions.forEach(t=>{ if(/^אסמכתא\s*\d+$/.test(strv(t.notes))) t.notes=''; });
+    }
+    db.defaultsV=6; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
@@ -533,20 +544,16 @@ function reconciliation(){
     g.status = g.bank===0 ? 'card_only' : g.card===0 ? 'pending' : Math.abs(g.gap)<=Math.max(2,g.bank*0.02) ? 'done' : 'partial'; return g; })
     .sort((a,b)=>b.bank-a.bank);
 }
-// מפת חברות אשראי שכבר יובא עבורן פירוט עסקאות (מתוך שורות הפירוט — בית עסק אמיתי, לא חיוב מרוכז)
-function issuerStatusMap(){ const map={}; db.transactions.forEach(t=>{ if(t.kind==='expense'&&t.source==='credit_card'&&!detectIssuer(t.merchant||t.description)){ const k=detectIssuer(t.account); if(k) map[k]=true; } }); return map; }
-// האם עסקה נספרת בסכום הכולל (מונע ספירה כפולה של חיוב-אשראי מרוכז מול הפירוט):
-//  - פירוט אשראי (בית עסק אמיתי) נספר תמיד — זו האמת על ההוצאה.
-//  - שורה "חיוב אשראי מרוכז" (בית העסק הוא שם חברת האשראי) לא נספרת אם יש פירוט לאותה חברה;
-//    אם אין פירוט — נספרת (זהו הסכום היחיד הידוע לאותו חודש).
-function countsInTotal(t, detailMap){
-  if(t.kind!=='expense') return true;
-  const isLump = !!detectIssuer(t.merchant||t.description); // בית העסק עצמו הוא שם חברת אשראי → חיוב מרוכז
-  if(t.source==='credit_card') return !isLump;             // פירוט אמיתי נספר; שורת מרוכז שסומנה אשראי — לא
-  if(!isLump) return true;                                 // הוצאת בנק רגילה (משכנתא/העברה/צ׳ק…)
-  const k=detectIssuer(t.merchant)||detectIssuer(t.description);
-  return !detailMap[k];                                    // חיוב מרוכז בבנק — רק אם אין פירוט לאותה חברה
-}
+function issuerStatusMap(){ return {}; } // נשמר לתאימות קריאות קיימות
+// שורת "חיוב מרוכז" — בית העסק עצמו הוא שם חברת אשראי (סכום כולל חסר-מהות)
+function isAggLump(t){ return !!detectIssuer(t.merchant||t.description); }
+// שורת פירוט אשראי — בית עסק אמיתי שהגיע מתדפיס כרטיס (החשבון הוא חברת אשראי)
+function isCardDetail(t){ return !isAggLump(t) && !!detectIssuer(t.account); }
+// עלות/תזרים = תזרים מזומנים אמיתי: חיובים מרוכזים חודשיים + הוצאות רגילות (משכנתא/העברות/מזומן).
+// פירוט האשראי אינו נספר כאן — הוא הפירוק של החיוב המרוכז, וספירתו תגרום לכפילות.
+function countsInTotal(t){ if(t.kind!=='expense') return true; return !isCardDetail(t); }
+// פילוח לפי מהות: פירוט האשראי (בית עסק אמיתי) + הוצאות רגילות. חיוב מרוכז אינו נספר (חסר מהות).
+function countsEssence(t){ if(t.kind!=='expense') return true; return !isAggLump(t); }
 
 /* ============================ Local "API" ============================ */
 async function api(path, opts={}){
@@ -611,7 +618,7 @@ function h_transactions(m,id,sub,b,qp){
       const hash=[src,acct,date,desc,amount,kind].join('|')+(ref?'|'+ref:'');
       if(existing.has(hash)){skipped++;continue;}
       const cat=matchCategory(desc+' '+merchant, kind); if(cat) autoCategorized++;
-      db.transactions.push({id:uid(),tx_date:date,source:src,account:acct,description:desc,merchant,amount,kind,category_id:cat,notes:ref?('אסמכתא '+ref):'',hash});
+      db.transactions.push({id:uid(),tx_date:date,source:src,account:acct,description:desc,merchant,amount,kind,category_id:cat,notes:'',hash});
       existing.add(hash); added++;
     }
     return {added,skipped,autoCategorized};
@@ -744,52 +751,52 @@ function h_backup(m,b){
 const MORTGAGE_NAME='משכנתא', RENT_INCOME_NAME='שכר דירה (הכנסה)';
 function h_dashboard(qp){
   const month=qp.month;
-  const stMap=issuerStatusMap();
-  const isCard=(t)=> !!detectIssuer(t.merchant||t.description);
   const mortgageCat=db.categories.find(c=>c.name===MORTGAGE_NAME);
   const rentCat=db.categories.find(c=>c.name===RENT_INCOME_NAME);
-  // זיהוי לפי מילת מפתח או קטגוריה — עובד גם אם עדיין לא סווג
   const isMortgage=(t)=> /משכנתא/.test((t.merchant||'')+' '+(t.description||'')) || (mortgageCat && t.category_id===mortgageCat.id);
   const isRent=(t)=> /שכר דירה|שכירות|שוכר/.test((t.merchant||'')+' '+(t.description||'')) || (rentCat && t.category_id===rentCat.id);
-  // כל ההוצאות בפועל (כולל חיובי אשראי ולא-מסווגות), עם מניעת ספירה כפולה
-  const exp=db.transactions.filter(t=>t.kind==='expense'&&inMonth(t.tx_date,month)&&countsInTotal(t,stMap));
+  // תזרים מזומנים אמיתי (עלות/תזרים): חיובים מרוכזים + הוצאות רגילות; פירוט אשראי לא נספר (בתוך החיוב המרוכז)
+  const exp=db.transactions.filter(t=>t.kind==='expense'&&inMonth(t.tx_date,month)&&countsInTotal(t));
+  // סט מהות לפילוח וסיווג: פירוט אשראי + הוצאות רגילות; חיוב מרוכז לא נכלל
+  const expEss=db.transactions.filter(t=>t.kind==='expense'&&inMonth(t.tx_date,month)&&countsEssence(t));
   const inc=db.transactions.filter(t=>t.kind==='income'&&inMonth(t.tx_date,month));
   const totalExpenses=exp.reduce((s,t)=>s+t.amount,0);
   const totalIncome=inc.reduce((s,t)=>s+t.amount,0);
-  // מנוהלים בנפרד מתקציב הבית:
   const mortgage=exp.filter(isMortgage).reduce((s,t)=>s+t.amount,0);
   const rentalIncome=inc.filter(isRent).reduce((s,t)=>s+t.amount,0);
-  // עלות אחזקת הבית = כל ההוצאות פחות המשכנתא
   const homeExpenses=totalExpenses-mortgage;
-  // סך הוצאת תזרים כוללת = כמה כסף צריך להכניס לחשבון כדי להיות באפס.
-  // כל ההוצאות (כולל משכנתא) פחות הכנסת השכירות — הכול משוקלל יחד.
   const cashFlowTotal=totalExpenses-rentalIncome;
-  // לא מסווג (אמיתי — לא כולל חיובי אשראי מרוכזים שמחכים לפירוט)
-  const uncategorized=exp.filter(t=>!t.category_id && !isCard(t)).length;
-  // פילוח לפי קטגוריה — רק המסווג (ללא משכנתא)
+  // חברות אשראי שכבר יובא עבורן פירוט
+  const detailIssuers=new Set(db.transactions.filter(t=>t.kind==='expense'&&isCardDetail(t)).map(t=>detectIssuer(t.account)));
+  // חיובים מרוכזים שעדיין אין להם פירוט (חסרי-מהות) — נספרים בעלות אבל לא מפורטים
+  const pendingLumps=exp.filter(t=>isAggLump(t) && !detailIssuers.has(detectIssuer(t.merchant||t.description)));
+  const pendingCredit=pendingLumps.reduce((s,t)=>s+t.amount,0);
+  // לא מסווג (מתוך סט המהות — לא כולל חיובים מרוכזים)
+  const uncategorized=expEss.filter(t=>!t.category_id && !isMortgage(t)).length;
+  // פילוח לפי קטגוריה — לפי מהות, ללא משכנתא
   const catMap={};
-  exp.filter(t=>t.category_id&&!isMortgage(t)).forEach(t=>{const c=catById(t.category_id); if(!c)return; if(!catMap[c.id])catMap[c.id]={name:c.name,color:c.color,total:0}; catMap[c.id].total+=t.amount;});
+  expEss.filter(t=>t.category_id&&!isMortgage(t)).forEach(t=>{const c=catById(t.category_id); if(!c)return; if(!catMap[c.id])catMap[c.id]={name:c.name,color:c.color,total:0}; catMap[c.id].total+=t.amount;});
   const byCategory=Object.values(catMap).filter(x=>x.total>0).sort((a,c)=>c.total-a.total);
   const perMonth={monthly:1,bimonthly:0.5,quarterly:1/3,yearly:1/12};
   const recurringMonthly=db.recurring.filter(recActive).reduce((s,r)=>s+r.amount*(perMonth[r.frequency]||1),0);
-  // trend last 6 months (כל ההוצאות פחות משכנתא)
+  // מגמת עלות אחזקת הבית (6 חודשים) — תזרים, ללא משכנתא
   const now=new Date(); const trend=[];
   for(let i=5;i>=0;i--){ const d=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()-i,1)); const m=d.toISOString().slice(0,7);
-    const e=db.transactions.filter(t=>t.kind==='expense'&&String(t.tx_date).slice(0,7)===m&&countsInTotal(t,stMap)&&!isMortgage(t)).reduce((s,t)=>s+t.amount,0);
+    const e=db.transactions.filter(t=>t.kind==='expense'&&String(t.tx_date).slice(0,7)===m&&countsInTotal(t)&&!isMortgage(t)).reduce((s,t)=>s+t.amount,0);
     const ic=db.transactions.filter(t=>t.kind==='income'&&String(t.tx_date).slice(0,7)===m&&!isRent(t)).reduce((s,t)=>s+t.amount,0);
     trend.push({m,expenses:e,income:ic}); }
   const upcomingMaintenance=db.components.map(compView).filter(c=>c.next_due&&c.days_left<=60).sort((a,c)=>a.next_due.localeCompare(c.next_due)).slice(0,8);
   const expiringWarranties=db.warranties.map(warrantyView).filter(w=>w.effective_expiry&&w.days_left<=90).sort((a,c)=>a.effective_expiry.localeCompare(c.effective_expiry)).slice(0,8);
-  // שלמות התמונה: חלק ההוצאות שידוע ומפורט. חיובי אשראי מרוכזים (בלי פירוט)
-  // ועסקאות לא מסווגות = חוסר, ולכן לא ניתן להגיע ל-100% עד שהכל מפורט ומסווג.
-  const lumpTotal=exp.filter(isCard).reduce((s,t)=>s+t.amount,0);
-  const classifiedTotal=exp.filter(t=>t.category_id).reduce((s,t)=>s+t.amount,0);
-  const unclassifiedTotal=totalExpenses-classifiedTotal; // כל מה שעדיין לא מסווג (כולל חיובי אשראי)
-  const pendingCredit=lumpTotal;
-  const completeness = totalExpenses>0 ? Math.round(classifiedTotal/totalExpenses*100) : 100;
-  const pendingIssuers=new Set(db.transactions.filter(t=>t.kind==='expense'&&isCard(t)).map(t=>detectIssuer(t.merchant)||detectIssuer(t.description))).size;
+  // שלמות התמונה: מתוך כל ההוצאה שדורשת מהות (פירוט/רגיל + חיובים מרוכזים שממתינים לפירוט),
+  // כמה כבר מסווג. חיוב מרוכז ללא פירוט = חוסר, ולכן לא מגיעים ל-100% עד שמעלים פירוט ומסווגים.
+  const classifiedTotal=expEss.filter(t=>t.category_id).reduce((s,t)=>s+t.amount,0);
+  const essTotal=expEss.reduce((s,t)=>s+t.amount,0);
+  const denom=essTotal+pendingCredit;
+  const unclassifiedTotal=(essTotal-classifiedTotal)+pendingCredit;
+  const completeness = denom>0 ? Math.round(classifiedTotal/denom*100) : 100;
+  const pendingIssuers=new Set(pendingLumps.map(t=>detectIssuer(t.merchant)||detectIssuer(t.description))).size;
   return {month:month||'all',homeExpenses,totalExpenses,totalIncome,mortgage,rentalIncome,cashFlowTotal,uncategorized,recurringMonthly,annualProjection:recurringMonthly*12,byCategory,trend,upcomingMaintenance,expiringWarranties,
-    pendingCredit,pendingIssuers,completeness,unclassifiedTotal,lumpTotal};
+    pendingCredit,pendingIssuers,completeness,unclassifiedTotal,lumpTotal:pendingCredit};
 }
 
 /* ============================ UI helpers ============================ */
@@ -1831,16 +1838,15 @@ views.categories=async()=>{
 // ===== Analytics =====
 views.analytics=async()=>{
   const [rows,cats]=await Promise.all([api('/transactions'+monthParam()),api('/categories')]);
-  const stMap=issuerStatusMap();
-  const exp=rows.filter(t=>t.kind==='expense'&&countsInTotal(t,stMap));
-  const totalExp=exp.reduce((s,t)=>s+t.amount,0);
+  const expCash=rows.filter(t=>t.kind==='expense'&&countsInTotal(t)); // תזרים מזומנים (עלות)
+  const exp=rows.filter(t=>t.kind==='expense'&&countsEssence(t));       // מהות (פילוח/סיווג)
+  const totalExp=expCash.reduce((s,t)=>s+t.amount,0);
   const catMap={}; exp.forEach(t=>{ const name=t.category_name||'ללא סיווג'; if(!catMap[name])catMap[name]={label:name,value:0,color:t.category_color||'#94a3b8'}; catMap[name].value+=t.amount; });
   const byCat=Object.values(catMap).sort((a,b)=>b.value-a.value);
   const srcColors={credit_card:'#6366f1',bank:'#0ea5e9',cash:'#16a34a',manual:'#a855f7'};
-  const srcMap={}; exp.forEach(t=>{ if(!srcMap[t.source])srcMap[t.source]={label:srcLabel(t.source),value:0,color:srcColors[t.source]||'#94a3b8'}; srcMap[t.source].value+=t.amount; });
+  const srcMap={}; expCash.forEach(t=>{ if(!srcMap[t.source])srcMap[t.source]={label:srcLabel(t.source),value:0,color:srcColors[t.source]||'#94a3b8'}; srcMap[t.source].value+=t.amount; });
   const bySrc=Object.values(srcMap).sort((a,b)=>b.value-a.value);
-  // הכי הרבה הוצאתי אצל — רק בתי עסק אמיתיים. לא כוללים חיובי אשראי מרוכזים
-  // (ישראכרט/אמריקן/כאל/כרטיסי אשראי) שהם סכומים חסרי-מהות המכילים עשרות עסקאות.
+  // הכי הרבה הוצאתי אצל — רק בתי עסק אמיתיים (מסט המהות). ללא חיובים מרוכזים וללא משכנתא.
   const mMap={}; exp.forEach(t=>{ if(detectIssuer(t.merchant||t.description)) return; const m=(t.merchant||t.description||'').trim(); if(!m) return; if(/משכנתא/.test(m)) return; mMap[m]=(mMap[m]||0)+t.amount; });
   const topMerch=Object.entries(mMap).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value).slice(0,10);
   const uncat=exp.filter(t=>!t.category_id).reduce((s,t)=>s+t.amount,0);
@@ -1976,12 +1982,11 @@ views.settings=async()=>{
 // ===== Monthly breakdown: missing statements + unclassified, per month =====
 views.monthly=async()=>{
   const rows=await api('/transactions');
-  const isAgg=(r)=> !!detectIssuer(r.merchant||r.description);
   const months={}; const M=(ym)=>(months[ym]=months[ym]||{ym,uncCount:0,uncSum:0,expSum:0,incSum:0,txCount:0});
   rows.forEach(r=>{ const ym=String(r.tx_date).slice(0,7); if(ym.length!==7) return; const mm=M(ym); mm.txCount++;
     if(r.kind==='income'){ mm.incSum+=r.amount; return; }
-    mm.expSum+=r.amount;
-    if(!isAgg(r) && !r.category_id){ mm.uncCount++; mm.uncSum+=r.amount; } });
+    if(countsInTotal(r)) mm.expSum+=r.amount;                              // תזרים מזומנים (ללא כפילות פירוט)
+    if(countsEssence(r) && !r.category_id){ mm.uncCount++; mm.uncSum+=r.amount; } });
   const list=Object.values(months).sort((a,b)=>b.ym.localeCompare(a.ym));
   const el=document.createElement('div');
   if(!list.length){ el.innerHTML='<div class="card"><div class="empty">אין עדיין עסקאות. ייבאו תדפיס במסך «ייבוא תדפיסים».</div></div>'; return el; }
