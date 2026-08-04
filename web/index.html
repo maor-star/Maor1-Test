@@ -689,12 +689,23 @@ function h_backup(m,b){
     db=d; save(); return {ok:true};
   }
 }
+const MORTGAGE_NAME='משכנתא', RENT_INCOME_NAME='שכר דירה (הכנסה)';
 function h_dashboard(qp){
   const month=qp.month;
   const stMap=issuerStatusMap();
-  const exp=db.transactions.filter(t=>t.kind==='expense'&&inMonth(t.tx_date,month)&&countsInTotal(t,stMap));
+  const isCard=(t)=> !!detectIssuer(t.merchant||t.description);
+  const mortgageCat=db.categories.find(c=>c.name===MORTGAGE_NAME);
+  const rentCat=db.categories.find(c=>c.name===RENT_INCOME_NAME);
+  const isMortgage=(t)=> mortgageCat && t.category_id===mortgageCat.id;
+  const isRent=(t)=> rentCat && t.category_id===rentCat.id;
+  // הוצאות אמיתיות בלבד (ללא חיובי אשראי מרוכזים)
+  const exp=db.transactions.filter(t=>t.kind==='expense'&&inMonth(t.tx_date,month)&&countsInTotal(t,stMap)&&!isCard(t));
   const inc=db.transactions.filter(t=>t.kind==='income'&&inMonth(t.tx_date,month));
-  const homeExp=exp.filter(t=>{const c=catById(t.category_id); return c&&c.is_home;});
+  // מנוהלים בנפרד מתקציב הבית:
+  const mortgage=exp.filter(isMortgage).reduce((s,t)=>s+t.amount,0);
+  const rentalIncome=inc.filter(isRent).reduce((s,t)=>s+t.amount,0);
+  // עלות אחזקת הבית = הוצאות בית, ללא משכנתא
+  const homeExp=exp.filter(t=>{const c=catById(t.category_id); return c&&c.is_home&&!isMortgage(t);});
   const homeExpenses=homeExp.reduce((s,t)=>s+t.amount,0);
   const totalExpenses=exp.reduce((s,t)=>s+t.amount,0);
   const totalIncome=inc.reduce((s,t)=>s+t.amount,0);
@@ -704,11 +715,11 @@ function h_dashboard(qp){
   const byCategory=Object.values(catMap).filter(x=>x.total>0).sort((a,c)=>c.total-a.total);
   const perMonth={monthly:1,bimonthly:0.5,quarterly:1/3,yearly:1/12};
   const recurringMonthly=db.recurring.filter(r=>r.active).reduce((s,r)=>s+r.amount*(perMonth[r.frequency]||1),0);
-  // trend last 6 months
+  // trend last 6 months (home cost, ללא משכנתא וללא חיובי אשראי)
   const now=new Date(); const trend=[];
   for(let i=5;i>=0;i--){ const d=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()-i,1)); const m=d.toISOString().slice(0,7);
-    const e=db.transactions.filter(t=>t.kind==='expense'&&String(t.tx_date).slice(0,7)===m&&(catById(t.category_id)?.is_home)).reduce((s,t)=>s+t.amount,0);
-    const ic=db.transactions.filter(t=>t.kind==='income'&&String(t.tx_date).slice(0,7)===m).reduce((s,t)=>s+t.amount,0);
+    const e=db.transactions.filter(t=>t.kind==='expense'&&String(t.tx_date).slice(0,7)===m&&(catById(t.category_id)?.is_home)&&!isMortgage(t)&&!isCard(t)).reduce((s,t)=>s+t.amount,0);
+    const ic=db.transactions.filter(t=>t.kind==='income'&&String(t.tx_date).slice(0,7)===m&&!isRent(t)).reduce((s,t)=>s+t.amount,0);
     trend.push({m,expenses:e,income:ic}); }
   const upcomingMaintenance=db.components.map(compView).filter(c=>c.next_due&&c.days_left<=60).sort((a,c)=>a.next_due.localeCompare(c.next_due)).slice(0,8);
   const expiringWarranties=db.warranties.map(warrantyView).filter(w=>w.effective_expiry&&w.days_left<=90).sort((a,c)=>a.effective_expiry.localeCompare(c.effective_expiry)).slice(0,8);
@@ -718,7 +729,7 @@ function h_dashboard(qp){
   const pendingCredit=pending.reduce((s,r)=>s+Math.max(0,r.gap),0);
   const totalBankCard=recon.reduce((s,r)=>s+r.bank,0);
   const completeness = totalBankCard>0 ? Math.round((1 - pendingCredit/totalBankCard)*100) : 100;
-  return {month:month||'all',homeExpenses,totalExpenses,totalIncome,uncategorized,recurringMonthly,annualProjection:recurringMonthly*12,byCategory,trend,upcomingMaintenance,expiringWarranties,
+  return {month:month||'all',homeExpenses,totalExpenses,totalIncome,mortgage,rentalIncome,uncategorized,recurringMonthly,annualProjection:recurringMonthly*12,byCategory,trend,upcomingMaintenance,expiringWarranties,
     pendingCredit,pendingIssuers:pending.length,completeness};
 }
 
@@ -766,14 +777,22 @@ const MONTH_VIEWS=new Set(['dashboard','analytics','transactions','review']);
 views.dashboard=async()=>{
   const d=await api('/dashboard'+monthParam());
   const el=document.createElement('div');
+  const managedSep = d.mortgage>0 || d.rentalIncome>0;
   el.innerHTML=`
+    <div class="section-title" style="margin-top:0">🏡 תקציב הבית</div>
     <div class="stats-grid">
-      <div class="stat-card expense"><div class="label">🏡 עלות אחזקת הבית</div><div class="value tnum">${money(d.homeExpenses)}</div><div class="sub">${state.month?'בחודש הנבחר':'סך הכל'}</div></div>
+      <div class="stat-card expense"><div class="label">🏡 עלות אחזקת הבית</div><div class="value tnum">${money(d.homeExpenses)}</div><div class="sub">${state.month?'בחודש הנבחר':'סך הכל'} · ללא משכנתא</div></div>
       <div class="stat-card accent"><div class="label">🔁 הוצאות קבועות (חודשי)</div><div class="value tnum">${money(d.recurringMonthly)}</div><div class="sub">תחזית שנתית: ${money(d.annualProjection)}</div></div>
-      <div class="stat-card expense"><div class="label">💳 סך כל ההוצאות</div><div class="value tnum">${money(d.totalExpenses)}</div><div class="sub">כולל שאינן בית</div></div>
       <div class="stat-card ${d.uncategorized?'warn':'accent'}"><div class="label">🏷️ עסקאות ללא סיווג</div><div class="value tnum">${d.uncategorized}</div><div class="sub">${d.uncategorized?'<a class="link" data-nav="review">סווג עכשיו ←</a>':'הכל מסווג ✔'}</div></div>
-      <div class="stat-card ${d.completeness>=99?'income':d.completeness>=60?'warn':'expense'}"><div class="label">✅ שלמות התמונה</div><div class="value tnum">${d.completeness}%</div><div class="sub">${d.pendingCredit>0?`<a class="link" data-nav="reconcile">חסר פירוט ${money(d.pendingCredit)} ←</a>`:'כל חיובי האשראי מפורטים ✔'}</div></div>
+      <div class="stat-card ${d.completeness>=99?'income':d.completeness>=60?'warn':'expense'}"><div class="label">✅ שלמות התמונה</div><div class="value tnum">${d.completeness}%</div><div class="sub">${d.pendingCredit>0?`<a class="link" data-nav="review">חסר פירוט אשראי ←</a>`:'הכל מפורט ✔'}</div></div>
     </div>
+    ${managedSep?`
+    <div class="section-title">🔀 מנוהל בנפרד מתקציב הבית</div>
+    <div class="stats-grid">
+      <div class="stat-card neutral" style="opacity:.95"><div class="label">🏦 משכנתא</div><div class="value tnum" style="color:var(--amber)">${money(d.mortgage)}</div><div class="sub">לא נכלל בעלות אחזקת הבית</div></div>
+      <div class="stat-card income"><div class="label">🏠 הכנסה משכירות</div><div class="value tnum">${money(d.rentalIncome)}</div><div class="sub">מנוהל בנפרד</div></div>
+      <div class="stat-card ${d.rentalIncome-d.mortgage>=0?'income':'expense'}"><div class="label">⚖️ שכירות פחות משכנתא</div><div class="value tnum">${money(d.rentalIncome-d.mortgage)}</div><div class="sub">מאזן הנכס</div></div>
+    </div>`:''}
     <div class="panels">
       <div class="panel"><h3>מגמת עלות אחזקת הבית (6 חודשים)</h3><div id="trend"></div></div>
       <div class="panel"><h3>עלות הבית לפי קטגוריה</h3><div>${barsHTML(d.byCategory.map(c=>({label:c.name,value:c.total,color:c.color})),money)}</div></div>
@@ -828,7 +847,7 @@ views.transactions=async()=>{
     <p class="hint" style="margin:-6px 0 14px">בחרו לכל שורה את <strong>מהות ההוצאה</strong> מהרשימה. מה שלא זוהה מסומן <span style="color:var(--red);font-weight:800">🔴 לא מסווג</span>. תיקון של בית עסק אחד (למשל «פרטנר» → תקשורת) יסווג את כל השאר מאותו בית עסק.</p>
     <div class="card"><div class="table-wrap" id="tx-table"></div></div>`;
 
-  const isAgg=(r)=> r.source!=='credit_card' && !!detectIssuer(r.merchant||r.description); // חיוב אשראי מרוכז מהבנק
+  const isAgg=(r)=> !!detectIssuer(r.merchant||r.description); // חיוב אשראי מרוכז מהבנק
   const renderStats=()=>{
     const exp=rows.filter(r=>r.kind==='expense');
     const totalExp=exp.reduce((s,r)=>s+r.amount,0);
@@ -852,7 +871,7 @@ views.transactions=async()=>{
       <td class="wrap"><strong>${esc(r.merchant||r.description)||'—'}</strong>${r.merchant&&r.description&&r.merchant!==r.description?`<div class="hint">${esc(r.description)}</div>`:''}${r.account?`<div class="hint">${esc(r.account)}</div>`:''}</td>
       <td><span class="muted">${srcLabel(r.source)}</span></td>
       <td>${isAgg(r)
-        ? `<span class="pill status-none">🔗 חיוב אשראי מרוכז</span><div class="hint">שם בית העסק בפירוט האשראי · <a class="link" data-nav="import">ייבא פירוט ←</a></div>`
+        ? `<span class="pill status-soon">💳 חיוב אשראי מרוכז</span><div class="hint">אין טעם לסווג סכום כולל · <a class="link" data-nav="review">העלה תדפיס פירוט ←</a></div>`
         : `<select class="cat-select ${r.category_id?'':'unset'}" data-id="${r.id}">${catSelectOptions(cats,r.category_id)}</select>`}</td>
       <td class="tnum ${r.kind==='income'?'amount-pos':'amount-neg'}">${r.kind==='income'?'+':'−'}${money2(r.amount)}</td>
       <td style="text-align:left"><button class="icon-btn" data-edit="${r.id}" title="עריכה מלאה">✏️</button><button class="btn-danger" data-del="${r.id}">🗑</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty">אין עסקאות תואמות. ייבאו תדפיס או הוסיפו עסקה ידנית.</div>';
@@ -913,23 +932,25 @@ views.review=async()=>{
   await api('/transactions/auto',{method:'POST',body:{}}); // סיווג אוטומטי בכניסה
   const [rows,cats,recon]=await Promise.all([api('/transactions'+monthParam('status=uncategorized')),api('/categories'),api('/reconcile')]);
   const el=document.createElement('div');
-  const isAgg=(r)=> r.source!=='credit_card' && !!detectIssuer(r.merchant||r.description);
-  const toClass=rows.filter(r=>!isAgg(r)); // מוציאים חיובי אשראי מרוכזים — אי אפשר לסווג אותם כמקשה אחת
-  const pending=recon.filter(r=>r.status==='pending'||r.status==='partial');
-  // פאנל "מידע חסר" — פירוט כרטיסי אשראי
-  const missingHTML = pending.length ? `
+  const isAgg=(r)=> !!detectIssuer(r.merchant||r.description);
+  const toClass=rows.filter(r=>!isAgg(r)); // מוציאים חיובי אשראי מרוכזים — אי אפשר לסווג סכום כולל
+  // חיובי כרטיסי אשראי מרוכזים (מזוהים לפי שם החברה) — צריך תדפיס פירוט
+  const byIssuer={};
+  rows.filter(r=>r.kind==='expense'&&isAgg(r)).forEach(r=>{ const k=detectIssuer(r.merchant)||detectIssuer(r.description); if(!byIssuer[k])byIssuer[k]={issuer:k,total:0,count:0}; byIssuer[k].total+=r.amount; byIssuer[k].count++; });
+  const issuers=Object.values(byIssuer).sort((a,b)=>b.total-a.total);
+  const missingHTML = issuers.length ? `
     <div class="card" style="margin-bottom:20px;border-color:var(--amber)">
-      <div class="card-header"><h2>🔗 מידע חסר — פירוט כרטיסי אשראי</h2></div>
+      <div class="card-header"><h2>💳 חיובי כרטיסי אשראי — צריך תדפיס פירוט</h2></div>
       <div style="padding:4px 20px 18px">
-        <p class="hint" style="margin-bottom:14px">חיובי כרטיסי האשראי שבתדפיס הבנק מכילים <strong>הרבה עסקאות בתוכם</strong> — אי אפשר לסווג אותם כמקשה אחת. כדי לקבל <strong>תמונה מלאה לחודש</strong>, העלה כאן את <strong>פירוט החיובים</strong> מאתר חברת האשראי (CSV מדויק ביותר, גם PDF נתמך).</p>
-        ${pending.map(p=>`<div class="bar-row" style="justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px">
-          <div><strong>${esc(p.issuer)}</strong> <span class="muted">· חויב בבנק ${money(p.bank)}${p.card?` · יובא ${money(p.card)} (${p.pct}%)`:' · טרם יובא פירוט'}</span></div>
-          <label class="btn" style="cursor:pointer;white-space:nowrap">⬆️ העלה פירוט ${esc(p.issuer)}<input type="file" accept=".csv,.pdf,text/csv,application/pdf" hidden data-issuer="${esc(p.issuer)}" /></label>
+        <p class="hint" style="margin-bottom:14px">אלו <strong>חיובים מרוכזים</strong> של כרטיסי האשראי — כל אחד מכיל עשרות עסקאות בתוכו, ולכן <strong>אין טעם לסווג את הסכום הכולל</strong>. כדי לסווג את מה שבתוכם, <strong>העלה את תדפיס הפירוט</strong> מאתר חברת האשראי (CSV / PDF).</p>
+        ${issuers.map(p=>`<div class="bar-row" style="justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+          <div><strong>${esc(p.issuer)}</strong> <span class="muted">· ${p.count} חיובים · ${money(p.total)}</span></div>
+          <label class="btn" style="cursor:pointer;white-space:nowrap">⬆️ העלה תדפיס ${esc(p.issuer)}<input type="file" accept=".csv,.pdf,text/csv,application/pdf" hidden data-issuer="${esc(p.issuer)}" /></label>
         </div>`).join('')}
       </div>
     </div>` : '';
   if(!toClass.length){
-    el.innerHTML=`${missingHTML}<div class="card"><div class="empty">🎉 כל העסקאות (הוצאות והכנסות) מסווגות!${pending.length?'<br><span class="hint">נותר רק להעלות למעלה את פירוטי כרטיסי האשראי כדי לחשוף את מהות ההוצאות שבתוכם.</span>':'<br><span class="hint">ייבאו תדפיס נוסף כדי להמשיך.</span>'}</div></div>`;
+    el.innerHTML=`${missingHTML}<div class="card"><div class="empty">🎉 כל העסקאות מסווגות!${issuers.length?'<br><span class="hint">נותר רק להעלות למעלה את תדפיסי כרטיסי האשראי כדי לסווג את מה שבתוכם.</span>':'<br><span class="hint">ייבאו תדפיס נוסף כדי להמשיך.</span>'}</div></div>`;
     wireIssuerUploads(el); return el;
   }
   // קיבוץ לפי בית עסק (שומר את סוג העסקה — הוצאה/הכנסה)
@@ -1519,7 +1540,7 @@ views.settings=async()=>{
 // ===== Monthly breakdown: missing statements + unclassified, per month =====
 views.monthly=async()=>{
   const rows=await api('/transactions');
-  const isAgg=(r)=> r.source!=='credit_card' && !!detectIssuer(r.merchant||r.description);
+  const isAgg=(r)=> !!detectIssuer(r.merchant||r.description);
   const detailIssuers=new Set(); rows.forEach(r=>{ if(r.source==='credit_card'){ const k=detectIssuer(r.account)||detectIssuer(r.merchant); if(k) detailIssuers.add(k); } });
   const months={}; const M=(ym)=>(months[ym]=months[ym]||{ym,agg:{},uncCount:0,uncSum:0,expSum:0,incSum:0,txCount:0});
   rows.forEach(r=>{ const ym=String(r.tx_date).slice(0,7); if(ym.length!==7) return; const mm=M(ym); mm.txCount++;
