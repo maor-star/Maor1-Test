@@ -517,6 +517,9 @@ const proById = (id)=> db.professionals.find(p=>p.id==id);
 const CARD_ISSUERS=['ישראכרט','אמריקן אקספרס','אמריקן','אמקס','לאומי קארד','דיינרס','כאל','מקס','ויזה','כרטיסי אשראי','כרטיס אשראי','כ.אשראי','כ. אשראי'];
 function normIssuer(k){ if(k==='אמריקן'||k==='אמקס') return 'אמריקן אקספרס'; if(k==='כרטיס אשראי'||k==='כ.אשראי'||k==='כ. אשראי') return 'כרטיסי אשראי'; return k; }
 function detectIssuer(text){ const t=strv(text); for(const k of CARD_ISSUERS){ if(k && t.includes(k)) return normIssuer(k); } return null; }
+// זיהוי העברת BIT / פייבוקס (לא לבלבל עם "ביטוח": מילת "ביט" חייבת לעמוד בפני עצמה)
+const BIT_RE=/(^|[^A-Za-z])BIT([^A-Za-z]|$)|(^|\s)ביט(\s|$)|PAYBOX|פייבוקס|פיי[ ]?בוקס/i;
+function isBitTransfer(text){ return BIT_RE.test(strv(text)); }
 const AGG_CAT='כרטיסי אשראי (חיוב מרוכז)';
 // השוואת חיוב-בנק מול פירוט-אשראי לכל חברה
 function reconciliation(){
@@ -539,10 +542,10 @@ function issuerStatusMap(){ const map={}; db.transactions.forEach(t=>{ if(t.kind
 function countsInTotal(t, detailMap){
   if(t.kind!=='expense') return true;
   const isLump = !!detectIssuer(t.merchant||t.description); // בית העסק עצמו הוא שם חברת אשראי → חיוב מרוכז
-  if(t.source==='credit_card') return !isLump;              // פירוט אמיתי נספר; שורת מרוכז שסומנה אשראי — לא
-  if(!isLump) return true;                                  // הוצאת בנק רגילה (משכנתא/העברה/צ׳ק…)
+  if(t.source==='credit_card') return !isLump;             // פירוט אמיתי נספר; שורת מרוכז שסומנה אשראי — לא
+  if(!isLump) return true;                                 // הוצאת בנק רגילה (משכנתא/העברה/צ׳ק…)
   const k=detectIssuer(t.merchant)||detectIssuer(t.description);
-  return !detailMap[k];                                     // חיוב מרוכז בבנק — רק אם אין פירוט לאותה חברה
+  return !detailMap[k];                                    // חיוב מרוכז בבנק — רק אם אין פירוט לאותה חברה
 }
 
 /* ============================ Local "API" ============================ */
@@ -623,6 +626,11 @@ function h_transactions(m,id,sub,b,qp){
   if(id==='auto'){ // החלת כל הכללים על עסקאות שטרם סווגו (הוצאות והכנסות כאחד)
     let n=0; db.transactions.forEach(t=>{ if(!t.category_id){ const c=matchCategory((t.description||'')+' '+(t.merchant||''), t.kind); if(c){ t.category_id=c; n++; } } });
     return {classified:n};
+  }
+  if(id==='detail'){ // צירוף הערה/פירוט (טקסט + קובץ) לקבוצת עסקאות
+    const ids=(b.ids||[]).map(String); const note=strv(b.note); const doc=strv(b.doc); let n=0;
+    db.transactions.forEach(t=>{ if(ids.includes(String(t.id))){ t.notes=note; if(doc) t.doc=doc; else if(b.clearDoc) t.doc=''; n++; } });
+    return {ok:true,count:n};
   }
   if(id==='classify-similar'){ // סיווג כל העסקאות מאותו מקור (גם אלו שכבר סווגו אחרת) + כלל לעתיד
     const key=strv(b.merchant); const cat=intOrNull(b.category_id); if(!key) return {count:0};
@@ -977,9 +985,9 @@ function editTx(r,cats){ const f=`
 
 function wireIssuerUploads(el){
   el.querySelectorAll('input[type=file][data-issuer]').forEach(inp=>inp.onchange=async()=>{
-    const file=inp.files[0]; if(!file) return; const issuer=inp.dataset.issuer;
+    const file=inp.files[0]; if(!file) return; const issuer=inp.dataset.issuer; const source=inp.dataset.source||'credit_card';
     const lbl=inp.closest('label'); const old=lbl?lbl.firstChild.textContent:''; if(lbl) lbl.firstChild.textContent='מעבד… ⏳';
-    try{ const res=await quickImportFile(file,'credit_card',issuer);
+    try{ const res=await quickImportFile(file,source,issuer);
       if(res.error){ toast(res.error,true); if(lbl) lbl.firstChild.textContent=old; return; }
       toast(`יובאו ${res.added} עסקאות מפירוט ${issuer} (${res.skipped} כפולות)`); render();
     }catch(e){ toast('שגיאה: '+e.message,true); if(lbl) lbl.firstChild.textContent=old; }
@@ -1026,10 +1034,11 @@ views.review=async()=>{
     <div id="review-list"></div>`;
   const listEl=el.querySelector('#review-list');
   listEl.innerHTML=groupList.map(g=>{ const chips=(g.kind==='income'?incCats:expCats);
+    const bit=isBitTransfer(g.key);
     return `<div class="review-card" data-key="${esc(g.key)}">
-      <div class="review-head"><div><div class="review-merchant">${esc(g.key)}</div><div class="review-meta">${g.ids.length} עסקאות · ${g.kind==='income'?'הכנסה':'הוצאה'} · אחרונה ${fmtDate(g.sample.tx_date)}</div></div><div class="review-amount tnum" style="color:${g.kind==='income'?'var(--income)':'var(--red)'}">${money2(g.total)}</div></div>
-      <div class="cat-chips">${chips.map(c=>`<button class="cat-chip" data-cat="${c.id}"><span class="cdot" style="background:${esc(c.color)}"></span>${esc(c.name)}</button>`).join('')}</div>
-      <div class="review-actions"><label class="chk"><input type="checkbox" class="remember" checked /> זכור לפעם הבאה</label><span class="spacer"></span><button class="btn-danger" data-skip>אחר כך</button></div></div>`;
+      <div class="review-head"><div><div class="review-merchant">${esc(g.key)}${bit?' <span class="pill status-soon" style="font-size:11px">📲 BIT</span>':''}</div><div class="review-meta">${g.ids.length} עסקאות · ${g.kind==='income'?'הכנסה':'הוצאה'} · אחרונה ${fmtDate(g.sample.tx_date)}${bit?' · ניתן לצרף פירוט למה שימשה ההעברה':''}</div></div><div class="review-amount tnum" style="color:${g.kind==='income'?'var(--income)':'var(--red)'}">${money2(g.total)}</div></div>
+      <div class="cat-chips">${chips.map(c=>`<button class="cat-chip" data-cat="${c.id}"><span class="cdot" style="background:${esc(c.color)}"></span>${esc(c.name)}</button>`).join('')}<button class="cat-chip" data-addcat style="border-style:dashed;opacity:.85">➕ סיווג חדש</button></div>
+      <div class="review-actions"><label class="chk"><input type="checkbox" class="remember" checked /> זכור לפעם הבאה</label><span class="spacer"></span><button class="btn-ghost" data-detail style="padding:5px 12px">📎 צרף פירוט/הערה</button><button class="btn-danger" data-skip>אחר כך</button></div></div>`;
   }).join('');
   const dec=(n)=>{ const c=el.querySelector('#left-count'); const left=Math.max(0,parseInt(c.textContent,10)-n); c.textContent=left; if(left<=0) setTimeout(render,500); };
   listEl.querySelectorAll('.review-card').forEach(card=>{ const key=card.dataset.key; const g=groups[key]; if(!g) return;
@@ -1038,6 +1047,27 @@ views.review=async()=>{
         card.style.transition='.25s'; card.style.opacity='0'; card.style.transform='translateX(-20px)'; setTimeout(()=>card.remove(),250);
         toast(`סווגו ${g.ids.length} עסקאות`); dec(g.ids.length);
       }catch(err){ toast(err.message,true); } });
+    const addBtn=card.querySelector('[data-addcat]'); if(addBtn) addBtn.onclick=async()=>{
+      const name=prompt('שם הסיווג החדש (מהות ההוצאה):',''); if(name===null) return; const nm=name.trim(); if(!nm) return;
+      const remember=card.querySelector('.remember').checked;
+      try{ const c=await api('/categories',{method:'POST',body:{name:nm,kind:g.kind==='income'?'income':'expense'}});
+        await api('/transactions/classify',{method:'POST',body:{ids:g.ids,category_id:c.id,make_rule:remember,rule_text:g.key}});
+        card.style.transition='.25s'; card.style.opacity='0'; card.style.transform='translateX(-20px)'; setTimeout(()=>card.remove(),250);
+        toast(`נוצר סיווג «${nm}» וסווגו ${g.ids.length} עסקאות`); dec(g.ids.length);
+      }catch(err){ toast(err.message,true); } };
+    const detBtn=card.querySelector('[data-detail]'); if(detBtn) detBtn.onclick=()=>{
+      let doc=g.sample.doc||''; let docName='קובץ';
+      const form=`<p class="hint">צרפו פירוט/הערה לכל ${g.ids.length} העסקאות של «${esc(g.key)}» — למשל למה שימשה ההעברה ב‑BIT, קבלה, או צילום.</p>
+        <div class="field"><label>הערה / פירוט</label><textarea name="note" rows="3" placeholder="למשל: החזר לאמא / תשלום לחוג של הילד / קבלה מצורפת">${esc(g.sample.notes||'')}</textarea></div>
+        <div class="field"><label>קובץ מצורף (קבלה / צילום / PDF)</label>
+          <div id="det-prev" class="docs-list"></div>
+          <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><label class="btn-ghost" style="cursor:pointer;padding:6px 12px">⬆️ העלה קובץ<input type="file" id="det-file" accept="image/*,application/pdf" hidden /></label></div>
+          <div class="hint">נשמר בדפדפן (עד ~3MB). לקובץ גדול העדיפו קישור בהערה.</div></div>`;
+      openModal(`פירוט: ${esc(g.key)}`,form,async fd=>{ await api('/transactions/detail',{method:'POST',body:{ids:g.ids,note:strv(fd.note),doc,clearDoc:!doc}}); toast('נשמר פירוט'); },{wide:true});
+      setTimeout(()=>{ const q=(s)=>document.querySelector('.modal '+s);
+        const rp=()=>{ const c=q('#det-prev'); if(!c) return; c.innerHTML=doc?`<div class="doc-item"><a class="link" href="${esc(doc)}" target="_blank" rel="noopener">📄 ${esc(docName)}</a><button type="button" class="btn-danger" id="det-del">🗑</button></div>`:'<span class="hint">לא צורף קובץ.</span>'; const d=q('#det-del'); if(d) d.onclick=()=>{ doc=''; rp(); }; };
+        rp(); const f=q('#det-file'); if(f) f.onchange=()=>{ const file=f.files[0]; if(!file) return; if(file.size>3*1024*1024){ toast('הקובץ גדול מדי (מעל 3MB)',true); f.value=''; return; } const rd=new FileReader(); rd.onload=()=>{ doc=rd.result; docName=file.name; rp(); }; rd.readAsDataURL(file); f.value=''; };
+      },0); };
     card.querySelector('[data-skip]').onclick=()=>{ card.style.transition='.2s'; card.style.opacity='0'; setTimeout(()=>card.remove(),200); }; });
   wireIssuerUploads(el);
   return el;
