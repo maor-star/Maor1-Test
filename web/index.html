@@ -519,6 +519,32 @@ function ensureDefaults(){
     }
     db.defaultsV=6; save();
   }
+  // v7: מבנה דו-רמתי (קטגוריה ראשית › תת-קטגוריה) + כללי סיווג נוספים + סיווג-אוטומטי מחדש
+  if((db.defaultsV||0) < 7){
+    const ensureMain=(name,color)=>{ let c=findCat(name); if(!c){ c={id:++db.seq,name,kind:'expense',is_home:1,color,monthly_budget:0,parent_id:null}; db.categories.push(c); } else { c.parent_id=null; } return c; };
+    const ensureSub=(name,parent,color)=>{ let c=findCat(name); if(!c){ c={id:++db.seq,name,kind:'expense',is_home:parent.is_home,color:color||parent.color,monthly_budget:0,parent_id:parent.id}; db.categories.push(c); } else { c.parent_id=parent.id; } return c; };
+    const rp=(name,parent)=>{ const c=findCat(name); if(c) c.parent_id=parent.id; };
+    const bait=ensureMain('הוצאות בית ותשתיות','#0ea5e9'), garden=ensureMain('גינה ובריכה','#16a34a'),
+      food=ensureMain('מזון','#f59e0b'), car=ensureMain('רכב ותחבורה','#84cc16'), kids=ensureMain('ילדים וחינוך','#06b6d4'),
+      health=ensureMain('בריאות','#ef4444'), insur=ensureMain('ביטוחים','#8b5cf6'), fun=ensureMain('פנאי, בילויים וקניות','#ec4899'),
+      taxes=ensureMain('מיסים קבועים','#64748b'), fin=ensureMain('פיננסים והעברות','#475569');
+    ['חשמל','מים וביוב','גז','ועד בית','אינטרנט וטלוויזיה','טלפון וסלולר','ניקיון ועזרת בית','תיקונים ותחזוקה','מכשירי חשמל וריהוט','אבטחה ומיגון'].forEach(n=>rp(n,bait));
+    ['בריכה – תחזוקה','בריכה – כימיקלים','גינון ותחזוקת גינה','השקיה וצמחייה'].forEach(n=>rp(n,garden));
+    rp('מזון וסופר',food); rp('דלק ורכב',car); rp('חינוך וחוגים לילדים',kids); rp('בריאות ותרופות',health); rp('ביטוח דירה ומבנה',insur);
+    ['מסעדות, פנאי ובילויים','ביגוד והנעלה'].forEach(n=>rp(n,fun));
+    ['ארנונה','מיסים ואגרות'].forEach(n=>rp(n,taxes));
+    ['עמלות בנק ופיננסים','העברה בין חשבונות'].forEach(n=>rp(n,fin));
+    const tv=ensureSub('טלוויזיה ומנויים',bait,'#3b82f6'), sport=ensureSub('כושר וספורט',fun,'#f472b6'), vac=ensureSub('נופש וחופשות',fun,'#e879f9');
+    const NR=[['נטפליקס',tv],['netflix',tv],['ספוטיפיי',tv],['spotify',tv],['apple.com/bill',tv],['disney',tv],['אמזון פריים',tv],
+      ['הולמס פלייס',sport],['holmes',sport],['fight club',sport],['פשיין קלאב',sport],['פאנקו',sport],['זוז במחול',sport],['עמותת ספורטאי',sport],
+      ['booking',vac],['מלונות',vac],['מלון',vac],['resort',vac],['hotel',vac]];
+    for(const [m,cat] of NR){ if(cat && !db.rules.some(r=>r.match_text===m && r.category_id===cat.id)) db.rules.push({id:++db.seq,match_text:m,category_id:cat.id}); }
+    // סיווג אוטומטי מחדש (מקומי — בלי catById שעדיין לא הוגדר בשלב זה)
+    const lById=(id)=>db.categories.find(c=>c.id==id);
+    const lMatch=(text,kind)=>{ const hay=strv(text).toLowerCase(); let rules=db.rules.filter(r=>{const c=lById(r.category_id);return c&&(!kind||c.kind===kind);}); rules.sort((a,b)=>strv(b.match_text).length-strv(a.match_text).length); for(const r of rules){const mt=strv(r.match_text).toLowerCase(); if(mt&&hay.includes(mt)) return r.category_id;} return null; };
+    db.transactions.forEach(t=>{ if(t.kind==='expense'&&!t.category_id){ const c=lMatch((t.description||'')+' '+(t.merchant||''),'expense'); if(c) t.category_id=c; } });
+    db.defaultsV=7; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
