@@ -1,8 +1,9 @@
 <!doctype html>
 <html lang="he" dir="rtl">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ניהול הבית</title>
 </head>
 <body>
 <title>ניהול הבית</title>
@@ -721,6 +722,9 @@ function h_dashboard(qp){
   const rentalIncome=inc.filter(isRent).reduce((s,t)=>s+t.amount,0);
   // עלות אחזקת הבית = כל ההוצאות פחות המשכנתא
   const homeExpenses=totalExpenses-mortgage;
+  // סך הוצאת תזרים כוללת = כמה כסף צריך להכניס לחשבון כדי להיות באפס.
+  // כל ההוצאות (כולל משכנתא) פחות הכנסת השכירות — הכול משוקלל יחד.
+  const cashFlowTotal=totalExpenses-rentalIncome;
   // לא מסווג (אמיתי — לא כולל חיובי אשראי מרוכזים שמחכים לפירוט)
   const uncategorized=exp.filter(t=>!t.category_id && !isCard(t)).length;
   // פילוח לפי קטגוריה — רק המסווג (ללא משכנתא)
@@ -745,7 +749,7 @@ function h_dashboard(qp){
   const pendingCredit=lumpTotal;
   const completeness = totalExpenses>0 ? Math.round(classifiedTotal/totalExpenses*100) : 100;
   const pendingIssuers=new Set(db.transactions.filter(t=>t.kind==='expense'&&isCard(t)).map(t=>detectIssuer(t.merchant)||detectIssuer(t.description))).size;
-  return {month:month||'all',homeExpenses,totalExpenses,totalIncome,mortgage,rentalIncome,uncategorized,recurringMonthly,annualProjection:recurringMonthly*12,byCategory,trend,upcomingMaintenance,expiringWarranties,
+  return {month:month||'all',homeExpenses,totalExpenses,totalIncome,mortgage,rentalIncome,cashFlowTotal,uncategorized,recurringMonthly,annualProjection:recurringMonthly*12,byCategory,trend,upcomingMaintenance,expiringWarranties,
     pendingCredit,pendingIssuers,completeness,unclassifiedTotal,lumpTotal};
 }
 
@@ -801,6 +805,10 @@ views.dashboard=async()=>{
       <div class="stat-card accent"><div class="label">🔁 הוצאות קבועות (חודשי)</div><div class="value tnum">${money(d.recurringMonthly)}</div><div class="sub">תחזית שנתית: ${money(d.annualProjection)}</div></div>
       <div class="stat-card ${d.uncategorized?'warn':'accent'}"><div class="label">🏷️ עסקאות ללא סיווג</div><div class="value tnum">${d.uncategorized}</div><div class="sub">${d.uncategorized?'<a class="link" data-nav="review">סווג עכשיו ←</a>':'הכל מסווג ✔'}</div></div>
       <div class="stat-card ${d.completeness>=99?'income':d.completeness>=60?'warn':'expense'}"><div class="label">✅ שלמות התמונה</div><div class="value tnum">${d.completeness}%</div><div class="sub">${d.unclassifiedTotal>0?`<a class="link" data-nav="review">חסר סיווג/פירוט ${money(d.unclassifiedTotal)} ←</a>`:'הכל מסווג ומפורט ✔'}</div></div>
+    </div>
+    <div class="section-title">💧 תזרים כולל</div>
+    <div class="stats-grid">
+      <div class="stat-card expense" style="grid-column:1/-1;background:linear-gradient(135deg,rgba(224,101,74,.12),transparent)"><div class="label">💧 סך הוצאת תזרים כוללת</div><div class="value tnum" style="font-size:32px">${money(d.cashFlowTotal)}</div><div class="sub">כמה כסף צריך להכניס לחשבון כדי להיות באפס · כל ההוצאות (כולל משכנתא ${money(d.mortgage)}) פחות הכנסת שכירות ${money(d.rentalIncome)}</div></div>
     </div>
     ${managedSep?`
     <div class="section-title">🔀 מנוהל בנפרד מתקציב הבית</div>
@@ -1583,44 +1591,31 @@ views.settings=async()=>{
 views.monthly=async()=>{
   const rows=await api('/transactions');
   const isAgg=(r)=> !!detectIssuer(r.merchant||r.description);
-  const detailIssuers=new Set(); rows.forEach(r=>{ if(r.source==='credit_card'){ const k=detectIssuer(r.account)||detectIssuer(r.merchant); if(k) detailIssuers.add(k); } });
-  const months={}; const M=(ym)=>(months[ym]=months[ym]||{ym,agg:{},uncCount:0,uncSum:0,expSum:0,incSum:0,txCount:0});
+  const months={}; const M=(ym)=>(months[ym]=months[ym]||{ym,uncCount:0,uncSum:0,expSum:0,incSum:0,txCount:0});
   rows.forEach(r=>{ const ym=String(r.tx_date).slice(0,7); if(ym.length!==7) return; const mm=M(ym); mm.txCount++;
     if(r.kind==='income'){ mm.incSum+=r.amount; return; }
     mm.expSum+=r.amount;
-    if(isAgg(r)){ const k=detectIssuer(r.merchant)||detectIssuer(r.description); mm.agg[k]=(mm.agg[k]||0)+r.amount; }
-    else if(!r.category_id){ mm.uncCount++; mm.uncSum+=r.amount; } });
+    if(!isAgg(r) && !r.category_id){ mm.uncCount++; mm.uncSum+=r.amount; } });
   const list=Object.values(months).sort((a,b)=>b.ym.localeCompare(a.ym));
   const el=document.createElement('div');
   if(!list.length){ el.innerHTML='<div class="card"><div class="empty">אין עדיין עסקאות. ייבאו תדפיס במסך «ייבוא תדפיסים».</div></div>'; return el; }
-  const totalMissing=list.reduce((s,m)=>s+Object.entries(m.agg).filter(([k])=>!detailIssuers.has(k)).length,0);
   const totalUnc=list.reduce((s,m)=>s+m.uncCount,0);
   el.innerHTML=`
     <div class="stats-grid">
       <div class="stat-card accent"><div class="label">📅 חודשים</div><div class="value tnum">${list.length}</div></div>
-      <div class="stat-card ${totalMissing?'warn':'accent'}"><div class="label">🔗 תדפיסי אשראי חסרים</div><div class="value tnum">${totalMissing}</div></div>
       <div class="stat-card ${totalUnc?'expense':'accent'}"><div class="label">🔴 עסקאות לא מסווגות</div><div class="value tnum">${totalUnc}</div></div>
     </div>
-    <p class="hintbar">לכל חודש: אילו <strong>פירוטי כרטיסי אשראי חסרים</strong> — העלה אותם כדי לפרק את החיוב הכללי לעסקאות בודדות ולסווג אחת-אחת — וכמה <strong>עסקאות עדיין לא סווגו</strong>. חיוב אשראי כללי לא ניתן לסיווג כי הוא מכיל תשלומים רבים.</p>
+    <p class="hintbar">תמונה חודשית: כמה <strong>עסקאות עדיין לא סווגו</strong>, וסך ההוצאות וההכנסות בכל חודש. אילו תדפיסי אשראי חסרים לך — ראה במסך «ייבוא תדפיסים».</p>
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>חודש</th><th class="wrap">תדפיסי אשראי חסרים (העלה פירוט)</th><th>עסקאות לא מסווגות</th><th>הוצאות</th><th>הכנסות</th></tr></thead>
-      <tbody>${list.map(m=>{ const aggEntries=Object.entries(m.agg).sort((a,b)=>b[1]-a[1]);
+      <thead><tr><th>חודש</th><th>עסקאות לא מסווגות</th><th>הוצאות</th><th>הכנסות</th></tr></thead>
+      <tbody>${list.map(m=>{
         return `<tr>
           <td><strong style="font-size:15px">${fmtMonth(m.ym)}</strong><div class="hint">${m.txCount} עסקאות</div></td>
-          <td class="wrap">${aggEntries.length? aggEntries.map(([k,v])=>{ const has=detailIssuers.has(k);
-            return `<div style="display:flex;align-items:center;gap:8px;margin:4px 0;flex-wrap:wrap">${has?'<span class="pill status-ok">✓ יש פירוט</span>':'<span class="pill status-late">חסר</span>'}<strong>${esc(k)}</strong><span class="muted tnum">${money(v)}</span>${has?'':`<label class="btn-ghost" style="cursor:pointer;padding:4px 11px;font-size:12px">⬆️ העלה פירוט<input type="file" hidden accept=".csv,.pdf,text/csv,application/pdf" data-issuer="${esc(k)}" /></label>`}</div>`;
-          }).join('') : '<span class="muted">— אין חיובי אשראי —</span>'}</td>
           <td>${m.uncCount? `<span class="pill status-late">${m.uncCount} לא מסווגות</span> <span class="muted tnum">${money(m.uncSum)}</span> <button class="link" data-month="${m.ym}" style="border:none;background:none;cursor:pointer">סווג ←</button>` : '<span class="pill status-ok">הכל מסווג ✓</span>'}</td>
           <td class="tnum amount-neg">${money(m.expSum)}</td>
           <td class="tnum amount-pos">${m.incSum?money(m.incSum):'—'}</td>
         </tr>`; }).join('')}</tbody>
     </table></div></div>`;
-  el.querySelectorAll('input[type=file][data-issuer]').forEach(inp=>inp.onchange=async()=>{
-    const file=inp.files[0]; if(!file) return; const issuer=inp.dataset.issuer;
-    const lbl=inp.closest('label'); if(lbl) lbl.firstChild.textContent='מעבד… ⏳';
-    try{ const res=await quickImportFile(file,'credit_card',issuer); if(res.error){ toast(res.error,true); if(lbl) lbl.firstChild.textContent='⬆️ העלה פירוט'; return; }
-      toast(`יובאו ${res.added} עסקאות מפירוט ${issuer}`); render();
-    }catch(e){ toast('שגיאה: '+e.message,true); if(lbl) lbl.firstChild.textContent='⬆️ העלה פירוט'; } });
   el.querySelectorAll('[data-month]').forEach(b=>b.onclick=()=>{ state.month=b.dataset.month; const mf=document.getElementById('month-filter'); if(mf) mf.value=b.dataset.month; location.hash='#/review'; });
   return el;
 };
