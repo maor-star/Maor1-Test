@@ -530,15 +530,19 @@ function reconciliation(){
     g.status = g.bank===0 ? 'card_only' : g.card===0 ? 'pending' : Math.abs(g.gap)<=Math.max(2,g.bank*0.02) ? 'done' : 'partial'; return g; })
     .sort((a,b)=>b.bank-a.bank);
 }
-// מפת סטטוס השלמה לכל חברת אשראי
-function issuerStatusMap(){ const map={}; reconciliation().forEach(r=>map[r.issuer]=r.status); return map; }
-// האם עסקה נספרת בסכום הכולל (מונע ספירה כפולה של חיוב-אשראי מרוכז מול פירוט):
-//  - פירוט אשראי נספר רק כשההשלמה הסתיימה (done) או שאין חיוב-בנק תואם (card_only)
-//  - חיוב-בנק מרוכז נספר תמיד, אלא אם הפירוט כבר הושלם ומחליף אותו
-function countsInTotal(t, stMap){
+// מפת חברות אשראי שכבר יובא עבורן פירוט עסקאות (מתוך שורות הפירוט — בית עסק אמיתי, לא חיוב מרוכז)
+function issuerStatusMap(){ const map={}; db.transactions.forEach(t=>{ if(t.kind==='expense'&&t.source==='credit_card'&&!detectIssuer(t.merchant||t.description)){ const k=detectIssuer(t.account); if(k) map[k]=true; } }); return map; }
+// האם עסקה נספרת בסכום הכולל (מונע ספירה כפולה של חיוב-אשראי מרוכז מול הפירוט):
+//  - פירוט אשראי (בית עסק אמיתי) נספר תמיד — זו האמת על ההוצאה.
+//  - שורה "חיוב אשראי מרוכז" (בית העסק הוא שם חברת האשראי) לא נספרת אם יש פירוט לאותה חברה;
+//    אם אין פירוט — נספרת (זהו הסכום היחיד הידוע לאותו חודש).
+function countsInTotal(t, detailMap){
   if(t.kind!=='expense') return true;
-  if(t.source==='credit_card'){ const k=detectIssuer(t.account)||detectIssuer(t.merchant); if(!k) return true; const st=stMap[k]; return st==='done'||st==='card_only'; }
-  const k=detectIssuer(t.merchant)||detectIssuer(t.description); if(!k) return true; return stMap[k]!=='done';
+  const isLump = !!detectIssuer(t.merchant||t.description); // בית העסק עצמו הוא שם חברת אשראי → חיוב מרוכז
+  if(t.source==='credit_card') return !isLump;              // פירוט אמיתי נספר; שורת מרוכז שסומנה אשראי — לא
+  if(!isLump) return true;                                  // הוצאת בנק רגילה (משכנתא/העברה/צ׳ק…)
+  const k=detectIssuer(t.merchant)||detectIssuer(t.description);
+  return !detailMap[k];                                     // חיוב מרוכז בבנק — רק אם אין פירוט לאותה חברה
 }
 
 /* ============================ Local "API" ============================ */
@@ -597,6 +601,8 @@ function h_transactions(m,id,sub,b,qp){
     for(const r of b.rows){
       const date=strv(r.date), desc=strv(r.description), merchant=strv(r.merchant||r.description);
       const amount=Math.abs(numv(r.amount)); if(!date||amount<=0){skipped++;continue;}
+      const yr=+String(date).slice(0,4); if(yr<2010||yr>2027){skipped++;continue;}   // תאריך לא-סביר (שגיאת פענוח)
+      if(!desc&&!merchant){skipped++;continue;}                                        // שורת סיכום ללא בית עסק — לא עסקה
       const kind=r.kind==='income'?'income':'expense';
       const ref=strv(r.ref);
       const hash=[src,acct,date,desc,amount,kind].join('|')+(ref?'|'+ref:'');
@@ -1246,8 +1252,9 @@ function parseAmount(v){ if(v==null) return 0; let s=String(v).replace(/[₪,\s]
 function normDate(v){ if(v==null||v==='') return ''; const s=String(v).trim(); let m;
   if((m=s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/))) return `${m[1]}-${p2(m[2])}-${p2(m[3])}`;
   if((m=s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/))){ let y=m[3]; if(y.length===2)y='20'+y; return `${y}-${p2(m[2])}-${p2(m[1])}`; }
-  // מספר סריאלי של אקסל (ימים מ‑1899‑12‑30) — טווח סביר לתאריכי תדפיס
-  if(/^\d{4,6}(\.\d+)?$/.test(s)){ const n=Math.floor(parseFloat(s)); if(n>=25569&&n<=60000){ const d=new Date(Date.UTC(1899,11,30)+n*86400000); return `${d.getUTCFullYear()}-${p2(d.getUTCMonth()+1)}-${p2(d.getUTCDate())}`; } }
+  // מספר סריאלי של אקסל (ימים מ‑1899‑12‑30) — טווח סביר לתאריכי תדפיס (1970..2031),
+  // כדי שסכומים גדולים (למשל סה״כ 58,338) לא יתפרשו בטעות כתאריך רחוק בעתיד.
+  if(/^\d{4,5}(\.\d+)?$/.test(s)){ const n=Math.floor(parseFloat(s)); if(n>=25569&&n<=48000){ const d=new Date(Date.UTC(1899,11,30)+n*86400000); return `${d.getUTCFullYear()}-${p2(d.getUTCMonth()+1)}-${p2(d.getUTCDate())}`; } }
   return ''; }
 const p2=n=>String(n).padStart(2,'0');
 
@@ -1804,7 +1811,7 @@ views.analytics=async()=>{
   const bySrc=Object.values(srcMap).sort((a,b)=>b.value-a.value);
   // הכי הרבה הוצאתי אצל — רק בתי עסק אמיתיים. לא כוללים חיובי אשראי מרוכזים
   // (ישראכרט/אמריקן/כאל/כרטיסי אשראי) שהם סכומים חסרי-מהות המכילים עשרות עסקאות.
-  const mMap={}; exp.forEach(t=>{ if(detectIssuer(t.merchant||t.description)) return; const m=(t.merchant||t.description||'—'); mMap[m]=(mMap[m]||0)+t.amount; });
+  const mMap={}; exp.forEach(t=>{ if(detectIssuer(t.merchant||t.description)) return; const m=(t.merchant||t.description||'').trim(); if(!m) return; if(/משכנתא/.test(m)) return; mMap[m]=(mMap[m]||0)+t.amount; });
   const topMerch=Object.entries(mMap).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value).slice(0,10);
   const uncat=exp.filter(t=>!t.category_id).reduce((s,t)=>s+t.amount,0);
   // הכנסות
