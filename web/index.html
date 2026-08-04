@@ -598,10 +598,11 @@ function h_transactions(m,id,sub,b,qp){
       const date=strv(r.date), desc=strv(r.description), merchant=strv(r.merchant||r.description);
       const amount=Math.abs(numv(r.amount)); if(!date||amount<=0){skipped++;continue;}
       const kind=r.kind==='income'?'income':'expense';
-      const hash=[src,acct,date,desc,amount,kind].join('|');
+      const ref=strv(r.ref);
+      const hash=[src,acct,date,desc,amount,kind].join('|')+(ref?'|'+ref:'');
       if(existing.has(hash)){skipped++;continue;}
       const cat=matchCategory(desc+' '+merchant, kind); if(cat) autoCategorized++;
-      db.transactions.push({id:uid(),tx_date:date,source:src,account:acct,description:desc,merchant,amount,kind,category_id:cat,notes:'',hash});
+      db.transactions.push({id:uid(),tx_date:date,source:src,account:acct,description:desc,merchant,amount,kind,category_id:cat,notes:ref?('אסמכתא '+ref):'',hash});
       existing.add(hash); added++;
     }
     return {added,skipped,autoCategorized};
@@ -1076,7 +1077,17 @@ views.import=async()=>{
   drop.ondrop=e=>{e.preventDefault();drop.classList.remove('drag');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);};
   fileInput.onchange=()=>fileInput.files[0]&&handleFile(fileInput.files[0]);
   const applyDetected=(meta)=>{ if(meta&&meta.issuer){ const s=el.querySelector('#imp-source'); if(s) s.value='credit_card'; const a=el.querySelector('#imp-account'); if(a&&!a.value.trim()) a.value=meta.issuer; } };
-  function processTabular(parsed, file){ const meta=autoDetectStatement(parsed.headers,parsed.rows,file?file.name:''); applyDetected(meta); showMapper(parsed,{detected:meta}); }
+  function processTabular(parsed, file){
+    const grid = parsed.grid || [parsed.headers, ...parsed.rows];
+    const stmt = extractStatementTransactions(grid);
+    if(stmt.length>=3){
+      const gridText=grid.map(r=>r.join(' ')).join(' ');
+      const meta={issuer: detectIssuer((file?file.name:'')+' '+gridText)||'', month: dominantMonth(stmt)};
+      applyDetected(meta); showPdfPreview(stmt, meta, {srcLabel:'מהקובץ', exact:true});
+      return;
+    }
+    const meta=autoDetectStatement(parsed.headers,parsed.rows,file?file.name:''); applyDetected(meta); showMapper(parsed,{detected:meta});
+  }
   function handleFile(file){
     const isPdf = /\.pdf$/i.test(file.name) || file.type==='application/pdf';
     const isXlsx = /\.xls[xm]$/i.test(file.name) || /spreadsheetml/.test(file.type||'');
@@ -1149,13 +1160,14 @@ views.import=async()=>{
       mapper.innerHTML=`<div class="empty" style="margin-top:20px">✔ הושלם. <a class="link" data-nav="review">עברו לסיווג העסקאות ←</a></div>`;
     };
   }
-  function showPdfPreview(items,meta){
+  function showPdfPreview(items,meta,opts={}){
     const mapper=el.querySelector('#mapper');
     const detected=items.some(i=>i.kind); const inc=items.filter(i=>i.kind==='income').length; const exp=items.length-inc;
     const total=items.filter(i=>i.kind!=='income').reduce((s,i)=>s+Number(i.amount),0);
-    mapper.innerHTML=`<div class="section-title">חולצו ${items.length} עסקאות מה‑PDF</div>
+    const cardCount=new Set(items.map(i=>i.card).filter(Boolean)).size;
+    mapper.innerHTML=`<div class="section-title">חולצו ${items.length} עסקאות ${opts.srcLabel||'מה‑PDF'}${cardCount>1?` · ${cardCount} כרטיסים`:''}</div>
       ${detectBanner(meta,total)}
-      <div class="hint" style="margin:-6px 0 10px;padding:9px 12px;background:color-mix(in srgb,var(--amber) 12%,transparent);border-radius:9px;color:var(--amber)">⚠️ חולץ אוטומטית — עברו על הרשימה וודאו שהתאריכים והסכומים נכונים. כפילויות יסוננו בייבוא, ותוכלו לתקן/לסווג הכל אחר כך.</div>
+      <div class="hint" style="margin:-6px 0 10px;padding:9px 12px;background:color-mix(in srgb,var(--${opts.exact?'accent':'amber'}) 12%,transparent);border-radius:9px;color:var(--${opts.exact?'accent':'amber'})">${opts.exact?'✓ כל העסקאות חולצו מהקובץ (כולל כל הכרטיסים). עברו על הרשימה ואשרו — כפילויות יסוננו, ותוכלו לסווג הכל אחר כך.':'⚠️ חולץ אוטומטית — עברו על הרשימה וודאו שהתאריכים והסכומים נכונים. כפילויות יסוננו בייבוא, ותוכלו לתקן/לסווג הכל אחר כך.'}</div>
       ${detected?`<div class="hint" style="margin-bottom:10px">זוהו אוטומטית <strong>${inc}</strong> הכנסות ו‑<strong>${exp}</strong> הוצאות (לפי עמודות זכות/חובה).</div>`:''}
       <label class="chk" style="margin-bottom:12px"><input type="checkbox" id="pdf-allexp" ${detected?'':'checked'} /> התייחס לכל השורות כהוצאה (בטלו כדי לשמור על זיהוי הכנסות/הוצאות)</label>
       <div class="preview-table"><table><thead><tr><th>תאריך</th><th>סוג</th><th>סכום</th><th>תיאור</th></tr></thead><tbody>${items.slice(0,60).map(i=>`<tr><td class="tnum">${fmtDate(i.date)}</td><td>${i.kind==='income'?'<span class="pill status-ok">זכות</span>':i.kind==='expense'?'<span class="pill status-late">חובה</span>':'<span class="muted">—</span>'}</td><td class="tnum">${money2(i.amount)}</td><td>${esc(i.description)||'<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div>
@@ -1164,7 +1176,7 @@ views.import=async()=>{
     mapper.querySelector('#do-import-pdf').onclick=async()=>{
       const allExp=mapper.querySelector('#pdf-allexp').checked;
       const source=el.querySelector('#imp-source').value; const account=el.querySelector('#imp-account').value.trim();
-      const rows=items.map(i=>({date:i.date,description:i.description,merchant:i.description,amount:i.amount,kind:allExp?'expense':(i.kind||'expense')}));
+      const rows=items.map(i=>({date:i.date,description:i.description,merchant:i.description,amount:i.amount,kind:allExp?'expense':(i.kind||'expense'),ref:i.ref}));
       const res=await api('/transactions/import',{method:'POST',body:{source,account,rows}});
       toast(`יובאו ${res.added} עסקאות (${res.autoCategorized} סווגו אוטומטית, ${res.skipped} כפולות/דולגו)`);
       mapper.innerHTML=`<div class="empty" style="margin-top:20px">✔ הושלם — יובאו ${res.added} עסקאות. <a class="link" data-nav="review">עברו לסיווג ←</a></div>`;
@@ -1242,11 +1254,48 @@ async function parseXLSX(buf){
       cells[col]=val; if(col>maxc)maxc=col; }
     for(let i=0;i<=maxc;i++) if(cells[i]==null)cells[i]='';
     rowsArr.push(cells); }
+  const grid=rowsArr.map(r=>r.map(c=>String(c==null?'':c)));
   const data=rowsArr.filter(r=>r.some(c=>c&&String(c).trim()));
-  if(!data.length) return {headers:[],rows:[]};
+  if(!data.length) return {headers:[],rows:[],grid};
   let hIdx=data.findIndex(r=>r.filter(c=>c&&String(c).trim()).length>=2); if(hIdx<0)hIdx=0;
-  return {headers:data[hIdx].map(h=>String(h).trim()), rows:data.slice(hIdx+1).map(r=>r.map(c=>String(c==null?'':c)))};
+  return {headers:data[hIdx].map(h=>String(h).trim()), rows:data.slice(hIdx+1).map(r=>r.map(c=>String(c==null?'':c))), grid};
 }
+// חילוץ עסקאות מתדפיס בנק/אשראי מרובה-מקטעים (כמו תדפיס משולב עם כמה כרטיסים):
+// מזהה כל טבלת פירוט (כותרת עם «תאריך» + «שם בית עסק» + «סכום חיוב/סכום») ואוסף את שורותיה.
+function extractStatementTransactions(grid){
+  if(!grid||!grid.length) return [];
+  const norm=(s)=>String(s==null?'':s).replace(/''/g,'"').replace(/\s+/g,' ').trim();
+  const findCols=(cells)=>{ let date=-1,merch=-1,amt=-1,card=-1,ref=-1;
+    cells.forEach((h,i)=>{ const s=norm(h);
+      if(date<0 && s==='תאריך') date=i;
+      if(merch<0 && (s.includes('שם בית עסק')||s.includes('בית עסק')||s==='תיאור')) merch=i;
+      if(amt<0 && s.includes('סכום חיוב')) amt=i;
+      if(card<0 && s.includes('שם כרטיס')) card=i;
+      if(ref<0 && s.includes('אסמכתא')) ref=i; });
+    if(amt<0) cells.forEach((h,i)=>{ if(amt<0){ const s=norm(h); if(s.includes('סכום')&&!s.includes('הנחה')) amt=i; } });
+    return {date,merch,amt,card,ref}; };
+  const out=[]; let i=0;
+  while(i<grid.length){
+    const c=findCols(grid[i]);
+    if(c.date>=0 && c.merch>=0 && c.amt>=0){
+      let j=i+1;
+      for(; j<grid.length; j++){ const row=grid[j];
+        const hc=findCols(row); if(hc.date>=0&&hc.merch>=0&&hc.amt>=0) break; // כותרת מקטע חדש
+        const date=normDate(row[c.date]); const merchant=String(row[c.merch]==null?'':row[c.merch]).trim();
+        if(!date && !merchant) break;         // גבול מקטע (כותרת/שורת חשבון/רווח)
+        if(!date || !merchant) continue;       // שורת ביניים (סיכום/כותרת משנה) — דלג, אל תעצור
+        const amount=Math.abs(parseAmount(row[c.amt]));
+        if(!(amount>0)) continue;              // עמלה בהנחה מלאה / סכום ריק — דלג
+        const card=c.card>=0? String(row[c.card]==null?'':row[c.card]).trim():'';
+        const ref=c.ref>=0? String(row[c.ref]==null?'':row[c.ref]).trim():'';
+        out.push({date,description:merchant,merchant,amount,kind:'expense',card,ref}); }
+      i=Math.max(j,i+1); continue;
+    }
+    i++;
+  }
+  return out;
+}
+function dominantMonth(items){ const c={}; items.forEach(it=>{ const d=String(it.date||'').slice(0,7); if(d.length===7)c[d]=(c[d]||0)+1; }); const e=Object.entries(c).sort((a,b)=>b[1]-a[1]); return e.length?e[0][0]:''; }
 // זיהוי אוטומטי של חברת האשראי וחודש החיוב מתוך תוכן הקובץ
 function autoDetectStatement(headers, rows, filename){
   const sample=[filename||'', headers.join(' '), rows.slice(0,40).map(r=>r.join(' ')).join(' ')].join(' ');
@@ -1263,8 +1312,10 @@ function quickImportFile(file, source, account){
     const isPdf=/\.pdf$/i.test(file.name)||file.type==='application/pdf';
     const isXlsx=/\.xls[xm]$/i.test(file.name)||/spreadsheetml/.test(file.type||'');
     if(/\.xls$/i.test(file.name)&&!isXlsx){ resolve({added:0,error:'קובץ .xls ישן אינו נתמך — שמרו כ‑.xlsx או CSV.'}); return; }
-    const fromTable=({headers,rows:data})=>{ const g=guessColumns(headers);
-      return data.map(r=>({date:normDate(r[g.date]),description:String(r[g.desc]||'').trim(),merchant:String(r[g.desc]||'').trim(),amount:Math.abs(parseAmount(r[g.amount])),kind:'expense'})).filter(r=>r.date&&r.amount>0); };
+    const fromTable=(parsed)=>{ const grid=parsed.grid||[parsed.headers,...parsed.rows]; const stmt=extractStatementTransactions(grid);
+      if(stmt.length>=3) return stmt.map(i=>({date:i.date,description:i.description,merchant:i.merchant,amount:i.amount,kind:'expense',ref:i.ref}));
+      const g=guessColumns(parsed.headers);
+      return parsed.rows.map(r=>({date:normDate(r[g.date]),description:String(r[g.desc]||'').trim(),merchant:String(r[g.desc]||'').trim(),amount:Math.abs(parseAmount(r[g.amount])),kind:'expense'})).filter(r=>r.date&&r.amount>0); };
     const reader=new FileReader();
     reader.onload=async()=>{ try{
       let rows;
