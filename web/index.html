@@ -487,6 +487,18 @@ function ensureDefaults(){
     for(const [match,cat] of RI){ const c=findCat(cat); if(c && !db.rules.some(r=>r.match_text===match && r.category_id===c.id)) db.rules.push({id:++db.seq,match_text:match,category_id:c.id}); }
     db.defaultsV=4; save();
   }
+  // v5: קטגוריית עמלות בנק + זיהוי אוטומטי
+  if((db.defaultsV||0) < 5){
+    ensureCat('עמלות בנק ופיננסים','#64748b');
+    const RF=[
+      ['עמלה','עמלות בנק ופיננסים'],['עמלות','עמלות בנק ופיננסים'],['עמלת','עמלות בנק ופיננסים'],
+      ['דמי ניהול','עמלות בנק ופיננסים'],['דמי כרטיס','עמלות בנק ופיננסים'],['דמי פנקס','עמלות בנק ופיננסים'],
+      ['ריבית חובה','עמלות בנק ופיננסים'],['ריבית חח"ד','עמלות בנק ופיננסים'],['ד.ניהול','עמלות בנק ופיננסים'],
+      ['ע.מפעולות','עמלות בנק ופיננסים'],['הקצאת אשראי','עמלות בנק ופיננסים'],['עמ.הקצאת','עמלות בנק ופיננסים'],
+    ];
+    for(const [match,cat] of RF){ const c=findCat(cat); if(c && !db.rules.some(r=>r.match_text===match)) db.rules.push({id:++db.seq,match_text:match,category_id:c.id}); }
+    db.defaultsV=5; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
@@ -723,14 +735,17 @@ function h_dashboard(qp){
     trend.push({m,expenses:e,income:ic}); }
   const upcomingMaintenance=db.components.map(compView).filter(c=>c.next_due&&c.days_left<=60).sort((a,c)=>a.next_due.localeCompare(c.next_due)).slice(0,8);
   const expiringWarranties=db.warranties.map(warrantyView).filter(w=>w.effective_expiry&&w.days_left<=90).sort((a,c)=>a.effective_expiry.localeCompare(c.effective_expiry)).slice(0,8);
-  // השלמות: חיובי אשראי בבנק שממתינים לפירוט
-  const recon=reconciliation();
-  const pending=recon.filter(r=>r.status==='pending'||r.status==='partial');
-  const pendingCredit=pending.reduce((s,r)=>s+Math.max(0,r.gap),0);
-  const totalBankCard=recon.reduce((s,r)=>s+r.bank,0);
-  const completeness = totalBankCard>0 ? Math.round((1 - pendingCredit/totalBankCard)*100) : 100;
+  // שלמות התמונה: חלק ההוצאות שידוע ומפורט. חיובי אשראי מרוכזים (בלי פירוט)
+  // ועסקאות לא מסווגות = חוסר, ולכן לא ניתן להגיע ל-100% עד שהכל מפורט ומסווג.
+  const lumpTotal=db.transactions.filter(t=>t.kind==='expense'&&inMonth(t.tx_date,month)&&isCard(t)).reduce((s,t)=>s+t.amount,0);
+  const classifiedTotal=exp.filter(t=>t.category_id).reduce((s,t)=>s+t.amount,0);
+  const unclassifiedTotal=exp.filter(t=>!t.category_id).reduce((s,t)=>s+t.amount,0);
+  const pendingCredit=lumpTotal;
+  const denom=classifiedTotal+unclassifiedTotal+lumpTotal;
+  const completeness = denom>0 ? Math.round(classifiedTotal/denom*100) : 100;
+  const pendingIssuers=new Set(db.transactions.filter(t=>t.kind==='expense'&&isCard(t)).map(t=>detectIssuer(t.merchant)||detectIssuer(t.description))).size;
   return {month:month||'all',homeExpenses,totalExpenses,totalIncome,mortgage,rentalIncome,uncategorized,recurringMonthly,annualProjection:recurringMonthly*12,byCategory,trend,upcomingMaintenance,expiringWarranties,
-    pendingCredit,pendingIssuers:pending.length,completeness};
+    pendingCredit,pendingIssuers,completeness,unclassifiedTotal,lumpTotal};
 }
 
 /* ============================ UI helpers ============================ */
@@ -784,7 +799,7 @@ views.dashboard=async()=>{
       <div class="stat-card expense"><div class="label">🏡 עלות אחזקת הבית</div><div class="value tnum">${money(d.homeExpenses)}</div><div class="sub">${state.month?'בחודש הנבחר':'סך הכל'} · ללא משכנתא</div></div>
       <div class="stat-card accent"><div class="label">🔁 הוצאות קבועות (חודשי)</div><div class="value tnum">${money(d.recurringMonthly)}</div><div class="sub">תחזית שנתית: ${money(d.annualProjection)}</div></div>
       <div class="stat-card ${d.uncategorized?'warn':'accent'}"><div class="label">🏷️ עסקאות ללא סיווג</div><div class="value tnum">${d.uncategorized}</div><div class="sub">${d.uncategorized?'<a class="link" data-nav="review">סווג עכשיו ←</a>':'הכל מסווג ✔'}</div></div>
-      <div class="stat-card ${d.completeness>=99?'income':d.completeness>=60?'warn':'expense'}"><div class="label">✅ שלמות התמונה</div><div class="value tnum">${d.completeness}%</div><div class="sub">${d.pendingCredit>0?`<a class="link" data-nav="review">חסר פירוט אשראי ←</a>`:'הכל מפורט ✔'}</div></div>
+      <div class="stat-card ${d.completeness>=99?'income':d.completeness>=60?'warn':'expense'}"><div class="label">✅ שלמות התמונה</div><div class="value tnum">${d.completeness}%</div><div class="sub">${(d.pendingCredit>0||d.unclassifiedTotal>0)?`<a class="link" data-nav="review">חסר ${money(d.pendingCredit+d.unclassifiedTotal)} ←</a>`:'הכל מסווג ומפורט ✔'}</div></div>
     </div>
     ${managedSep?`
     <div class="section-title">🔀 מנוהל בנפרד מתקציב הבית</div>
