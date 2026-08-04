@@ -275,6 +275,12 @@ code{background:var(--chip); padding:2px 7px; border-radius:6px; font-size:13px;
 .pro-avatar.ph{display:inline-flex; align-items:center; justify-content:center; font-size:24px; background:var(--grad-soft)}
 .docs-list{display:flex; flex-direction:column; gap:6px}
 .doc-item{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2)}
+.chips{display:flex; flex-wrap:wrap; gap:8px}
+.chip{display:inline-flex; align-items:center; gap:6px; padding:6px 13px; border:1px solid var(--border); border-radius:999px; background:var(--surface-2); color:var(--text); font:inherit; font-size:13px; cursor:pointer; transition:all .15s}
+.chip:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--border))}
+.chip.active{background:var(--accent); color:var(--on-accent); border-color:var(--accent)}
+.chip .chip-n{font-size:11px; opacity:.7; background:color-mix(in srgb,var(--text) 12%,transparent); border-radius:999px; padding:1px 7px; min-width:18px; text-align:center}
+.chip.active .chip-n{background:color-mix(in srgb,var(--on-accent) 25%,transparent); opacity:.9}
 
 /* ---------- Toast ---------- */
 .toast{position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(120px); background:linear-gradient(135deg,#0b1322,#111a2e); color:#fff; padding:13px 24px; border-radius:13px; border:1px solid rgba(255,255,255,.10); box-shadow:0 16px 40px rgba(0,0,0,.4); opacity:0; transition:.3s cubic-bezier(.22,.9,.3,1); z-index:100; font-weight:600; max-width:90vw}
@@ -316,6 +322,7 @@ code{background:var(--chip); padding:2px 7px; border-radius:6px; font-size:13px;
       <a data-view="recurring"><span class="ico">🔁</span> <span>הוצאות קבועות</span></a>
       <a data-view="maintenance"><span class="ico">🛠️</span> <span>תחזוקה</span></a>
       <a data-view="warranties"><span class="ico">📜</span> <span>אחריות</span></a>
+      <a data-view="documents"><span class="ico">📁</span> <span>ארכיון מסמכים</span></a>
       <a data-view="professionals"><span class="ico">👷</span> <span>בעלי מקצוע</span></a>
       <a data-view="lighting"><span class="ico">💡</span> <span>תאורה</span></a>
       <a data-view="categories"><span class="ico">🗂️</span> <span>קטגוריות</span></a>
@@ -357,7 +364,7 @@ function seedDB(){
   addCat('משכורת','#15803d','income',0);
   addCat('הכנסה אחרת','#22c55e','income',0);
   addCat('העברה בין חשבונות','#94a3b8','expense',0);
-  return {seq, categories:cats, rules:[], transactions:[], recurring:[], professionals:[], warranties:[], components:[], maintenance:[], lighting:[]};
+  return {seq, categories:cats, rules:[], transactions:[], recurring:[], professionals:[], warranties:[], components:[], maintenance:[], lighting:[], documents:[]};
 }
 function loadDB(){
   try{ const raw = localStorage.getItem(LS_KEY); if(raw){ return JSON.parse(raw); } }catch(e){}
@@ -436,6 +443,7 @@ function matchCategory(text, kind){
 // קטגוריות וכללי סיווג ברירת מחדל (רצים גם על מסדי נתונים קיימים, מוסיפים רק מה שחסר)
 function ensureDefaults(){
   if(!db.rules) db.rules=[];
+  if(!Array.isArray(db.documents)) db.documents=[];
   const findCat=(name)=>db.categories.find(c=>c.name===name);
   const ensureCat=(name,color,kind='expense',is_home=1)=>{ if(!findCat(name)) db.categories.push({id:++db.seq,name,kind,is_home,color,monthly_budget:0}); };
   if((db.defaultsV||0) < 2){
@@ -555,6 +563,7 @@ function route(parts, method, b, qp){
     case 'components': return h_components(method,id,sub,b);
     case 'recurring': return h_recurring(method,id,b);
     case 'lighting': return h_lighting(method,id,b);
+    case 'documents': return h_documents(method,id,b);
     case 'dashboard': return h_dashboard(qp);
     case 'reconcile': return reconciliation();
     case 'backup': return h_backup(method,b);
@@ -657,7 +666,7 @@ function warrantyView(w){ const expiry = strv(w.expiry_date)||addMonths(w.purcha
   return {...w, professional_name:p?.name, professional_phone:p?.phone, effective_expiry:expiry, days_left:daysLeft(expiry)}; }
 function h_warranties(m,id,b){
   if(m==='GET') return db.warranties.map(warrantyView).sort((a,c)=> (a.effective_expiry||'9999').localeCompare(c.effective_expiry||'9999'));
-  const fields=(w)=>{ w.item_name=strv(b.item_name); w.category=strv(b.category); w.brand=strv(b.brand); w.model=strv(b.model); w.serial=strv(b.serial); w.area=strv(b.area); w.vendor=strv(b.vendor); w.purchase_date=strv(b.purchase_date)||null; w.warranty_months=intOrNull(b.warranty_months)??12; w.expiry_date=strv(b.expiry_date)||null; w.cost=numv(b.cost); w.professional_id=intOrNull(b.professional_id); w.doc_url=strv(b.doc_url); w.notes=strv(b.notes); return w; };
+  const fields=(w)=>{ w.item_name=strv(b.item_name); w.category=strv(b.category); w.brand=strv(b.brand); w.model=strv(b.model); w.serial=strv(b.serial); w.area=strv(b.area); w.vendor=strv(b.vendor); w.purchase_date=strv(b.purchase_date)||null; w.warranty_months=intOrNull(b.warranty_months)??12; w.expiry_date=strv(b.expiry_date)||null; w.cost=numv(b.cost); w.professional_id=intOrNull(b.professional_id); w.doc_url=strv(b.doc_url); w.image=strv(b.image); w.notes=strv(b.notes); return w; };
   if(m==='POST'){ if(!strv(b.item_name)) throw new Error('שם הפריט הוא שדה חובה'); const w=fields({id:uid()}); db.warranties.push(w); return {id:w.id}; }
   if(m==='PUT'){ const w=db.warranties.find(x=>x.id==id); if(!w) throw new Error('לא נמצא'); if(!strv(b.item_name)) throw new Error('שם הפריט הוא שדה חובה'); fields(w); return {ok:true}; }
   if(m==='DELETE'){ db.warranties=db.warranties.filter(w=>w.id!=id); return {ok:true}; }
@@ -692,13 +701,22 @@ function h_lighting(m,id,b){
   if(m==='PUT'){ const l=db.lighting.find(x=>x.id==id); if(!l) throw new Error('לא נמצא'); fields(l); return {ok:true}; }
   if(m==='DELETE'){ db.lighting=db.lighting.filter(l=>l.id!=id); return {ok:true}; }
 }
+function h_documents(m,id,b){
+  if(!Array.isArray(db.documents)) db.documents=[];
+  if(m==='GET') return clone(db.documents).sort((a,c)=> strv(c.created_at).localeCompare(strv(a.created_at)) || strv(a.name).localeCompare(strv(c.name),'he'));
+  const fields=(d)=>{ d.name=strv(b.name); d.category=strv(b.category); d.url=strv(b.url); d.file_type=strv(b.file_type); d.doc_date=strv(b.doc_date)||null; d.notes=strv(b.notes); return d; };
+  if(m==='POST'){ if(!strv(b.name)) throw new Error('שם המסמך הוא שדה חובה'); if(!strv(b.url)) throw new Error('יש להעלות קובץ או להזין קישור');
+    const d=fields({id:uid(),created_at:new Date().toISOString()}); db.documents.push(d); return {id:d.id}; }
+  if(m==='PUT'){ const d=db.documents.find(x=>x.id==id); if(!d) throw new Error('לא נמצא'); if(!strv(b.name)) throw new Error('שם המסמך הוא שדה חובה'); fields(d); return {ok:true}; }
+  if(m==='DELETE'){ db.documents=db.documents.filter(d=>d.id!=id); return {ok:true}; }
+}
 function h_backup(m,b){
   if(m==='GET') return {version:1, exportedAt:new Date().toISOString(), data:clone(db)};
   if(m==='POST'){ // ייבוא/שחזור — מחליף את כל הנתונים
     const d = b && b.data ? b.data : b;
     if(!d || typeof d!=='object' || !Array.isArray(d.transactions)) throw new Error('קובץ גיבוי לא תקין');
-    ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'].forEach(k=>{ if(!Array.isArray(d[k])) d[k]=[]; });
-    if(typeof d.seq!=='number'){ let mx=0; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'].forEach(k=>d[k].forEach(x=>{ if(x&&x.id>mx)mx=x.id; })); d.seq=mx; }
+    ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting','documents'].forEach(k=>{ if(!Array.isArray(d[k])) d[k]=[]; });
+    if(typeof d.seq!=='number'){ let mx=0; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting','documents'].forEach(k=>d[k].forEach(x=>{ if(x&&x.id>mx)mx=x.id; })); d.seq=mx; }
     db=d; save(); return {ok:true};
   }
 }
@@ -768,6 +786,7 @@ const monthParam=(extra='')=>{ const q=[]; if(state.month)q.push('month='+state.
 const AREAS=['מטבח','סלון','פינת אוכל','חדר הורים','חדר רחצה הורים','חדר ילדים','חדר אורחים','שירותי אורחים','חדר כביסה','מרתף','מחסן','מוסך','חצר','גינה','בריכה','מרפסת','גג','כניסה','פרוזדור','משרד / חדר עבודה','ממ״ד'];
 const SYSTEMS=['מים ואינסטלציה','חשמל','מיזוג אוויר','בריכה','גינה והשקיה','מבנה ואיטום','מכשירי חשמל','אבטחה ומיגון','דוד שמש / סולארי','כללי'];
 const TRADES=['חשמלאי','אינסטלטור (שרברב)','גנן','טכנאי מיזוג','טכנאי בריכה','שיפוצניק','נגר','צבע','טכנאי מכשירי חשמל','מנעולן','זגג','טכנאי דוד שמש','מדביר','טכנאי אזעקה/מצלמות','אלומיניום'];
+const DOC_CATEGORIES=['חוזים והסכמים','משכנתא ובנק','ביטוחים','חשבונות וקבלות','תעודות אחריות','רישוי ועירייה','תוכניות ואדריכלות','מיסים וארנונה','בעלי מקצוע','מכשירי חשמל','רכב','בריאות','מסמכים אישיים','אחר'];
 const BULB_BASES=['E27','E14','GU10','G9','GU5.3 (MR16)','B22','צינור T8','צינור T5','LED מובנה','אחר'];
 const BULB_TYPES=['LED','הלוגן','פלואורסנט','להט','חכמה (Smart)'];
 const datalist=(id,items)=>`<datalist id="${id}">${items.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>`;
@@ -1322,20 +1341,112 @@ views.warranties=async()=>{
   const [rows,pros]=await Promise.all([api('/warranties'),api('/professionals')]);
   const active=rows.filter(r=>r.days_left===null||r.days_left>=0).length;
   const el=document.createElement('div');
+  const thumb=(r)=> r.image?`<img src="${esc(r.image)}" class="pro-avatar" data-img="${r.id}" alt="${esc(r.item_name)}" style="cursor:zoom-in" />`:'<span class="pro-avatar ph">📦</span>';
+  const docLink=(r)=> r.doc_url?`<a class="icon-btn" href="${esc(r.doc_url)}" target="_blank" rel="noopener" download="${esc((r.item_name||'תעודה')+'')}" title="סריקת התעודה">📎</a>`:'';
   el.innerHTML=`<div class="stats-grid"><div class="stat-card accent"><div class="label">📜 תעודות</div><div class="value tnum">${rows.length}</div></div><div class="stat-card income"><div class="label">✅ בתוקף</div><div class="value tnum">${active}</div></div><div class="stat-card expense"><div class="label">⌛ פגו</div><div class="value tnum">${rows.length-active}</div></div></div>
     <div class="card"><div class="card-header"><h2>תעודות אחריות</h2><button class="btn" id="add">+ תעודה חדשה</button></div>
-    ${rows.length?`<div class="table-wrap"><table><thead><tr><th>פריט</th><th>יצרן/דגם</th><th>מיקום</th><th>נרכש</th><th>תוקף עד</th><th>סטטוס</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr>
+    ${rows.length?`<div class="table-wrap"><table><thead><tr><th>תמונה</th><th>פריט</th><th>יצרן/דגם</th><th>מיקום</th><th>נרכש</th><th>תוקף עד</th><th>סטטוס</th><th>תעודה</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr>
+      <td>${thumb(r)}</td>
       <td><strong>${esc(r.item_name)}</strong>${r.serial?`<div class="hint">מק״ט: ${esc(r.serial)}</div>`:''}</td><td>${esc([r.brand,r.model].filter(Boolean).join(' '))||'—'}</td><td>${esc(r.area)||'—'}</td><td class="tnum">${r.purchase_date?fmtDate(r.purchase_date):'—'}</td><td class="tnum">${r.effective_expiry?fmtDate(r.effective_expiry):'—'}</td><td>${statusPill(r.days_left,{soon:90})}</td>
-      <td style="text-align:left">${r.doc_url?`<a class="icon-btn" href="${esc(r.doc_url)}" target="_blank" rel="noopener" title="תעודה">📎</a>`:''}<button class="icon-btn" data-edit="${r.id}">✏️</button><button class="btn-danger" data-del="${r.id}">🗑</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">אין תעודות. הוסיפו מקרר, תנור, מזגנים, דוד שמש, מכונת כביסה, טלוויזיה וכו׳.</div>'}</div>${datalist('areas',AREAS)}`;
-  const form=(r={})=>`<div class="field-row"><div class="field"><label>שם הפריט *</label><input name="item_name" value="${esc(r.item_name||'')}" required /></div><div class="field"><label>סוג/קטגוריה</label><input name="category" value="${esc(r.category||'')}" placeholder="מקרר, מזגן…" /></div></div>
-    <div class="field-row-3"><div class="field"><label>יצרן</label><input name="brand" value="${esc(r.brand||'')}" /></div><div class="field"><label>דגם</label><input name="model" value="${esc(r.model||'')}" /></div><div class="field"><label>מק״ט/סריאלי</label><input name="serial" value="${esc(r.serial||'')}" /></div></div>
-    <div class="field-row-3"><div class="field"><label>מיקום</label><input name="area" list="areas" value="${esc(r.area||'')}" /></div><div class="field"><label>נקנה מ‑</label><input name="vendor" value="${esc(r.vendor||'')}" /></div><div class="field"><label>עלות (₪)</label><input name="cost" type="number" step="0.01" min="0" value="${r.cost??''}" /></div></div>
-    <div class="field-row-3"><div class="field"><label>תאריך רכישה</label><input name="purchase_date" type="date" value="${esc(r.purchase_date||'')}" /></div><div class="field"><label>אחריות (חודשים)</label><input name="warranty_months" type="number" min="0" value="${r.warranty_months??12}" /></div><div class="field"><label>או תוקף עד (ידני)</label><input name="expiry_date" type="date" value="${esc(r.expiry_date||'')}" /></div></div>
-    <div class="field-row"><div class="field"><label>בעל מקצוע / שירות</label><select name="professional_id">${professionalOptions(pros,r.professional_id)}</select></div><div class="field"><label>קישור לסריקת התעודה</label><input name="doc_url" value="${esc(r.doc_url||'')}" placeholder="https://…" /></div></div>
-    <div class="field"><label>הערות</label><input name="notes" value="${esc(r.notes||'')}" /></div>`;
-  el.querySelector('#add').onclick=()=>openModal('תעודת אחריות',form(),async fd=>{await api('/warranties',{method:'POST',body:fd});toast('נוסף');render();},{wide:true});
-  el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.id==b.dataset.edit);openModal('עריכת תעודה',form(r),async fd=>{await api('/warranties/'+r.id,{method:'PUT',body:fd});toast('עודכן');render();},{wide:true});});
+      <td style="text-align:center">${docLink(r)||'<span class="muted">—</span>'}</td>
+      <td style="text-align:left"><button class="icon-btn" data-edit="${r.id}">✏️</button><button class="btn-danger" data-del="${r.id}">🗑</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">אין תעודות. הוסיפו מקרר, תנור, מזגנים, דוד שמש, מכונת כביסה, טלוויזיה וכו׳.</div>'}</div>${datalist('areas',AREAS)}`;
+
+  function openWarrantyModal(title,r,onSave){
+    let img=r.image||''; let doc=r.doc_url||'';
+    const form=`
+      <div class="field-row">
+        <div class="field"><label>תמונת המוצר</label><div class="img-uploader"><div class="img-prev" id="w-prev">${img?`<img src="${esc(img)}" alt="" />`:'<span>אין תמונה</span>'}</div>
+          <div><input type="file" id="w-imgfile" accept="image/*" class="img-file" /><div class="hint">צלמו/בחרו תמונה של המוצר. נשמרת ומוקטנת אוטומטית.</div>${img?'<button type="button" class="btn-ghost" id="w-imgclear" style="margin-top:8px;padding:5px 12px">הסר תמונה</button>':''}</div></div></div>
+        <div class="field"><label>סריקת תעודת האחריות</label>
+          <div id="w-docprev" class="docs-list"></div>
+          <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><label class="btn-ghost" style="cursor:pointer;padding:6px 12px">⬆️ העלה סריקה<input type="file" id="w-docfile" accept="image/*,application/pdf" hidden /></label><button type="button" class="btn-ghost" id="w-doclink" style="padding:6px 12px">🔗 קישור</button></div>
+          <div class="hint">תמונה או PDF של התעודה. קובץ נשמר בדפדפן (עד ~3MB); לקובץ גדול הוסיפו קישור.</div></div>
+      </div>
+      <div class="field-row"><div class="field"><label>שם הפריט *</label><input name="item_name" value="${esc(r.item_name||'')}" required /></div><div class="field"><label>סוג/קטגוריה</label><input name="category" value="${esc(r.category||'')}" placeholder="מקרר, מזגן…" /></div></div>
+      <div class="field-row-3"><div class="field"><label>יצרן</label><input name="brand" value="${esc(r.brand||'')}" /></div><div class="field"><label>דגם</label><input name="model" value="${esc(r.model||'')}" /></div><div class="field"><label>מק״ט/סריאלי</label><input name="serial" value="${esc(r.serial||'')}" /></div></div>
+      <div class="field-row-3"><div class="field"><label>מיקום</label><input name="area" list="areas" value="${esc(r.area||'')}" /></div><div class="field"><label>נקנה מ‑</label><input name="vendor" value="${esc(r.vendor||'')}" /></div><div class="field"><label>עלות (₪)</label><input name="cost" type="number" step="0.01" min="0" value="${r.cost??''}" /></div></div>
+      <div class="field-row-3"><div class="field"><label>תאריך רכישה</label><input name="purchase_date" type="date" value="${esc(r.purchase_date||'')}" /></div><div class="field"><label>אחריות (חודשים)</label><input name="warranty_months" type="number" min="0" value="${r.warranty_months??12}" /></div><div class="field"><label>או תוקף עד (ידני)</label><input name="expiry_date" type="date" value="${esc(r.expiry_date||'')}" /></div></div>
+      <div class="field-row"><div class="field"><label>בעל מקצוע / שירות</label><select name="professional_id">${professionalOptions(pros,r.professional_id)}</select></div><div class="field"><label>הערות</label><input name="notes" value="${esc(r.notes||'')}" /></div></div>`;
+    openModal(title,form,async fd=>{ await onSave({...fd,image:img,doc_url:doc}); },{wide:true});
+    setTimeout(()=>{
+      const q=(s)=>document.querySelector('.modal '+s);
+      // תמונת מוצר
+      const pf=q('#w-imgfile'), prev=q('#w-prev');
+      const setClear=()=>{ let clr=q('#w-imgclear'); if(img&&!clr){ clr=document.createElement('button'); clr.type='button'; clr.className='btn-ghost'; clr.id='w-imgclear'; clr.style.cssText='margin-top:8px;padding:5px 12px'; clr.textContent='הסר תמונה'; pf.parentElement.appendChild(clr); }
+        q('#w-imgclear') && (q('#w-imgclear').onclick=()=>{ img=''; prev.innerHTML='<span>אין תמונה</span>'; q('#w-imgclear').remove(); }); };
+      if(pf) pf.onchange=()=>{ const f=pf.files[0]; if(!f) return; resizeImage(f,420,(u)=>{ img=u; prev.innerHTML=`<img src="${u}" alt="" />`; setClear(); }); };
+      setClear();
+      // סריקת תעודה
+      const renderDoc=()=>{ const c=q('#w-docprev'); if(!c) return; c.innerHTML=doc?`<div class="doc-item"><a class="link" href="${esc(doc)}" target="_blank" rel="noopener">📄 סריקת התעודה</a><button type="button" class="btn-danger" id="w-docdel">🗑</button></div>`:'<span class="hint">לא צורפה סריקה.</span>';
+        const del=q('#w-docdel'); if(del) del.onclick=()=>{ doc=''; renderDoc(); }; };
+      renderDoc();
+      const df=q('#w-docfile'); if(df) df.onchange=()=>{ const f=df.files[0]; if(!f) return; if(f.size>3*1024*1024){ toast('הקובץ גדול מדי (מעל 3MB) — הוסיפו קישור במקום',true); df.value=''; return; }
+        const rd=new FileReader(); rd.onload=()=>{ doc=rd.result; renderDoc(); }; rd.readAsDataURL(f); df.value=''; };
+      const dl=q('#w-doclink'); if(dl) dl.onclick=()=>{ const url=prompt('הדביקו קישור לסריקת התעודה (https://…)',doc||''); if(url!==null){ doc=url.trim(); renderDoc(); } };
+    },0);
+  }
+
+  el.querySelector('#add').onclick=()=>openWarrantyModal('תעודת אחריות',{},async body=>{await api('/warranties',{method:'POST',body});toast('נוסף');render();});
+  el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.id==b.dataset.edit);openWarrantyModal('עריכת תעודה',r,async body=>{await api('/warranties/'+r.id,{method:'PUT',body});toast('עודכן');render();});});
   el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>confirmDelete('למחוק תעודה זו?',async()=>{await api('/warranties/'+b.dataset.del,{method:'DELETE'});toast('נמחק');render();}));
+  el.querySelectorAll('[data-img]').forEach(im=>im.onclick=()=>lightbox(im.src));
+  return el;
+};
+
+const docState={cat:''};
+views.documents=async()=>{
+  const rows=await api('/documents');
+  const el=document.createElement('div');
+  const isImg=(d)=> /^data:image\//.test(d.url||'') || /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(d.url||'');
+  const isPdf=(d)=> /^data:application\/pdf/.test(d.url||'') || /\.pdf(\?|#|$)/i.test(d.url||'');
+  const icon=(d)=> isImg(d)?'🖼️':isPdf(d)?'📕':'📄';
+  // ספירה לפי תחום עניין
+  const counts={}; rows.forEach(d=>{ const k=d.category||'ללא סיווג'; counts[k]=(counts[k]||0)+1; });
+  const cats=Object.keys(counts).sort((a,c)=>c.localeCompare(a)==0?0:counts[c]-counts[a]);
+  const filtered = docState.cat? rows.filter(d=>(d.category||'ללא סיווג')===docState.cat) : rows;
+  const chip=(label,val,n)=>`<button class="chip ${docState.cat===val?'active':''}" data-cat="${esc(val)}">${esc(label)} <span class="chip-n">${n}</span></button>`;
+  el.innerHTML=`
+    <div class="card-header" style="border:none;padding:0 0 12px"><h2 style="margin:0">📁 ארכיון מסמכי הבית</h2><button class="btn" id="add">+ מסמך חדש</button></div>
+    <p class="hintbar">כל המסמכים החשובים של הבית במקום אחד — חוזים, ביטוחים, קבלות, תוכניות ועוד. סווגו כל מסמך <strong>לפי תחום עניין</strong> כדי למצוא אותו בקלות. הקבצים נשמרים בדפדפן ומסתנכרנים אוטומטית בין המכשירים.</p>
+    <div class="chips" style="margin-bottom:14px">${chip('הכול',''+'',rows.length)}${cats.map(c=>chip(c,c,counts[c])).join('')}</div>
+    ${filtered.length?`<div class="grid-cards">${filtered.map(d=>`<div class="mini-card">
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        ${isImg(d)?`<img src="${esc(d.url)}" class="doc-thumb" data-img="${d.id}" alt="" style="width:54px;height:54px;object-fit:cover;border-radius:10px;cursor:zoom-in" />`:`<span class="doc-thumb ph" style="width:54px;height:54px;display:flex;align-items:center;justify-content:center;font-size:26px;border-radius:10px;background:var(--surface-2,rgba(127,127,127,.12))">${icon(d)}</span>`}
+        <div style="flex:1;min-width:0"><h4 style="margin:0 0 2px;word-break:break-word">${esc(d.name)}</h4>
+          <div class="row" style="margin:0">${d.category?`<span class="pill status-ok">${esc(d.category)}</span>`:'<span class="pill status-none">ללא סיווג</span>'}</div>
+          ${d.doc_date?`<div class="row" style="margin:4px 0 0">📅 ${fmtDate(d.doc_date)}</div>`:''}
+          ${d.notes?`<div class="row" style="margin:4px 0 0">${esc(d.notes)}</div>`:''}
+        </div></div>
+      <div class="contact-actions" style="margin-top:10px"><a class="btn-ghost" href="${esc(d.url)}" target="_blank" rel="noopener" download="${esc(d.name||'מסמך')}">פתח / הורד</a><span class="spacer"></span><button class="icon-btn" data-edit="${d.id}">✏️</button><button class="btn-danger" data-del="${d.id}">🗑</button></div>
+      </div>`).join('')}</div>`:'<div class="card"><div class="empty">אין מסמכים עדיין. העלו חוזה שכירות, פוליסת ביטוח, אישור משכנתא, תוכניות הבית, קבלות וכו׳ — וסווגו לפי תחום עניין.</div></div>'}
+    ${datalist('doc-cats',DOC_CATEGORIES)}`;
+
+  function openDocModal(title,r,onSave){
+    let url=r.url||''; let fileName=r.name||'';
+    const form=`
+      <div class="field"><label>קובץ המסמך</label>
+        <div id="d-prev" class="docs-list"></div>
+        <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><label class="btn-ghost" style="cursor:pointer;padding:6px 12px">⬆️ העלה קובץ<input type="file" id="d-file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" hidden /></label><button type="button" class="btn-ghost" id="d-link" style="padding:6px 12px">🔗 קישור</button></div>
+        <div class="hint">תמונה / PDF / קובץ. נשמר בדפדפן (עד ~3MB); לקובץ גדול הוסיפו קישור (Drive/Dropbox).</div></div>
+      <div class="field-row"><div class="field"><label>שם המסמך *</label><input name="name" id="d-name" value="${esc(r.name||'')}" required placeholder="חוזה שכירות 2026…" /></div><div class="field"><label>תחום עניין</label><input name="category" list="doc-cats" value="${esc(r.category||'')}" placeholder="בחרו או הקלידו…" /></div></div>
+      <div class="field-row"><div class="field"><label>תאריך המסמך</label><input name="doc_date" type="date" value="${esc(r.doc_date||'')}" /></div><div class="field"><label>הערות</label><input name="notes" value="${esc(r.notes||'')}" /></div></div>`;
+    openModal(title,form,async fd=>{ if(!url) throw new Error('יש להעלות קובץ או להזין קישור'); await onSave({...fd,url}); },{wide:true});
+    setTimeout(()=>{
+      const q=(s)=>document.querySelector('.modal '+s);
+      const renderPrev=()=>{ const c=q('#d-prev'); if(!c) return; c.innerHTML=url?`<div class="doc-item"><a class="link" href="${esc(url)}" target="_blank" rel="noopener">📄 ${esc(fileName||'המסמך')}</a><button type="button" class="btn-danger" id="d-del">🗑</button></div>`:'<span class="hint">לא צורף קובץ.</span>';
+        const del=q('#d-del'); if(del) del.onclick=()=>{ url=''; renderPrev(); }; };
+      renderPrev();
+      const f=q('#d-file'); if(f) f.onchange=()=>{ const file=f.files[0]; if(!file) return; if(file.size>3*1024*1024){ toast('הקובץ גדול מדי (מעל 3MB) — הוסיפו קישור במקום',true); f.value=''; return; }
+        const rd=new FileReader(); rd.onload=()=>{ url=rd.result; fileName=file.name; const nm=q('#d-name'); if(nm&&!nm.value) nm.value=file.name.replace(/\.[^.]+$/,''); renderPrev(); }; rd.readAsDataURL(file); f.value=''; };
+      const dl=q('#d-link'); if(dl) dl.onclick=()=>{ const v=prompt('הדביקו קישור למסמך (https://…)',url||''); if(v!==null){ url=v.trim(); fileName=fileName||'קישור'; renderPrev(); } };
+    },0);
+  }
+
+  el.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{ docState.cat=b.dataset.cat; render(); });
+  el.querySelector('#add').onclick=()=>openDocModal('מסמך חדש',{category:docState.cat||''},async body=>{await api('/documents',{method:'POST',body});toast('נוסף');render();});
+  el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.id==b.dataset.edit);openDocModal('עריכת מסמך',r,async body=>{await api('/documents/'+r.id,{method:'PUT',body});toast('עודכן');render();});});
+  el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>confirmDelete('למחוק מסמך זה?',async()=>{await api('/documents/'+b.dataset.del,{method:'DELETE'});toast('נמחק');render();}));
+  el.querySelectorAll('[data-img]').forEach(im=>im.onclick=()=>lightbox(im.src));
   return el;
 };
 
@@ -1621,7 +1732,7 @@ views.monthly=async()=>{
 };
 
 /* ============================ Router ============================ */
-const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',transactions:'עסקאות',review:'סיווג עסקאות',import:'ייבוא תדפיסים',monthly:'לפי חודש',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי'};
+const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',transactions:'עסקאות',review:'סיווג עסקאות',import:'ייבוא תדפיסים',monthly:'לפי חודש',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',documents:'ארכיון מסמכים',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי'};
 function currentView(){ const hash=location.hash.replace('#/','')||'dashboard'; return views[hash]?hash:'dashboard'; }
 async function render(){
   const name=currentView();
