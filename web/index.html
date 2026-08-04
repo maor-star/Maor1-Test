@@ -1846,9 +1846,17 @@ views.analytics=async()=>{
   const srcColors={credit_card:'#6366f1',bank:'#0ea5e9',cash:'#16a34a',manual:'#a855f7'};
   const srcMap={}; expCash.forEach(t=>{ if(!srcMap[t.source])srcMap[t.source]={label:srcLabel(t.source),value:0,color:srcColors[t.source]||'#94a3b8'}; srcMap[t.source].value+=t.amount; });
   const bySrc=Object.values(srcMap).sort((a,b)=>b.value-a.value);
-  // הכי הרבה הוצאתי אצל — רק בתי עסק אמיתיים (מסט המהות). ללא חיובים מרוכזים וללא משכנתא.
-  const mMap={}; exp.forEach(t=>{ if(detectIssuer(t.merchant||t.description)) return; const m=(t.merchant||t.description||'').trim(); if(!m) return; if(/משכנתא/.test(m)) return; mMap[m]=(mMap[m]||0)+t.amount; });
-  const topMerch=Object.entries(mMap).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value).slice(0,10);
+  // משכנתא + חיובים מרוכזים שטרם פורטו (מסבירים את הפער בין תזרים לפילוח)
+  const mortSum=expCash.filter(t=>/משכנתא/.test((t.merchant||'')+(t.description||''))).reduce((s,t)=>s+t.amount,0);
+  const detailIssuers=new Set(rows.filter(t=>t.kind==='expense'&&isCardDetail(t)).map(t=>detectIssuer(t.account)));
+  const pendingSum=expCash.filter(t=>isAggLump(t)&&!detailIssuers.has(detectIssuer(t.merchant||t.description))).reduce((s,t)=>s+t.amount,0);
+  const homeCost=totalExp-mortSum;
+  // הכי הרבה הוצאתי על… — מקובץ לפי קטגוריה (מסעדות/דלק/ביטוח יחד). לא-מסווג מוצג לפי בית עסק.
+  const spendMap={}; exp.forEach(t=>{ if(/משכנתא/.test((t.merchant||'')+(t.description||''))) return;
+    const label = t.category_name ? t.category_name : ((t.merchant||t.description||'—').trim()+' · ללא סיווג');
+    const color = t.category_id ? (t.category_color||'#7c3aed') : '#f59e0b';
+    if(!spendMap[label]) spendMap[label]={label,value:0,color}; spendMap[label].value+=t.amount; });
+  const topMerch=Object.values(spendMap).sort((a,b)=>b.value-a.value).slice(0,12);
   const uncat=exp.filter(t=>!t.category_id).reduce((s,t)=>s+t.amount,0);
   // הכנסות
   const incRows=rows.filter(t=>t.kind==='income');
@@ -1868,16 +1876,17 @@ views.analytics=async()=>{
   el.innerHTML=`
     <div class="stats-grid">
       <div class="stat-card income"><div class="label">💰 סך הכנסות ${state.month?'בחודש':'כולל'}</div><div class="value tnum">${money(totalInc)}</div></div>
-      <div class="stat-card expense"><div class="label">💸 סך הוצאות ${state.month?'בחודש':'כולל'}</div><div class="value tnum">${money(totalExp)}</div></div>
+      <div class="stat-card expense"><div class="label">💸 סך הוצאות ${state.month?'בחודש':'כולל'}</div><div class="value tnum">${money(totalExp)}</div><div class="sub">אחזקת בית ${money(homeCost)}${mortSum?` + משכנתא ${money(mortSum)}`:''}</div></div>
       <div class="stat-card ${net>=0?'income':'expense'}"><div class="label">${net>=0?'📈':'📉'} מאזן (הכנסות − הוצאות)</div><div class="value tnum">${money(net)}</div></div>
-      <div class="stat-card ${uncat?'warn':'accent'}"><div class="label">🏷️ הוצאות לא מסווגות</div><div class="value tnum">${money(uncat)}</div><div class="sub">${totalExp?Math.round(uncat/totalExp*100):0}% · <a class="link" data-nav="transactions">סווג ←</a></div></div>
+      <div class="stat-card ${uncat||pendingSum?'warn':'accent'}"><div class="label">🏷️ לא מסווג / לא פורט</div><div class="value tnum">${money(uncat+pendingSum)}</div><div class="sub">${uncat?`ללא סיווג ${money(uncat)}`:''}${pendingSum?`${uncat?' · ':''}אשראי לא פורט ${money(pendingSum)}`:''} · <a class="link" data-nav="review">טפל ←</a></div></div>
     </div>
+    ${pendingSum?`<div class="hintbar" style="border-color:color-mix(in srgb,var(--amber) 40%,var(--border));background:color-mix(in srgb,var(--amber) 8%,transparent)">🔗 <strong>${money(pendingSum)}</strong> נמצאים ב<strong>חיובי אשראי מרוכזים שטרם פורטו</strong> — לכן חלק מההוצאות (מזון, מסעדות, דלק…) עדיין לא מופיעות בפילוח לפי קטגוריה. <a class="link" data-nav="import">העלה את תדפיסי הכרטיסים</a> כדי לפרק אותם ולראות את התמונה המלאה.</div>`:''}
     <div class="panel" style="margin-bottom:18px"><h3>🎯 תקציב מול ביצוע ${state.month?'(בחודש הנבחר)':'(בחרו חודש להשוואה מדויקת)'}</h3>${budgetHTML}</div>
     <div class="panels">
       <div class="panel"><h3>הוצאות לפי מהות (קטגוריה)</h3>${donut(byCat)}</div>
       <div class="panel"><h3>הכנסות לפי מהות</h3>${donut(byInc)}</div>
       <div class="panel"><h3>הוצאות לפי מקור (אשראי / בנק / מזומן)</h3>${donut(bySrc)}</div>
-      <div class="panel"><h3>הכי הרבה הוצאתי אצל…</h3>${barsHTML(topMerch,money)}</div>
+      <div class="panel"><h3>הכי הרבה הוצאתי על… (לפי קטגוריה)</h3>${barsHTML(topMerch,money)}</div>
       <div class="panel"><h3>פילוח הוצאות מלא</h3>${barsHTML(byCat.map(c=>({label:c.label,value:c.value,color:c.color})),money)}</div>
       <div class="panel"><h3>פילוח הכנסות מלא</h3>${barsHTML(byInc.map(c=>({label:c.label,value:c.value,color:c.color})),money)}</div>
     </div>`;
@@ -1979,35 +1988,57 @@ views.settings=async()=>{
   return el;
 };
 
-// ===== Monthly breakdown: missing statements + unclassified, per month =====
+// ===== Monthly breakdown: פירוט חודשי מלא לפי קטגוריה ותת-קטגוריה (בית עסק) =====
 views.monthly=async()=>{
   const rows=await api('/transactions');
-  const months={}; const M=(ym)=>(months[ym]=months[ym]||{ym,uncCount:0,uncSum:0,expSum:0,incSum:0,txCount:0});
-  rows.forEach(r=>{ const ym=String(r.tx_date).slice(0,7); if(ym.length!==7) return; const mm=M(ym); mm.txCount++;
+  const curYM=new Date().toISOString().slice(0,7);
+  const detailIssuers=new Set(rows.filter(t=>t.kind==='expense'&&isCardDetail(t)).map(t=>detectIssuer(t.account)));
+  const isMort=(t)=>/משכנתא/.test((t.merchant||'')+' '+(t.description||''));
+  const months={};
+  const M=(ym)=>(months[ym]=months[ym]||{ym,txCount:0,incSum:0,expSum:0,mortgage:0,pending:0,cats:{},uncat:{total:0,count:0,mer:{}}});
+  rows.forEach(r=>{ const ym=String(r.tx_date).slice(0,7); if(ym.length!==7||ym>curYM) return; // בלי חודשים עתידיים
+    const mm=M(ym); mm.txCount++;
     if(r.kind==='income'){ mm.incSum+=r.amount; return; }
-    if(countsInTotal(r)) mm.expSum+=r.amount;                              // תזרים מזומנים (ללא כפילות פירוט)
-    if(countsEssence(r) && !r.category_id){ mm.uncCount++; mm.uncSum+=r.amount; } });
+    if(countsInTotal(r)){ mm.expSum+=r.amount; if(isMort(r)) mm.mortgage+=r.amount;
+      if(isAggLump(r) && !detailIssuers.has(detectIssuer(r.merchant||r.description))) mm.pending+=r.amount; }
+    // פילוח מהות (ללא חיובים מרוכזים, ללא משכנתא)
+    if(countsEssence(r) && !isMort(r)){ const merch=(r.merchant||r.description||'—').trim()||'—';
+      if(r.category_id){ const c=catById(r.category_id); const key=c?c.name:'אחר'; const col=c?c.color:'#94a3b8';
+        const g=mm.cats[key]=mm.cats[key]||{name:key,color:col,total:0,mer:{}}; g.total+=r.amount; g.mer[merch]=(g.mer[merch]||0)+r.amount; }
+      else { mm.uncat.total+=r.amount; mm.uncat.count++; mm.uncat.mer[merch]=(mm.uncat.mer[merch]||0)+r.amount; } } });
   const list=Object.values(months).sort((a,b)=>b.ym.localeCompare(a.ym));
   const el=document.createElement('div');
   if(!list.length){ el.innerHTML='<div class="card"><div class="empty">אין עדיין עסקאות. ייבאו תדפיס במסך «ייבוא תדפיסים».</div></div>'; return el; }
-  const totalUnc=list.reduce((s,m)=>s+m.uncCount,0);
+  const totalUncCount=list.reduce((s,m)=>s+m.uncat.count,0);
+  const merRows=(obj)=>Object.entries(obj).sort((a,b)=>b[1]-a[1]).map(([n,v])=>`<div class="bar-row" style="justify-content:space-between;padding:2px 0 2px 14px"><span class="muted" title="${esc(n)}">${esc(n)}</span><span class="tnum">${money(v)}</span></div>`).join('');
   el.innerHTML=`
     <div class="stats-grid">
       <div class="stat-card accent"><div class="label">📅 חודשים</div><div class="value tnum">${list.length}</div></div>
-      <div class="stat-card ${totalUnc?'expense':'accent'}"><div class="label">🔴 עסקאות לא מסווגות</div><div class="value tnum">${totalUnc}</div></div>
+      <div class="stat-card ${totalUncCount?'expense':'accent'}"><div class="label">🔴 עסקאות לא מסווגות</div><div class="value tnum">${totalUncCount}</div></div>
     </div>
-    <p class="hintbar">תמונה חודשית: כמה <strong>עסקאות עדיין לא סווגו</strong>, וסך ההוצאות וההכנסות בכל חודש. אילו תדפיסי אשראי חסרים לך — ראה במסך «ייבוא תדפיסים».</p>
-    <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>חודש</th><th>עסקאות לא מסווגות</th><th>הוצאות</th><th>הכנסות</th></tr></thead>
-      <tbody>${list.map(m=>{
-        return `<tr>
-          <td><strong style="font-size:15px">${fmtMonth(m.ym)}</strong><div class="hint">${m.txCount} עסקאות</div></td>
-          <td>${m.uncCount? `<span class="pill status-late">${m.uncCount} לא מסווגות</span> <span class="muted tnum">${money(m.uncSum)}</span> <button class="link" data-month="${m.ym}" style="border:none;background:none;cursor:pointer">סווג ←</button>` : '<span class="pill status-ok">הכל מסווג ✓</span>'}</td>
-          <td class="tnum amount-neg">${money(m.expSum)}</td>
-          <td class="tnum amount-pos">${m.incSum?money(m.incSum):'—'}</td>
-        </tr>`; }).join('')}</tbody>
-    </table></div></div>`;
-  el.querySelectorAll('[data-month]').forEach(b=>b.onclick=()=>{ state.month=b.dataset.month; const mf=document.getElementById('month-filter'); if(mf) mf.value=b.dataset.month; location.hash='#/review'; });
+    <p class="hintbar">פירוט חודשי מלא: לחצו על חודש כדי לפתוח את כל ההוצאות שלו <strong>לפי קטגוריה</strong> ובתוך כל קטגוריה <strong>לפי בית עסק (תת-סעיף)</strong>. כך תוכלו לעבור ולוודא שהכול מסווג נכון. «לא פורט» = חיוב אשראי מרוכז שצריך להעלות לו תדפיס.</p>
+    <div id="mlist">${list.map(m=>{
+      const cats=Object.values(m.cats).sort((a,b)=>b.total-a.total);
+      const home=m.expSum-m.mortgage;
+      return `<div class="card" style="margin-bottom:12px">
+        <div class="mrow" data-ym="${m.ym}" style="display:flex;align-items:center;gap:14px;cursor:pointer;padding:4px 2px">
+          <span class="mchev" style="transition:.2s;display:inline-block">▶</span>
+          <div style="flex:1"><strong style="font-size:16px">${fmtMonth(m.ym)}</strong> <span class="hint">· ${m.txCount} עסקאות</span>
+            ${m.uncat.count?`<span class="pill status-late" style="margin-inline-start:8px">${m.uncat.count} לא מסווגות · ${money(m.uncat.total)}</span>`:'<span class="pill status-ok" style="margin-inline-start:8px">הכל מסווג ✓</span>'}
+            ${m.pending?`<span class="pill status-soon" style="margin-inline-start:6px">🔗 ${money(m.pending)} לא פורט</span>`:''}</div>
+          <div style="text-align:end"><div class="tnum amount-neg" style="font-size:16px">${money(m.expSum)}</div><div class="hint">אחזקת בית ${money(home)}${m.mortgage?` · משכנתא ${money(m.mortgage)}`:''}${m.incSum?` · הכנסות ${money(m.incSum)}`:''}</div></div>
+        </div>
+        <div class="mbody" data-body="${m.ym}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+          ${cats.length?cats.map(c=>`<div style="margin-bottom:10px">
+            <div class="bar-row" style="justify-content:space-between;font-weight:600"><span><span class="cdot" style="background:${esc(c.color)}"></span> ${esc(c.name)}</span><span class="tnum">${money(c.total)}</span></div>
+            ${merRows(c.mer)}</div>`).join(''):'<div class="hint" style="padding:6px 0">אין עסקאות מסווגות בחודש זה.</div>'}
+          ${m.uncat.count?`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
+            <div class="bar-row" style="justify-content:space-between;font-weight:600;color:var(--red)"><span>🔴 ללא סיווג — <button class="link" data-month="${m.ym}" style="border:none;background:none;cursor:pointer">סווג עכשיו ←</button></span><span class="tnum">${money(m.uncat.total)}</span></div>
+            ${merRows(m.uncat.mer)}</div>`:''}
+          ${m.pending?`<div class="hint" style="margin-top:8px;padding:8px;background:color-mix(in srgb,var(--amber) 10%,transparent);border-radius:8px">🔗 <strong>${money(m.pending)}</strong> בחיובי אשראי מרוכזים שטרם פורטו — <a class="link" data-nav="import">העלה תדפיסים</a> כדי לפרק אותם לקטגוריות.</div>`:''}
+        </div></div>`; }).join('')}</div>`;
+  el.querySelectorAll('.mrow').forEach(row=>row.onclick=(e)=>{ if(e.target.closest('[data-month]')||e.target.closest('[data-nav]'))return; const ym=row.dataset.ym; const body=el.querySelector(`[data-body="${ym}"]`); const chev=row.querySelector('.mchev'); const open=body.style.display!=='none'; body.style.display=open?'none':'block'; chev.style.transform=open?'':'rotate(90deg)'; });
+  el.querySelectorAll('[data-month]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); state.month=b.dataset.month; const mf=document.getElementById('month-filter'); if(mf) mf.value=b.dataset.month; location.hash='#/review'; });
   return el;
 };
 
