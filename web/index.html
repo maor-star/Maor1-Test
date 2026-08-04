@@ -1004,7 +1004,32 @@ views.review=async()=>{
 
 views.import=async()=>{
   const el=document.createElement('div');
-  el.innerHTML=`<div class="card" style="padding:22px">
+  const txs=await api('/transactions');
+  const isCard=(t)=> !!detectIssuer(t.merchant||t.description);
+  // מה חסר להעלות — 6 חודשים אחרונים
+  const nowD=new Date(); const months=[];
+  for(let i=0;i<6;i++){ const dd=new Date(Date.UTC(nowD.getUTCFullYear(),nowD.getUTCMonth()-i,1)); months.push(dd.toISOString().slice(0,7)); }
+  const monthRows=months.map(ym=>{
+    const mtx=txs.filter(t=>String(t.tx_date).slice(0,7)===ym);
+    const lumps={}; mtx.filter(t=>t.kind==='expense'&&isCard(t)).forEach(t=>{ const k=detectIssuer(t.merchant)||detectIssuer(t.description); if(!lumps[k])lumps[k]={issuer:k,total:0}; lumps[k].total+=t.amount; });
+    const covered=(iss)=> mtx.some(t=>t.source==='credit_card' && detectIssuer(t.account)===iss && !isCard(t));
+    const needed=Object.values(lumps).filter(p=>!covered(p.issuer)).sort((a,b)=>b.total-a.total);
+    return {ym, noData:mtx.length===0, needed};
+  });
+  const anyMissing=monthRows.some(r=>r.noData||r.needed.length);
+  const missingHTML=`<div class="card" style="margin-bottom:18px;border-color:color-mix(in srgb,var(--amber) 35%,var(--border))">
+    <div class="card-header"><h2>📋 מה חסר להעלות · חצי שנה אחורה</h2></div>
+    <div style="padding:4px 20px 16px">
+      <p class="hint" style="margin-bottom:12px">אלו התדפיסים שכדאי להעלות כדי לקבל תמונה מלאה. ליד כל חברת אשראי — כפתור העלאה ישיר.</p>
+      ${monthRows.map(r=>`<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <strong style="min-width:110px">${fmtMonth(r.ym)}</strong>
+        ${r.noData? '<span class="pill status-late">אין נתונים — העלה תדפיס בנק</span>'
+          : r.needed.length? r.needed.map(p=>`<span style="display:inline-flex;align-items:center;gap:6px"><span class="pill status-soon">${esc(p.issuer)} · ${money(p.total)}</span><label class="btn-ghost" style="cursor:pointer;padding:4px 10px;font-size:12px">⬆️ פירוט<input type="file" hidden accept=".csv,.pdf,text/csv,application/pdf" data-issuer="${esc(p.issuer)}" /></label></span>`).join('')
+          : '<span class="pill status-ok">מלא ✓</span>'}
+      </div>`).join('')}
+      ${!anyMissing?'<div class="empty" style="padding:16px">הכל מלא — אין תדפיסים חסרים 🎉</div>':''}
+    </div></div>`;
+  el.innerHTML=missingHTML+`<div class="card" style="padding:22px">
     <h2 style="margin:0 0 8px">📥 ייבוא תדפיס אשראי / בנק</h2>
     <p class="hint" style="margin-bottom:16px">גררו לכאן קובץ <strong>CSV</strong> או <strong>PDF</strong> שהורדתם מאתר חברת האשראי או הבנק, או לחצו לבחירה. נזהה את השורות ותאשרו את הייבוא. עסקאות כפולות יסוננו אוטומטית.<br><span class="muted">💡 CSV הוא המדויק ביותר. חילוץ מ‑PDF הוא מיטבי — תמיד בדקו את התצוגה המקדימה לפני ייבוא.</span></p>
     <div class="field-row" style="margin-bottom:14px"><div class="field"><label>מקור</label><select id="imp-source"><option value="credit_card">💳 כרטיס אשראי</option><option value="bank">🏦 חשבון בנק</option></select></div><div class="field"><label>שם הכרטיס / החשבון</label><input id="imp-account" placeholder="לדוגמה: ויזה לאומי / עו״ש הפועלים" /></div></div>
@@ -1072,6 +1097,7 @@ views.import=async()=>{
       mapper.innerHTML=`<div class="empty" style="margin-top:20px">✔ הושלם — יובאו ${res.added} עסקאות. <a class="link" data-nav="review">עברו לסיווג ←</a></div>`;
     };
   }
+  wireIssuerUploads(el); // כפתורי ההעלאה בפאנל "מה חסר"
   return el;
 };
 function parseCSV(text){ text=text.replace(/^﻿/,'').replace(/\r\n?/g,'\n');
