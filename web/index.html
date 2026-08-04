@@ -710,7 +710,7 @@ function h_lighting(m,id,b){
 function h_documents(m,id,b){
   if(!Array.isArray(db.documents)) db.documents=[];
   if(m==='GET') return clone(db.documents).sort((a,c)=> strv(c.created_at).localeCompare(strv(a.created_at)) || strv(a.name).localeCompare(strv(c.name),'he'));
-  const fields=(d)=>{ d.name=strv(b.name); d.category=strv(b.category); d.url=strv(b.url); d.file_type=strv(b.file_type); d.doc_date=strv(b.doc_date)||null; d.notes=strv(b.notes); return d; };
+  const fields=(d)=>{ d.name=strv(b.name); d.category=strv(b.category); d.house=strv(b.house); d.url=strv(b.url); d.file_type=strv(b.file_type); d.doc_date=strv(b.doc_date)||null; d.notes=strv(b.notes); return d; };
   if(m==='POST'){ if(!strv(b.name)) throw new Error('שם המסמך הוא שדה חובה'); if(!strv(b.url)) throw new Error('יש להעלות קובץ או להזין קישור');
     const d=fields({id:uid(),created_at:new Date().toISOString()}); db.documents.push(d); return {id:d.id}; }
   if(m==='PUT'){ const d=db.documents.find(x=>x.id==id); if(!d) throw new Error('לא נמצא'); if(!strv(b.name)) throw new Error('שם המסמך הוא שדה חובה'); fields(d); return {ok:true}; }
@@ -793,6 +793,7 @@ const AREAS=['מטבח','סלון','פינת אוכל','חדר הורים','חד
 const SYSTEMS=['מים ואינסטלציה','חשמל','מיזוג אוויר','בריכה','גינה והשקיה','מבנה ואיטום','מכשירי חשמל','אבטחה ומיגון','דוד שמש / סולארי','כללי'];
 const TRADES=['חשמלאי','אינסטלטור (שרברב)','גנן','טכנאי מיזוג','טכנאי בריכה','שיפוצניק','נגר','צבע','טכנאי מכשירי חשמל','מנעולן','זגג','טכנאי דוד שמש','מדביר','טכנאי אזעקה/מצלמות','אלומיניום'];
 const DOC_CATEGORIES=['חוזים והסכמים','משכנתא ובנק','ביטוחים','חשבונות וקבלות','תעודות אחריות','רישוי ועירייה','תוכניות ואדריכלות','מיסים וארנונה','בעלי מקצוע','מכשירי חשמל','רכב','בריאות','מסמכים אישיים','אחר'];
+const HOUSES=['מכבים','רמלה','כפר אוריה'];
 const BULB_BASES=['E27','E14','GU10','G9','GU5.3 (MR16)','B22','צינור T8','צינור T5','LED מובנה','אחר'];
 const BULB_TYPES=['LED','הלוגן','פלואורסנט','להט','חכמה (Smart)'];
 const datalist=(id,items)=>`<datalist id="${id}">${items.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>`;
@@ -1057,7 +1058,7 @@ views.import=async()=>{
       ${monthRows.map(r=>`<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <strong style="min-width:110px">${fmtMonth(r.ym)}</strong>
         ${r.noData? '<span class="pill status-late">אין נתונים — העלה תדפיס בנק</span>'
-          : r.needed.length? r.needed.map(p=>`<span style="display:inline-flex;align-items:center;gap:6px"><span class="pill status-soon">${esc(p.issuer)} · ${money(p.total)}</span><label class="btn-ghost" style="cursor:pointer;padding:4px 10px;font-size:12px">⬆️ פירוט<input type="file" hidden accept=".csv,.pdf,text/csv,application/pdf" data-issuer="${esc(p.issuer)}" /></label></span>`).join('')
+          : r.needed.length? r.needed.map(p=>`<span style="display:inline-flex;align-items:center;gap:6px"><span class="pill status-soon">${esc(p.issuer)} · ${money(p.total)}</span><label class="btn-ghost" style="cursor:pointer;padding:4px 10px;font-size:12px">⬆️ ייבוא מסמך<input type="file" hidden accept=".csv,.pdf,text/csv,application/pdf" data-issuer="${esc(p.issuer)}" /></label></span>`).join('')
           : '<span class="pill status-ok">מלא ✓</span>'}
       </div>`).join('')}
       ${!anyMissing?'<div class="empty" style="padding:16px">הכל מלא — אין תדפיסים חסרים 🎉</div>':''}
@@ -1422,27 +1423,33 @@ views.warranties=async()=>{
   return el;
 };
 
-const docState={cat:''};
+const docState={cat:'',house:''};
 views.documents=async()=>{
   const rows=await api('/documents');
   const el=document.createElement('div');
   const isImg=(d)=> /^data:image\//.test(d.url||'') || /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(d.url||'');
   const isPdf=(d)=> /^data:application\/pdf/.test(d.url||'') || /\.pdf(\?|#|$)/i.test(d.url||'');
   const icon=(d)=> isImg(d)?'🖼️':isPdf(d)?'📕':'📄';
-  // ספירה לפי תחום עניין
+  // ספירה לפי תחום עניין ולפי בית
   const counts={}; rows.forEach(d=>{ const k=d.category||'ללא סיווג'; counts[k]=(counts[k]||0)+1; });
   const cats=Object.keys(counts).sort((a,c)=>c.localeCompare(a)==0?0:counts[c]-counts[a]);
-  const filtered = docState.cat? rows.filter(d=>(d.category||'ללא סיווג')===docState.cat) : rows;
+  const hCounts={}; rows.forEach(d=>{ const k=d.house||'ללא בית'; hCounts[k]=(hCounts[k]||0)+1; });
+  const houseKeys=[...HOUSES.filter(h=>hCounts[h]), ...Object.keys(hCounts).filter(h=>!HOUSES.includes(h))];
+  const filtered = rows.filter(d=> (!docState.cat||(d.category||'ללא סיווג')===docState.cat) && (!docState.house||(d.house||'ללא בית')===docState.house) );
   const chip=(label,val,n)=>`<button class="chip ${docState.cat===val?'active':''}" data-cat="${esc(val)}">${esc(label)} <span class="chip-n">${n}</span></button>`;
+  const hchip=(label,val,n)=>`<button class="chip ${docState.house===val?'active':''}" data-house="${esc(val)}">${esc(label)} <span class="chip-n">${n}</span></button>`;
   el.innerHTML=`
     <div class="card-header" style="border:none;padding:0 0 12px"><h2 style="margin:0">📁 ארכיון מסמכי הבית</h2><button class="btn" id="add">+ מסמך חדש</button></div>
-    <p class="hintbar">כל המסמכים החשובים של הבית במקום אחד — חוזים, ביטוחים, קבלות, תוכניות ועוד. סווגו כל מסמך <strong>לפי תחום עניין</strong> כדי למצוא אותו בקלות. הקבצים נשמרים בדפדפן ומסתנכרנים אוטומטית בין המכשירים.</p>
+    <p class="hintbar">כל המסמכים החשובים של הבית במקום אחד — חוזים, ביטוחים, קבלות, תוכניות ועוד. סווגו כל מסמך <strong>לפי תחום עניין</strong> ו<strong>לפי בית</strong> (מכבים / רמלה / כפר אוריה) כדי למצוא אותו בקלות. הקבצים נשמרים בדפדפן ומסתנכרנים אוטומטית בין המכשירים.</p>
+    <div class="row" style="margin:0 0 4px;font-weight:600;color:var(--muted)">🏠 בית</div>
+    <div class="chips" style="margin-bottom:12px">${hchip('הכול','',rows.length)}${houseKeys.map(h=>hchip(h,h,hCounts[h])).join('')}</div>
+    <div class="row" style="margin:0 0 4px;font-weight:600;color:var(--muted)">🗂️ תחום עניין</div>
     <div class="chips" style="margin-bottom:14px">${chip('הכול',''+'',rows.length)}${cats.map(c=>chip(c,c,counts[c])).join('')}</div>
     ${filtered.length?`<div class="grid-cards">${filtered.map(d=>`<div class="mini-card">
       <div style="display:flex;gap:10px;align-items:flex-start">
         ${isImg(d)?`<img src="${esc(d.url)}" class="doc-thumb" data-img="${d.id}" alt="" style="width:54px;height:54px;object-fit:cover;border-radius:10px;cursor:zoom-in" />`:`<span class="doc-thumb ph" style="width:54px;height:54px;display:flex;align-items:center;justify-content:center;font-size:26px;border-radius:10px;background:var(--surface-2,rgba(127,127,127,.12))">${icon(d)}</span>`}
         <div style="flex:1;min-width:0"><h4 style="margin:0 0 2px;word-break:break-word">${esc(d.name)}</h4>
-          <div class="row" style="margin:0">${d.category?`<span class="pill status-ok">${esc(d.category)}</span>`:'<span class="pill status-none">ללא סיווג</span>'}</div>
+          <div class="row" style="margin:0;flex-wrap:wrap;gap:4px">${d.house?`<span class="pill status-soon">🏠 ${esc(d.house)}</span>`:''}${d.category?`<span class="pill status-ok">${esc(d.category)}</span>`:'<span class="pill status-none">ללא סיווג</span>'}</div>
           ${d.doc_date?`<div class="row" style="margin:4px 0 0">📅 ${fmtDate(d.doc_date)}</div>`:''}
           ${d.notes?`<div class="row" style="margin:4px 0 0">${esc(d.notes)}</div>`:''}
         </div></div>
@@ -1457,8 +1464,9 @@ views.documents=async()=>{
         <div id="d-prev" class="docs-list"></div>
         <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><label class="btn-ghost" style="cursor:pointer;padding:6px 12px">⬆️ העלה קובץ<input type="file" id="d-file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" hidden /></label><button type="button" class="btn-ghost" id="d-link" style="padding:6px 12px">🔗 קישור</button></div>
         <div class="hint">תמונה / PDF / קובץ. נשמר בדפדפן (עד ~3MB); לקובץ גדול הוסיפו קישור (Drive/Dropbox).</div></div>
-      <div class="field-row"><div class="field"><label>שם המסמך *</label><input name="name" id="d-name" value="${esc(r.name||'')}" required placeholder="חוזה שכירות 2026…" /></div><div class="field"><label>תחום עניין</label><input name="category" list="doc-cats" value="${esc(r.category||'')}" placeholder="בחרו או הקלידו…" /></div></div>
-      <div class="field-row"><div class="field"><label>תאריך המסמך</label><input name="doc_date" type="date" value="${esc(r.doc_date||'')}" /></div><div class="field"><label>הערות</label><input name="notes" value="${esc(r.notes||'')}" /></div></div>`;
+      <div class="field-row"><div class="field"><label>שם המסמך *</label><input name="name" id="d-name" value="${esc(r.name||'')}" required placeholder="חוזה שכירות 2026…" /></div><div class="field"><label>בית 🏠</label><input name="house" list="doc-houses" value="${esc(r.house||'')}" placeholder="מכבים / רמלה / כפר אוריה…" /></div></div>
+      <div class="field-row"><div class="field"><label>תחום עניין</label><input name="category" list="doc-cats" value="${esc(r.category||'')}" placeholder="בחרו או הקלידו…" /></div><div class="field"><label>תאריך המסמך</label><input name="doc_date" type="date" value="${esc(r.doc_date||'')}" /></div></div>
+      <div class="field"><label>הערות</label><input name="notes" value="${esc(r.notes||'')}" /></div>${datalist('doc-houses',HOUSES)}`;
     openModal(title,form,async fd=>{ if(!url) throw new Error('יש להעלות קובץ או להזין קישור'); await onSave({...fd,url}); },{wide:true});
     setTimeout(()=>{
       const q=(s)=>document.querySelector('.modal '+s);
@@ -1472,7 +1480,8 @@ views.documents=async()=>{
   }
 
   el.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{ docState.cat=b.dataset.cat; render(); });
-  el.querySelector('#add').onclick=()=>openDocModal('מסמך חדש',{category:docState.cat||''},async body=>{await api('/documents',{method:'POST',body});toast('נוסף');render();});
+  el.querySelectorAll('[data-house]').forEach(b=>b.onclick=()=>{ docState.house=b.dataset.house; render(); });
+  el.querySelector('#add').onclick=()=>openDocModal('מסמך חדש',{category:docState.cat||'',house:docState.house||''},async body=>{await api('/documents',{method:'POST',body});toast('נוסף');render();});
   el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.id==b.dataset.edit);openDocModal('עריכת מסמך',r,async body=>{await api('/documents/'+r.id,{method:'PUT',body});toast('עודכן');render();});});
   el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>confirmDelete('למחוק מסמך זה?',async()=>{await api('/documents/'+b.dataset.del,{method:'DELETE'});toast('נמחק');render();}));
   el.querySelectorAll('[data-img]').forEach(im=>im.onclick=()=>lightbox(im.src));
