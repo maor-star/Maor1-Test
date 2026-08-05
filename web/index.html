@@ -994,17 +994,17 @@ function donut(items){
 }
 // גרף רב-קווי (כמה סדרות לאורך חודשים) — RTL: החודש המוקדם מימין
 function multiLineChart(months,series){ if(!months.length||!series.length) return '<div class="empty">אין מספיק נתונים</div>';
-  const W=520,H=230,pad=38; const all=series.flatMap(s=>s.values); const max=Math.max(...all,1); const n=months.length; const bw=(W-pad*2)/Math.max(n,1);
+  const W=560,H=300,pad=40; const all=series.flatMap(s=>s.values); const max=Math.max(...all,1); const n=months.length; const bw=(W-pad*2)/Math.max(n,1);
   const y=v=>H-pad-(v/max)*(H-pad*2); const x=i=>W-pad-bw*(i+0.5);
   const grid=[0,.5,1].map(f=>{ const yy=H-pad-(f)*(H-pad*2); return `<line x1="${pad}" y1="${yy}" x2="${W-pad}" y2="${yy}" stroke="currentColor" opacity=".08"/><text x="${W-pad+3}" y="${yy+3}" font-size="9" fill="currentColor" opacity=".4">${money(Math.round(max*f))}</text>`; }).join('');
   const lines=series.map(s=>{ const pts=months.map((m,i)=>`${x(i)},${y(s.values[i]||0)}`).join(' '); const dots=months.map((m,i)=>`<circle cx="${x(i)}" cy="${y(s.values[i]||0)}" r="3" fill="${s.color}"/>`).join(''); return `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2.5"/>${dots}`; }).join('');
   const labels=months.map((m,i)=>{ const [yy,mm]=m.split('-'); return `<text x="${x(i)}" y="${H-12}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".55">${mm}/${yy.slice(2)}</text>`; }).join('');
   const legend=`<div class="legend" style="flex-wrap:wrap">${series.map(s=>`<span><span class="dot" style="background:${s.color}"></span> ${esc(s.name)}</span>`).join('')}</div>`;
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%" preserveAspectRatio="xMidYMid meet">${grid}<line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="currentColor" opacity=".2"/>${lines}${labels}</svg>${legend}`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:720px;display:block;margin-inline:auto" preserveAspectRatio="xMidYMid meet">${grid}<line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="currentColor" opacity=".2"/>${lines}${labels}</svg>${legend}`;
 }
 // עמודות חודשיות עם ערכים חיוביים/שליליים (למאזן נטו) — ירוק/אדום, RTL
 function vBarChart(data,fmt){ if(!data.length) return '<div class="empty">אין נתונים</div>'; fmt=fmt||money;
-  const W=520,H=220,pad=40; const n=data.length; const bw=(W-pad*2)/Math.max(n,1);
+  const W=560,H=280,pad=42; const n=data.length; const bw=(W-pad*2)/Math.max(n,1);
   const maxAbs=Math.max(...data.map(d=>Math.abs(d.value)),1); const hasNeg=data.some(d=>d.value<0);
   const zeroY=hasNeg? pad+(H-pad*2)*(maxAbs/(2*maxAbs)) : H-pad; const scale=hasNeg? (H-pad*2)/(2*maxAbs) : (H-pad*2)/maxAbs;
   const x=i=>W-pad-bw*(i+1)+bw*0.15; const barW=bw*0.7;
@@ -1012,7 +1012,7 @@ function vBarChart(data,fmt){ if(!data.length) return '<div class="empty">אין
     return `<rect x="${x(i)}" y="${yTop}" width="${barW}" height="${Math.max(h,1)}" rx="3" fill="${col}"><title>${esc(d.label||d.m)}: ${fmt(d.value)}</title></rect>`; }).join('');
   const labels=data.map((d,i)=>{ const [yy,mm]=(d.m||'').split('-'); return `<text x="${x(i)+barW/2}" y="${H-12}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".55">${mm}/${(yy||'').slice(2)}</text>`; }).join('');
   const vals=data.map((d,i)=>{ const h=Math.abs(d.value)*scale; const yTxt=d.value>=0? zeroY-h-4 : zeroY+h+12; return `<text x="${x(i)+barW/2}" y="${yTxt}" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" opacity=".7">${fmt(Math.round(d.value/1000))+'k'}</text>`; }).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%" preserveAspectRatio="xMidYMid meet"><line x1="${pad}" y1="${zeroY}" x2="${W-pad}" y2="${zeroY}" stroke="currentColor" opacity=".2"/>${bars}${vals}${labels}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:720px;display:block;margin-inline:auto" preserveAspectRatio="xMidYMid meet"><line x1="${pad}" y1="${zeroY}" x2="${W-pad}" y2="${zeroY}" stroke="currentColor" opacity=".2"/>${bars}${vals}${labels}</svg>`;
 }
 
 function catSelectOptions(cats,selId){
@@ -2029,7 +2029,8 @@ views.analytics=async()=>{
       <div class="stat-card ${uncat||pendingSum?'warn':'accent'}"><div class="label">🏷️ לא מסווג / לא פורט</div><div class="value tnum">${money(uncat+pendingSum)}</div><div class="sub">${uncat?`ללא סיווג ${money(uncat)}`:''}${pendingSum?`${uncat?' · ':''}אשראי לא פורט ${money(pendingSum)}`:''} · <a class="link" data-nav="review">טפל ←</a></div></div>
     </div>
     ${pendingSum?`<div class="hintbar" style="border-color:color-mix(in srgb,var(--amber) 40%,var(--border));background:color-mix(in srgb,var(--amber) 8%,transparent)">🔗 <strong>${money(pendingSum)}</strong> נמצאים ב<strong>חיובי אשראי מרוכזים שטרם פורטו</strong> — לכן חלק מההוצאות (מזון, מסעדות, דלק…) עדיין לא מופיעות בפילוח לפי קטגוריה. <a class="link" data-nav="import">העלה את תדפיסי הכרטיסים</a> כדי לפרק אותם ולראות את התמונה המלאה.</div>`:''}
-    <div class="panel" style="margin-bottom:18px"><h3>🎯 תקציב מול ביצוע ${state.month?'(בחודש הנבחר)':'(בחרו חודש להשוואה מדויקת)'}</h3>${budgetHTML}</div>
+    <div id="deep-anchor"></div>
+    <div class="panel" style="margin-bottom:18px"><h3>🎯 תקציב מול ביצוע ${state.month?'(בחודש הנבחר)':'(בחרו חודש להשוואה מדויקת)'}</h3><button class="btn" id="set-budgets" style="margin-bottom:12px">✏️ הגדרת תקציבים לכל הקטגוריות</button>${budgetHTML}</div>
     <div class="panels">
       <div class="panel"><h3>הוצאות לפי מהות (קטגוריה)</h3>${donut(byCat)}</div>
       <div class="panel" data-drill="exp"><h3>פילוח הוצאות מלא</h3>${barsHTML(byCat.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
@@ -2094,16 +2095,18 @@ views.analytics=async()=>{
   const dayNames=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת']; const dSum=Array(7).fill(0),dCnt=Array(7).fill(0);
   essExpAll.forEach(t=>{ const [y,mo,d]=String(t.tx_date).slice(0,10).split('-').map(Number); if(!y)return; const wd=new Date(y,mo-1,d).getDay(); dSum[wd]+=t.amount; dCnt[wd]++; });
   const dowData=dayNames.map((nm,i)=>({label:nm,value:Math.round(dSum[i]),color:'#0d9488'}));
+  // חודשים לגרפי מגמה — רק חודשים עם נתונים אמיתיים (מסנן חודשי-קצה כמעט-ריקים שמעוותים את הפרופורציה)
+  const trendMonths=months.filter(m=>M[m].txCount>=5);
   // מגמת 5 הקטגוריות המובילות לאורך זמן
   const catTot={}; essExpAll.forEach(t=>{ const n=t.main_name||'ללא סיווג'; catTot[n]=(catTot[n]||0)+t.amount; });
   const topCatNames=Object.entries(catTot).sort((a,b)=>b[1]-a[1]).slice(0,5).map(e=>e[0]);
   const lineColors=['#0ea5e9','#f59e0b','#16a34a','#e0654a','#a855f7'];
-  const catMonthly={}; topCatNames.forEach(n=>catMonthly[n]=months.map(()=>0));
-  essExpAll.forEach(t=>{ const n=t.main_name||'ללא סיווג'; if(catMonthly[n]===undefined)return; const mi=months.indexOf(String(t.tx_date).slice(0,7)); if(mi>=0)catMonthly[n][mi]+=t.amount; });
+  const catMonthly={}; topCatNames.forEach(n=>catMonthly[n]=trendMonths.map(()=>0));
+  essExpAll.forEach(t=>{ const n=t.main_name||'ללא סיווג'; if(catMonthly[n]===undefined)return; const mi=trendMonths.indexOf(String(t.tx_date).slice(0,7)); if(mi>=0)catMonthly[n][mi]+=t.amount; });
   const catSeries=topCatNames.map((n,i)=>({name:n,color:lineColors[i%lineColors.length],values:catMonthly[n]}));
   // סדרות למגמות בית/הכנסה/נטו
-  const homeSeries=[{name:'אחזקת בית',color:'#e0654a',values:months.map(m=>M[m].home)},{name:'הכנסות',color:'#2f9e6f',values:months.map(m=>M[m].income)}];
-  const netData=months.map(m=>({m,value:Math.round(M[m].income-M[m].expense)}));
+  const homeSeries=[{name:'אחזקת בית',color:'#e0654a',values:trendMonths.map(m=>M[m].home)},{name:'הכנסות',color:'#2f9e6f',values:trendMonths.map(m=>M[m].income)}];
+  const netData=trendMonths.map(m=>({m,value:Math.round(M[m].income-M[m].expense)}));
   // ---- פירוט חודשי לצורך ניתוח מילולי: קטגוריה מובילה, מותרות, מקור ----
   const mCat={},mBkt={},mSrc={}; months.forEach(m=>{ mCat[m]={}; mBkt[m]={disc:0,tot:0}; mSrc[m]={credit:0,bank:0,cash:0}; });
   const outKindD=(t)=> isCardDetail(t)?'credit':(/משיכה|מזומן|כספומט|בנקט/.test((t.merchant||'')+' '+(t.description||''))?'cash':'bank');
@@ -2147,9 +2150,9 @@ views.analytics=async()=>{
     ${partialNote}
     <div class="stats-grid" style="margin-bottom:18px">${insightsHTML||'<div class="empty">אין מספיק נתונים לתובנות. דרושים לפחות חודש מלא אחד.</div>'}</div>
     <div class="panels">
-      <div class="panel" style="grid-column:1/-1"><h3>📉 מגמת אחזקת בית מול הכנסות (לפי חודש)</h3>${multiLineChart(months,homeSeries)}</div>
+      <div class="panel" style="grid-column:1/-1"><h3>📉 מגמת אחזקת בית מול הכנסות (לפי חודש)</h3>${multiLineChart(trendMonths,homeSeries)}</div>
       <div class="panel" style="grid-column:1/-1"><h3>💰 מאזן חודשי נטו (הכנסות − הוצאות)</h3>${vBarChart(netData)}<div class="hint" style="text-align:center;margin-top:6px">ירוק = עודף · אדום = גירעון</div></div>
-      <div class="panel" style="grid-column:1/-1"><h3>🧭 מגמת 5 הקטגוריות המובילות לאורך זמן</h3>${multiLineChart(months,catSeries)}</div>
+      <div class="panel" style="grid-column:1/-1"><h3>🧭 מגמת 5 הקטגוריות המובילות לאורך זמן</h3>${multiLineChart(trendMonths,catSeries)}</div>
       <div class="panel"><h3>⚖️ חיוני מול מותרות</h3>${donut(bucketData)}<div class="hint" style="margin-top:8px">מותרות = <strong>${discShare}%</strong> מההוצאה. יעד בריא נפוץ: עד ~30%.</div></div>
       <div class="panel"><h3>🔁 קבוע מול משתנה</h3>${donut([{label:'קבוע / חוזר',value:fixedSum,color:'#6366f1'},{label:'משתנה',value:Math.max(0,varSum),color:'#f59e0b'}])}<div class="hint" style="margin-top:8px">הוצאות קבועות = <strong>${fixShare}%</strong>. אלו המנויים/הוראות הקבע שמזוהים כחוזרים על עצמם.</div></div>
       <div class="panel"><h3>🗓️ הוצאה ממוצעת לפי יום בשבוע</h3>${barsHTML(dowData,money,false)}</div>
@@ -2158,7 +2161,21 @@ views.analytics=async()=>{
       <div class="panel"><h3>💥 10 העסקאות הגדולות</h3><div class="table-wrap"><table style="width:100%"><tbody>${bigTx.map(t=>`<tr><td class="tnum" style="white-space:nowrap">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td><td class="muted" style="font-size:11px">${esc(t.main_name||'ללא סיווג')}</td><td class="tnum amount-neg">${money(t.amount)}</td></tr>`).join('')||'<tr><td class="empty">אין נתונים</td></tr>'}</tbody></table></div></div>
       <div class="panel" style="grid-column:1/-1"><h3>📝 ניתוח חודשי מילולי</h3><div class="hint" style="margin-bottom:6px">סיכום מילולי אוטומטי לכל חודש — מה קרה, מה השתנה, ומהיכן יצא הכסף.</div>${narr||'<div class="empty">אין מספיק נתונים לניתוח חודשי.</div>'}</div>
     </div>`;
-  el.insertAdjacentHTML('beforeend',deepHTML);
+  // מגמות העומק והתובנות עולות למעלה — מיד אחרי כרטיסי הסיכום, כי זה החלק החשוב והמעניין
+  el.querySelector('#deep-anchor').insertAdjacentHTML('afterend',deepHTML);
+
+  // הגדרת תקציבים לכל הקטגוריות — מקום מרכזי אחד
+  const budgetBtn=el.querySelector('#set-budgets');
+  if(budgetBtn) budgetBtn.onclick=()=>{
+    const mains=cats.filter(c=>c.kind==='expense'&&!c.parent_id).sort((a,b)=>strv(a.name).localeCompare(strv(b.name),'he'));
+    const form=`<div class="hint" style="margin-bottom:10px">הגדירו תקציב חודשי (₪) לכל קטגוריה. השאירו ריק או 0 לביטול. אחר כך תראו «תקציב מול ביצוע» ותקבלו התראת חריגה.</div>
+      ${mains.map(c=>`<div class="bar-row" style="margin-bottom:8px"><div class="bar-label" style="width:auto;flex:1"><span class="dot" style="background:${esc(c.color)}"></span> ${esc(c.name)}</div><input name="b_${c.id}" type="number" step="10" min="0" value="${c.monthly_budget||''}" placeholder="ללא" style="width:130px" /></div>`).join('')}`;
+    openModal('הגדרת תקציבים',form,async fd=>{
+      let n=0;
+      for(const c of mains){ const raw=fd['b_'+c.id]; const val=numv(raw); if((val||0)!==(c.monthly_budget||0)){ await api('/categories/'+c.id,{method:'PUT',body:{name:c.name,kind:c.kind,color:c.color,is_home:c.is_home,parent_id:c.parent_id||'',monthly_budget:val}}); n++; } }
+      toast(n?`${n} תקציבים עודכנו ✓`:'לא בוצע שינוי'); render();
+    },{wide:true,submitLabel:'שמירה'});
+  };
 
   el.querySelectorAll('.panel[data-drill] .bar-row[data-barlabel]').forEach(row=>row.onclick=()=>{
     const label=row.dataset.barlabel, kind=row.closest('[data-drill]').dataset.drill;
