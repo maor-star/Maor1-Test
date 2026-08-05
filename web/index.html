@@ -316,6 +316,7 @@ code{background:var(--chip); padding:2px 7px; border-radius:6px; font-size:13px;
       <a data-view="analytics"><span class="ico">📈</span> <span>גרפים וניתוח</span></a>
       <a data-view="transactions"><span class="ico">💳</span> <span>עסקאות</span></a>
       <a data-view="review"><span class="ico">🏷️</span> <span>סיווג עסקאות</span></a>
+      <a data-view="classifyall"><span class="ico">🗃️</span> <span>כל הסיווגים</span></a>
       <a data-view="import"><span class="ico">📥</span> <span>ייבוא תדפיסים</span></a>
       <a data-view="monthly"><span class="ico">📅</span> <span>לפי חודש</span></a>
       <a data-view="balance"><span class="ico">🧮</span> <span>מאזן והצלבה</span></a>
@@ -2036,6 +2037,79 @@ function showTxDrill(title,list){
     }catch(e){ toast(e.message,true); } }); },0);
 }
 
+// ===== כל הסיווגים — מנהל מרכזי לצפייה, שינוי ועריכה של סיווג כל בתי העסק =====
+views.classifyall=async()=>{
+  let rows,cats;
+  const load=async()=>{ [rows,cats]=await Promise.all([api('/transactions'),api('/categories')]); };
+  await load();
+  // קיבוץ כל ההוצאות לפי בית עסק
+  const buildGroups=()=>{
+    const map={};
+    rows.filter(t=>t.kind==='expense').forEach(t=>{
+      const key=(t.merchant||t.description||'—').trim()||'—';
+      if(!map[key]) map[key]={merchant:key,count:0,total:0,catCount:{}};
+      const g=map[key]; g.count++; g.total+=Number(t.amount)||0;
+      const cid=t.category_id||'__none'; g.catCount[cid]=(g.catCount[cid]||0)+1;
+    });
+    return Object.values(map).map(g=>{
+      // הסיווג הנפוץ ביותר בקבוצה = הסיווג המייצג
+      let best='__none',bn=-1; for(const k in g.catCount){ if(g.catCount[k]>bn){bn=g.catCount[k];best=k;} }
+      const cid=best==='__none'?null:best;
+      const c=cats.find(x=>x.id==cid);
+      const isOther = !c || c.name==='אחר' || c.name==='הכנסה אחרת';
+      const full = c ? (catLabel(cid)||c.name) : 'ללא סיווג';
+      return {merchant:g.merchant,count:g.count,total:g.total,category_id:cid,full,isOther,mixed:Object.keys(g.catCount).length>1};
+    }).sort((a,b)=>b.total-a.total);
+  };
+  let groups=buildGroups();
+  const totMerch=groups.length, otherCount=groups.filter(g=>g.isOther).length;
+
+  const el=document.createElement('div');
+  el.innerHTML=`
+    <div class="cards-row" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+      <div class="stat-card accent"><div class="label">🏬 בתי עסק</div><div class="value tnum">${totMerch}</div></div>
+      <div class="stat-card ${otherCount?'expense':'accent'}"><div class="label">🔴 מסווגים כ"אחר" / ללא</div><div class="value tnum">${otherCount}</div></div>
+      <div class="stat-card accent"><div class="label">🗂️ קטגוריות</div><div class="value tnum">${cats.filter(c=>c.kind==='expense'&&!c.parent_id).length}</div><div class="sub"><a class="link" data-nav="categories">נהל קטגוריות ←</a></div></div>
+    </div>
+    <p class="hintbar">כאן רואים <strong>את כל בתי העסק</strong> ואת הסיווג שלהם במקום אחד. שינוי הסיווג של בית עסק חל על <strong>כל העסקאות שלו בכל החודשים</strong> ומתעדכן מיד בכל הגרפים והדוחות. חפשו, סננו לפי קטגוריה, או הציגו רק את מה שעדיין לא מסווג כראוי.</p>
+    <div class="card" style="margin-bottom:12px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <input id="c-txt" placeholder="🔎 חיפוש בית עסק…" style="flex:1;min-width:200px">
+      <select id="c-catf" style="min-width:180px"><option value="">כל הקטגוריות</option><option value="__other">רק "אחר" / ללא סיווג</option>${cats.filter(c=>c.kind==='expense'&&!c.parent_id).sort((a,b)=>strv(a.name).localeCompare(strv(b.name),'he')).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
+      <label class="hint" style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="c-only"> רק לא מסווגים כראוי</label>
+    </div></div>
+    <div class="card"><div class="table-wrap" style="max-height:66vh;overflow:auto"><table style="width:100%">
+      <thead><tr><th>בית עסק</th><th class="tnum">עסקאות</th><th class="tnum">סה"כ</th><th>סיווג נוכחי</th><th style="min-width:200px">שינוי סיווג</th></tr></thead>
+      <tbody id="c-tbody"></tbody></table></div></div>`;
+
+  const tbody=el.querySelector('#c-tbody');
+  const txt=el.querySelector('#c-txt'), catf=el.querySelector('#c-catf'), only=el.querySelector('#c-only');
+  const rowHTML=(g)=>`<tr data-merch="${esc(g.merchant)}">
+      <td>${esc(g.merchant)}${g.mixed?' <span class="pill status-soon" title="לבית עסק זה יש כמה סיווגים שונים בעסקאות">מעורב</span>':''}</td>
+      <td class="tnum">${g.count}</td>
+      <td class="tnum amount-neg">${money(g.total)}</td>
+      <td>${g.isOther?'<span class="pill status-late">'+esc(g.full)+'</span>':'<span class="pill status-ok">'+esc(g.full)+'</span>'}</td>
+      <td><select class="c-sel" data-merch="${esc(g.merchant)}" style="width:100%">${catSelectOptions(cats,g.category_id)}</select></td></tr>`;
+  const applyFilter=()=>{
+    const q=strv(txt.value).trim().toLowerCase(), cf=catf.value, onlyOther=only.checked;
+    let list=groups;
+    if(q) list=list.filter(g=>g.merchant.toLowerCase().includes(q));
+    if(onlyOther||cf==='__other') list=list.filter(g=>g.isOther);
+    else if(cf) list=list.filter(g=>{ if(!g.category_id) return false; return g.category_id==cf||catMain(g.category_id)?.id==cf; });
+    tbody.innerHTML=list.map(rowHTML).join('')||'<tr><td colspan="5"><div class="empty">אין תוצאות</div></td></tr>';
+    tbody.querySelectorAll('.c-sel').forEach(sel=>sel.onchange=async()=>{
+      const merch=sel.dataset.merch, val=sel.value;
+      try{
+        await api('/transactions/classify-similar',{method:'POST',body:{merchant:merch,category_id:val||null,make_rule:!!val}});
+        toast('סווג מחדש ✓');
+        await load(); groups=buildGroups(); applyFilter();
+      }catch(e){ toast(e.message,true); }
+    });
+  };
+  txt.oninput=applyFilter; catf.onchange=applyFilter; only.onchange=applyFilter;
+  applyFilter();
+  return el;
+};
+
 // ===== Reconcile / completeness =====
 views.reconcile=async()=>{
   const data=await api('/reconcile');
@@ -2265,7 +2339,7 @@ views.balance=async()=>{
 };
 
 /* ============================ Router ============================ */
-const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',transactions:'עסקאות',review:'סיווג עסקאות',import:'ייבוא תדפיסים',monthly:'לפי חודש',balance:'מאזן והצלבה',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',documents:'ארכיון מסמכים',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי'};
+const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',transactions:'עסקאות',review:'סיווג עסקאות',classifyall:'כל הסיווגים',import:'ייבוא תדפיסים',monthly:'לפי חודש',balance:'מאזן והצלבה',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',documents:'ארכיון מסמכים',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי'};
 function currentView(){ const hash=location.hash.replace('#/','')||'dashboard'; return views[hash]?hash:'dashboard'; }
 async function render(){
   const name=currentView();
@@ -2298,6 +2372,7 @@ async function boot(){
 }
 boot();
 </script>
+
 
 </body>
 </html>
