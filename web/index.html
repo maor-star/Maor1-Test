@@ -1,9 +1,5 @@
 <!doctype html>
-<html lang="he" dir="rtl">
-<head>
-<meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>ניהול הבית</title>
-</head>
-<body>
+<html lang="he" dir="rtl"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>ניהול הבית</title></head><body>
 <title>ניהול הבית</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <style>
@@ -117,13 +113,14 @@ nav a.active::before{content:""; position:absolute; inset-inline-start:-14px; to
 .content{flex:1; display:flex; flex-direction:column; min-width:0}
 .topbar{
   display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
-  padding:16px 30px; position:sticky; top:0; z-index:20;
-  background:color-mix(in srgb,var(--bg) 72%,transparent); backdrop-filter:blur(14px) saturate(1.4);
+  padding:15px 30px; position:sticky; top:0; z-index:20;
+  background:color-mix(in srgb,var(--surface) 88%,var(--bg)); backdrop-filter:blur(16px) saturate(1.5);
   border-bottom:1px solid var(--border);
 }
-.topbar h1{font-size:20px; font-weight:800; margin:0; letter-spacing:-.01em}
-.month-picker{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted)}
-.month-picker input{padding:8px 11px; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--text); font-weight:600; font-family:inherit; color-scheme:light dark}
+.topbar h1{font-size:20px; font-weight:800; margin:0; letter-spacing:-.01em; color:var(--text)}
+.month-picker{display:flex; align-items:center; gap:9px; font-size:13px; color:var(--muted); background:var(--surface); border:1px solid var(--border); padding:5px 6px 5px 12px; border-radius:13px; box-shadow:var(--shadow)}
+.month-picker>label{font-weight:700; color:var(--text)}
+.month-picker input{padding:8px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2); color:var(--text); font-weight:700; font-family:inherit; color-scheme:light dark; min-width:130px}
 :root[data-theme="light"] .month-picker input{color-scheme:light}
 :root[data-theme="dark"] .month-picker input{color-scheme:dark}
 .month-picker input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
@@ -154,9 +151,10 @@ nav a.active::before{content:""; position:absolute; inset-inline-start:-14px; to
 .stat-card.accent .value{background:var(--grad); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
 
 /* ---------- Panels ---------- */
-.panels{display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start}
-@media (max-width:920px){.panels{grid-template-columns:1fr}}
-.panel{padding:22px 22px 20px; border-radius:var(--radius); background:linear-gradient(180deg,var(--surface),var(--surface-2)); border:1px solid var(--border); box-shadow:var(--shadow); transition:box-shadow .25s cubic-bezier(.22,.9,.3,1), border-color .25s, transform .25s}
+.panels{display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:stretch}
+@media (max-width:1080px){.panels{grid-template-columns:1fr}}
+.panel{padding:22px 22px 20px; border-radius:var(--radius); background:linear-gradient(180deg,var(--surface),var(--surface-2)); border:1px solid var(--border); box-shadow:var(--shadow); transition:box-shadow .25s cubic-bezier(.22,.9,.3,1), border-color .25s, transform .25s; display:flex; flex-direction:column}
+.panel>.chart-box,.panel>.table-wrap{margin-top:auto; margin-bottom:auto}
 .panel:hover{box-shadow:var(--shadow-lg); border-color:color-mix(in srgb,var(--accent) 22%,var(--border))}
 .panel h3{font-size:14px; margin:0 0 18px; padding-bottom:13px; border-bottom:1px solid color-mix(in srgb,var(--border) 70%,transparent); font-weight:800; letter-spacing:-.01em; display:flex; align-items:center; gap:8px}
 /* גרף SVG בתוך פאנל — ממלא את רוחב הפאנל בגובה מידתי, בלי שוליים ריקים */
@@ -1099,11 +1097,18 @@ views.dashboard=async()=>{
 function barsHTML(items,fmt,clickable){ if(!items.length) return '<div class="empty">אין נתונים</div>'; const max=Math.max(...items.map(i=>i.value),1);
   return items.map(i=>`<div class="bar-row"${clickable?` data-barlabel="${esc(i.label)}" style="cursor:pointer" title="לחצו לפירוט: ${esc(i.label)}"`:` title="${esc(i.label)}"`}><div class="bar-label">${esc(i.label)}${clickable?' <span class="muted" style="font-size:11px">🔎</span>':''}</div><div class="bar-track"><div class="bar-fill" style="width:${(i.value/max*100).toFixed(1)}%;${i.color?'background:'+esc(i.color):''}"></div></div><div class="bar-value tnum">${fmt(i.value)}</div></div>`).join(''); }
 function trendChart(trend){ if(!trend.length) return '<div class="empty">אין נתונים</div>';
-  const W=460,H=200,pad=34; const max=Math.max(...trend.flatMap(t=>[t.expenses,t.income]),1); const n=trend.length; const bw=(W-pad*2)/n;
-  const y=v=>H-pad-(v/max)*(H-pad*2); const x=i=>pad+bw*(i+0.5);
-  const line=(key,color)=>{ const pts=trend.map((t,i)=>`${x(i)},${y(t[key])}`).join(' '); const dots=trend.map((t,i)=>`<circle cx="${x(i)}" cy="${y(t[key])}" r="3.5" fill="${color}"/>`).join(''); return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5"/>${dots}`; };
-  const labels=trend.map((t,i)=>{ const [yy,mm]=t.m.split('-'); return `<text x="${x(i)}" y="${H-12}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".55">${mm}/${yy.slice(2)}</text>`; }).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%" preserveAspectRatio="xMidYMid meet"><line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="currentColor" opacity=".15"/>${line('expenses','#e0654a')}${line('income','#2f9e6f')}${labels}</svg><div class="legend"><span><span class="dot" style="background:#e0654a"></span> הוצאות בית</span><span><span class="dot" style="background:#2f9e6f"></span> הכנסות</span></div>`; }
+  const W=560,H=290,padX=44,padT=20,padB=38; const max=Math.max(...trend.flatMap(t=>[t.expenses,t.income]),1); const n=trend.length; const bw=(W-padX*2)/n;
+  const y=v=>H-padB-(v/max)*(H-padB-padT); const x=i=>padX+bw*(i+0.5);
+  const grid=[0,.5,1].map(f=>{ const yy=H-padB-f*(H-padB-padT); return `<line x1="${padX}" y1="${yy}" x2="${W-padX}" y2="${yy}" stroke="currentColor" opacity="${f===0?'.16':'.06'}"/><text x="${padX-6}" y="${yy+3}" text-anchor="end" font-size="9" fill="currentColor" opacity=".45">${money(Math.round(max*f))}</text>`; }).join('');
+  const series=[{key:'expenses',color:'#e0654a',name:'הוצאות בית'},{key:'income',color:'#2f9e6f',name:'הכנסות'}];
+  const defs=`<defs>${series.map((s,i)=>`<linearGradient id="tr${i}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${s.color}" stop-opacity=".18"/><stop offset="1" stop-color="${s.color}" stop-opacity="0"/></linearGradient>`).join('')}</defs>`;
+  const lines=series.map((s,si)=>{ const pts=trend.map((t,i)=>`${x(i)},${y(t[s.key])}`).join(' ');
+    const area=`<polygon points="${x(0)},${H-padB} ${pts} ${x(n-1)},${H-padB}" fill="url(#tr${si})"/>`;
+    const dots=trend.map((t,i)=>`<circle cx="${x(i)}" cy="${y(t[s.key])}" r="3.4" fill="${s.color}" stroke-width="1.7" style="stroke:var(--surface);pointer-events:none"/>`).join('');
+    return `${area}<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"/>${dots}`; }).join('');
+  const labels=trend.map((t,i)=>{ const [yy,mm]=t.m.split('-'); return `<text x="${x(i)}" y="${H-13}" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor" opacity=".5">${mm}/${yy.slice(2)}</text>`; }).join('');
+  const cols=trend.map((t,i)=>{ const tip=esc(fmtMonth(t.m)+'\nהוצאות בית: '+money(t.expenses)+'\nהכנסות: '+money(t.income)); return `<rect x="${x(i)-bw/2}" y="${padT}" width="${bw}" height="${H-padT-padB}" fill="transparent" data-tip="${tip}"/>`; }).join('');
+  return `<div class="chart-box"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;aspect-ratio:${W}/${H}">${defs}${grid}${lines}${labels}${cols}</svg></div><div class="legend"><span><span class="dot" style="background:#e0654a"></span> הוצאות בית</span><span><span class="dot" style="background:#2f9e6f"></span> הכנסות</span></div>`; }
 function donut(items,clickable){
   items=items.filter(i=>i.value>0);
   if(!items.length) return '<div class="empty">אין נתונים</div>';
@@ -2113,9 +2118,12 @@ views.categories=async()=>{
 // ===== Analytics =====
 views.analytics=async()=>{
   const [rows,cats,allRows]=await Promise.all([api('/transactions'+monthParam()),api('/categories'),api('/transactions')]);
-  const expCash=rows.filter(t=>t.kind==='expense'&&countsInTotal(t)); // תזרים מזומנים (עלות)
-  const exp=rows.filter(t=>t.kind==='expense'&&countsEssence(t));       // מהות (פילוח/סיווג)
+  const isMortT=t=>/משכנתא/.test((t.merchant||'')+(t.description||'')) || t.main_name===MORTGAGE_NAME || t.category_name===MORTGAGE_NAME;
+  const isRentInc=t=>/שכר דירה|שכירות|שוכר/.test((t.merchant||'')+' '+(t.description||'')) || t.category_name===RENT_INCOME_NAME || t.main_name===RENT_INCOME_NAME;
+  const expCash=rows.filter(t=>t.kind==='expense'&&countsInTotal(t)&&!isMortT(t)); // תזרים אחזקת בית (ללא משכנתא)
+  const exp=rows.filter(t=>t.kind==='expense'&&countsEssence(t)&&!isMortT(t));       // מהות (פילוח/סיווג) — ללא משכנתא
   const totalExp=expCash.reduce((s,t)=>s+t.amount,0);
+  const mortAll=rows.filter(t=>t.kind==='expense'&&countsInTotal(t)&&isMortT(t)).reduce((s,t)=>s+t.amount,0);
   const catMap={}; exp.forEach(t=>{ const name=t.main_name||'ללא סיווג'; if(!catMap[name])catMap[name]={label:name,value:0,color:t.main_color||'#94a3b8'}; catMap[name].value+=t.amount; });
   const byCat=Object.values(catMap).sort((a,b)=>b.value-a.value);
   // מקור אמיתי של ההוצאה: אשראי (שורת פירוט מכרטיס) / מזומן (משיכה) / בנק (הו״ק, העברה, משכנתא, שיק).
@@ -2124,11 +2132,11 @@ views.analytics=async()=>{
   const srcMeta={credit:{label:'💳 כרטיס אשראי',color:'#6366f1'},bank:{label:'🏦 חשבון בנק (הו״ק/העברות/משכנתא)',color:'#0ea5e9'},cash:{label:'💵 מזומן',color:'#16a34a'}};
   const srcMap={}; expCash.forEach(t=>{ const k=outKind(t); if(!srcMap[k])srcMap[k]={label:srcMeta[k].label,value:0,color:srcMeta[k].color}; srcMap[k].value+=t.amount; });
   const bySrc=Object.values(srcMap).sort((a,b)=>b.value-a.value);
-  // משכנתא + חיובים מרוכזים שטרם פורטו (מסבירים את הפער בין תזרים לפילוח)
-  const mortSum=expCash.filter(t=>/משכנתא/.test((t.merchant||'')+(t.description||''))).reduce((s,t)=>s+t.amount,0);
+  // חיובים מרוכזים שטרם פורטו (מסבירים את הפער בין תזרים לפילוח)
+  const mortSum=mortAll;
   const detailIssuers=new Set(rows.filter(t=>t.kind==='expense'&&isCardDetail(t)).map(t=>detectIssuer(t.account)));
   const pendingSum=detailIssuers.size>0? 0 : expCash.filter(t=>isAggLump(t)&&!detailIssuers.has(detectIssuer(t.merchant||t.description))).reduce((s,t)=>s+t.amount,0);
-  const homeCost=totalExp-mortSum;
+  const homeCost=totalExp;
   // הכי הרבה הוצאתי על… — מקובץ לפי קטגוריה (מסעדות/דלק/ביטוח יחד). לא-מסווג מוצג לפי בית עסק.
   const spendMap={}; exp.forEach(t=>{ if(/משכנתא/.test((t.merchant||'')+(t.description||''))) return;
     const label = t.main_name ? t.main_name : ((t.merchant||t.description||'—').trim()+' · ללא סיווג');
@@ -2136,8 +2144,9 @@ views.analytics=async()=>{
     if(!spendMap[label]) spendMap[label]={label,value:0,color}; spendMap[label].value+=t.amount; });
   const topMerch=Object.values(spendMap).sort((a,b)=>b.value-a.value).slice(0,12);
   const uncat=exp.filter(t=>!t.category_id).reduce((s,t)=>s+t.amount,0);
-  // הכנסות
-  const incRows=rows.filter(t=>t.kind==='income');
+  // הכנסות — ללא הכנסת שכירות (מנוהלת בנפרד מול המשכנתא)
+  const rentSum=rows.filter(t=>t.kind==='income'&&isRentInc(t)).reduce((s,t)=>s+t.amount,0);
+  const incRows=rows.filter(t=>t.kind==='income'&&!isRentInc(t));
   const totalInc=incRows.reduce((s,t)=>s+t.amount,0);
   const incMap={}; incRows.forEach(t=>{ const name=t.category_name||'ללא סיווג'; if(!incMap[name])incMap[name]={label:name,value:0,color:t.category_color||'#94a3b8'}; incMap[name].value+=t.amount; });
   const byInc=Object.values(incMap).sort((a,b)=>b.value-a.value);
@@ -2153,9 +2162,9 @@ views.analytics=async()=>{
   const el=document.createElement('div');
   el.innerHTML=`
     <div class="stats-grid">
-      <div class="stat-card income"><div class="label">💰 סך הכנסות ${state.month?'בחודש':'כולל'}</div><div class="value tnum">${money(totalInc)}</div></div>
-      <div class="stat-card expense"><div class="label">💸 סך הוצאות ${state.month?'בחודש':'כולל'}</div><div class="value tnum">${money(totalExp)}</div><div class="sub">אחזקת בית ${money(homeCost)}${mortSum?` + משכנתא ${money(mortSum)}`:''}</div></div>
-      <div class="stat-card ${net>=0?'income':'expense'}"><div class="label">${net>=0?'📈':'📉'} מאזן (הכנסות − הוצאות)</div><div class="value tnum">${money(net)}</div></div>
+      <div class="stat-card income"><div class="label">💰 הכנסות ${state.month?'בחודש':'כולל'}</div><div class="value tnum">${money(totalInc)}</div><div class="sub">${rentSum?`ללא שכירות ₪${Math.round(rentSum).toLocaleString('en-US')} <span class="muted">(מנוהלת בנפרד מול המשכנתא)</span>`:'ללא הכנסת שכירות'}</div></div>
+      <div class="stat-card expense"><div class="label">💸 הוצאות אחזקת בית ${state.month?'בחודש':'כולל'}</div><div class="value tnum">${money(homeCost)}</div><div class="sub">${mortSum?`ללא משכנתא ₪${Math.round(mortSum).toLocaleString('en-US')} <span class="muted">(מנוהלת בנפרד)</span>`:'ללא משכנתא'}</div></div>
+      <div class="stat-card ${net>=0?'income':'expense'}"><div class="label">${net>=0?'📈':'📉'} מאזן אחזקת בית</div><div class="value tnum">${money(net)}</div><div class="sub">הכנסות − הוצאות (ללא משכנתא/שכירות)</div></div>
       <div class="stat-card ${uncat||pendingSum?'warn':'accent'}"><div class="label">🏷️ לא מסווג / לא פורט</div><div class="value tnum">${money(uncat+pendingSum)}</div><div class="sub">${uncat?`ללא סיווג ${money(uncat)}`:''}${pendingSum?`${uncat?' · ':''}אשראי לא פורט ${money(pendingSum)}`:''} · <a class="link" data-nav="review">טפל ←</a></div></div>
     </div>
     ${pendingSum?`<div class="hintbar" style="border-color:color-mix(in srgb,var(--amber) 40%,var(--border));background:color-mix(in srgb,var(--amber) 8%,transparent)">🔗 <strong>${money(pendingSum)}</strong> נמצאים ב<strong>חיובי אשראי מרוכזים שטרם פורטו</strong> — לכן חלק מההוצאות (מזון, מסעדות, דלק…) עדיין לא מופיעות בפילוח לפי קטגוריה. <a class="link" data-nav="import">העלה את תדפיסי הכרטיסים</a> כדי לפרק אותם ולראות את התמונה המלאה.</div>`:''}
@@ -2173,17 +2182,18 @@ views.analytics=async()=>{
     </div>`;
 
   /* ===================== מגמות עומק ותובנות — כל התקופה ===================== */
-  const isMort=t=>/משכנתא/.test((t.merchant||'')+(t.description||''));
+  const isMort=t=>/משכנתא/.test((t.merchant||'')+(t.description||'')) || t.main_name===MORTGAGE_NAME || t.category_name===MORTGAGE_NAME;
   const curYM=(()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); })();
   const A=allRows;
   const mSet=new Set(A.filter(t=>t.kind==='expense'||t.kind==='income').map(t=>String(t.tx_date).slice(0,7)).filter(s=>s.length===7));
   const months=[...mSet].sort();
-  const M={}; months.forEach(m=>M[m]={home:0,expense:0,income:0,mort:0,txCount:0,ess:0});
+  // הכנסות = ללא שכירות (מנוהלת בנפרד); הוצאות = ללא משכנתא (מנוהלת בנפרד) — כדי שכל המגמות עקביות
+  const M={}; months.forEach(m=>M[m]={home:0,expense:0,income:0,mort:0,rent:0,txCount:0,ess:0});
   A.forEach(t=>{ const m=String(t.tx_date).slice(0,7); if(!M[m])return;
-    if(t.kind==='income'){ M[m].income+=t.amount; return; }
+    if(t.kind==='income'){ if(isRentInc(t))M[m].rent+=t.amount; else M[m].income+=t.amount; return; }
     if(t.kind!=='expense')return;
     if(countsEssence(t)&&!isMort(t)) M[m].ess+=t.amount;
-    if(countsInTotal(t)){ M[m].expense+=t.amount; if(isMort(t))M[m].mort+=t.amount; else M[m].home+=t.amount; M[m].txCount++; } });
+    if(countsInTotal(t)){ if(isMort(t)){M[m].mort+=t.amount;} else {M[m].expense+=t.amount; M[m].home+=t.amount; M[m].txCount++;} } });
   // חודש חלקי = חודש שפירוט האשראי אינו מכסה אותו במלואו (מהחודש של תאריך האשראי האחרון והלאה) או חודש נוכחי/דל-עסקאות
   const lastCardDate=A.filter(t=>t.kind==='expense'&&isCardDetail(t)).reduce((mx,t)=>String(t.tx_date)>mx?String(t.tx_date):mx,'');
   const partialOf=(ym)=> ym===curYM || (lastCardDate&&ym>=lastCardDate.slice(0,7)) || M[ym].txCount<20;
@@ -2250,7 +2260,7 @@ views.analytics=async()=>{
   // ---- פירוט חודשי לצורך ניתוח מילולי: קטגוריה מובילה, מותרות, מקור ----
   const mCat={},mBkt={},mSrc={}; months.forEach(m=>{ mCat[m]={}; mBkt[m]={disc:0,tot:0}; mSrc[m]={credit:0,bank:0,cash:0}; });
   const outKindD=(t)=> isCardDetail(t)?'credit':(/משיכה|מזומן|כספומט|בנקט/.test((t.merchant||'')+' '+(t.description||''))?'cash':'bank');
-  A.forEach(t=>{ if(t.kind!=='expense'||!countsInTotal(t))return; const m=String(t.tx_date).slice(0,7); if(!mSrc[m])return; mSrc[m][outKindD(t)]+=t.amount; });
+  A.forEach(t=>{ if(t.kind!=='expense'||!countsInTotal(t)||isMort(t))return; const m=String(t.tx_date).slice(0,7); if(!mSrc[m])return; mSrc[m][outKindD(t)]+=t.amount; });
   essExpAll.forEach(t=>{ const m=String(t.tx_date).slice(0,7); if(!mCat[m])return; const n=t.main_name||'ללא סיווג'; mCat[m][n]=(mCat[m][n]||0)+t.amount; if(bucketOf(t.main_name||'')==='מותרות')mBkt[m].disc+=t.amount; mBkt[m].tot+=t.amount; });
   // ניתוח מילולי לכל חודש (מהחדש לישן)
   const narr=months.slice().reverse().filter(m=>M[m].txCount>=3).map(m=>{
@@ -2263,8 +2273,8 @@ views.analytics=async()=>{
     const partial=partialOf(m);
     const txt=`הוצאתם על אחזקת הבית <strong>${money(M[m].home)}</strong>${mom}. ` +
       (top?`הקטגוריה הגדולה הייתה <strong>${esc(top[0])}</strong> (${money(top[1])})${mBkt[m].tot>0?`, ומותרות היוו <strong>${disc}%</strong> מההוצאה`:''}. `:'') +
-      (srcParts.length?`סך ההוצאה החודשית${M[m].mort>0?' (כולל משכנתא)':''} עמד על <strong>${money(M[m].expense)}</strong>, ומקורותיה: ${srcParts.join(' · ')}. `:'') +
-      `ההכנסות עמדו על ${money(M[m].income)}, כך שהמאזן החודשי ${net>=0?`נותר <span style="color:var(--green,#2f9e6f)">בעודף של ${money(net)}</span>`:`היה <span style="color:var(--red)">בגירעון של ${money(Math.abs(net))}</span>`}.` +
+      (srcParts.length?`סך ההוצאה החודשית (אחזקת בית, ללא משכנתא) עמד על <strong>${money(M[m].home)}</strong>${M[m].mort>0?` <span class="muted">(בנוסף משכנתא ${money(M[m].mort)} מנוהלת בנפרד)</span>`:''}, ומקורותיה: ${srcParts.join(' · ')}. `:'') +
+      `ההכנסות (ללא שכירות) עמדו על ${money(M[m].income)}, כך שמאזן אחזקת הבית ${net>=0?`נותר <span style="color:var(--green,#2f9e6f)">בעודף של ${money(net)}</span>`:`היה <span style="color:var(--red)">בגירעון של ${money(Math.abs(net))}</span>`}.` +
       (partial?` <span class="pill status-soon" style="padding:1px 7px">⏳ חודש חלקי — ייתכן שחסר פירוט אשראי, המספרים צפויים לעלות</span>`:'');
     return `<div style="padding:12px 2px;border-bottom:1px solid var(--border)"><div style="font-size:15px;font-weight:800;margin-bottom:4px">${fmtMonth(m)}</div><div style="line-height:1.6">${txt}</div></div>`;
   }).join('');
@@ -2292,13 +2302,13 @@ views.analytics=async()=>{
     <div class="panels">
       ${state.month?'':`
       <div class="panel"><h3>📉 מגמת אחזקת בית מול הכנסות (לפי חודש)</h3>${multiLineChart(trendMonths,homeSeries)}</div>
-      <div class="panel"><h3>💰 מאזן חודשי נטו (הכנסות − הוצאות)</h3>${vBarChart(netData)}<div class="hint" style="text-align:center;margin-top:10px">ירוק = עודף · אדום = גירעון</div></div>
-      <div class="panel"><h3>🧭 מגמת 5 הקטגוריות המובילות לאורך זמן</h3>${multiLineChart(trendMonths,catSeries)}</div>`}
+      <div class="panel"><h3>💰 מאזן חודשי נטו (הכנסות − הוצאות)</h3>${vBarChart(netData)}<div class="hint" style="text-align:center;margin-top:10px">ירוק = עודף · אדום = גירעון</div></div>`}
       <div class="panel" data-drill="bucket"><h3>⚖️ חיוני מול מותרות</h3>${donut(bucketData,true)}<div class="hint" style="margin-top:8px">מותרות = <strong>${discShare}%</strong> מההוצאה. יעד בריא נפוץ: עד ~30%.</div></div>
       <div class="panel" data-drill="fixed"><h3>🔁 קבוע מול משתנה</h3>${donut([{label:'קבוע / חוזר',value:fixedSum,color:'#6366f1'},{label:'משתנה',value:Math.max(0,varSum),color:'#f59e0b'}],true)}<div class="hint" style="margin-top:8px">הוצאות קבועות = <strong>${fixShare}%</strong>. אלו המנויים/הוראות הקבע שמזוהים כחוזרים על עצמם.</div></div>
-      <div class="panel" data-drill="dow"><h3>🗓️ הוצאה ממוצעת לפי יום בשבוע</h3>${barsHTML(dowData,money,true)}</div>
       <div class="panel" data-drill="merch"><h3>🏬 בתי העסק היקרים ביותר (בודדים)</h3>${barsHTML(topMerchInd,money,true)}</div>
       <div class="panel" data-drill="merchfixed"><h3>🔁 הוצאות קבועות מזוהות</h3>${topFixed.length?barsHTML(topFixed.map(f=>({label:f.label+' · '+f.months+' חוד׳',value:f.value,color:f.color})),money,true):'<div class="empty">לא זוהו הוצאות קבועות</div>'}</div>
+      ${state.month?'':`<div class="panel"><h3>🧭 מגמת 5 הקטגוריות המובילות לאורך זמן</h3>${multiLineChart(trendMonths,catSeries)}</div>`}
+      <div class="panel" data-drill="dow" style="${state.month?'grid-column:1/-1':''}"><h3>🗓️ הוצאה ממוצעת לפי יום בשבוע</h3>${barsHTML(dowData,money,true)}</div>
       <div class="panel" style="grid-column:1/-1"><h3>💥 10 העסקאות הגדולות</h3><div class="hint" style="margin-bottom:6px">בחרו סיווג ישירות מהרשימה כדי לתקן — השינוי חל על אותו בית עסק בכל החודשים ומתעדכן בכל הגרפים.</div><div class="table-wrap"><table style="width:100%"><thead><tr><th>תאריך</th><th>בית עסק</th><th style="min-width:170px">סיווג (ניתן לשינוי)</th><th class="tnum">סכום</th></tr></thead><tbody>${bigTx.map(t=>`<tr><td class="tnum" style="white-space:nowrap">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td><td><select class="big-cat" data-merch="${esc((t.merchant||t.description||'').trim())}" style="width:100%">${catSelectOptions(cats,t.category_id)}</select></td><td class="tnum amount-neg">${money(t.amount)}</td></tr>`).join('')||'<tr><td class="empty">אין נתונים</td></tr>'}</tbody></table></div></div>
       <div class="panel" style="grid-column:1/-1"><h3>📝 ניתוח חודשי מילולי</h3><div class="hint" style="margin-bottom:6px">סיכום מילולי אוטומטי לכל חודש — מה קרה, מה השתנה, ומהיכן יצא הכסף.</div>${narr||'<div class="empty">אין מספיק נתונים לניתוח חודשי.</div>'}</div>
     </div>`;
