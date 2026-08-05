@@ -2076,7 +2076,10 @@ views.classifyall=async()=>{
       <input id="c-txt" placeholder="🔎 חיפוש בית עסק…" style="flex:1;min-width:200px">
       <select id="c-catf" style="min-width:180px"><option value="">כל הקטגוריות</option><option value="__other">רק "אחר" / ללא סיווג</option>${cats.filter(c=>c.kind==='expense'&&!c.parent_id).sort((a,b)=>strv(a.name).localeCompare(strv(b.name),'he')).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
       <label class="hint" style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="c-only"> רק לא מסווגים כראוי</label>
-    </div></div>
+      <button class="btn" id="c-newcat">➕ קטגוריה חדשה</button>
+      <a class="link" data-nav="categories" style="white-space:nowrap">✏️ עריכה/מחיקה של קטגוריות ←</a>
+    </div>
+    <div class="hint" style="margin-top:8px">כדי <strong>להוסיף</strong> קטגוריה או תת-קטגוריה — «➕ קטגוריה חדשה». כדי <strong>לשנות שם, צבע או למחוק</strong> קטגוריה — עברו למסך «קטגוריות». כאן משייכים כל בית עסק לאחת הקטגוריות הקיימות.</div></div>
     <div class="card"><div class="table-wrap" style="max-height:66vh;overflow:auto"><table style="width:100%">
       <thead><tr><th>בית עסק</th><th class="tnum">עסקאות</th><th class="tnum">סה"כ</th><th>סיווג נוכחי</th><th style="min-width:200px">שינוי סיווג</th></tr></thead>
       <tbody id="c-tbody"></tbody></table></div></div>`;
@@ -2106,6 +2109,18 @@ views.classifyall=async()=>{
     });
   };
   txt.oninput=applyFilter; catf.onchange=applyFilter; only.onchange=applyFilter;
+  // הוספת קטגוריה / תת-קטגוריה חדשה — ישירות מכאן, בלי לעזוב את המסך
+  el.querySelector('#c-newcat').onclick=()=>{
+    const mainOpts=cats.filter(c=>!c.parent_id).sort((a,b)=>strv(a.name).localeCompare(strv(b.name),'he')).map(mc=>`<option value="${mc.id}">${esc(mc.name)}${mc.kind==='income'?' (הכנסה)':''}</option>`).join('');
+    const form=`<div class="field-row"><div class="field"><label>שם *</label><input name="name" required placeholder="לדוגמה: אוכל בחוץ / דלק" /></div><div class="field"><label>צבע</label><input name="color" type="color" value="#0f766e" /></div></div>
+      <div class="field"><label>תת-קטגוריה של… (השאירו «ללא» לקטגוריה ראשית)</label><select name="parent_id"><option value="">— קטגוריה ראשית —</option>${mainOpts}</select><div class="hint">תת-קטגוריה מוצגת בגרפים תחת הקטגוריה הראשית שלה.</div></div>
+      <div class="field-row"><div class="field"><label>סוג</label><select name="kind"><option value="expense" selected>הוצאה</option><option value="income">הכנסה</option></select></div><div class="field"><label>תקציב חודשי (₪)</label><input name="monthly_budget" type="number" step="0.01" min="0" /></div></div>
+      <div class="field"><label><input type="checkbox" name="is_home" checked /> נספר בעלות אחזקת הבית</label></div>`;
+    openModal('קטגוריה חדשה',form,async fd=>{
+      await api('/categories',{method:'POST',body:{...fd,is_home:fd.is_home==='on'}});
+      toast('קטגוריה נוספה ✓'); await load(); groups=buildGroups(); applyFilter();
+    });
+  };
   applyFilter();
   return el;
 };
