@@ -126,7 +126,8 @@ nav a.active::before{content:""; position:absolute; inset-inline-start:-14px; to
 .topbar h1{font-size:20px; font-weight:800; margin:0; letter-spacing:-.01em}
 .month-picker{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted)}
 .month-picker input{padding:8px 11px; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--text)}
-.view{padding:26px 30px; width:100%; max-width:none; animation:viewIn .32s cubic-bezier(.22,.9,.3,1)}
+.view{padding:28px 34px 56px; width:100%; max-width:1460px; margin-inline:auto; animation:viewIn .32s cubic-bezier(.22,.9,.3,1)}
+@media (max-width:1200px){.view{padding:24px 22px 48px}}
 @keyframes viewIn{from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none}}
 
 /* ---------- Stat cards ---------- */
@@ -148,10 +149,17 @@ nav a.active::before{content:""; position:absolute; inset-inline-start:-14px; to
 .stat-card.accent .value{background:var(--grad); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
 
 /* ---------- Panels ---------- */
-.panels{display:grid; grid-template-columns:1fr 1fr; gap:18px}
+.panels{display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start}
 @media (max-width:920px){.panels{grid-template-columns:1fr}}
-.panel{padding:20px; border-radius:var(--radius); background:linear-gradient(180deg,var(--surface),var(--surface-2)); border:1px solid var(--border); box-shadow:var(--shadow)}
-.panel h3{font-size:14px; margin:0 0 16px; font-weight:800; letter-spacing:-.01em; display:flex; align-items:center; gap:8px}
+.panel{padding:22px 22px 20px; border-radius:var(--radius); background:linear-gradient(180deg,var(--surface),var(--surface-2)); border:1px solid var(--border); box-shadow:var(--shadow); transition:box-shadow .25s cubic-bezier(.22,.9,.3,1), border-color .25s, transform .25s}
+.panel:hover{box-shadow:var(--shadow-lg); border-color:color-mix(in srgb,var(--accent) 22%,var(--border))}
+.panel h3{font-size:14px; margin:0 0 18px; padding-bottom:13px; border-bottom:1px solid color-mix(in srgb,var(--border) 70%,transparent); font-weight:800; letter-spacing:-.01em; display:flex; align-items:center; gap:8px}
+/* גרף SVG בתוך פאנל — ממלא את רוחב הפאנל בגובה מידתי, בלי שוליים ריקים */
+.panel svg{display:block; width:100%; height:auto}
+.chart-box{position:relative; width:100%}
+.section-head{margin:34px 0 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+.section-head h2{margin:0; font-size:20px; font-weight:800; letter-spacing:-.02em; display:flex; align-items:center; gap:9px}
+.section-head .rule{flex:1; height:1px; min-width:40px; background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 30%,transparent),transparent)}
 
 /* ---------- Cards / tables ---------- */
 .card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden}
@@ -213,13 +221,14 @@ td.wrap,th.wrap{white-space:normal}
 @media (max-width:560px){.field-row,.field-row-3{flex-direction:column}}
 
 /* ---------- Bars & charts ---------- */
-.bar-row{display:flex; align-items:center; gap:12px; margin-bottom:11px; font-size:13.5px}
+.bar-row{display:flex; align-items:center; gap:12px; margin-bottom:10px; font-size:13.5px; border-radius:9px; padding:2px 4px; margin-inline:-4px; transition:background .15s}
+.bar-row[data-barlabel]:hover{background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .bar-label{width:130px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .bar-track{flex:1; background:var(--chip); border-radius:999px; height:10px; overflow:hidden}
 .bar-fill{height:100%; border-radius:999px; background:var(--grad); box-shadow:0 0 12px -2px color-mix(in srgb,var(--accent) 50%,transparent); transition:width .5s cubic-bezier(.22,.9,.3,1)}
-.bar-value{width:98px; flex-shrink:0; text-align:left; color:var(--muted)}
-.legend{display:flex; gap:18px; margin-top:8px; font-size:12.5px; color:var(--muted); justify-content:center}
-.legend span{display:inline-flex; align-items:center; gap:6px}
+.bar-value{width:98px; flex-shrink:0; text-align:left; color:var(--muted); font-variant-numeric:tabular-nums}
+.legend{display:flex; gap:10px; margin-top:12px; font-size:12px; color:var(--muted); justify-content:center; flex-wrap:wrap}
+.legend span{display:inline-flex; align-items:center; gap:7px; background:var(--surface-3); border:1px solid var(--border); padding:4px 11px; border-radius:999px; font-weight:600}
 .dot{width:9px; height:9px; border-radius:50%; display:inline-block}
 .chart{width:100%}
 
@@ -994,25 +1003,31 @@ function donut(items,clickable){
 }
 // גרף רב-קווי (כמה סדרות לאורך חודשים) — RTL: החודש המוקדם מימין
 function multiLineChart(months,series){ if(!months.length||!series.length) return '<div class="empty">אין מספיק נתונים</div>';
-  const W=560,H=300,pad=40; const all=series.flatMap(s=>s.values); const max=Math.max(...all,1); const n=months.length; const bw=(W-pad*2)/Math.max(n,1);
-  const y=v=>H-pad-(v/max)*(H-pad*2); const x=i=>W-pad-bw*(i+0.5);
-  const grid=[0,.5,1].map(f=>{ const yy=H-pad-(f)*(H-pad*2); return `<line x1="${pad}" y1="${yy}" x2="${W-pad}" y2="${yy}" stroke="currentColor" opacity=".08"/><text x="${W-pad+3}" y="${yy+3}" font-size="9" fill="currentColor" opacity=".4">${money(Math.round(max*f))}</text>`; }).join('');
-  const lines=series.map(s=>{ const pts=months.map((m,i)=>`${x(i)},${y(s.values[i]||0)}`).join(' '); const dots=months.map((m,i)=>`<circle cx="${x(i)}" cy="${y(s.values[i]||0)}" r="3" fill="${s.color}"/>`).join(''); return `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2.5"/>${dots}`; }).join('');
-  const labels=months.map((m,i)=>{ const [yy,mm]=m.split('-'); return `<text x="${x(i)}" y="${H-12}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".55">${mm}/${yy.slice(2)}</text>`; }).join('');
-  const legend=`<div class="legend" style="flex-wrap:wrap">${series.map(s=>`<span><span class="dot" style="background:${s.color}"></span> ${esc(s.name)}</span>`).join('')}</div>`;
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:720px;display:block;margin-inline:auto" preserveAspectRatio="xMidYMid meet">${grid}<line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="currentColor" opacity=".2"/>${lines}${labels}</svg>${legend}`;
+  const W=580,H=306,padX=46,padT=20,padB=38; const all=series.flatMap(s=>s.values); const max=Math.max(...all,1); const n=months.length; const bw=(W-padX*2)/Math.max(n,1);
+  const y=v=>H-padB-(v/max)*(H-padB-padT); const x=i=>W-padX-bw*(i+0.5);
+  const grid=[0,.25,.5,.75,1].map(f=>{ const yy=H-padB-f*(H-padB-padT); return `<line x1="${padX}" y1="${yy}" x2="${W-padX}" y2="${yy}" stroke="currentColor" opacity="${f===0?'.16':'.06'}"/>`+((f===0||f===.5||f===1)?`<text x="${W-padX+6}" y="${yy+3}" font-size="9" fill="currentColor" opacity=".45">${money(Math.round(max*f))}</text>`:''); }).join('');
+  const doArea=series.length<=2;
+  const defs=doArea?`<defs>${series.map((s,si)=>`<linearGradient id="ar${si}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${s.color}" stop-opacity=".20"/><stop offset="1" stop-color="${s.color}" stop-opacity="0"/></linearGradient>`).join('')}</defs>`:'';
+  const lines=series.map((s,si)=>{ const pts=months.map((m,i)=>`${x(i)},${y(s.values[i]||0)}`).join(' ');
+    const area=doArea?`<polygon points="${x(0)},${H-padB} ${pts} ${x(n-1)},${H-padB}" fill="url(#ar${si})"/>`:'';
+    const dots=months.map((m,i)=>`<circle cx="${x(i)}" cy="${y(s.values[i]||0)}" r="3.6" fill="${s.color}" stroke-width="1.8" style="stroke:var(--surface)"/>`).join('');
+    return `${area}<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>${dots}`; }).join('');
+  const labels=months.map((m,i)=>{ const [yy,mm]=m.split('-'); return `<text x="${x(i)}" y="${H-13}" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor" opacity=".5">${mm}/${yy.slice(2)}</text>`; }).join('');
+  const legend=`<div class="legend">${series.map(s=>`<span><span class="dot" style="background:${s.color}"></span> ${esc(s.name)}</span>`).join('')}</div>`;
+  return `<div class="chart-box"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;aspect-ratio:${W}/${H}">${defs}${grid}${lines}${labels}</svg></div>${legend}`;
 }
 // עמודות חודשיות עם ערכים חיוביים/שליליים (למאזן נטו) — ירוק/אדום, RTL
 function vBarChart(data,fmt){ if(!data.length) return '<div class="empty">אין נתונים</div>'; fmt=fmt||money;
-  const W=560,H=280,pad=42; const n=data.length; const bw=(W-pad*2)/Math.max(n,1);
+  const W=580,H=290,padX=30,padT=26,padB=40; const n=data.length; const bw=(W-padX*2)/Math.max(n,1);
   const maxAbs=Math.max(...data.map(d=>Math.abs(d.value)),1); const hasNeg=data.some(d=>d.value<0);
-  const zeroY=hasNeg? pad+(H-pad*2)*(maxAbs/(2*maxAbs)) : H-pad; const scale=hasNeg? (H-pad*2)/(2*maxAbs) : (H-pad*2)/maxAbs;
-  const x=i=>W-pad-bw*(i+1)+bw*0.15; const barW=bw*0.7;
-  const bars=data.map((d,i)=>{ const h=Math.abs(d.value)*scale; const yTop=d.value>=0? zeroY-h : zeroY; const col=d.value>=0?'#2f9e6f':'#e0654a';
-    return `<rect x="${x(i)}" y="${yTop}" width="${barW}" height="${Math.max(h,1)}" rx="3" fill="${col}"><title>${esc(d.label||d.m)}: ${fmt(d.value)}</title></rect>`; }).join('');
-  const labels=data.map((d,i)=>{ const [yy,mm]=(d.m||'').split('-'); return `<text x="${x(i)+barW/2}" y="${H-12}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".55">${mm}/${(yy||'').slice(2)}</text>`; }).join('');
-  const vals=data.map((d,i)=>{ const h=Math.abs(d.value)*scale; const yTxt=d.value>=0? zeroY-h-4 : zeroY+h+12; return `<text x="${x(i)+barW/2}" y="${yTxt}" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" opacity=".7">${fmt(Math.round(d.value/1000))+'k'}</text>`; }).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:720px;display:block;margin-inline:auto" preserveAspectRatio="xMidYMid meet"><line x1="${pad}" y1="${zeroY}" x2="${W-pad}" y2="${zeroY}" stroke="currentColor" opacity=".2"/>${bars}${vals}${labels}</svg>`;
+  const plotH=H-padT-padB; const zeroY=hasNeg? padT+plotH/2 : H-padB; const scale=hasNeg? (plotH/2)/maxAbs : plotH/maxAbs;
+  const x=i=>W-padX-bw*(i+1)+bw*0.18; const barW=bw*0.64;
+  const defs=`<defs><linearGradient id="vbP" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#0f9d58"/></linearGradient><linearGradient id="vbN" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#f0883e"/><stop offset="1" stop-color="#e0654a"/></linearGradient></defs>`;
+  const bars=data.map((d,i)=>{ const h=Math.max(Math.abs(d.value)*scale,2); const yTop=d.value>=0? zeroY-h : zeroY;
+    return `<rect x="${x(i)}" y="${yTop}" width="${barW}" height="${h}" rx="5" fill="${d.value>=0?'url(#vbP)':'url(#vbN)'}"><title>${esc(d.label||d.m)}: ${fmt(d.value)}</title></rect>`; }).join('');
+  const labels=data.map((d,i)=>{ const [yy,mm]=(d.m||'').split('-'); return `<text x="${x(i)+barW/2}" y="${H-13}" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor" opacity=".5">${mm}/${(yy||'').slice(2)}</text>`; }).join('');
+  const vals=data.map((d,i)=>{ const h=Math.max(Math.abs(d.value)*scale,2); const yTxt=d.value>=0? zeroY-h-6 : zeroY+h+14; return `<text x="${x(i)+barW/2}" y="${yTxt}" text-anchor="middle" font-size="10" font-weight="800" fill="${d.value>=0?'#0f9d58':'#e0654a'}">${(d.value>=0?'+':'−')+fmt(Math.abs(Math.round(d.value/1000)))+'k'}</text>`; }).join('');
+  return `<div class="chart-box"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;aspect-ratio:${W}/${H}">${defs}<line x1="${padX}" y1="${zeroY}" x2="${W-padX}" y2="${zeroY}" stroke="currentColor" opacity=".18"/>${bars}${vals}${labels}</svg></div>`;
 }
 
 function catSelectOptions(cats,selId){
@@ -2030,7 +2045,9 @@ views.analytics=async()=>{
     </div>
     ${pendingSum?`<div class="hintbar" style="border-color:color-mix(in srgb,var(--amber) 40%,var(--border));background:color-mix(in srgb,var(--amber) 8%,transparent)">🔗 <strong>${money(pendingSum)}</strong> נמצאים ב<strong>חיובי אשראי מרוכזים שטרם פורטו</strong> — לכן חלק מההוצאות (מזון, מסעדות, דלק…) עדיין לא מופיעות בפילוח לפי קטגוריה. <a class="link" data-nav="import">העלה את תדפיסי הכרטיסים</a> כדי לפרק אותם ולראות את התמונה המלאה.</div>`:''}
     <div id="deep-anchor"></div>
-    <div class="panel" style="margin-bottom:18px"><h3>🎯 תקציב מול ביצוע ${state.month?'(בחודש הנבחר)':'(בחרו חודש להשוואה מדויקת)'}</h3><button class="btn" id="set-budgets" style="margin-bottom:12px">✏️ הגדרת תקציבים לכל הקטגוריות</button>${budgetHTML}</div>
+    <div class="section-head"><h2>🎯 תקציב וביצוע</h2><span class="rule"></span></div>
+    <div class="panel" style="margin-bottom:22px"><h3>תקציב מול ביצוע ${state.month?'(בחודש הנבחר)':'(בחרו חודש להשוואה מדויקת)'}</h3><button class="btn" id="set-budgets" style="margin-bottom:14px">✏️ הגדרת תקציבים לכל הקטגוריות</button>${budgetHTML}</div>
+    <div class="section-head"><h2>📊 פילוחים מפורטים</h2><span class="rule"></span></div>
     <div class="panels">
       <div class="panel" data-drill="exp"><h3>הוצאות לפי מהות (קטגוריה)</h3>${donut(byCat,true)}</div>
       <div class="panel" data-drill="exp"><h3>פילוח הוצאות מלא</h3>${barsHTML(byCat.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
@@ -2146,19 +2163,19 @@ views.analytics=async()=>{
   const partialNote=partialMonths.length?`<div class="hint" style="margin:2px 0 12px">התובנות והממוצעים מחושבים על <strong>${complete.length} חודשים מלאים</strong>. חודשים חלקיים (${partialMonths.map(fmtMonth).join(', ')}) מוצגים בגרפי המגמה אך אינם משוקללים בממוצעים.</div>`:'';
 
   const deepHTML=`
-    <div style="margin:26px 0 10px;display:flex;align-items:center;gap:10px"><h2 style="margin:0;font-size:20px">🔬 מגמות עומק ותובנות</h2><span class="hint">כל התקופה · ${months.length} חודשים · אינו מושפע מסינון החודש</span></div>
+    <div class="section-head"><h2>🔬 מגמות עומק ותובנות</h2><span class="rule"></span><span class="hint" style="margin:0">כל התקופה · ${months.length} חודשים · אינו מושפע מסינון החודש</span></div>
     ${partialNote}
-    <div class="stats-grid" style="margin-bottom:18px">${insightsHTML||'<div class="empty">אין מספיק נתונים לתובנות. דרושים לפחות חודש מלא אחד.</div>'}</div>
+    <div class="stats-grid" style="margin-bottom:20px">${insightsHTML||'<div class="empty">אין מספיק נתונים לתובנות. דרושים לפחות חודש מלא אחד.</div>'}</div>
     <div class="panels">
-      <div class="panel" style="grid-column:1/-1"><h3>📉 מגמת אחזקת בית מול הכנסות (לפי חודש)</h3>${multiLineChart(trendMonths,homeSeries)}</div>
-      <div class="panel" style="grid-column:1/-1"><h3>💰 מאזן חודשי נטו (הכנסות − הוצאות)</h3>${vBarChart(netData)}<div class="hint" style="text-align:center;margin-top:6px">ירוק = עודף · אדום = גירעון</div></div>
-      <div class="panel" style="grid-column:1/-1"><h3>🧭 מגמת 5 הקטגוריות המובילות לאורך זמן</h3>${multiLineChart(trendMonths,catSeries)}</div>
+      <div class="panel"><h3>📉 מגמת אחזקת בית מול הכנסות (לפי חודש)</h3>${multiLineChart(trendMonths,homeSeries)}</div>
+      <div class="panel"><h3>💰 מאזן חודשי נטו (הכנסות − הוצאות)</h3>${vBarChart(netData)}<div class="hint" style="text-align:center;margin-top:10px">ירוק = עודף · אדום = גירעון</div></div>
+      <div class="panel"><h3>🧭 מגמת 5 הקטגוריות המובילות לאורך זמן</h3>${multiLineChart(trendMonths,catSeries)}</div>
       <div class="panel" data-drill="bucket"><h3>⚖️ חיוני מול מותרות</h3>${donut(bucketData,true)}<div class="hint" style="margin-top:8px">מותרות = <strong>${discShare}%</strong> מההוצאה. יעד בריא נפוץ: עד ~30%.</div></div>
       <div class="panel" data-drill="fixed"><h3>🔁 קבוע מול משתנה</h3>${donut([{label:'קבוע / חוזר',value:fixedSum,color:'#6366f1'},{label:'משתנה',value:Math.max(0,varSum),color:'#f59e0b'}],true)}<div class="hint" style="margin-top:8px">הוצאות קבועות = <strong>${fixShare}%</strong>. אלו המנויים/הוראות הקבע שמזוהים כחוזרים על עצמם.</div></div>
       <div class="panel" data-drill="dow"><h3>🗓️ הוצאה ממוצעת לפי יום בשבוע</h3>${barsHTML(dowData,money,true)}</div>
       <div class="panel" data-drill="merch"><h3>🏬 בתי העסק היקרים ביותר (בודדים)</h3>${barsHTML(topMerchInd,money,true)}</div>
       <div class="panel" data-drill="merchfixed"><h3>🔁 הוצאות קבועות מזוהות</h3>${topFixed.length?barsHTML(topFixed.map(f=>({label:f.label+' · '+f.months+' חוד׳',value:f.value,color:f.color})),money,true):'<div class="empty">לא זוהו הוצאות קבועות</div>'}</div>
-      <div class="panel"><h3>💥 10 העסקאות הגדולות</h3><div class="hint" style="margin-bottom:6px">בחרו סיווג ישירות מהרשימה כדי לתקן — השינוי חל על אותו בית עסק בכל החודשים ומתעדכן בכל הגרפים.</div><div class="table-wrap"><table style="width:100%"><thead><tr><th>תאריך</th><th>בית עסק</th><th style="min-width:170px">סיווג (ניתן לשינוי)</th><th class="tnum">סכום</th></tr></thead><tbody>${bigTx.map(t=>`<tr><td class="tnum" style="white-space:nowrap">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td><td><select class="big-cat" data-merch="${esc((t.merchant||t.description||'').trim())}" style="width:100%">${catSelectOptions(cats,t.category_id)}</select></td><td class="tnum amount-neg">${money(t.amount)}</td></tr>`).join('')||'<tr><td class="empty">אין נתונים</td></tr>'}</tbody></table></div></div>
+      <div class="panel" style="grid-column:1/-1"><h3>💥 10 העסקאות הגדולות</h3><div class="hint" style="margin-bottom:6px">בחרו סיווג ישירות מהרשימה כדי לתקן — השינוי חל על אותו בית עסק בכל החודשים ומתעדכן בכל הגרפים.</div><div class="table-wrap"><table style="width:100%"><thead><tr><th>תאריך</th><th>בית עסק</th><th style="min-width:170px">סיווג (ניתן לשינוי)</th><th class="tnum">סכום</th></tr></thead><tbody>${bigTx.map(t=>`<tr><td class="tnum" style="white-space:nowrap">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td><td><select class="big-cat" data-merch="${esc((t.merchant||t.description||'').trim())}" style="width:100%">${catSelectOptions(cats,t.category_id)}</select></td><td class="tnum amount-neg">${money(t.amount)}</td></tr>`).join('')||'<tr><td class="empty">אין נתונים</td></tr>'}</tbody></table></div></div>
       <div class="panel" style="grid-column:1/-1"><h3>📝 ניתוח חודשי מילולי</h3><div class="hint" style="margin-bottom:6px">סיכום מילולי אוטומטי לכל חודש — מה קרה, מה השתנה, ומהיכן יצא הכסף.</div>${narr||'<div class="empty">אין מספיק נתונים לניתוח חודשי.</div>'}</div>
     </div>`;
   // מגמות העומק והתובנות עולות למעלה — מיד אחרי כרטיסי הסיכום, כי זה החלק החשוב והמעניין
