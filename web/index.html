@@ -2102,6 +2102,11 @@ views.monthly=async()=>{
   const el=document.createElement('div');
   if(!list.length){ el.innerHTML='<div class="card"><div class="empty">אין עדיין עסקאות. ייבאו תדפיס במסך «ייבוא תדפיסים».</div></div>'; return el; }
   const totalUncCount=list.reduce((s,m)=>s+m.unclCount,0);
+  // חודש «חלקי» = פירוט האשראי לא מכסה אותו במלואו (מתאריך הכיסוי האחרון והלאה)
+  const partialOf=(ym)=> lastCardDate && ym>=lastCardDate.slice(0,7);
+  // אומדן = ממוצע החודשים המלאים בעלי מספיק נתונים (מסננים חודשים דלים/חלקיים בקצה)
+  const completeHomes=list.filter(mm=>!partialOf(mm.ym)&&mm.txCount>=20).map(mm=>mm.expSum-mm.mortgage).filter(v=>v>0);
+  const avgHome = completeHomes.length? Math.round(completeHomes.reduce((a,b)=>a+b,0)/completeHomes.length) : 0;
   const openSet = state.monthlyOpen || (state.monthlyOpen=new Set());
   if(!openSet.size && list[0]) openSet.add(list[0].ym); // ברירת מחדל: החודש האחרון פתוח
   const mainList=cats.filter(c=>c.kind==='expense'&&!c.parent_id).sort((a,b)=>a.name.localeCompare(b.name,'he'));
@@ -2118,15 +2123,16 @@ views.monthly=async()=>{
     <div id="mlist">${list.map(m=>{
       const mers=Object.values(m.mer).sort((a,b)=>b.total-a.total);
       const home=m.expSum-m.mortgage; const pct=(m.classified+m.unclSum)>0?Math.round(m.classified/(m.classified+m.unclSum)*100):100;
-      const cardPartial = lastCardDate && m.ym===lastCardDate.slice(0,7);
+      const cardPartial = partialOf(m.ym); const showEst = cardPartial && avgHome>0;
       return `<div class="card" style="margin-bottom:12px">
         <div class="mrow" data-ym="${m.ym}" style="display:flex;align-items:center;gap:14px;cursor:pointer;padding:4px 2px">
           <span class="mchev" style="transition:.2s;display:inline-block;${openSet.has(m.ym)?'transform:rotate(90deg)':''}">▶</span>
           <div style="flex:1"><strong style="font-size:16px">${fmtMonth(m.ym)}</strong> <span class="hint">· ${m.txCount} עסקאות</span>
             ${m.unclCount?`<span class="pill status-late" style="margin-inline-start:8px">${m.unclCount} לא מסווגות · ${money(m.unclSum)}</span>`:'<span class="pill status-ok" style="margin-inline-start:8px">הכל מסווג ✓</span>'}
-            ${cardPartial?`<span class="pill status-soon" style="margin-inline-start:6px" title="עסקאות האשראי בחודש זה מפורטות רק עד ${fmtDate(lastCardDate)} — השאר יופיע כשיועלה התדפיס הבא">⏳ חודש חלקי · אשראי עד ${fmtDate(lastCardDate)}</span>`:''}
-            ${m.pending?`<span class="pill status-soon" style="margin-inline-start:6px">🔗 ${money(m.pending)} לא פורט</span>`:''}</div>
-          <div style="text-align:end"><div class="tnum amount-neg" style="font-size:16px">${money(m.expSum)}</div><div class="hint">אחזקת בית ${money(home)}${m.mortgage?` · משכנתא ${money(m.mortgage)}`:''} · מסווג ${pct}%</div></div>
+            ${cardPartial?`<span class="pill status-soon" style="margin-inline-start:6px" title="פירוט האשראי מכסה עד ${fmtDate(lastCardDate)} — השאר יופיע כשיועלה התדפיס הבא. מוצג אומדן חודשי מלא.">⏳ חלקי · אומדן (אשראי עד ${fmtDate(lastCardDate)})</span>`:''}</div>
+          <div style="text-align:end">${showEst
+            ? `<div class="tnum amount-neg" style="font-size:16px">≈ ${money(avgHome)}</div><div class="hint">אומדן חודשי מלא · בפועל עד כה ${money(home)}${m.mortgage?` · משכנתא ${money(m.mortgage)}`:''}</div>`
+            : `<div class="tnum amount-neg" style="font-size:16px">${money(m.expSum)}</div><div class="hint">אחזקת בית ${money(home)}${m.mortgage?` · משכנתא ${money(m.mortgage)}`:''} · מסווג ${pct}%</div>`}</div>
         </div>
         <div class="mbody" data-body="${m.ym}" style="display:${openSet.has(m.ym)?'block':'none'};margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
           <div class="table-wrap"><table style="width:100%"><thead><tr><th>בית עסק</th><th style="width:52%">קטגוריה + תת-קטגוריה</th><th>סכום</th></tr></thead>
