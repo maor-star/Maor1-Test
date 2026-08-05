@@ -157,6 +157,9 @@ nav a.active::before{content:""; position:absolute; inset-inline-start:-14px; to
 /* גרף SVG בתוך פאנל — ממלא את רוחב הפאנל בגובה מידתי, בלי שוליים ריקים */
 .panel svg{display:block; width:100%; height:auto}
 .chart-box{position:relative; width:100%}
+.chart-box svg [data-tip]{cursor:crosshair}
+#chart-tip{position:fixed; z-index:220; pointer-events:none; background:linear-gradient(135deg,#0b1322,#111a2e); color:#fff; border:1px solid rgba(255,255,255,.14); padding:7px 11px; border-radius:9px; font-size:12.5px; font-weight:600; box-shadow:0 12px 34px rgba(0,0,0,.42); opacity:0; transform:translateY(4px); transition:opacity .12s, transform .12s; white-space:nowrap; max-width:280px}
+#chart-tip.on{opacity:1; transform:translateY(0)}
 .section-head{margin:34px 0 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap}
 .section-head h2{margin:0; font-size:20px; font-weight:800; letter-spacing:-.02em; display:flex; align-items:center; gap:9px}
 .section-head .rule{flex:1; height:1px; min-width:40px; background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 30%,transparent),transparent)}
@@ -997,7 +1000,7 @@ function donut(items,clickable){
   if(!items.length) return '<div class="empty">אין נתונים</div>';
   const total=items.reduce((s,i)=>s+i.value,0);
   const cx=90,cy=90,rad=58,C=2*Math.PI*rad,sw=26; let acc=0;
-  const segs=items.map(i=>{ const dash=i.value/total*C; const s=`<circle cx="${cx}" cy="${cy}" r="${rad}" fill="none" stroke="${esc(i.color)}" stroke-width="${sw}" stroke-dasharray="${dash} ${C-dash}" stroke-dashoffset="${-acc}" transform="rotate(-90 ${cx} ${cy})"/>`; acc+=dash; return s; }).join('');
+  const segs=items.map(i=>{ const dash=i.value/total*C; const tip=esc(`${i.label}: ${money(i.value)} · ${Math.round(i.value/total*100)}%`); const s=`<circle cx="${cx}" cy="${cy}" r="${rad}" fill="none" stroke="${esc(i.color)}" stroke-width="${sw}" stroke-dasharray="${dash} ${C-dash}" stroke-dashoffset="${-acc}" transform="rotate(-90 ${cx} ${cy})" data-tip="${tip}" style="cursor:crosshair"/>`; acc+=dash; return s; }).join('');
   const legend=items.slice(0,10).map(i=>`<div class="bar-row" style="margin-bottom:6px${clickable?';cursor:pointer':''}"${clickable?` data-barlabel="${esc(i.label)}" title="לחצו לפירוט: ${esc(i.label)}"`:` title="${esc(i.label)}"`}><span class="dot" style="background:${esc(i.color)}"></span><div class="bar-label" style="width:auto;flex:1">${esc(i.label)}${clickable?' <span class="muted" style="font-size:11px">🔎</span>':''}</div><div class="bar-value tnum" style="width:auto">${money(i.value)} · ${Math.round(i.value/total*100)}%</div></div>`).join('');
   return `<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><svg viewBox="0 0 180 180" style="width:170px;height:170px;flex-shrink:0">${segs}<text x="90" y="86" text-anchor="middle" font-size="12" fill="currentColor" opacity=".55">סה״כ</text><text x="90" y="105" text-anchor="middle" font-size="15" font-weight="800" fill="currentColor">${money(total)}</text></svg><div style="flex:1;min-width:180px">${legend}</div></div>`;
 }
@@ -1010,8 +1013,9 @@ function multiLineChart(months,series){ if(!months.length||!series.length) retur
   const defs=doArea?`<defs>${series.map((s,si)=>`<linearGradient id="ar${si}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${s.color}" stop-opacity=".20"/><stop offset="1" stop-color="${s.color}" stop-opacity="0"/></linearGradient>`).join('')}</defs>`:'';
   const lines=series.map((s,si)=>{ const pts=months.map((m,i)=>`${x(i)},${y(s.values[i]||0)}`).join(' ');
     const area=doArea?`<polygon points="${x(0)},${H-padB} ${pts} ${x(n-1)},${H-padB}" fill="url(#ar${si})"/>`:'';
-    const dots=months.map((m,i)=>`<circle cx="${x(i)}" cy="${y(s.values[i]||0)}" r="3.6" fill="${s.color}" stroke-width="1.8" style="stroke:var(--surface)"/>`).join('');
-    return `${area}<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>${dots}`; }).join('');
+    const dots=months.map((m,i)=>{ const cx=x(i),cy=y(s.values[i]||0); const tip=esc(`${s.name} · ${fmtMonth(m)}: ${money(s.values[i]||0)}`);
+      return `<circle cx="${cx}" cy="${cy}" r="13" fill="transparent" data-tip="${tip}"/><circle cx="${cx}" cy="${cy}" r="3.6" fill="${s.color}" stroke-width="1.8" style="stroke:var(--surface);pointer-events:none"/>`; }).join('');
+    return `${area}<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"/>${dots}`; }).join('');
   const labels=months.map((m,i)=>{ const [yy,mm]=m.split('-'); return `<text x="${x(i)}" y="${H-13}" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor" opacity=".5">${mm}/${yy.slice(2)}</text>`; }).join('');
   const legend=`<div class="legend">${series.map(s=>`<span><span class="dot" style="background:${s.color}"></span> ${esc(s.name)}</span>`).join('')}</div>`;
   return `<div class="chart-box"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;aspect-ratio:${W}/${H}">${defs}${grid}${lines}${labels}</svg></div>${legend}`;
@@ -1023,8 +1027,8 @@ function vBarChart(data,fmt){ if(!data.length) return '<div class="empty">אין
   const plotH=H-padT-padB; const zeroY=hasNeg? padT+plotH/2 : H-padB; const scale=hasNeg? (plotH/2)/maxAbs : plotH/maxAbs;
   const x=i=>W-padX-bw*(i+1)+bw*0.18; const barW=bw*0.64;
   const defs=`<defs><linearGradient id="vbP" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#0f9d58"/></linearGradient><linearGradient id="vbN" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#f0883e"/><stop offset="1" stop-color="#e0654a"/></linearGradient></defs>`;
-  const bars=data.map((d,i)=>{ const h=Math.max(Math.abs(d.value)*scale,2); const yTop=d.value>=0? zeroY-h : zeroY;
-    return `<rect x="${x(i)}" y="${yTop}" width="${barW}" height="${h}" rx="5" fill="${d.value>=0?'url(#vbP)':'url(#vbN)'}"><title>${esc(d.label||d.m)}: ${fmt(d.value)}</title></rect>`; }).join('');
+  const bars=data.map((d,i)=>{ const h=Math.max(Math.abs(d.value)*scale,2); const yTop=d.value>=0? zeroY-h : zeroY; const tip=esc(`${d.m?fmtMonth(d.m):(d.label||'')}: ${(d.value>=0?'עודף ':'גירעון ')+fmt(Math.abs(d.value))}`);
+    return `<rect x="${x(i)}" y="${yTop}" width="${barW}" height="${h}" rx="5" fill="${d.value>=0?'url(#vbP)':'url(#vbN)'}" data-tip="${tip}"/>`; }).join('');
   const labels=data.map((d,i)=>{ const [yy,mm]=(d.m||'').split('-'); return `<text x="${x(i)+barW/2}" y="${H-13}" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor" opacity=".5">${mm}/${(yy||'').slice(2)}</text>`; }).join('');
   const vals=data.map((d,i)=>{ const h=Math.max(Math.abs(d.value)*scale,2); const yTxt=d.value>=0? zeroY-h-6 : zeroY+h+14; return `<text x="${x(i)+barW/2}" y="${yTxt}" text-anchor="middle" font-size="10" font-weight="800" fill="${d.value>=0?'#0f9d58':'#e0654a'}">${(d.value>=0?'+':'−')+fmt(Math.abs(Math.round(d.value/1000)))+'k'}</text>`; }).join('');
   return `<div class="chart-box"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;aspect-ratio:${W}/${H}">${defs}<line x1="${padX}" y1="${zeroY}" x2="${W-padX}" y2="${zeroY}" stroke="currentColor" opacity=".18"/>${bars}${vals}${labels}</svg></div>`;
@@ -2575,6 +2579,21 @@ try{ const saved=localStorage.getItem('home-theme'); if(saved) document.document
 document.getElementById('theme-toggle').onclick=()=>{ const cur=document.documentElement.getAttribute('data-theme'); const isDark = cur? cur==='dark' : matchMedia('(prefers-color-scheme: dark)').matches; applyTheme(isDark?'light':'dark'); };
 
 if(!location.hash) location.hash='#/dashboard';
+// טולטיפ אינטראקטיבי לגרפים — מציג את המספר שמעליו מרחפים
+(function initChartTips(){
+  const tip=document.createElement('div'); tip.id='chart-tip'; let attached=false;
+  const place=(e)=>{ const pad=14; const r=tip.getBoundingClientRect(); let x=e.clientX+pad, y=e.clientY+pad;
+    if(x+r.width>innerWidth-8) x=e.clientX-r.width-pad; if(y+r.height>innerHeight-8) y=e.clientY-r.height-pad;
+    tip.style.left=Math.max(6,x)+'px'; tip.style.top=Math.max(6,y)+'px'; };
+  document.addEventListener('mousemove',(e)=>{
+    const t=e.target&&e.target.closest?e.target.closest('[data-tip]'):null;
+    if(!t){ if(tip.classList.contains('on')) tip.classList.remove('on'); return; }
+    if(!attached){ document.body.appendChild(tip); attached=true; }
+    const txt=t.getAttribute('data-tip'); if(tip.textContent!==txt) tip.textContent=txt;
+    tip.classList.add('on'); place(e);
+  }, {passive:true});
+  document.addEventListener('scroll',()=>{ if(tip.classList.contains('on')) tip.classList.remove('on'); }, {passive:true,capture:true});
+})();
 async function boot(){
   render();
   syncBadge('מסתנכרן…☁️');
