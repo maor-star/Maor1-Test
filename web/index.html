@@ -2083,6 +2083,8 @@ views.monthly=async()=>{
   const curYM=new Date().toISOString().slice(0,7);
   const detailIssuers=new Set(rows.filter(t=>t.kind==='expense'&&isCardDetail(t)).map(t=>detectIssuer(t.account)));
   const compDetail=detailIssuers.size>0; // תדפיסי פירוט הועלו — מכסים את כל הכרטיסים בתדפיס המשולב
+  // עד איזה תאריך יש כיסוי של פירוט אשראי (מעבר לזה — חודש חלקי עד שיועלה התדפיס הבא)
+  const lastCardDate=rows.filter(t=>t.kind==='expense'&&isCardDetail(t)).reduce((mx,t)=>String(t.tx_date)>mx?String(t.tx_date):mx,'');
   const isMort=(t)=>/משכנתא/.test((t.merchant||'')+' '+(t.description||''));
   const months={};
   const M=(ym)=>(months[ym]=months[ym]||{ym,txCount:0,incSum:0,expSum:0,mortgage:0,pending:0,mer:{},lumps:{},classified:0,unclSum:0,unclCount:0});
@@ -2116,11 +2118,13 @@ views.monthly=async()=>{
     <div id="mlist">${list.map(m=>{
       const mers=Object.values(m.mer).sort((a,b)=>b.total-a.total);
       const home=m.expSum-m.mortgage; const pct=(m.classified+m.unclSum)>0?Math.round(m.classified/(m.classified+m.unclSum)*100):100;
+      const cardPartial = lastCardDate && m.ym===lastCardDate.slice(0,7);
       return `<div class="card" style="margin-bottom:12px">
         <div class="mrow" data-ym="${m.ym}" style="display:flex;align-items:center;gap:14px;cursor:pointer;padding:4px 2px">
           <span class="mchev" style="transition:.2s;display:inline-block;${openSet.has(m.ym)?'transform:rotate(90deg)':''}">▶</span>
           <div style="flex:1"><strong style="font-size:16px">${fmtMonth(m.ym)}</strong> <span class="hint">· ${m.txCount} עסקאות</span>
             ${m.unclCount?`<span class="pill status-late" style="margin-inline-start:8px">${m.unclCount} לא מסווגות · ${money(m.unclSum)}</span>`:'<span class="pill status-ok" style="margin-inline-start:8px">הכל מסווג ✓</span>'}
+            ${cardPartial?`<span class="pill status-soon" style="margin-inline-start:6px" title="עסקאות האשראי בחודש זה מפורטות רק עד ${fmtDate(lastCardDate)} — השאר יופיע כשיועלה התדפיס הבא">⏳ חודש חלקי · אשראי עד ${fmtDate(lastCardDate)}</span>`:''}
             ${m.pending?`<span class="pill status-soon" style="margin-inline-start:6px">🔗 ${money(m.pending)} לא פורט</span>`:''}</div>
           <div style="text-align:end"><div class="tnum amount-neg" style="font-size:16px">${money(m.expSum)}</div><div class="hint">אחזקת בית ${money(home)}${m.mortgage?` · משכנתא ${money(m.mortgage)}`:''} · מסווג ${pct}%</div></div>
         </div>
