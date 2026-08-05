@@ -2158,11 +2158,18 @@ views.analytics=async()=>{
       <div class="panel"><h3>🗓️ הוצאה ממוצעת לפי יום בשבוע</h3>${barsHTML(dowData,money,false)}</div>
       <div class="panel" data-drill="merch"><h3>🏬 בתי העסק היקרים ביותר (בודדים)</h3>${barsHTML(topMerchInd,money,true)}</div>
       <div class="panel"><h3>🔁 הוצאות קבועות מזוהות</h3>${topFixed.length?barsHTML(topFixed.map(f=>({label:f.label+' · '+f.months+' חוד׳',value:f.value,color:f.color})),money,false):'<div class="empty">לא זוהו הוצאות קבועות</div>'}</div>
-      <div class="panel"><h3>💥 10 העסקאות הגדולות</h3><div class="table-wrap"><table style="width:100%"><tbody>${bigTx.map(t=>`<tr><td class="tnum" style="white-space:nowrap">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td><td class="muted" style="font-size:11px">${esc(t.main_name||'ללא סיווג')}</td><td class="tnum amount-neg">${money(t.amount)}</td></tr>`).join('')||'<tr><td class="empty">אין נתונים</td></tr>'}</tbody></table></div></div>
+      <div class="panel"><h3>💥 10 העסקאות הגדולות</h3><div class="hint" style="margin-bottom:6px">בחרו סיווג ישירות מהרשימה כדי לתקן — השינוי חל על אותו בית עסק בכל החודשים ומתעדכן בכל הגרפים.</div><div class="table-wrap"><table style="width:100%"><thead><tr><th>תאריך</th><th>בית עסק</th><th style="min-width:170px">סיווג (ניתן לשינוי)</th><th class="tnum">סכום</th></tr></thead><tbody>${bigTx.map(t=>`<tr><td class="tnum" style="white-space:nowrap">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td><td><select class="big-cat" data-merch="${esc((t.merchant||t.description||'').trim())}" style="width:100%">${catSelectOptions(cats,t.category_id)}</select></td><td class="tnum amount-neg">${money(t.amount)}</td></tr>`).join('')||'<tr><td class="empty">אין נתונים</td></tr>'}</tbody></table></div></div>
       <div class="panel" style="grid-column:1/-1"><h3>📝 ניתוח חודשי מילולי</h3><div class="hint" style="margin-bottom:6px">סיכום מילולי אוטומטי לכל חודש — מה קרה, מה השתנה, ומהיכן יצא הכסף.</div>${narr||'<div class="empty">אין מספיק נתונים לניתוח חודשי.</div>'}</div>
     </div>`;
   // מגמות העומק והתובנות עולות למעלה — מיד אחרי כרטיסי הסיכום, כי זה החלק החשוב והמעניין
   el.querySelector('#deep-anchor').insertAdjacentHTML('afterend',deepHTML);
+
+  // שינוי סיווג ישיר מטבלת "העסקאות הגדולות"
+  el.querySelectorAll('.big-cat').forEach(sel=>sel.onchange=async()=>{
+    const merch=sel.dataset.merch, val=sel.value;
+    try{ await api('/transactions/classify-similar',{method:'POST',body:{merchant:merch,category_id:val||null,make_rule:!!val}});
+      toast('סווג מחדש ✓'); render();
+    }catch(e){ toast(e.message,true); } });
 
   // הגדרת תקציבים לכל הקטגוריות — מקום מרכזי אחד
   const budgetBtn=el.querySelector('#set-budgets');
