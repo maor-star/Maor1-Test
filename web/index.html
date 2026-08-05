@@ -975,7 +975,7 @@ views.transactions=async()=>{
       <select id="f-src"><option value="">כל המקורות</option><option value="credit_card">כרטיס אשראי</option><option value="bank">חשבון בנק</option><option value="cash">מזומן</option><option value="manual">ידני</option></select>
       <input id="f-txt" placeholder="חיפוש לפי מהות / בית עסק…" />
       <label class="chk"><input type="checkbox" id="f-uncls" /> רק לא מסווג 🔴</label>
-      <label class="chk"><input type="checkbox" id="f-hideagg" /> הסתר חיובי אשראי מרוכזים 🔗</label>
+      <label class="chk"><input type="checkbox" id="f-hideagg" checked /> הסתר חיובי אשראי מרוכזים 🔗</label>
       <div class="spacer"></div>
       <label class="chk" title="החל את הסיווג על כל העסקאות מאותו בית עסק וזכור לעתיד"><input type="checkbox" id="remember" checked /> למד מהתיקונים שלי</label>
       <button class="btn" id="add">💵 + מזומן / ידני</button>
@@ -984,6 +984,7 @@ views.transactions=async()=>{
     <div class="card"><div class="table-wrap" id="tx-table"></div></div>`;
 
   const isAgg=(r)=> !!detectIssuer(r.merchant||r.description); // חיוב אשראי מרוכז מהבנק
+  const compDetail=()=> rows.some(r=>r.kind==='expense'&&isCardDetail(r)) || db.transactions.some(t=>t.kind==='expense'&&isCardDetail(t));
   const renderStats=()=>{
     const exp=rows.filter(r=>r.kind==='expense');
     const totalExp=exp.reduce((s,r)=>s+r.amount,0);
@@ -995,7 +996,7 @@ views.transactions=async()=>{
       <div class="stat-card expense"><div class="label">💸 הוצאות בתקופה</div><div class="value tnum">${money(totalExp)}</div><div class="sub">${real.length-unclsN}/${real.length} מסווגות</div></div>
       <div class="stat-card income"><div class="label">💰 הכנסות בתקופה</div><div class="value tnum">${money(incTotal)}</div><div class="sub">${incRows.length-incUn}/${incRows.length} מסווגות</div></div>
       <div class="stat-card ${unclsN?'expense':'accent'}"><div class="label">🔴 הוצאות לא מסווגות</div><div class="value tnum">${unclsN}</div><div class="sub">${money(unclsSum)}</div></div>
-      ${aggs.length?`<div class="stat-card warn"><div class="label">🔗 חיובי אשראי לפירוט</div><div class="value tnum">${aggs.length}</div><div class="sub"><a class="link" data-nav="reconcile">${money(aggs.reduce((s,r)=>s+r.amount,0))} — ייבא פירוט ←</a></div></div>`:''}`;
+      ${aggs.length?`<div class="stat-card ${compDetail()?'accent':'warn'}"><div class="label">🔗 חיובי אשראי מרוכזים</div><div class="value tnum">${aggs.length}</div><div class="sub">${compDetail()?'מפורטים לפי בית עסק ✓ (מוסתרים)':`<a class="link" data-nav="reconcile">${money(aggs.reduce((s,r)=>s+r.amount,0))} — ייבא פירוט ←</a>`}</div></div>`:''}`;
   };
   const renderFilterCats=()=>{ el.querySelector('#f-cat').innerHTML=`<option value="">כל הקטגוריות</option><option value="__none">🔴 לא מסווג</option>`+cats.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join(''); };
 
@@ -1007,7 +1008,9 @@ views.transactions=async()=>{
       <td class="wrap"><strong>${esc(r.merchant||r.description)||'—'}</strong>${r.merchant&&r.description&&r.merchant!==r.description?`<div class="hint">${esc(r.description)}</div>`:''}${r.account?`<div class="hint">${esc(r.account)}</div>`:''}</td>
       <td><span class="muted">${srcLabel(r.source)}</span></td>
       <td>${isAgg(r)
-        ? `<span class="pill status-soon">💳 חיוב אשראי מרוכז</span><div class="hint">אין טעם לסווג סכום כולל · <a class="link" data-nav="review">העלה תדפיס פירוט ←</a></div>`
+        ? (compDetail()
+            ? `<span class="pill status-ok">💳 חיוב חודשי מרוכז · מפורט ✓</span><div class="hint">הפירוט מופיע לפי בית עסק בתאריכי הקנייה (במסך «לפי חודש»)</div>`
+            : `<span class="pill status-soon">💳 חיוב אשראי מרוכז</span><div class="hint">אין טעם לסווג סכום כולל · <a class="link" data-nav="import">העלה תדפיס פירוט ←</a></div>`)
         : `<select class="cat-select ${r.category_id?'':'unset'}" data-id="${r.id}">${catSelectOptions(cats,r.category_id)}</select>`}</td>
       <td class="tnum ${r.kind==='income'?'amount-pos':'amount-neg'}">${r.kind==='income'?'+':'−'}${money2(r.amount)}</td>
       <td style="text-align:left"><button class="icon-btn" data-edit="${r.id}" title="עריכה מלאה">✏️</button><button class="btn-danger" data-del="${r.id}">🗑</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty">אין עסקאות תואמות. ייבאו תדפיס או הוסיפו עסקה ידנית.</div>';
