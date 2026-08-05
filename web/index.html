@@ -160,6 +160,23 @@ nav a.active::before{content:""; position:absolute; inset-inline-start:-14px; to
 .chart-box svg [data-tip]{cursor:crosshair}
 #chart-tip{position:fixed; z-index:220; pointer-events:none; background:linear-gradient(135deg,#0b1322,#111a2e); color:#fff; border:1px solid rgba(255,255,255,.14); padding:7px 11px; border-radius:9px; font-size:12.5px; font-weight:600; box-shadow:0 12px 34px rgba(0,0,0,.42); opacity:0; transform:translateY(4px); transition:opacity .12s, transform .12s; white-space:nowrap; max-width:280px}
 #chart-tip.on{opacity:1; transform:translateY(0)}
+/* עוזר הבית — צ'אט */
+.asst{background:linear-gradient(160deg,color-mix(in srgb,var(--accent) 9%,var(--surface)),var(--surface-2)); border:1px solid color-mix(in srgb,var(--accent) 26%,var(--border)); border-radius:var(--radius); padding:20px 22px; box-shadow:var(--shadow); margin-bottom:24px}
+.asst-head{display:flex; align-items:center; gap:11px; margin-bottom:14px}
+.asst-avatar{width:40px; height:40px; border-radius:12px; background:var(--grad); display:flex; align-items:center; justify-content:center; font-size:21px; box-shadow:var(--glow); flex-shrink:0}
+.asst-msgs{max-height:340px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:6px 2px 12px}
+.asst-bubble{max-width:82%; padding:11px 15px; border-radius:15px; font-size:14px; line-height:1.6; animation:pop .2s cubic-bezier(.22,.9,.3,1)}
+.asst-bubble.bot{align-self:flex-start; background:var(--surface); border:1px solid var(--border); border-bottom-inline-start-radius:5px}
+.asst-bubble.me{align-self:flex-end; background:var(--grad); color:var(--on-accent); border-bottom-inline-end-radius:5px}
+.asst-bubble strong{font-weight:800}
+.asst-chips{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px}
+.asst-chip{font-size:12.5px; font-weight:600; padding:7px 13px; border-radius:999px; background:var(--surface-3); border:1px solid var(--border); color:var(--text); cursor:pointer; transition:.15s}
+.asst-chip:hover{background:var(--grad-soft); border-color:color-mix(in srgb,var(--accent) 40%,var(--border)); transform:translateY(-1px)}
+.asst-input{display:flex; gap:10px; align-items:center}
+.asst-input input{flex:1; padding:12px 16px; border-radius:12px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:14px; font-family:inherit}
+.asst-input input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+.asst-send{padding:12px 20px; border-radius:12px; border:none; background:var(--grad); color:var(--on-accent); font-weight:800; font-size:14px; cursor:pointer; font-family:inherit; transition:.15s}
+.asst-send:hover{filter:brightness(1.06); transform:translateY(-1px)}
 .section-head{margin:34px 0 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap}
 .section-head h2{margin:0; font-size:20px; font-weight:800; letter-spacing:-.02em; display:flex; align-items:center; gap:9px}
 .section-head .rule{flex:1; height:1px; min-width:40px; background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 30%,transparent),transparent)}
@@ -955,11 +972,87 @@ function professionalOptions(pros,selectedId){ return `<option value="">— לל
 const views={};
 const MONTH_VIEWS=new Set(['dashboard','analytics','transactions','review']);
 
+/* ===== עוזר הבית — מנוע תשובות מקומי מבוסס-נתונים (ללא שרת) ===== */
+const HE_MONTHS=['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+function homeAssistant(qRaw){
+  const q=strv(qRaw).trim(); if(!q) return 'שאלו אותי משהו על ההוצאות וניהול הבית 🙂';
+  const t=q.toLowerCase();
+  const isMort=x=>/משכנתא/.test((x.merchant||'')+(x.description||''));
+  const mainNameOf=x=>{ if(!x.category_id) return null; const mc=catMain(x.category_id); return mc?mc.name:null; };
+  const expAll=db.transactions.filter(x=>x.kind==='expense'&&countsInTotal(x));
+  const incAll=db.transactions.filter(x=>x.kind==='income');
+  // חודשים + חודשים מלאים
+  const mSet=new Set(db.transactions.filter(x=>x.kind==='expense'||x.kind==='income').map(x=>strv(x.tx_date).slice(0,7)).filter(s=>s.length===7));
+  const months=[...mSet].sort();
+  const now=new Date(); const curYM=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const lastCardDate=db.transactions.filter(x=>x.kind==='expense'&&isCardDetail(x)).reduce((mx,x)=>String(x.tx_date)>mx?String(x.tx_date):mx,'');
+  const txCount=ym=>db.transactions.filter(x=>x.kind==='expense'&&countsInTotal(x)&&strv(x.tx_date).slice(0,7)===ym).length;
+  const partialOf=ym=> ym===curYM || (lastCardDate&&ym>=lastCardDate.slice(0,7)) || txCount(ym)<20;
+  const complete=months.filter(m=>!partialOf(m));
+  // טווח זמן מהשאלה
+  let scopePred=()=>true, scopeLabel='בסך הכל', scopeYM=null;
+  if(/החודש|חודש נוכחי|החודש הזה/.test(t)){ scopeYM=curYM; }
+  else { const mi=HE_MONTHS.findIndex(nm=>t.includes(nm)); if(mi>=0){ const cand=months.filter(m=>+m.slice(5,7)===mi+1).sort(); if(cand.length){ scopeYM=cand[cand.length-1]; } } }
+  if(scopeYM){ scopePred=x=>strv(x.tx_date).slice(0,7)===scopeYM; scopeLabel='ב'+fmtMonth(scopeYM); }
+  const exp=expAll.filter(scopePred), inc=incAll.filter(scopePred);
+  const sum=a=>a.reduce((s,x)=>s+x.amount,0);
+  const totExp=sum(exp.filter(x=>!isMort(x))), totMort=sum(exp.filter(isMort)), totInc=sum(inc);
+  // זיהוי קטגוריה מהשאלה
+  const mains=[...new Set(db.transactions.map(x=>mainNameOf(x)).filter(Boolean))];
+  const SYN={'אוכל':'מזון','סופר':'מזון','מכולת':'מזון','מסעד':'מזון','דלק':'רכב ותחבורה','רכב':'רכב ותחבורה','תחבורה':'רכב ותחבורה','ביטוח':'ביטוחים','בריאות':'בריאות','רופא':'בריאות','תרופ':'בריאות','בילוי':'פנאי, בילויים וקניות','קניות':'פנאי, בילויים וקניות','פנאי':'פנאי, בילויים וקניות','חשמל':'הוצאות בית ותשתיות','מים':'הוצאות בית ותשתיות','ארנונ':'הוצאות בית ותשתיות','תשתית':'הוצאות בית ותשתיות','גינ':'גינה ובריכה','בריכ':'גינה ובריכה','ילד':'ילדים וחינוך','חינוך':'ילדים וחינוך','משכנת':'משכנתא','מיסים':'מיסים קבועים'};
+  let targetCat=mains.find(nm=>t.includes(nm.toLowerCase()));
+  if(!targetCat){ for(const k in SYN){ if(t.includes(k)&&mains.includes(SYN[k])){ targetCat=SYN[k]; break; } } }
+  const money2=money;
+  // כוונות
+  const askBiggest=/הכי (גדול|יקר|הרבה)|הגדולה ביותר|היקרה ביותר|הוצאה הכי/.test(t);
+  const askIncome=/הכנס|נכנס|משכורת|רווח/.test(t)&&!/הוצא/.test(t);
+  const askSavings=/חסכ|חיסכון|נשאר|עוד[ףם]|מאזן|גירעון/.test(t);
+  const askAvg=/ממוצע|בממוצע/.test(t);
+  const askDisc=/מותרות|בזבוז|לא הכרחי/.test(t);
+  const askFixed=/קבוע|מנוי|הוראת קבע|הוראות קבע/.test(t);
+  const askBudget=/תקציב|חריג/.test(t);
+  const askCount=/כמה עסקאות|מספר עסקאות/.test(t);
+  const askTopCat=/על מה.*הכי|הקטגוריה הגדולה|הכי גדולה|לאן הכסף|על מה הוצאתי/.test(t);
+  const askHelp=/עזרה|מה אתה יודע|מה אפשר|שלום|היי|hello/.test(t);
+  // קטגוריות מסודרות לפי הוצאה
+  const byCat={}; exp.filter(x=>!isMort(x)).forEach(x=>{ const n=mainNameOf(x)||'ללא סיווג'; byCat[n]=(byCat[n]||0)+x.amount; });
+  const catRank=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  if(askHelp) return `שלום! 👋 אני עוזר הבית. אפשר לשאול אותי דברים כמו:<br>• «כמה הוצאתי על מזון החודש?»<br>• «מה ההוצאה הכי גדולה שלי?»<br>• «כמה אני מוציא בממוצע על אחזקת הבית?»<br>• «כמה מותרות?» · «כמה נשאר לי?» · «איפה אני חורג מהתקציב?»`;
+  // קטגוריה ספציפית
+  if(targetCat){
+    const rows=exp.filter(x=>mainNameOf(x)===targetCat);
+    const s=sum(rows);
+    if(!rows.length) return `לא מצאתי הוצאות בקטגוריה «${targetCat}» ${scopeLabel}.`;
+    const top=Object.entries(rows.reduce((o,x)=>{const k=(x.merchant||x.description||'—').trim();o[k]=(o[k]||0)+x.amount;return o;},{})).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    return `על <strong>${targetCat}</strong> הוצאתם <strong>${money2(s)}</strong> ${scopeLabel} (${rows.length} עסקאות).<br>הגדולים: ${top.map(([k,v])=>`${esc(k)} ${money2(v)}`).join(' · ')}.`;
+  }
+  if(askBiggest){ const rows=exp.filter(x=>!isMort(x)).slice().sort((a,b)=>b.amount-a.amount); if(!rows.length)return 'אין נתונים.'; const b=rows[0]; return `ההוצאה הכי גדולה ${scopeLabel}: <strong>${esc(b.merchant||b.description||'—')}</strong> על סך <strong>${money2(b.amount)}</strong> (${fmtDate(b.tx_date)}${mainNameOf(b)?', '+mainNameOf(b):''}).`; }
+  if(askCount){ return `יש <strong>${exp.length}</strong> עסקאות הוצאה ${scopeLabel}${scopeYM?'':` (על פני ${months.length} חודשים)`}.`; }
+  if(askAvg){ const vals=complete.map(m=>sum(db.transactions.filter(x=>x.kind==='expense'&&countsInTotal(x)&&!isMort(x)&&strv(x.tx_date).slice(0,7)===m))); const avg=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0; return `בממוצע אתם מוציאים <strong>${money2(avg)}</strong> לחודש על אחזקת הבית (על בסיס ${complete.length} חודשים מלאים). תחזית שנתית: <strong>${money2(avg*12)}</strong>.`; }
+  if(askDisc){ const DISC=/פנאי|בילוי|קני|מסעד|גינה|בריכה|בידור|מתנ|ביגוד|טיול/; const disc=sum(exp.filter(x=>!isMort(x)&&DISC.test(mainNameOf(x)||''))); const base=totExp; return `הוצאות ה«מותרות» ${scopeLabel} הן <strong>${money2(disc)}</strong> — כ־<strong>${base>0?Math.round(disc/base*100):0}%</strong> מההוצאה. יעד בריא נפוץ: עד ~30%.`; }
+  if(askFixed){ const merMonths={},merSum={}; expAll.filter(x=>!isMort(x)).forEach(x=>{const k=(x.merchant||x.description||'—').trim();(merMonths[k]=merMonths[k]||new Set()).add(strv(x.tx_date).slice(0,7));merSum[k]=(merSum[k]||0)+x.amount;}); const th=Math.max(2,Math.ceil((complete.length||months.length)*0.6)); const fixed=Object.keys(merMonths).filter(k=>merMonths[k].size>=th).sort((a,b)=>merSum[b]-merSum[a]); const fs=fixed.reduce((s,k)=>s+merSum[k],0); return `זיהיתי <strong>${fixed.length}</strong> הוצאות קבועות/מנויים חוזרים בסך <strong>${money2(fs)}</strong> על פני התקופה.<br>הגדולים: ${fixed.slice(0,4).map(k=>`${esc(k)} ${money2(merSum[k])}`).join(' · ')}.`; }
+  if(askBudget){ const cats=db.categories.filter(c=>c.kind==='expense'&&c.monthly_budget>0&&!c.parent_id); if(!cats.length) return 'לא הוגדרו תקציבים עדיין. אפשר להגדיר תקציב חודשי לכל קטגוריה בעמוד «גרפים וניתוח» → «הגדרת תקציבים».'; const ym=scopeYM||complete[complete.length-1]||months[months.length-1]; const over=cats.map(c=>{const a=sum(db.transactions.filter(x=>x.kind==='expense'&&countsInTotal(x)&&strv(x.tx_date).slice(0,7)===ym&&catMain(x.category_id)&&catMain(x.category_id).id===c.id));return{name:c.name,a,b:c.monthly_budget};}).filter(r=>r.a>r.b); if(!over.length) return `יופי — ב${fmtMonth(ym)} לא חרגתם מאף תקציב שהוגדר ✅`; return `ב${fmtMonth(ym)} חרגתם מהתקציב ב:<br>${over.map(r=>`<strong>${esc(r.name)}</strong>: ${money2(r.a)} מתוך ${money2(r.b)} (חריגה ${money2(r.a-r.b)})`).join('<br>')}`; }
+  if(askSavings){ const net=totInc-(totExp+totMort); return `${scopeLabel}: הכנסות <strong>${money2(totInc)}</strong>, הוצאות <strong>${money2(totExp+totMort)}</strong> → ${net>=0?`נשאר עודף של <strong>${money2(net)}</strong> 💚`:`גירעון של <strong>${money2(-net)}</strong> ⚠️`}${totInc>0?` (שיעור חיסכון ${Math.round(net/totInc*100)}%)`:''}.`; }
+  if(askIncome){ return `ההכנסות ${scopeLabel} הן <strong>${money2(totInc)}</strong> (${inc.length} תנועות).`; }
+  if(askTopCat){ if(!catRank.length)return 'אין נתונים מסווגים עדיין.'; return `הקטגוריה הגדולה ביותר ${scopeLabel} היא <strong>${catRank[0][0]}</strong> עם <strong>${money2(catRank[0][1])}</strong>.<br>אחריה: ${catRank.slice(1,4).map(([n,v])=>`${n} ${money2(v)}`).join(' · ')}.`; }
+  // ברירת מחדל: "כמה הוצאתי" כללי / סיכום
+  if(/כמה.*הוצא|סך.*הוצא|הוצאות|עלות/.test(t)){
+    return `סך ההוצאות ${scopeLabel}: <strong>${money2(totExp)}</strong> על אחזקת הבית${totMort>0?` + ${money2(totMort)} משכנתא`:''}.<br>הקטגוריה הגדולה: ${catRank.length?`${catRank[0][0]} (${money2(catRank[0][1])})`:'—'}.`;
+  }
+  // fallback חכם — סיכום קצר + הצעות
+  return `לא בטוח שהבנתי, אבל הנה תמונת מצב ${scopeLabel}:<br>• הוצאות אחזקת בית: <strong>${money2(totExp)}</strong><br>• הכנסות: <strong>${money2(totInc)}</strong><br>• הקטגוריה הגדולה: <strong>${catRank.length?catRank[0][0]:'—'}</strong><br>נסו לשאול: «כמה הוצאתי על מזון?», «מה ההוצאה הכי גדולה?», «כמה מותרות?»`;
+}
 views.dashboard=async()=>{
   const d=await api('/dashboard'+monthParam());
   const el=document.createElement('div');
   const managedSep = d.mortgage>0 || d.rentalIncome>0;
   el.innerHTML=`
+    <div class="asst">
+      <div class="asst-head"><div class="asst-avatar">🤖</div><div><div style="font-weight:800;font-size:16px">עוזר הבית</div><div class="hint" style="margin:2px 0 0">שאלו אותי כל שאלה על ההוצאות וניהול הבית — אני עונה מהנתונים שלכם</div></div></div>
+      <div class="asst-msgs" id="asst-msgs"></div>
+      <div class="asst-chips" id="asst-chips"></div>
+      <div class="asst-input"><input id="asst-in" placeholder="לדוגמה: כמה הוצאתי על מזון החודש?" autocomplete="off" /><button class="asst-send" id="asst-send">שליחה</button></div>
+    </div>
     <div class="section-title" style="margin-top:0">🏡 תקציב הבית</div>
     <div class="stats-grid">
       <div class="stat-card expense"><div class="label">🏡 עלות אחזקת הבית</div><div class="value tnum">${money(d.homeExpenses)}</div><div class="sub">${state.month?'בחודש הנבחר':'סך הכל'} · כל ההוצאות פחות משכנתא</div></div>
@@ -985,13 +1078,24 @@ views.dashboard=async()=>{
       <div class="panel"><h3>📜 אחריות שעומדת לפוג</h3>${d.expiringWarranties.length?d.expiringWarranties.map(w=>`<div class="bar-row" style="justify-content:space-between"><div><strong>${esc(w.item_name)}</strong> <span class="muted">${esc(w.brand||'')}</span></div>${statusPill(w.days_left,{soon:90})}</div>`).join(''):'<div class="empty">אין אחריות שעומדת לפוג</div>'}</div>
     </div>`;
   el.querySelector('#trend').innerHTML=trendChart(d.trend);
+  // ===== עוזר הבית — צ'אט =====
+  const msgs=el.querySelector('#asst-msgs'), input=el.querySelector('#asst-in'), sendBtn=el.querySelector('#asst-send');
+  const addMsg=(html,who)=>{ const b=document.createElement('div'); b.className='asst-bubble '+(who==='me'?'me':'bot'); b.innerHTML=html; msgs.appendChild(b); msgs.scrollTop=msgs.scrollHeight; };
+  const ask=(qText)=>{ const q=strv(qText).trim(); if(!q) return; addMsg(esc(q),'me'); input.value='';
+    setTimeout(()=>{ let ans; try{ ans=homeAssistant(q); }catch(e){ ans='אופס, לא הצלחתי לחשב את זה. נסו לנסח אחרת.'; } addMsg(ans,'bot'); },160); };
+  addMsg('שלום! 👋 אני עוזר הבית. שאלו אותי כל דבר על ההוצאות — למשל «כמה הוצאתי על מזון החודש?» או «מה ההוצאה הכי גדולה שלי?»','bot');
+  const chips=['כמה הוצאתי על מזון?','מה ההוצאה הכי גדולה?','כמה מותרות?','כמה נשאר לי?','ממוצע אחזקת בית','איפה חרגתי מהתקציב?'];
+  const chipsBox=el.querySelector('#asst-chips');
+  chips.forEach(c=>{ const b=document.createElement('button'); b.className='asst-chip'; b.textContent=c; b.onclick=()=>ask(c); chipsBox.appendChild(b); });
+  sendBtn.onclick=()=>ask(input.value);
+  input.onkeydown=(e)=>{ if(e.key==='Enter') ask(input.value); };
   return el;
 };
 function barsHTML(items,fmt,clickable){ if(!items.length) return '<div class="empty">אין נתונים</div>'; const max=Math.max(...items.map(i=>i.value),1);
   return items.map(i=>`<div class="bar-row"${clickable?` data-barlabel="${esc(i.label)}" style="cursor:pointer" title="לחצו לפירוט: ${esc(i.label)}"`:` title="${esc(i.label)}"`}><div class="bar-label">${esc(i.label)}${clickable?' <span class="muted" style="font-size:11px">🔎</span>':''}</div><div class="bar-track"><div class="bar-fill" style="width:${(i.value/max*100).toFixed(1)}%;${i.color?'background:'+esc(i.color):''}"></div></div><div class="bar-value tnum">${fmt(i.value)}</div></div>`).join(''); }
 function trendChart(trend){ if(!trend.length) return '<div class="empty">אין נתונים</div>';
   const W=460,H=200,pad=34; const max=Math.max(...trend.flatMap(t=>[t.expenses,t.income]),1); const n=trend.length; const bw=(W-pad*2)/n;
-  const y=v=>H-pad-(v/max)*(H-pad*2); const x=i=>W-pad-bw*(i+0.5);
+  const y=v=>H-pad-(v/max)*(H-pad*2); const x=i=>pad+bw*(i+0.5);
   const line=(key,color)=>{ const pts=trend.map((t,i)=>`${x(i)},${y(t[key])}`).join(' '); const dots=trend.map((t,i)=>`<circle cx="${x(i)}" cy="${y(t[key])}" r="3.5" fill="${color}"/>`).join(''); return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5"/>${dots}`; };
   const labels=trend.map((t,i)=>{ const [yy,mm]=t.m.split('-'); return `<text x="${x(i)}" y="${H-12}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".55">${mm}/${yy.slice(2)}</text>`; }).join('');
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%" preserveAspectRatio="xMidYMid meet"><line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="currentColor" opacity=".15"/>${line('expenses','#e0654a')}${line('income','#2f9e6f')}${labels}</svg><div class="legend"><span><span class="dot" style="background:#e0654a"></span> הוצאות בית</span><span><span class="dot" style="background:#2f9e6f"></span> הכנסות</span></div>`; }
@@ -1007,8 +1111,8 @@ function donut(items,clickable){
 // גרף רב-קווי (כמה סדרות לאורך חודשים) — RTL: החודש המוקדם מימין
 function multiLineChart(months,series){ if(!months.length||!series.length) return '<div class="empty">אין מספיק נתונים</div>';
   const W=580,H=306,padX=46,padT=20,padB=38; const all=series.flatMap(s=>s.values); const max=Math.max(...all,1); const n=months.length; const bw=(W-padX*2)/Math.max(n,1);
-  const y=v=>H-padB-(v/max)*(H-padB-padT); const x=i=>W-padX-bw*(i+0.5);
-  const grid=[0,.25,.5,.75,1].map(f=>{ const yy=H-padB-f*(H-padB-padT); return `<line x1="${padX}" y1="${yy}" x2="${W-padX}" y2="${yy}" stroke="currentColor" opacity="${f===0?'.16':'.06'}"/>`+((f===0||f===.5||f===1)?`<text x="${W-padX+6}" y="${yy+3}" font-size="9" fill="currentColor" opacity=".45">${money(Math.round(max*f))}</text>`:''); }).join('');
+  const y=v=>H-padB-(v/max)*(H-padB-padT); const x=i=>padX+bw*(i+0.5);
+  const grid=[0,.25,.5,.75,1].map(f=>{ const yy=H-padB-f*(H-padB-padT); return `<line x1="${padX}" y1="${yy}" x2="${W-padX}" y2="${yy}" stroke="currentColor" opacity="${f===0?'.16':'.06'}"/>`+((f===0||f===.5||f===1)?`<text x="${padX-6}" y="${yy+3}" text-anchor="end" font-size="9" fill="currentColor" opacity=".45">${money(Math.round(max*f))}</text>`:''); }).join('');
   const doArea=series.length<=2;
   const defs=doArea?`<defs>${series.map((s,si)=>`<linearGradient id="ar${si}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${s.color}" stop-opacity=".20"/><stop offset="1" stop-color="${s.color}" stop-opacity="0"/></linearGradient>`).join('')}</defs>`:'';
   const lines=series.map((s,si)=>{ const pts=months.map((m,i)=>`${x(i)},${y(s.values[i]||0)}`).join(' ');
@@ -1025,7 +1129,7 @@ function vBarChart(data,fmt){ if(!data.length) return '<div class="empty">אין
   const W=580,H=290,padX=30,padT=26,padB=40; const n=data.length; const bw=(W-padX*2)/Math.max(n,1);
   const maxAbs=Math.max(...data.map(d=>Math.abs(d.value)),1); const hasNeg=data.some(d=>d.value<0);
   const plotH=H-padT-padB; const zeroY=hasNeg? padT+plotH/2 : H-padB; const scale=hasNeg? (plotH/2)/maxAbs : plotH/maxAbs;
-  const x=i=>W-padX-bw*(i+1)+bw*0.18; const barW=bw*0.64;
+  const barW=bw*0.64; const x=i=>padX+bw*i+bw*0.18;
   const defs=`<defs><linearGradient id="vbP" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#0f9d58"/></linearGradient><linearGradient id="vbN" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#f0883e"/><stop offset="1" stop-color="#e0654a"/></linearGradient></defs>`;
   const bars=data.map((d,i)=>{ const h=Math.max(Math.abs(d.value)*scale,2); const yTop=d.value>=0? zeroY-h : zeroY; const tip=esc(`${d.m?fmtMonth(d.m):(d.label||'')}: ${(d.value>=0?'עודף ':'גירעון ')+fmt(Math.abs(d.value))}`);
     return `<rect x="${x(i)}" y="${yTop}" width="${barW}" height="${h}" rx="5" fill="${d.value>=0?'url(#vbP)':'url(#vbN)'}" data-tip="${tip}"/>`; }).join('');
