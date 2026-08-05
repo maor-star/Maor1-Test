@@ -582,6 +582,25 @@ function ensureDefaults(){
     }
     db.defaultsV=9; save();
   }
+  // v10: כללים נוספים לבתי עסק שנותרו + נפילה-לברירת-מחדל «אחר» כדי שכל ההוצאות יסווגו (100%).
+  if((db.defaultsV||0) < 10){
+    ensureCat('אחר','#94a3b8'); ensureCat('הכנסה אחרת','#4ade80','income',0);
+    const R=[
+      ['מקס','ביגוד והנעלה'],['פנדורה','ביגוד והנעלה'],['twentysix','ביגוד והנעלה'],['sephora','ביגוד והנעלה'],['hair','ביגוד והנעלה'],['ביוטי','ביגוד והנעלה'],['gift','ביגוד והנעלה'],['פלורוז','ביגוד והנעלה'],['דודלי','ביגוד והנעלה'],['לורין','ביגוד והנעלה'],['שופלילו','ביגוד והנעלה'],
+      ['gett','דלק ורכב'],['מונית','דלק ורכב'],['מנעול','תיקונים ותחזוקה'],['מפתח','תיקונים ותחזוקה'],
+      ['אילת','נופש וחופשות'],['טרמינל','נופש וחופשות'],['bangkok','נופש וחופשות'],['cannes','נופש וחופשות'],['samsonite','נופש וחופשות'],['evisa','נופש וחופשות'],['tallinn','נופש וחופשות'],['dublin','נופש וחופשות'],['athina','נופש וחופשות'],['singapore','נופש וחופשות'],['luxembourg','נופש וחופשות'],['cozy','נופש וחופשות'],
+      ['קולינאריק','מסעדות, פנאי ובילויים'],['אושי','מסעדות, פנאי ובילויים'],['קדרא','מסעדות, פנאי ובילויים'],['סקארה','מסעדות, פנאי ובילויים'],['nergiz','מסעדות, פנאי ובילויים'],['restaur','מסעדות, פנאי ובילויים'],['באשרייה','מסעדות, פנאי ובילויים'],['ניני','מסעדות, פנאי ובילויים'],['קלמא','מסעדות, פנאי ובילויים'],['משו במודיעין','מסעדות, פנאי ובילויים'],['totash','מסעדות, פנאי ובילויים'],['סוויט','מסעדות, פנאי ובילויים'],['the zone','מסעדות, פנאי ובילויים'],
+      ['טלקום','טלפון וסלולר'],['תקשורת','טלפון וסלולר'],['ספורט','כושר וספורט'],['לביטח','ביטוח דירה ומבנה']
+    ];
+    for(const [kw,name] of R){ const c=findCat(name); if(c && !db.rules.some(r=>r.match_text===kw && r.category_id===c.id)) db.rules.push({id:++db.seq,match_text:kw,category_id:c.id}); }
+    const lById=(id)=>db.categories.find(c=>c.id==id);
+    const lMatch=(text,kind)=>{ const hay=strv(text).toLowerCase(); let rules=db.rules.filter(r=>{const c=lById(r.category_id);return c&&(!kind||c.kind===kind);}); rules.sort((a,b)=>strv(b.match_text).length-strv(a.match_text).length); for(const r of rules){const mt=strv(r.match_text).toLowerCase(); if(mt&&hay.includes(mt)) return r.category_id;} return null; };
+    db.transactions.forEach(t=>{ if(!t.category_id){ const c=lMatch((t.description||'')+' '+(t.merchant||''),t.kind); if(c) t.category_id=c; } });
+    // נפילה לברירת מחדל: כל מה שעדיין לא סווג → «אחר» (הוצאה) / «הכנסה אחרת» (הכנסה)
+    const otherId=(findCat('אחר')||{}).id, otherIncId=(findCat('הכנסה אחרת')||{}).id;
+    db.transactions.forEach(t=>{ if(!t.category_id){ t.category_id = t.kind==='income'? otherIncId : otherId; } });
+    db.defaultsV=10; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
