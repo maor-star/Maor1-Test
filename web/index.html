@@ -1031,7 +1031,7 @@ views.transactions=async()=>{
     <p class="hint" style="margin:-6px 0 14px">בחרו לכל שורה את <strong>מהות ההוצאה</strong> מהרשימה. מה שלא זוהה מסומן <span style="color:var(--red);font-weight:800">🔴 לא מסווג</span>. תיקון של בית עסק אחד (למשל «פרטנר» → תקשורת) יסווג את כל השאר מאותו בית עסק.</p>
     <div class="card"><div class="table-wrap" id="tx-table"></div></div>`;
 
-  const isAgg=(r)=> !!detectIssuer(r.merchant||r.description); // חיוב אשראי מרוכז מהבנק
+  const isAgg=(r)=> isAggLump(r); // חיוב אשראי מרוכז מהבנק (בית העסק=חברת אשראי, החשבון אינו כרטיס אשראי) — לא שורת פירוט אמיתית
   const compDetail=()=> rows.some(r=>r.kind==='expense'&&isCardDetail(r)) || db.transactions.some(t=>t.kind==='expense'&&isCardDetail(t));
   const renderStats=()=>{
     const exp=rows.filter(r=>r.kind==='expense');
@@ -1119,7 +1119,7 @@ views.review=async()=>{
   await api('/transactions/auto',{method:'POST',body:{}}); // סיווג אוטומטי בכניסה
   const [rows,cats,recon]=await Promise.all([api('/transactions'+monthParam('status=uncategorized')),api('/categories'),api('/reconcile')]);
   const el=document.createElement('div');
-  const isAgg=(r)=> !!detectIssuer(r.merchant||r.description);
+  const isAgg=(r)=> isAggLump(r);
   const toClass=rows.filter(r=>!isAgg(r)); // מוציאים חיובי אשראי מרוכזים — אי אפשר לסווג סכום כולל
   // חיובי כרטיסי אשראי מרוכזים (מזוהים לפי שם החברה) — צריך תדפיס פירוט
   const byIssuer={};
@@ -1198,7 +1198,9 @@ views.review=async()=>{
 views.import=async()=>{
   const el=document.createElement('div');
   const txs=await api('/transactions');
-  const isCard=(t)=> !!detectIssuer(t.merchant||t.description);
+  // חיוב אשראי מרוכז אמיתי מהבנק = בית העסק הוא חברת אשראי אך החשבון אינו כרטיס אשראי (לא שורת פירוט
+  // שבמקרה שם בית העסק שלה מכיל «מקס»/«כאל» וכד׳). כך לא נסמן בטעות עסקאות מפורטות כ"חסרות".
+  const isCard=(t)=> isAggLump(t);
   // מה חסר להעלות — 6 חודשים אחרונים
   const nowD=new Date(); const months=[];
   for(let i=0;i<6;i++){ const dd=new Date(Date.UTC(nowD.getUTCFullYear(),nowD.getUTCMonth()-i,1)); months.push(dd.toISOString().slice(0,7)); }
