@@ -2020,13 +2020,20 @@ views.analytics=async()=>{
   });
   return el;
 };
-// חלון פירוט: כל העסקאות שמרכיבות מספר בגרף
+// חלון פירוט: כל העסקאות שמרכיבות מספר בגרף — עם אפשרות לשנות סיווג בשורה
 function showTxDrill(title,list){
   list=list.slice().sort((a,b)=>b.amount-a.amount);
-  const body=`<div class="hint" style="margin-bottom:10px">${list.length} עסקאות</div>
-    <div class="table-wrap" style="max-height:60vh;overflow:auto"><table style="width:100%"><thead><tr><th>תאריך</th><th>בית עסק</th><th>סיווג מלא</th><th>סכום</th></tr></thead>
-    <tbody>${list.map(t=>`<tr><td class="tnum">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td><td class="hint">${esc(t.category_full||t.category_name||'—')}</td><td class="tnum ${t.kind==='income'?'amount-pos':'amount-neg'}">${money2(t.amount)}</td></tr>`).join('')||'<tr><td colspan="4"><div class="empty">אין עסקאות</div></td></tr>'}</tbody></table></div>`;
+  const body=`<div class="hint" style="margin-bottom:10px">${list.length} עסקאות · שינוי סיווג כאן חל על אותו בית עסק בכל החודשים ומתעדכן בגרפים.</div>
+    <div class="table-wrap" style="max-height:62vh;overflow:auto"><table style="width:100%"><thead><tr><th>תאריך</th><th>בית עסק</th><th style="min-width:190px">שינוי סיווג</th><th>סכום</th></tr></thead>
+    <tbody>${list.map(t=>`<tr><td class="tnum">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td>
+      <td><select class="drill-cat" data-merch="${esc((t.merchant||t.description||'').trim())}" style="width:100%">${catSelectOptions(db.categories,t.category_id)}</select></td>
+      <td class="tnum ${t.kind==='income'?'amount-pos':'amount-neg'}">${money2(t.amount)}</td></tr>`).join('')||'<tr><td colspan="4"><div class="empty">אין עסקאות</div></td></tr>'}</tbody></table></div>`;
   openModal(title,body,async()=>{},{wide:true,submitLabel:'סגירה'});
+  setTimeout(()=>{ document.querySelectorAll('.modal .drill-cat').forEach(sel=>sel.onchange=async()=>{
+    const merch=sel.dataset.merch, val=sel.value;
+    try{ await api('/transactions/classify-similar',{method:'POST',body:{merchant:merch,category_id:val||null,make_rule:!!val}});
+      toast('סווג מחדש ✓'); const bd=sel.closest('.modal-backdrop'); if(bd) bd.remove(); render();
+    }catch(e){ toast(e.message,true); } }); },0);
 }
 
 // ===== Reconcile / completeness =====
