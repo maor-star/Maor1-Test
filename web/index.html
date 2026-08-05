@@ -974,8 +974,8 @@ views.dashboard=async()=>{
   el.querySelector('#trend').innerHTML=trendChart(d.trend);
   return el;
 };
-function barsHTML(items,fmt){ if(!items.length) return '<div class="empty">אין נתונים</div>'; const max=Math.max(...items.map(i=>i.value),1);
-  return items.map(i=>`<div class="bar-row"><div class="bar-label" title="${esc(i.label)}">${esc(i.label)}</div><div class="bar-track"><div class="bar-fill" style="width:${(i.value/max*100).toFixed(1)}%;${i.color?'background:'+esc(i.color):''}"></div></div><div class="bar-value tnum">${fmt(i.value)}</div></div>`).join(''); }
+function barsHTML(items,fmt,clickable){ if(!items.length) return '<div class="empty">אין נתונים</div>'; const max=Math.max(...items.map(i=>i.value),1);
+  return items.map(i=>`<div class="bar-row"${clickable?` data-barlabel="${esc(i.label)}" style="cursor:pointer" title="לחצו לפירוט: ${esc(i.label)}"`:` title="${esc(i.label)}"`}><div class="bar-label">${esc(i.label)}${clickable?' <span class="muted" style="font-size:11px">🔎</span>':''}</div><div class="bar-track"><div class="bar-fill" style="width:${(i.value/max*100).toFixed(1)}%;${i.color?'background:'+esc(i.color):''}"></div></div><div class="bar-value tnum">${fmt(i.value)}</div></div>`).join(''); }
 function trendChart(trend){ if(!trend.length) return '<div class="empty">אין נתונים</div>';
   const W=460,H=200,pad=34; const max=Math.max(...trend.flatMap(t=>[t.expenses,t.income]),1); const n=trend.length; const bw=(W-pad*2)/n;
   const y=v=>H-pad-(v/max)*(H-pad*2); const x=i=>W-pad-bw*(i+0.5);
@@ -2006,12 +2006,28 @@ views.analytics=async()=>{
       <div class="panel"><h3>הוצאות לפי מהות (קטגוריה)</h3>${donut(byCat)}</div>
       <div class="panel"><h3>הכנסות לפי מהות</h3>${donut(byInc)}</div>
       <div class="panel"><h3>הוצאות לפי מקור (אשראי / בנק / מזומן)</h3>${donut(bySrc)}</div>
-      <div class="panel"><h3>הכי הרבה הוצאתי על… (לפי קטגוריה)</h3>${barsHTML(topMerch,money)}</div>
-      <div class="panel"><h3>פילוח הוצאות מלא</h3>${barsHTML(byCat.map(c=>({label:c.label,value:c.value,color:c.color})),money)}</div>
-      <div class="panel"><h3>פילוח הכנסות מלא</h3>${barsHTML(byInc.map(c=>({label:c.label,value:c.value,color:c.color})),money)}</div>
+      <div class="panel" data-drill="exp"><h3>הכי הרבה הוצאתי על… (לפי קטגוריה)</h3>${barsHTML(topMerch,money,true)}</div>
+      <div class="panel" data-drill="exp"><h3>פילוח הוצאות מלא</h3>${barsHTML(byCat.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
+      <div class="panel" data-drill="inc"><h3>פילוח הכנסות מלא</h3>${barsHTML(byInc.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
     </div>`;
+  el.querySelectorAll('.panel[data-drill] .bar-row[data-barlabel]').forEach(row=>row.onclick=()=>{
+    const label=row.dataset.barlabel, kind=row.closest('[data-drill]').dataset.drill;
+    let list;
+    if(kind==='inc'){ list=incRows.filter(t=>(t.category_name||'ללא סיווג')===label); }
+    else if(/· ללא סיווג$/.test(label)){ const mer=label.replace(/ · ללא סיווג$/,''); list=exp.filter(t=>!t.category_id && (t.merchant||t.description||'—').trim()===mer); }
+    else { list=exp.filter(t=>(t.main_name||'ללא סיווג')===label); }
+    showTxDrill(`${label} · ${money(list.reduce((s,t)=>s+t.amount,0))}`, list);
+  });
   return el;
 };
+// חלון פירוט: כל העסקאות שמרכיבות מספר בגרף
+function showTxDrill(title,list){
+  list=list.slice().sort((a,b)=>b.amount-a.amount);
+  const body=`<div class="hint" style="margin-bottom:10px">${list.length} עסקאות</div>
+    <div class="table-wrap" style="max-height:60vh;overflow:auto"><table style="width:100%"><thead><tr><th>תאריך</th><th>בית עסק</th><th>סיווג מלא</th><th>סכום</th></tr></thead>
+    <tbody>${list.map(t=>`<tr><td class="tnum">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td><td class="hint">${esc(t.category_full||t.category_name||'—')}</td><td class="tnum ${t.kind==='income'?'amount-pos':'amount-neg'}">${money2(t.amount)}</td></tr>`).join('')||'<tr><td colspan="4"><div class="empty">אין עסקאות</div></td></tr>'}</tbody></table></div>`;
+  openModal(title,body,async()=>{},{wide:true,submitLabel:'סגירה'});
+}
 
 // ===== Reconcile / completeness =====
 views.reconcile=async()=>{
