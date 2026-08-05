@@ -376,6 +376,7 @@ let saveTimer;
 function persistLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(db)); }catch(e){} }
 function save(){
   db.updatedAt=Date.now();
+  _hasCardDetail=null; // איפוס מטמון (ייתכן שהשתנו שורות פירוט)
   persistLocal();
   const s=document.getElementById('save-state');
   if(s && !syncCode){ s.textContent='נשמר ✔'; clearTimeout(saveTimer); saveTimer=setTimeout(()=>s.textContent='נשמר בדפדפן',1500); }
@@ -569,6 +570,17 @@ function ensureDefaults(){
     db.transactions.forEach(t=>{ if(t.kind==='expense'&&!t.category_id){ const c=lMatch2((t.description||'')+' '+(t.merchant||''),'expense'); if(c) t.category_id=c; } });
     db.defaultsV=8; save();
   }
+  // v9: מחיקת חיובי אשראי מרוכזים (חשבוניות חודשיות) כשקיים פירוט מפורט — הפירוט הופך למקור האמת.
+  // מוחקים רק שורות שבהן «בית העסק» הוא שם חברת אשראי ואין חשבון (=חשבונית), לא שורות פירוט (חשבון=חברה).
+  if((db.defaultsV||0) < 9){
+    const CARDS=['ישראכרט','אמריקן אקספרס','אמריקן','אמקס','לאומי קארד','דיינרס','כאל','מקס','ויזה','כרטיסי אשראי','כרטיס אשראי','כ.אשראי','כ. אשראי'];
+    const detIss=(txt)=>{ const t=strv(txt); return CARDS.some(k=>k&&t.includes(k)); };
+    if(Array.isArray(db.transactions)){
+      const hasDetail=db.transactions.some(t=>t.kind==='expense'&&!detIss(t.merchant||t.description)&&detIss(t.account));
+      if(hasDetail) db.transactions=db.transactions.filter(t=>!(t.kind==='expense'&&detIss(t.merchant||t.description)&&!strv(t.account)));
+    }
+    db.defaultsV=9; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
@@ -596,12 +608,16 @@ function reconciliation(){
 }
 function issuerStatusMap(){ return {}; } // נשמר לתאימות קריאות קיימות
 // שורת "חיוב מרוכז" — בית העסק עצמו הוא שם חברת אשראי (סכום כולל חסר-מהות)
-function isAggLump(t){ return !!detectIssuer(t.merchant||t.description); }
-// שורת פירוט אשראי — בית עסק אמיתי שהגיע מתדפיס כרטיס (החשבון הוא חברת אשראי)
-function isCardDetail(t){ return !isAggLump(t) && !!detectIssuer(t.account); }
-// עלות/תזרים = תזרים מזומנים אמיתי: חיובים מרוכזים חודשיים + הוצאות רגילות (משכנתא/העברות/מזומן).
-// פירוט האשראי אינו נספר כאן — הוא הפירוק של החיוב המרוכז, וספירתו תגרום לכפילות.
-function countsInTotal(t){ if(t.kind!=='expense') return true; return !isCardDetail(t); }
+// חיוב מרוכז (חשבונית) = בית העסק הוא שם חברת אשראי ואין חשבון-כרטיס (לא שורת פירוט)
+function isAggLump(t){ return !!detectIssuer(t.merchant||t.description) && !detectIssuer(t.account); }
+// שורת פירוט אשראי — הגיעה מתדפיס כרטיס, ולכן החשבון הוא שם חברת אשראי (גם אם שם בית העסק מכיל «מקס» וכד׳)
+function isCardDetail(t){ return !!detectIssuer(t.account); }
+// האם קיימים חיובי אשראי מרוכזים (חשבוניות) בנתונים
+var _hasCardDetail=null; // var (מונע TDZ כי save() ניגש אליו כבר ב-ensureDefaults שרץ קודם)
+function hasCardDetail(){ if(_hasCardDetail===null) _hasCardDetail=db.transactions.some(t=>t.kind==='expense'&&isCardDetail(t)); return _hasCardDetail; }
+// עלות/תזרים: הפירוט (בית עסק אמיתי) + הוצאות רגילות תמיד נספרים.
+// חיוב מרוכז (חשבונית) לא נספר כשקיים פירוט — הפירוט הוא מקור האמת (מניעת כפילות).
+function countsInTotal(t){ if(t.kind!=='expense') return true; if(isAggLump(t)) return !hasCardDetail(); return true; }
 // פילוח לפי מהות: פירוט האשראי (בית עסק אמיתי) + הוצאות רגילות. חיוב מרוכז אינו נספר (חסר מהות).
 function countsEssence(t){ if(t.kind!=='expense') return true; return !isAggLump(t); }
 
