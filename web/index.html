@@ -992,6 +992,28 @@ function donut(items){
   const legend=items.slice(0,10).map(i=>`<div class="bar-row" style="margin-bottom:6px"><span class="dot" style="background:${esc(i.color)}"></span><div class="bar-label" style="width:auto;flex:1" title="${esc(i.label)}">${esc(i.label)}</div><div class="bar-value tnum" style="width:auto">${money(i.value)} · ${Math.round(i.value/total*100)}%</div></div>`).join('');
   return `<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><svg viewBox="0 0 180 180" style="width:170px;height:170px;flex-shrink:0">${segs}<text x="90" y="86" text-anchor="middle" font-size="12" fill="currentColor" opacity=".55">סה״כ</text><text x="90" y="105" text-anchor="middle" font-size="15" font-weight="800" fill="currentColor">${money(total)}</text></svg><div style="flex:1;min-width:180px">${legend}</div></div>`;
 }
+// גרף רב-קווי (כמה סדרות לאורך חודשים) — RTL: החודש המוקדם מימין
+function multiLineChart(months,series){ if(!months.length||!series.length) return '<div class="empty">אין מספיק נתונים</div>';
+  const W=520,H=230,pad=38; const all=series.flatMap(s=>s.values); const max=Math.max(...all,1); const n=months.length; const bw=(W-pad*2)/Math.max(n,1);
+  const y=v=>H-pad-(v/max)*(H-pad*2); const x=i=>W-pad-bw*(i+0.5);
+  const grid=[0,.5,1].map(f=>{ const yy=H-pad-(f)*(H-pad*2); return `<line x1="${pad}" y1="${yy}" x2="${W-pad}" y2="${yy}" stroke="currentColor" opacity=".08"/><text x="${W-pad+3}" y="${yy+3}" font-size="9" fill="currentColor" opacity=".4">${money(Math.round(max*f))}</text>`; }).join('');
+  const lines=series.map(s=>{ const pts=months.map((m,i)=>`${x(i)},${y(s.values[i]||0)}`).join(' '); const dots=months.map((m,i)=>`<circle cx="${x(i)}" cy="${y(s.values[i]||0)}" r="3" fill="${s.color}"/>`).join(''); return `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2.5"/>${dots}`; }).join('');
+  const labels=months.map((m,i)=>{ const [yy,mm]=m.split('-'); return `<text x="${x(i)}" y="${H-12}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".55">${mm}/${yy.slice(2)}</text>`; }).join('');
+  const legend=`<div class="legend" style="flex-wrap:wrap">${series.map(s=>`<span><span class="dot" style="background:${s.color}"></span> ${esc(s.name)}</span>`).join('')}</div>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%" preserveAspectRatio="xMidYMid meet">${grid}<line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="currentColor" opacity=".2"/>${lines}${labels}</svg>${legend}`;
+}
+// עמודות חודשיות עם ערכים חיוביים/שליליים (למאזן נטו) — ירוק/אדום, RTL
+function vBarChart(data,fmt){ if(!data.length) return '<div class="empty">אין נתונים</div>'; fmt=fmt||money;
+  const W=520,H=220,pad=40; const n=data.length; const bw=(W-pad*2)/Math.max(n,1);
+  const maxAbs=Math.max(...data.map(d=>Math.abs(d.value)),1); const hasNeg=data.some(d=>d.value<0);
+  const zeroY=hasNeg? pad+(H-pad*2)*(maxAbs/(2*maxAbs)) : H-pad; const scale=hasNeg? (H-pad*2)/(2*maxAbs) : (H-pad*2)/maxAbs;
+  const x=i=>W-pad-bw*(i+1)+bw*0.15; const barW=bw*0.7;
+  const bars=data.map((d,i)=>{ const h=Math.abs(d.value)*scale; const yTop=d.value>=0? zeroY-h : zeroY; const col=d.value>=0?'#2f9e6f':'#e0654a';
+    return `<rect x="${x(i)}" y="${yTop}" width="${barW}" height="${Math.max(h,1)}" rx="3" fill="${col}"><title>${esc(d.label||d.m)}: ${fmt(d.value)}</title></rect>`; }).join('');
+  const labels=data.map((d,i)=>{ const [yy,mm]=(d.m||'').split('-'); return `<text x="${x(i)+barW/2}" y="${H-12}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".55">${mm}/${(yy||'').slice(2)}</text>`; }).join('');
+  const vals=data.map((d,i)=>{ const h=Math.abs(d.value)*scale; const yTxt=d.value>=0? zeroY-h-4 : zeroY+h+12; return `<text x="${x(i)+barW/2}" y="${yTxt}" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" opacity=".7">${fmt(Math.round(d.value/1000))+'k'}</text>`; }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%" preserveAspectRatio="xMidYMid meet"><line x1="${pad}" y1="${zeroY}" x2="${W-pad}" y2="${zeroY}" stroke="currentColor" opacity=".2"/>${bars}${vals}${labels}</svg>`;
+}
 
 function catSelectOptions(cats,selId){
   // תדירות שימוש לכל קטגוריה — כדי להציג את הנפוצות קודם; קיבוץ תת-קטגוריות תחת הראשית
@@ -1960,7 +1982,7 @@ views.categories=async()=>{
 
 // ===== Analytics =====
 views.analytics=async()=>{
-  const [rows,cats]=await Promise.all([api('/transactions'+monthParam()),api('/categories')]);
+  const [rows,cats,allRows]=await Promise.all([api('/transactions'+monthParam()),api('/categories'),api('/transactions')]);
   const expCash=rows.filter(t=>t.kind==='expense'&&countsInTotal(t)); // תזרים מזומנים (עלות)
   const exp=rows.filter(t=>t.kind==='expense'&&countsEssence(t));       // מהות (פילוח/סיווג)
   const totalExp=expCash.reduce((s,t)=>s+t.amount,0);
@@ -2013,10 +2035,111 @@ views.analytics=async()=>{
       <div class="panel" data-drill="exp"><h3>פילוח הוצאות מלא</h3>${barsHTML(byCat.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
       <div class="panel" data-drill="inc"><h3>פילוח הכנסות מלא</h3>${barsHTML(byInc.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
     </div>`;
+
+  /* ===================== מגמות עומק ותובנות — כל התקופה ===================== */
+  const isMort=t=>/משכנתא/.test((t.merchant||'')+(t.description||''));
+  const curYM=(()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); })();
+  const A=allRows;
+  const mSet=new Set(A.filter(t=>t.kind==='expense'||t.kind==='income').map(t=>String(t.tx_date).slice(0,7)).filter(s=>s.length===7));
+  const months=[...mSet].sort();
+  const M={}; months.forEach(m=>M[m]={home:0,expense:0,income:0,mort:0,txCount:0,ess:0});
+  A.forEach(t=>{ const m=String(t.tx_date).slice(0,7); if(!M[m])return;
+    if(t.kind==='income'){ M[m].income+=t.amount; return; }
+    if(t.kind!=='expense')return;
+    if(countsEssence(t)&&!isMort(t)) M[m].ess+=t.amount;
+    if(countsInTotal(t)){ M[m].expense+=t.amount; if(isMort(t))M[m].mort+=t.amount; else M[m].home+=t.amount; M[m].txCount++; } });
+  // חודש חלקי = חודש שפירוט האשראי אינו מכסה אותו במלואו (מהחודש של תאריך האשראי האחרון והלאה) או חודש נוכחי/דל-עסקאות
+  const lastCardDate=A.filter(t=>t.kind==='expense'&&isCardDetail(t)).reduce((mx,t)=>String(t.tx_date)>mx?String(t.tx_date):mx,'');
+  const partialOf=(ym)=> ym===curYM || (lastCardDate&&ym>=lastCardDate.slice(0,7)) || M[ym].txCount<20;
+  const complete=months.filter(m=>!partialOf(m));
+  const partialMonths=months.filter(m=>!complete.includes(m));
+  const avg=arr=>arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0;
+  const avgHome=avg(complete.map(m=>M[m].home));
+  const avgInc=avg(complete.map(m=>M[m].income));
+  const avgExp=avg(complete.map(m=>M[m].expense));
+  // חודש שיא/שפל (מתוך חודשים מלאים)
+  const compByHome=complete.slice().sort((a,b)=>M[b].home-M[a].home);
+  const hiM=compByHome[0], loM=compByHome[compByHome.length-1];
+  // שינוי חודש-על-חודש (שני החודשים המלאים האחרונים)
+  const lastTwo=complete.slice(-2); let momPct=null,momFrom,momTo;
+  if(lastTwo.length===2){ momFrom=lastTwo[0]; momTo=lastTwo[1]; const a=M[momFrom].home,b=M[momTo].home; momPct=a>0?Math.round((b-a)/a*100):null; }
+  // שיעור חיסכון (חודשים מלאים)
+  const sumIncC=complete.reduce((s,m)=>s+M[m].income,0), sumExpC=complete.reduce((s,m)=>s+M[m].expense,0);
+  const saveRate=sumIncC>0?Math.round((sumIncC-sumExpC)/sumIncC*100):null;
+  // חיוני מול מותרות (לפי קטגוריה ראשית)
+  const DISC=/פנאי|בילוי|קני|מסעד|אוכל בחוץ|נופש|חופש|גינה|בריכה|בידור|מתנ|ביגוד|אלקטרו|טיול/;
+  const ESS=/משכנתא|מזון|סופר|תשתית|הוצאות בית|חשמל|מים|ארנונ|\bגז\b|בריאות|ביטוח|רכב|תחבורה|דלק|ילד|חינוך|מיס|תקשור|פיננס|העבר/;
+  const bucketOf=n=>DISC.test(n)?'מותרות':ESS.test(n)?'חיוני':'אחר';
+  const essExpAll=A.filter(t=>t.kind==='expense'&&countsEssence(t)&&!isMort(t));
+  const bkt={'חיוני':0,'מותרות':0,'אחר':0}; essExpAll.forEach(t=>{ bkt[bucketOf(t.main_name||'')]+=t.amount; });
+  const bktTot=bkt['חיוני']+bkt['מותרות']+bkt['אחר'];
+  const discShare=bktTot>0?Math.round(bkt['מותרות']/bktTot*100):0;
+  const bucketData=[{label:'חיוני',value:bkt['חיוני'],color:'#0ea5e9'},{label:'מותרות',value:bkt['מותרות'],color:'#f59e0b'},{label:'לא מסווג / אחר',value:bkt['אחר'],color:'#94a3b8'}];
+  // קבוע מול משתנה (זיהוי לפי הופעה חוזרת של בית עסק ברוב החודשים)
+  const merMonths={}, merSum={};
+  essExpAll.forEach(t=>{ const k=(t.merchant||t.description||'—').trim(); const m=String(t.tx_date).slice(0,7); (merMonths[k]=merMonths[k]||new Set()).add(m); merSum[k]=(merSum[k]||0)+t.amount; });
+  const recurThresh=Math.max(2,Math.ceil((complete.length||months.length)*0.6));
+  const fixedMers=Object.keys(merMonths).filter(k=>merMonths[k].size>=recurThresh);
+  const fixedSum=fixedMers.reduce((s,k)=>s+merSum[k],0); const varSum=bktTot-fixedSum;
+  const fixShare=bktTot>0?Math.round(fixedSum/bktTot*100):0;
+  const topFixed=fixedMers.map(k=>({label:k,value:merSum[k],months:merMonths[k].size,color:'#6366f1'})).sort((a,b)=>b.value-a.value).slice(0,10);
+  // בתי עסק יקרים (בודדים)
+  const topMerchInd=Object.keys(merSum).map(k=>({label:k,value:merSum[k],color:'#7c3aed'})).sort((a,b)=>b.value-a.value).slice(0,12);
+  // עסקאות בודדות גדולות
+  const bigTx=essExpAll.slice().sort((a,b)=>b.amount-a.amount).slice(0,10);
+  // הוצאה לפי יום בשבוע
+  const dayNames=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת']; const dSum=Array(7).fill(0),dCnt=Array(7).fill(0);
+  essExpAll.forEach(t=>{ const [y,mo,d]=String(t.tx_date).slice(0,10).split('-').map(Number); if(!y)return; const wd=new Date(y,mo-1,d).getDay(); dSum[wd]+=t.amount; dCnt[wd]++; });
+  const dowData=dayNames.map((nm,i)=>({label:nm,value:Math.round(dSum[i]),color:'#0d9488'}));
+  // מגמת 5 הקטגוריות המובילות לאורך זמן
+  const catTot={}; essExpAll.forEach(t=>{ const n=t.main_name||'ללא סיווג'; catTot[n]=(catTot[n]||0)+t.amount; });
+  const topCatNames=Object.entries(catTot).sort((a,b)=>b[1]-a[1]).slice(0,5).map(e=>e[0]);
+  const lineColors=['#0ea5e9','#f59e0b','#16a34a','#e0654a','#a855f7'];
+  const catMonthly={}; topCatNames.forEach(n=>catMonthly[n]=months.map(()=>0));
+  essExpAll.forEach(t=>{ const n=t.main_name||'ללא סיווג'; if(catMonthly[n]===undefined)return; const mi=months.indexOf(String(t.tx_date).slice(0,7)); if(mi>=0)catMonthly[n][mi]+=t.amount; });
+  const catSeries=topCatNames.map((n,i)=>({name:n,color:lineColors[i%lineColors.length],values:catMonthly[n]}));
+  // סדרות למגמות בית/הכנסה/נטו
+  const homeSeries=[{name:'אחזקת בית',color:'#e0654a',values:months.map(m=>M[m].home)},{name:'הכנסות',color:'#2f9e6f',values:months.map(m=>M[m].income)}];
+  const netData=months.map(m=>({m,value:Math.round(M[m].income-M[m].expense)}));
+
+  // ---- כרטיסי תובנה ----
+  const arrow=p=>p==null?'':(p>0?`<span style="color:var(--red)">▲ ${p}%</span>`:p<0?`<span style="color:var(--green,#2f9e6f)">▼ ${Math.abs(p)}%</span>`:'ללא שינוי');
+  const insights=[];
+  if(avgHome>0) insights.push({ic:'🏡',t:`עלות אחזקת בית ממוצעת: <strong>${money(avgHome)}</strong> לחודש`,s:`על בסיס ${complete.length} חודשים מלאים`});
+  if(avgHome>0) insights.push({ic:'📅',t:`תחזית שנתית: <strong>${money(avgHome*12)}</strong>`,s:'לפי הממוצע החודשי הנוכחי'});
+  if(momPct!=null) insights.push({ic:'🔀',t:`שינוי מ${fmtMonth(momFrom)} ל${fmtMonth(momTo)}: ${arrow(momPct)}`,s:`${money(M[momFrom].home)} ← ${money(M[momTo].home)}`});
+  if(hiM&&loM&&hiM!==loM){ insights.push({ic:'📈',t:`החודש היקר: <strong>${fmtMonth(hiM)}</strong> (${money(M[hiM].home)})`,s:`הזול: ${fmtMonth(loM)} (${money(M[loM].home)})`}); }
+  if(saveRate!=null) insights.push({ic:saveRate>=0?'💚':'⚠️',t:`שיעור חיסכון: <strong>${saveRate}%</strong> מההכנסה`,s:saveRate>=0?`נותרו ${money(sumIncC-sumExpC)} מ${money(sumIncC)}`:`הוצאתם ${money(sumExpC-sumIncC)} מעל ההכנסה`});
+  if(bktTot>0) insights.push({ic:'🛍️',t:`מותרות: <strong>${discShare}%</strong> מההוצאה (${money(bkt['מותרות'])})`,s:`חיוני ${money(bkt['חיוני'])} · ${100-discShare-Math.round(bkt['אחר']/bktTot*100)}%`});
+  if(bktTot>0) insights.push({ic:'🔁',t:`הוצאות קבועות: <strong>${fixShare}%</strong> (${money(fixedSum)})`,s:`משתנות ${money(varSum)} · ${fixedMers.length} בתי עסק חוזרים`});
+  const busiest=dowData.slice().sort((a,b)=>b.value-a.value)[0];
+  if(busiest&&busiest.value>0) insights.push({ic:'🗓️',t:`יום ההוצאה הגדול: <strong>יום ${busiest.label}</strong>`,s:`סה״כ ${money(busiest.value)} לאורך התקופה`});
+  const insightsHTML=insights.map(i=>`<div class="stat-card accent" style="min-width:210px"><div class="label">${i.ic} תובנה</div><div class="value" style="font-size:15px;line-height:1.35;font-weight:600">${i.t}</div><div class="sub">${i.s}</div></div>`).join('');
+
+  const partialNote=partialMonths.length?`<div class="hint" style="margin:2px 0 12px">התובנות והממוצעים מחושבים על <strong>${complete.length} חודשים מלאים</strong>. חודשים חלקיים (${partialMonths.map(fmtMonth).join(', ')}) מוצגים בגרפי המגמה אך אינם משוקללים בממוצעים.</div>`:'';
+
+  const deepHTML=`
+    <div style="margin:26px 0 10px;display:flex;align-items:center;gap:10px"><h2 style="margin:0;font-size:20px">🔬 מגמות עומק ותובנות</h2><span class="hint">כל התקופה · ${months.length} חודשים · אינו מושפע מסינון החודש</span></div>
+    ${partialNote}
+    <div class="stats-grid" style="margin-bottom:18px">${insightsHTML||'<div class="empty">אין מספיק נתונים לתובנות. דרושים לפחות חודש מלא אחד.</div>'}</div>
+    <div class="panels">
+      <div class="panel" style="grid-column:1/-1"><h3>📉 מגמת אחזקת בית מול הכנסות (לפי חודש)</h3>${multiLineChart(months,homeSeries)}</div>
+      <div class="panel" style="grid-column:1/-1"><h3>💰 מאזן חודשי נטו (הכנסות − הוצאות)</h3>${vBarChart(netData)}<div class="hint" style="text-align:center;margin-top:6px">ירוק = עודף · אדום = גירעון</div></div>
+      <div class="panel" style="grid-column:1/-1"><h3>🧭 מגמת 5 הקטגוריות המובילות לאורך זמן</h3>${multiLineChart(months,catSeries)}</div>
+      <div class="panel"><h3>⚖️ חיוני מול מותרות</h3>${donut(bucketData)}<div class="hint" style="margin-top:8px">מותרות = <strong>${discShare}%</strong> מההוצאה. יעד בריא נפוץ: עד ~30%.</div></div>
+      <div class="panel"><h3>🔁 קבוע מול משתנה</h3>${donut([{label:'קבוע / חוזר',value:fixedSum,color:'#6366f1'},{label:'משתנה',value:Math.max(0,varSum),color:'#f59e0b'}])}<div class="hint" style="margin-top:8px">הוצאות קבועות = <strong>${fixShare}%</strong>. אלו המנויים/הוראות הקבע שמזוהים כחוזרים על עצמם.</div></div>
+      <div class="panel"><h3>🗓️ הוצאה ממוצעת לפי יום בשבוע</h3>${barsHTML(dowData,money,false)}</div>
+      <div class="panel" data-drill="merch"><h3>🏬 בתי העסק היקרים ביותר (בודדים)</h3>${barsHTML(topMerchInd,money,true)}</div>
+      <div class="panel"><h3>🔁 הוצאות קבועות מזוהות</h3>${topFixed.length?barsHTML(topFixed.map(f=>({label:f.label+' · '+f.months+' חוד׳',value:f.value,color:f.color})),money,false):'<div class="empty">לא זוהו הוצאות קבועות</div>'}</div>
+      <div class="panel"><h3>💥 10 העסקאות הגדולות</h3><div class="table-wrap"><table style="width:100%"><tbody>${bigTx.map(t=>`<tr><td class="tnum" style="white-space:nowrap">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td><td class="muted" style="font-size:11px">${esc(t.main_name||'ללא סיווג')}</td><td class="tnum amount-neg">${money(t.amount)}</td></tr>`).join('')||'<tr><td class="empty">אין נתונים</td></tr>'}</tbody></table></div></div>
+    </div>`;
+  el.insertAdjacentHTML('beforeend',deepHTML);
+
   el.querySelectorAll('.panel[data-drill] .bar-row[data-barlabel]').forEach(row=>row.onclick=()=>{
     const label=row.dataset.barlabel, kind=row.closest('[data-drill]').dataset.drill;
     let list;
     if(kind==='inc'){ list=incRows.filter(t=>(t.category_name||'ללא סיווג')===label); }
+    else if(kind==='merch'){ list=A.filter(t=>t.kind==='expense'&&countsEssence(t)&&!isMort(t)&&(t.merchant||t.description||'—').trim()===label); }
     else if(/· ללא סיווג$/.test(label)){ const mer=label.replace(/ · ללא סיווג$/,''); list=exp.filter(t=>!t.category_id && (t.merchant||t.description||'—').trim()===mer); }
     else { list=exp.filter(t=>(t.main_name||'ללא סיווג')===label); }
     showTxDrill(`${label} · ${money(list.reduce((s,t)=>s+t.amount,0))}`, list);
