@@ -1988,8 +1988,11 @@ views.analytics=async()=>{
   const totalExp=expCash.reduce((s,t)=>s+t.amount,0);
   const catMap={}; exp.forEach(t=>{ const name=t.main_name||'ללא סיווג'; if(!catMap[name])catMap[name]={label:name,value:0,color:t.main_color||'#94a3b8'}; catMap[name].value+=t.amount; });
   const byCat=Object.values(catMap).sort((a,b)=>b.value-a.value);
-  const srcColors={credit_card:'#6366f1',bank:'#0ea5e9',cash:'#16a34a',manual:'#a855f7'};
-  const srcMap={}; expCash.forEach(t=>{ if(!srcMap[t.source])srcMap[t.source]={label:srcLabel(t.source),value:0,color:srcColors[t.source]||'#94a3b8'}; srcMap[t.source].value+=t.amount; });
+  // מקור אמיתי של ההוצאה: אשראי (שורת פירוט מכרטיס) / מזומן (משיכה) / בנק (הו״ק, העברה, משכנתא, שיק).
+  // לא מסתמכים על שדה source הגולמי כי חלק מהעסקאות שיובאו מהבנק תויגו בטעות כ-credit_card.
+  const outKind=(t)=> isCardDetail(t)?'credit' : (/משיכה|מזומן|כספומט|בנקט/.test((t.merchant||'')+' '+(t.description||''))?'cash':'bank');
+  const srcMeta={credit:{label:'💳 כרטיס אשראי',color:'#6366f1'},bank:{label:'🏦 חשבון בנק (הו״ק/העברות/משכנתא)',color:'#0ea5e9'},cash:{label:'💵 מזומן',color:'#16a34a'}};
+  const srcMap={}; expCash.forEach(t=>{ const k=outKind(t); if(!srcMap[k])srcMap[k]={label:srcMeta[k].label,value:0,color:srcMeta[k].color}; srcMap[k].value+=t.amount; });
   const bySrc=Object.values(srcMap).sort((a,b)=>b.value-a.value);
   // משכנתא + חיובים מרוכזים שטרם פורטו (מסבירים את הפער בין תזרים לפילוח)
   const mortSum=expCash.filter(t=>/משכנתא/.test((t.merchant||'')+(t.description||''))).reduce((s,t)=>s+t.amount,0);
@@ -2029,10 +2032,10 @@ views.analytics=async()=>{
     <div class="panel" style="margin-bottom:18px"><h3>🎯 תקציב מול ביצוע ${state.month?'(בחודש הנבחר)':'(בחרו חודש להשוואה מדויקת)'}</h3>${budgetHTML}</div>
     <div class="panels">
       <div class="panel"><h3>הוצאות לפי מהות (קטגוריה)</h3>${donut(byCat)}</div>
-      <div class="panel"><h3>הכנסות לפי מהות</h3>${donut(byInc)}</div>
+      <div class="panel" data-drill="exp"><h3>פילוח הוצאות מלא</h3>${barsHTML(byCat.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
       <div class="panel"><h3>הוצאות לפי מקור (אשראי / בנק / מזומן)</h3>${donut(bySrc)}</div>
       <div class="panel" data-drill="exp"><h3>הכי הרבה הוצאתי על… (לפי קטגוריה)</h3>${barsHTML(topMerch,money,true)}</div>
-      <div class="panel" data-drill="exp"><h3>פילוח הוצאות מלא</h3>${barsHTML(byCat.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
+      <div class="panel"><h3>הכנסות לפי מהות</h3>${donut(byInc)}</div>
       <div class="panel" data-drill="inc"><h3>פילוח הכנסות מלא</h3>${barsHTML(byInc.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
     </div>`;
 
@@ -2101,6 +2104,27 @@ views.analytics=async()=>{
   // סדרות למגמות בית/הכנסה/נטו
   const homeSeries=[{name:'אחזקת בית',color:'#e0654a',values:months.map(m=>M[m].home)},{name:'הכנסות',color:'#2f9e6f',values:months.map(m=>M[m].income)}];
   const netData=months.map(m=>({m,value:Math.round(M[m].income-M[m].expense)}));
+  // ---- פירוט חודשי לצורך ניתוח מילולי: קטגוריה מובילה, מותרות, מקור ----
+  const mCat={},mBkt={},mSrc={}; months.forEach(m=>{ mCat[m]={}; mBkt[m]={disc:0,tot:0}; mSrc[m]={credit:0,bank:0,cash:0}; });
+  const outKindD=(t)=> isCardDetail(t)?'credit':(/משיכה|מזומן|כספומט|בנקט/.test((t.merchant||'')+' '+(t.description||''))?'cash':'bank');
+  A.forEach(t=>{ if(t.kind!=='expense'||!countsInTotal(t))return; const m=String(t.tx_date).slice(0,7); if(!mSrc[m])return; mSrc[m][outKindD(t)]+=t.amount; });
+  essExpAll.forEach(t=>{ const m=String(t.tx_date).slice(0,7); if(!mCat[m])return; const n=t.main_name||'ללא סיווג'; mCat[m][n]=(mCat[m][n]||0)+t.amount; if(bucketOf(t.main_name||'')==='מותרות')mBkt[m].disc+=t.amount; mBkt[m].tot+=t.amount; });
+  // ניתוח מילולי לכל חודש (מהחדש לישן)
+  const narr=months.slice().reverse().filter(m=>M[m].txCount>=3).map(m=>{
+    const idx=months.indexOf(m); const prevM=months.slice(0,idx).reverse().find(x=>M[x].txCount>=3);
+    const top=Object.entries(mCat[m]).sort((a,b)=>b[1]-a[1])[0];
+    const disc=mBkt[m].tot>0?Math.round(mBkt[m].disc/mBkt[m].tot*100):0;
+    const net=M[m].income-M[m].expense;
+    const srcParts=Object.entries(mSrc[m]).filter(([k,v])=>v>0).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({credit:'אשראי',bank:'בנק',cash:'מזומן'}[k]+' '+money(v)));
+    let mom=''; if(prevM&&M[prevM].home>0){ const p=Math.round((M[m].home-M[prevM].home)/M[prevM].home*100); mom= p===0?', ללא שינוי מהחודש הקודם':(p>0?`, <span style="color:var(--red)">עלייה של ${p}%</span> מ${fmtMonth(prevM)}`:`, <span style="color:var(--green,#2f9e6f)">ירידה של ${Math.abs(p)}%</span> מ${fmtMonth(prevM)}`); }
+    const partial=partialOf(m);
+    const txt=`הוצאתם על אחזקת הבית <strong>${money(M[m].home)}</strong>${mom}. ` +
+      (top?`הקטגוריה הגדולה הייתה <strong>${esc(top[0])}</strong> (${money(top[1])})${mBkt[m].tot>0?`, ומותרות היוו <strong>${disc}%</strong> מההוצאה`:''}. `:'') +
+      (srcParts.length?`סך ההוצאה החודשית${M[m].mort>0?' (כולל משכנתא)':''} עמד על <strong>${money(M[m].expense)}</strong>, ומקורותיה: ${srcParts.join(' · ')}. `:'') +
+      `ההכנסות עמדו על ${money(M[m].income)}, כך שהמאזן החודשי ${net>=0?`נותר <span style="color:var(--green,#2f9e6f)">בעודף של ${money(net)}</span>`:`היה <span style="color:var(--red)">בגירעון של ${money(Math.abs(net))}</span>`}.` +
+      (partial?` <span class="pill status-soon" style="padding:1px 7px">⏳ חודש חלקי — ייתכן שחסר פירוט אשראי, המספרים צפויים לעלות</span>`:'');
+    return `<div style="padding:12px 2px;border-bottom:1px solid var(--border)"><div style="font-size:15px;font-weight:800;margin-bottom:4px">${fmtMonth(m)}</div><div style="line-height:1.6">${txt}</div></div>`;
+  }).join('');
 
   // ---- כרטיסי תובנה ----
   const arrow=p=>p==null?'':(p>0?`<span style="color:var(--red)">▲ ${p}%</span>`:p<0?`<span style="color:var(--green,#2f9e6f)">▼ ${Math.abs(p)}%</span>`:'ללא שינוי');
@@ -2132,6 +2156,7 @@ views.analytics=async()=>{
       <div class="panel" data-drill="merch"><h3>🏬 בתי העסק היקרים ביותר (בודדים)</h3>${barsHTML(topMerchInd,money,true)}</div>
       <div class="panel"><h3>🔁 הוצאות קבועות מזוהות</h3>${topFixed.length?barsHTML(topFixed.map(f=>({label:f.label+' · '+f.months+' חוד׳',value:f.value,color:f.color})),money,false):'<div class="empty">לא זוהו הוצאות קבועות</div>'}</div>
       <div class="panel"><h3>💥 10 העסקאות הגדולות</h3><div class="table-wrap"><table style="width:100%"><tbody>${bigTx.map(t=>`<tr><td class="tnum" style="white-space:nowrap">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td><td class="muted" style="font-size:11px">${esc(t.main_name||'ללא סיווג')}</td><td class="tnum amount-neg">${money(t.amount)}</td></tr>`).join('')||'<tr><td class="empty">אין נתונים</td></tr>'}</tbody></table></div></div>
+      <div class="panel" style="grid-column:1/-1"><h3>📝 ניתוח חודשי מילולי</h3><div class="hint" style="margin-bottom:6px">סיכום מילולי אוטומטי לכל חודש — מה קרה, מה השתנה, ומהיכן יצא הכסף.</div>${narr||'<div class="empty">אין מספיק נתונים לניתוח חודשי.</div>'}</div>
     </div>`;
   el.insertAdjacentHTML('beforeend',deepHTML);
 
