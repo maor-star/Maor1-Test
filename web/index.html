@@ -1076,7 +1076,7 @@ views.dashboard=async()=>{
     </div>`:''}
     <div class="panels">
       <div class="panel"><h3>מגמת עלות אחזקת הבית (6 חודשים)</h3><div id="trend"></div></div>
-      <div class="panel"><h3>עלות הבית לפי קטגוריה</h3><div>${barsHTML(d.byCategory.map(c=>({label:c.name,value:c.total,color:c.color})),money)}</div></div>
+      <div class="panel" data-drill="homecat"><h3>עלות הבית לפי קטגוריה</h3><div>${barsHTML(d.byCategory.map(c=>({label:c.name,value:c.total,color:c.color})),money,true)}</div></div>
       <div class="panel"><h3>🛠️ תחזוקה קרובה</h3>${d.upcomingMaintenance.length?d.upcomingMaintenance.map(m=>`<div class="bar-row" style="justify-content:space-between"><div><strong>${esc(m.name)}</strong> <span class="muted">${esc(m.area||m.system)}</span></div>${statusPill(m.days_left)}</div>`).join(''):'<div class="empty">אין תחזוקה קרובה 🎉</div>'}</div>
       <div class="panel"><h3>📜 אחריות שעומדת לפוג</h3>${d.expiringWarranties.length?d.expiringWarranties.map(w=>`<div class="bar-row" style="justify-content:space-between"><div><strong>${esc(w.item_name)}</strong> <span class="muted">${esc(w.brand||'')}</span></div>${statusPill(w.days_left,{soon:90})}</div>`).join(''):'<div class="empty">אין אחריות שעומדת לפוג</div>'}</div>
     </div>`;
@@ -1092,6 +1092,14 @@ views.dashboard=async()=>{
   chips.forEach(c=>{ const b=document.createElement('button'); b.className='asst-chip'; b.textContent=c; b.onclick=()=>ask(c); chipsBox.appendChild(b); });
   sendBtn.onclick=()=>ask(input.value);
   input.onkeydown=(e)=>{ if(e.key==='Enter') ask(input.value); };
+  // ===== צלילה לעסקאות שבתוך קטגוריה (זכוכית מגדלת) =====
+  const dashRows=await api('/transactions'+monthParam());
+  const isMortD=t=>/משכנתא/.test((t.merchant||'')+(t.description||'')) || t.main_name===MORTGAGE_NAME || t.category_name===MORTGAGE_NAME;
+  el.querySelectorAll('.panel[data-drill="homecat"] .bar-row[data-barlabel]').forEach(row=>row.onclick=()=>{
+    const label=row.dataset.barlabel;
+    const list=dashRows.filter(t=>t.kind==='expense'&&countsEssence(t)&&!isMortD(t)&&(t.main_name||'ללא סיווג')===label);
+    showTxDrill(`${label} · ${money(list.reduce((s,t)=>s+t.amount,0))}`, list);
+  });
   return el;
 };
 function barsHTML(items,fmt,clickable){ if(!items.length) return '<div class="empty">אין נתונים</div>'; const max=Math.max(...items.map(i=>i.value),1);
