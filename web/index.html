@@ -318,6 +318,7 @@ code{background:var(--chip); padding:2px 7px; border-radius:6px; font-size:13px;
       <a data-view="review"><span class="ico">🏷️</span> <span>סיווג עסקאות</span></a>
       <a data-view="import"><span class="ico">📥</span> <span>ייבוא תדפיסים</span></a>
       <a data-view="monthly"><span class="ico">📅</span> <span>לפי חודש</span></a>
+      <a data-view="balance"><span class="ico">🧮</span> <span>מאזן והצלבה</span></a>
       <a data-view="reconcile"><span class="ico">✅</span> <span>השלמות אשראי</span></a>
       <a data-view="recurring"><span class="ico">🔁</span> <span>הוצאות קבועות</span></a>
       <a data-view="maintenance"><span class="ico">🛠️</span> <span>תחזוקה</span></a>
@@ -973,10 +974,21 @@ function donut(items){
 }
 
 function catSelectOptions(cats,selId){
-  const exp=cats.filter(c=>c.kind==='expense'), inc=cats.filter(c=>c.kind==='income');
-  return `<option value="">🔴 לא מסווג</option>`+
-    `<optgroup label="הוצאות">`+exp.map(c=>`<option value="${c.id}" ${c.id==selId?'selected':''}>${esc(c.name)}</option>`).join('')+`</optgroup>`+
-    `<optgroup label="הכנסות">`+inc.map(c=>`<option value="${c.id}" ${c.id==selId?'selected':''}>${esc(c.name)}</option>`).join('')+`</optgroup>`;
+  // תדירות שימוש לכל קטגוריה — כדי להציג את הנפוצות קודם; קיבוץ תת-קטגוריות תחת הראשית
+  const usage={}; db.transactions.forEach(t=>{ if(t.category_id) usage[t.category_id]=(usage[t.category_id]||0)+1; });
+  const subUse=(mid)=>cats.filter(c=>c.parent_id==mid).reduce((s,c)=>s+(usage[c.id]||0),0);
+  const mainUse=(mc)=>(usage[mc.id]||0)+subUse(mc.id);
+  const kindBlock=(kind,label)=>{
+    const mains=cats.filter(c=>c.kind===kind&&!c.parent_id).sort((a,b)=>mainUse(b)-mainUse(a)||strv(a.name).localeCompare(strv(b.name),'he'));
+    if(!mains.length) return '';
+    const inner=mains.map(mc=>{
+      const subs=cats.filter(c=>c.parent_id==mc.id).sort((a,b)=>(usage[b.id]||0)-(usage[a.id]||0)||strv(a.name).localeCompare(strv(b.name),'he'));
+      return `<option value="${mc.id}" ${mc.id==selId?'selected':''}>${esc(mc.name)}</option>`+
+        subs.map(s=>`<option value="${s.id}" ${s.id==selId?'selected':''}>&nbsp;&nbsp;↳ ${esc(s.name)}</option>`).join('');
+    }).join('');
+    return `<optgroup label="${esc(label)}">${inner}</optgroup>`;
+  };
+  return `<option value="">🔴 לא מסווג</option>`+kindBlock('expense','הוצאות (הנפוצות ראשונות)')+kindBlock('income','הכנסות');
 }
 views.transactions=async()=>{
   const el=document.createElement('div');
@@ -2160,8 +2172,58 @@ views.monthly=async()=>{
   return el;
 };
 
+// ===== מאזן והצלבה חודשית: יתרת פתיחה + הכנסות − הוצאות = יתרת סגירה =====
+views.balance=async()=>{
+  const rows=await api('/transactions');
+  const curYM=new Date().toISOString().slice(0,7);
+  const months={};
+  const M=(ym)=>(months[ym]=months[ym]||{ym,income:0,exp:0,bySrc:{}});
+  // סיווג ההוצאה למקור אמיתי: קניית אשראי (חשבון=חברה) / משיכת מזומן / שאר תנועות בנק
+  const outKind=(t)=> isCardDetail(t)?'credit' : (/משיכה|מזומן|כספומט|בנקט/.test((t.merchant||'')+' '+(t.description||''))?'cash':'bank');
+  rows.forEach(t=>{ const ym=String(t.tx_date).slice(0,7); if(ym.length!==7||ym>curYM) return; const mm=M(ym);
+    if(t.kind==='income'){ mm.income+=t.amount; return; }
+    if(countsInTotal(t)){ mm.exp+=t.amount; const k=outKind(t); mm.bySrc[k]=(mm.bySrc[k]||0)+t.amount; } });
+  const list=Object.values(months).sort((a,b)=>a.ym.localeCompare(b.ym)); // ישן → חדש (לצורך יתרה מתגלגלת)
+  const opening0=numv(db.openingBalance)||0;
+  let bal=opening0; const data=list.map(m=>{ const open=bal; const net=m.income-m.exp; const close=open+net; bal=close;
+    const credit=m.bySrc['credit']||0, bank=m.bySrc['bank']||0, cash=m.bySrc['cash']||0;
+    return {...m,open,net,close,credit,bank,cash}; });
+  const sum=(k)=>data.reduce((s,m)=>s+m[k],0);
+  const el=document.createElement('div');
+  el.innerHTML=`
+    <div class="card" style="margin-bottom:16px"><div class="card-header"><h2>🧮 מאזן והצלבה חודשית</h2></div>
+      <div style="padding:6px 20px 16px">
+        <p class="hint" style="margin-bottom:12px">בכל חודש: <strong>יתרת פתיחה + הכנסות − הוצאות = יתרת סגירה</strong> — והסגירה הופכת לפתיחה של החודש הבא. כך רואים שכל היתרות «נסגרות», וההוצאות מסוכמות לפי מקור: <strong>אשראי / בנק / מזומן</strong>.</p>
+        <div class="field" style="max-width:300px"><label>יתרת פתיחה התחלתית בבנק (₪)</label><input id="open-bal" type="number" step="0.01" value="${opening0}" /><div class="hint">הזינו את יתרת חשבון הבנק בתחילת התקופה — כדי שהיתרות יהיו אמיתיות.</div></div>
+      </div></div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>חודש</th><th>יתרת פתיחה</th><th>+ הכנסות</th><th>− אשראי</th><th>− בנק</th><th>− מזומן</th><th>= תזרים נטו</th><th>יתרת סגירה</th></tr></thead>
+      <tbody>${data.map(m=>`<tr>
+        <td><strong>${fmtMonth(m.ym)}</strong></td>
+        <td class="tnum">${money(m.open)}</td>
+        <td class="tnum amount-pos">${m.income?money(m.income):'—'}</td>
+        <td class="tnum amount-neg">${m.credit?money(m.credit):'—'}</td>
+        <td class="tnum amount-neg">${m.bank?money(m.bank):'—'}</td>
+        <td class="tnum amount-neg">${m.cash?money(m.cash):'—'}</td>
+        <td class="tnum ${m.net>=0?'amount-pos':'amount-neg'}">${m.net>=0?'+':'−'}${money(Math.abs(m.net))}</td>
+        <td class="tnum" style="font-weight:800;${m.close<0?'color:var(--red)':''}">${money(m.close)}</td>
+      </tr>`).join('')||'<tr><td colspan="8"><div class="empty">אין עדיין עסקאות.</div></td></tr>'}</tbody>
+      ${data.length?`<tfoot><tr style="font-weight:800;background:var(--surface-2)">
+        <td>סה״כ תקופה</td><td class="tnum">${money(opening0)}</td>
+        <td class="tnum amount-pos">${money(sum('income'))}</td>
+        <td class="tnum amount-neg">${money(sum('credit'))}</td>
+        <td class="tnum amount-neg">${money(sum('bank'))}</td>
+        <td class="tnum amount-neg">${money(sum('cash'))}</td>
+        <td class="tnum ${sum('net')>=0?'amount-pos':'amount-neg'}">${sum('net')>=0?'+':'−'}${money(Math.abs(sum('net')))}</td>
+        <td class="tnum">${money(data[data.length-1].close)}</td></tr></tfoot>`:''}
+    </table></div></div>
+    <p class="hintbar" style="margin-top:14px">💡 «יתרת סגירה» היא יתרת הבנק המשוערת בסוף כל חודש (לפי כל ההכנסות וההוצאות שנקלטו). אם היא לא תואמת לדף הבנק שלכם — סימן שחסר תדפיס או עסקה, וכדאי לייבא את מה שחסר.</p>`;
+  const inp=el.querySelector('#open-bal'); if(inp) inp.onchange=()=>{ db.openingBalance=numv(inp.value); save(); toast('יתרת פתיחה עודכנה'); render(); };
+  return el;
+};
+
 /* ============================ Router ============================ */
-const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',transactions:'עסקאות',review:'סיווג עסקאות',import:'ייבוא תדפיסים',monthly:'לפי חודש',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',documents:'ארכיון מסמכים',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי'};
+const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',transactions:'עסקאות',review:'סיווג עסקאות',import:'ייבוא תדפיסים',monthly:'לפי חודש',balance:'מאזן והצלבה',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',documents:'ארכיון מסמכים',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי'};
 function currentView(){ const hash=location.hash.replace('#/','')||'dashboard'; return views[hash]?hash:'dashboard'; }
 async function render(){
   const name=currentView();
