@@ -1051,9 +1051,12 @@ function homeAssistant(qRaw){
   if(/החודש|חודש נוכחי|החודש הזה|this month/.test(t)) scopeYM=curYM;
   else if(/חודש שעבר|חודש קודם|last month/.test(t)){ const idx=months.indexOf(curYM); scopeYM = idx>0?months[idx-1]:months[months.length-1]; }
   else { const mi=HE_MONTHS.findIndex(nm=>t.includes(nm)); if(mi>=0){ const cand=months.filter(m=>+m.slice(5,7)===mi+1).sort(); if(cand.length) scopeYM=cand[cand.length-1]; } }
-  const wantAvg=(/ממוצע|בממוצע|חודשי|בחודש טיפוסי/.test(t)||/לחודש/.test(t))&&!scopeYM;
+  // ברירת מחדל: ממוצע חודשי. רק אם ביקשו במפורש «סך הכל / מצטבר / כל התקופה» או חודש ספציפי — לא ממוצע.
+  const wantTotal=/סך הכל|בסך הכל|סה"כ|סה״כ|סהכ|בכל התקופה|כל התקופה|במצטבר|מצטבר|בסך|\btotal\b/.test(t);
+  const wantAvg=!scopeYM&&!wantTotal;
   const scope=x=> !scopeYM || ym(x)===scopeYM;
-  const scopeLabel = scopeYM? ('ב'+fmtMonth(scopeYM)) : (wantAvg? 'בממוצע לחודש' : 'בסך הכל');
+  const scopeLabel = scopeYM? ('ב'+fmtMonth(scopeYM)) : (wantAvg? 'בממוצע חודשי' : 'בסך הכל (כל התקופה)');
+  const pointLabel = scopeYM? ('ב'+fmtMonth(scopeYM)) : 'בכל התקופה'; // לעובדות בודדות (הכי גדול / כמה עסקאות)
   const exp=expAll.filter(scope), inc=incAll.filter(scope);
   // ---------- זיהוי קטגוריה ----------
   const SYN={'אוכל בחוץ':'מזון','אוכל':'מזון','סופר':'מזון','מכולת':'מזון','מסעדות':'מזון','מסעד':'מזון','wolt':'מזון','וולט':'מזון','דלק':'רכב ותחבורה','רכב':'רכב ותחבורה','תחבורה':'רכב ותחבורה','חניה':'רכב ותחבורה','אוטו':'רכב ותחבורה','ביטוח':'ביטוחים','ביטוחים':'ביטוחים','בריאות':'בריאות','רופא':'בריאות','תרופ':'בריאות','שיניים':'בריאות','בילויים':'פנאי, בילויים וקניות','בילוי':'פנאי, בילויים וקניות','קניות':'פנאי, בילויים וקניות','פנאי':'פנאי, בילויים וקניות','ביגוד':'פנאי, בילויים וקניות','בגד':'פנאי, בילויים וקניות','חשמל':'הוצאות בית ותשתיות','מים':'הוצאות בית ותשתיות','ארנונ':'הוצאות בית ותשתיות','תשתית':'הוצאות בית ותשתיות','אינטרנט':'הוצאות בית ותשתיות','תקשור':'הוצאות בית ותשתיות','ועד בית':'הוצאות בית ותשתיות','גינ':'גינה ובריכה','בריכ':'גינה ובריכה','גנן':'גינה ובריכה','ילד':'ילדים וחינוך','חינוך':'ילדים וחינוך','חוג':'ילדים וחינוך','משכנת':'משכנתא','מיסים':'מיסים קבועים','ארנונה':'הוצאות בית ותשתיות','העבר':'פיננסים והעברות','פיננס':'פיננסים והעברות'};
@@ -1087,6 +1090,10 @@ function homeAssistant(qRaw){
   // דירוג קטגוריות בטווח
   const byCat={}; exp.forEach(x=>{ const n=mainNameOf(x)||'ללא סיווג'; byCat[n]=(byCat[n]||0)+x.amount; });
   const catRank=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  // דירוג לפי ממוצע חודשי (על בסיס חודשים מלאים) — לשימוש כשברירת המחדל היא ממוצע
+  const byCatC={}; expAll.filter(x=>complete.includes(ym(x))).forEach(x=>{ const n=mainNameOf(x)||'ללא סיווג'; byCatC[n]=(byCatC[n]||0)+x.amount; });
+  const rankAvg=Object.entries(byCatC).map(([n,v])=>[n,v/(complete.length||1)]).sort((a,b)=>b[1]-a[1]);
+  const rank = wantAvg? rankAvg : catRank;
   const totExp=sum(exp), totInc=sum(inc);
   const avgMonthlyOf=(pred)=>{ if(!complete.length) return 0; return expAll.filter(x=>complete.includes(ym(x))&&pred(x)).reduce((a,x)=>a+x.amount,0)/complete.length; };
   const topMerchOf=(rows,n=3)=>Object.entries(rows.reduce((o,x)=>{const k=nameOf(x);o[k]=(o[k]||0)+x.amount;return o;},{})).sort((a,b)=>b[1]-a[1]).slice(0,n);
@@ -1107,13 +1114,13 @@ function homeAssistant(qRaw){
     const rows=exp.filter(catMatchF(cat)); const s=sum(rows);
     const allRows=expAll.filter(catMatchF(cat));
     if(!allRows.length) return `לא מצאתי הוצאות בקטגוריה «${esc(cat.name)}».`;
-    if(wantAvg){ const av=avgMonthlyOf(catMatchF(cat)); return `בממוצע אתם מוציאים <strong>${money2(av)}</strong> על <strong>${esc(cat.name)}</strong> בחודש (על בסיס ${complete.length} חודשים מלאים · תחזית שנתית ${money2(av*12)}).`; }
-    if(askBiggest){ const b=allRows.filter(scope).slice().sort((a,b)=>b.amount-a.amount)[0]||allRows.slice().sort((a,b)=>b.amount-a.amount)[0]; return `ההוצאה הכי גדולה על <strong>${esc(cat.name)}</strong> ${scopeLabel}: <strong>${esc(nameOf(b))}</strong> — ${money2(b.amount)} (${fmtDate(b.tx_date)}).`; }
-    if(askCount) return `יש <strong>${rows.length}</strong> עסקאות בקטגוריה <strong>${esc(cat.name)}</strong> ${scopeLabel}.`;
-    if(askCountMerch){ const nm=new Set(rows.map(nameOf)).size; return `בקטגוריה <strong>${esc(cat.name)}</strong> יש <strong>${nm}</strong> בתי עסק שונים ${scopeLabel}.`; }
+    if(askBiggest){ const b=allRows.filter(scope).slice().sort((a,b)=>b.amount-a.amount)[0]||allRows.slice().sort((a,b)=>b.amount-a.amount)[0]; return `ההוצאה הכי גדולה על <strong>${esc(cat.name)}</strong> ${pointLabel}: <strong>${esc(nameOf(b))}</strong> — ${money2(b.amount)} (${fmtDate(b.tx_date)}).`; }
+    if(askCount) return `יש <strong>${rows.length}</strong> עסקאות בקטגוריה <strong>${esc(cat.name)}</strong> ${pointLabel}.`;
+    if(askCountMerch){ const nm=new Set(rows.map(nameOf)).size; return `בקטגוריה <strong>${esc(cat.name)}</strong> יש <strong>${nm}</strong> בתי עסק שונים ${pointLabel}.`; }
     if(askPct){ const p=pctBase>0?Math.round(s/pctBase*100):0; return `<strong>${esc(cat.name)}</strong> מהווה <strong>${p}%</strong> מההוצאות ${scopeLabel} (${money2(s)} מתוך ${money2(pctBase)}).`; }
-    if(askTopMerch||askTopCat){ const tm=topMerchOf(rows,5); return `הכי הרבה על <strong>${esc(cat.name)}</strong> ${scopeLabel} הוצאתם ב־${tm.map(([k,v])=>`${esc(k)} (${money2(v)})`).join(' · ')}.`; }
+    if(askTopMerch||askTopCat){ const tm=topMerchOf(rows,5); return `הכי הרבה על <strong>${esc(cat.name)}</strong>${wantAvg?'':' '+scopeLabel} הוצאתם ב־${tm.map(([k,v])=>`${esc(k)} (${money2(v)})`).join(' · ')}.`; }
     if(askTrend){ const cm=complete.slice(-2); if(cm.length===2){ const a=sum(allRows.filter(x=>ym(x)===cm[0])),b=sum(allRows.filter(x=>ym(x)===cm[1])); const d=a>0?Math.round((b-a)/a*100):null; return `${esc(cat.name)}: ${money2(a)} ב${fmtMonth(cm[0])} → ${money2(b)} ב${fmtMonth(cm[1])}${d!=null?` (${d>0?'עלייה':'ירידה'} ${Math.abs(d)}%)`:''}.`; } }
+    if(wantAvg){ const av=avgMonthlyOf(catMatchF(cat)); const tm=topMerchOf(allRows.filter(x=>complete.includes(ym(x))),3); return `בממוצע אתם מוציאים <strong>${money2(av)}</strong> על <strong>${esc(cat.name)}</strong> בחודש (על בסיס ${complete.length} חודשים מלאים · תחזית שנתית ${money2(av*12)}).${tm.length?`<br>הגדולים: ${tm.map(([k,v])=>esc(k)).join(' · ')}.`:''}`; }
     const tm=topMerchOf(rows,3);
     return `על <strong>${esc(cat.name)}</strong> הוצאתם <strong>${money2(s)}</strong> ${scopeLabel} (${rows.length} עסקאות).${tm.length?`<br>הגדולים: ${tm.map(([k,v])=>`${esc(k)} ${money2(v)}`).join(' · ')}.`:''}`;
   }
@@ -1122,28 +1129,31 @@ function homeAssistant(qRaw){
   if(merchGroup){
     const rows=exp.filter(x=>merchGroup.includes(nameOf(x))); const s=sum(rows);
     if(!rows.length) return `לא מצאתי הוצאות שמתאימות ל־«${esc(merchName)}» ${scopeLabel}.`;
-    if(wantAvg){ const av=avgMonthlyOf(x=>merchGroup.includes(nameOf(x))); return `ב־<strong>${esc(merchGroup[0])}</strong> אתם מוציאים בממוצע <strong>${money2(av)}</strong> בחודש.`; }
     const disp=merchGroup.length>1?`${esc(merchName)} (${merchGroup.length} בתי עסק)`:esc(merchGroup[0]);
+    if(askCount) return `יש <strong>${rows.length}</strong> עסקאות ב־<strong>${disp}</strong> ${pointLabel}.`;
+    if(wantAvg){ const av=avgMonthlyOf(x=>merchGroup.includes(nameOf(x))); return `ב־<strong>${disp}</strong> אתם מוציאים בממוצע <strong>${money2(av)}</strong> בחודש.`; }
     return `ב־<strong>${disp}</strong> הוצאתם <strong>${money2(s)}</strong> ${scopeLabel} (${rows.length} עסקאות).`;
   }
 
   // ===== שאלות כלליות =====
   if(askIncome){ if(wantAvg){ const av=complete.length?complete.map(m=>sum(incAll.filter(x=>ym(x)===m))).reduce((a,b)=>a+b,0)/complete.length:0; return `ההכנסה החודשית הממוצעת (ללא שכירות) היא <strong>${money2(av)}</strong>.`; } return `ההכנסות ${scopeLabel} (ללא שכירות) הן <strong>${money2(totInc)}</strong> (${inc.length} תנועות).`; }
   if(askSavings){ if(wantAvg){ const ai=complete.map(m=>sum(incAll.filter(x=>ym(x)===m))).reduce((a,b)=>a+b,0)/(complete.length||1); const ae=complete.map(m=>sum(expAll.filter(x=>ym(x)===m))).reduce((a,b)=>a+b,0)/(complete.length||1); const nn=ai-ae; return `בחודש ממוצע נותרים <strong>${money2(nn)}</strong> (הכנסה ${money2(ai)} − הוצאה ${money2(ae)})${ai>0?` · שיעור חיסכון ${Math.round(nn/ai*100)}%`:''}.`; } const net=totInc-totExp; return `${scopeLabel}: הכנסות <strong>${money2(totInc)}</strong>, הוצאות אחזקת בית <strong>${money2(totExp)}</strong> → ${net>=0?`עודף של <strong>${money2(net)}</strong> 💚`:`גירעון של <strong>${money2(-net)}</strong> ⚠️`}${totInc>0?` (שיעור חיסכון ${Math.round(net/totInc*100)}%)`:''}.`; }
-  if(askDisc){ const DISC=/פנאי|בילוי|קני|מסעד|גינה|בריכה|בידור|מתנ|ביגוד|טיול/; const disc=sum(exp.filter(x=>DISC.test(mainNameOf(x)||''))); return `הוצאות ה«מותרות» ${scopeLabel} הן <strong>${money2(disc)}</strong> — כ־<strong>${totExp>0?Math.round(disc/totExp*100):0}%</strong> מההוצאה. יעד בריא נפוץ: עד ~30%.`; }
+  if(askDisc){ const DISC=/פנאי|בילוי|קני|מסעד|גינה|בריכה|בידור|מתנ|ביגוד|טיול/; const pred=x=>DISC.test(mainNameOf(x)||''); const discTot=sum(exp.filter(pred)); const disc= wantAvg? avgMonthlyOf(pred) : discTot; const base= wantAvg? avgMonthlyOf(()=>true) : totExp; return `הוצאות ה«מותרות» ${scopeLabel} הן <strong>${money2(disc)}</strong> — כ־<strong>${base>0?Math.round(disc/base*100):0}%</strong> מההוצאה. יעד בריא נפוץ: עד ~30%.`; }
   if(askFixed){ const isTransfer=x=>{ const s=(x.merchant||'')+' '+(x.description||''); return /העבר|העב['׳]|משיכ|מזומן|כספומט|בנקט|שיק|פקדון|הפקד|פנקס|ע\.מפעולות|הקצאת אשראי|עמ['׳]|פייבוקס|paybox|זיכוי/i.test(s)||isBitTransfer(s); };
     const merMonths={},merSum={}; expAll.filter(x=>!isTransfer(x)).forEach(x=>{const k=nameOf(x);(merMonths[k]=merMonths[k]||new Set()).add(ym(x));merSum[k]=(merSum[k]||0)+x.amount;}); const th=Math.max(2,Math.ceil((complete.length||months.length)*0.6)); const fixed=Object.keys(merMonths).filter(k=>merMonths[k].size>=th).sort((a,b)=>merSum[b]-merSum[a]); const fs=fixed.reduce((s,k)=>s+merSum[k],0); return `זיהיתי <strong>${fixed.length}</strong> הוצאות קבועות/מנויים חוזרים בסך <strong>${money2(fs)}</strong> על פני התקופה.<br>הגדולים: ${fixed.slice(0,5).map(k=>`${esc(k)} ${money2(merSum[k])}`).join(' · ')}.`; }
   if(askBudget){ const bcats=cats.filter(c=>c.kind==='expense'&&c.monthly_budget>0&&!c.parent_id); if(!bcats.length) return 'לא הוגדרו תקציבים עדיין. אפשר להגדיר תקציב חודשי לכל קטגוריה בעמוד «גרפים וניתוח» → «הגדרת תקציבים».'; const mm=scopeYM||complete[complete.length-1]||months[months.length-1]; const over=bcats.map(c=>{const a=sum(expAll.filter(x=>ym(x)===mm&&catMain(x.category_id)&&catMain(x.category_id).id===c.id));return{name:c.name,a,b:c.monthly_budget};}).filter(r=>r.a>r.b); if(!over.length) return `יופי — ב${fmtMonth(mm)} לא חרגתם מאף תקציב שהוגדר ✅`; return `ב${fmtMonth(mm)} חרגתם מהתקציב ב:<br>${over.map(r=>`<strong>${esc(r.name)}</strong>: ${money2(r.a)} מתוך ${money2(r.b)} (חריגה ${money2(r.a-r.b)})`).join('<br>')}`; }
-  if(askSource){ const outKind=x=> isCardDetail(x)?'אשראי':(/משיכה|מזומן|כספומט|בנקט/.test(nameOf(x))?'מזומן':'בנק'); let key=/מזומן/.test(t)?'מזומן':/אשראי|כרטיס/.test(t)?'אשראי':/בנק/.test(t)?'בנק':null; if(key){ const s=sum(exp.filter(x=>outKind(x)===key)); return `דרך <strong>${key}</strong> הוצאתם <strong>${money2(s)}</strong> ${scopeLabel}.`; } }
-  if(askCountMerch){ const nm=new Set(exp.map(nameOf)).size; return `הוצאתם ב־<strong>${nm}</strong> בתי עסק שונים ${scopeLabel}.`; }
-  if(askBiggest){ const b=exp.slice().sort((a,b)=>b.amount-a.amount)[0]; if(!b)return 'אין נתונים.'; return `ההוצאה הכי גדולה ${scopeLabel}: <strong>${esc(nameOf(b))}</strong> על סך <strong>${money2(b.amount)}</strong> (${fmtDate(b.tx_date)}${mainNameOf(b)?', '+mainNameOf(b):''}).`; }
-  if(askTopCat||askTopMerch){ if(!catRank.length)return 'אין נתונים מסווגים עדיין.'; return `הקטגוריה הגדולה ${scopeLabel} היא <strong>${catRank[0][0]}</strong> (${money2(catRank[0][1])}).<br>אחריה: ${catRank.slice(1,4).map(([n,v])=>`${n} ${money2(v)}`).join(' · ')}.`; }
-  if(askCount) return `יש <strong>${exp.length}</strong> עסקאות הוצאה ${scopeLabel}${scopeYM?'':` (על פני ${months.length} חודשים)`}.`;
+  if(askSource){ const outKind=x=> isCardDetail(x)?'אשראי':(/משיכה|מזומן|כספומט|בנקט/.test(nameOf(x))?'מזומן':'בנק'); let key=/מזומן/.test(t)?'מזומן':/אשראי|כרטיס/.test(t)?'אשראי':/בנק/.test(t)?'בנק':null; if(key){ const s= wantAvg? avgMonthlyOf(x=>outKind(x)===key) : sum(exp.filter(x=>outKind(x)===key)); return `דרך <strong>${key}</strong> הוצאתם <strong>${money2(s)}</strong> ${scopeLabel}.`; } }
+  if(askCountMerch){ const nm=new Set(exp.map(nameOf)).size; return `הוצאתם ב־<strong>${nm}</strong> בתי עסק שונים ${pointLabel}.`; }
+  if(askBiggest){ const b=exp.slice().sort((a,b)=>b.amount-a.amount)[0]; if(!b)return 'אין נתונים.'; return `ההוצאה הכי גדולה ${pointLabel}: <strong>${esc(nameOf(b))}</strong> על סך <strong>${money2(b.amount)}</strong> (${fmtDate(b.tx_date)}${mainNameOf(b)?', '+mainNameOf(b):''}).`; }
+  if(askTopCat||askTopMerch){ if(!rank.length)return 'אין נתונים מסווגים עדיין.'; return `הקטגוריה הגדולה ${scopeLabel} היא <strong>${rank[0][0]}</strong> (${money2(rank[0][1])}).<br>אחריה: ${rank.slice(1,4).map(([n,v])=>`${n} ${money2(v)}`).join(' · ')}.`; }
+  if(askCount) return `יש <strong>${exp.length}</strong> עסקאות הוצאה ${pointLabel}${scopeYM?'':` (על פני ${months.length} חודשים)`}.`;
   if(wantAvg){ const av=avgMonthlyOf(()=>true); return `בממוצע אתם מוציאים <strong>${money2(av)}</strong> לחודש על אחזקת הבית (על בסיס ${complete.length} חודשים מלאים · תחזית שנתית ${money2(av*12)}).`; }
   if(askSpend){ return `${scopeYM?'ב'+fmtMonth(scopeYM):'סך'} ההוצאות ${scopeYM?'':'בסך הכל '}על אחזקת הבית: <strong>${money2(totExp)}</strong>.${catRank.length?`<br>הקטגוריה הגדולה: ${catRank[0][0]} (${money2(catRank[0][1])}).`:''}`; }
 
   // fallback חכם
-  return `לא בטוח שהבנתי במדויק 🤔 הנה תמונת מצב ${scopeLabel}:<br>• הוצאות אחזקת בית: <strong>${money2(totExp)}</strong><br>• הכנסות: <strong>${money2(totInc)}</strong><br>• הקטגוריה הגדולה: <strong>${catRank.length?catRank[0][0]:'—'}</strong><br>נסו: «כמה על מזון בממוצע?», «מזון מול פנאי», «על מה הכי הוצאתי?», «כמה נשאר לי?»`;
+  const fExp = wantAvg? avgMonthlyOf(()=>true) : totExp;
+  const fInc = wantAvg? (complete.length? complete.map(m=>sum(incAll.filter(x=>ym(x)===m))).reduce((a,b)=>a+b,0)/complete.length : 0) : totInc;
+  return `לא בטוח שהבנתי במדויק 🤔 הנה תמונת מצב ${scopeLabel}:<br>• הוצאות אחזקת בית: <strong>${money2(fExp)}</strong><br>• הכנסות: <strong>${money2(fInc)}</strong><br>• הקטגוריה הגדולה: <strong>${rank.length?rank[0][0]:'—'}</strong><br>נסו: «כמה על מזון?», «מזון מול פנאי», «על מה הכי הוצאתי?», «כמה נשאר לי?» · להצגת סך הכל הוסיפו «בסך הכל».`;
 }
 views.dashboard=async()=>{
   const d=await api('/dashboard'+monthParam());
