@@ -1414,27 +1414,41 @@ views.import=async()=>{
   // שבמקרה שם בית העסק שלה מכיל «מקס»/«כאל» וכד׳). כך לא נסמן בטעות עסקאות מפורטות כ"חסרות".
   const isCard=(t)=> isAggLump(t);
   // מה חסר להעלות — 6 חודשים אחרונים
-  const nowD=new Date(); const months=[];
+  const nowD=new Date(); const curYM=nowD.getFullYear()+'-'+String(nowD.getMonth()+1).padStart(2,'0');
+  const todayISOd=nowD.getFullYear()+'-'+String(nowD.getMonth()+1).padStart(2,'0')+'-'+String(nowD.getDate()).padStart(2,'0');
+  const months=[];
   for(let i=0;i<6;i++){ const dd=new Date(Date.UTC(nowD.getUTCFullYear(),nowD.getUTCMonth()-i,1)); months.push(dd.toISOString().slice(0,7)); }
+  // תאריך פירוט האשראי האחרון — כדי לזהות חודשים שהפירוט לא מכסה עד סופם
+  const lastCardDate=txs.filter(t=>t.kind==='expense'&&isCardDetail(t)).reduce((mx,t)=>String(t.tx_date)>mx?String(t.tx_date):mx,'');
+  const monthEnd=ym=>{ const [y,m]=ym.split('-').map(Number); return ym+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0'); };
   const monthRows=months.map(ym=>{
     const mtx=txs.filter(t=>String(t.tx_date).slice(0,7)===ym);
     const lumps={}; mtx.filter(t=>t.kind==='expense'&&isCard(t)).forEach(t=>{ const k=detectIssuer(t.merchant)||detectIssuer(t.description); if(!lumps[k])lumps[k]={issuer:k,total:0}; lumps[k].total+=t.amount; });
     const covered=(iss)=> mtx.some(t=>t.source==='credit_card' && detectIssuer(t.account)===iss && !isCard(t));
     const needed=Object.values(lumps).filter(p=>!covered(p.issuer)).sort((a,b)=>b.total-a.total);
-    return {ym, noData:mtx.length===0, needed};
+    const hasDetail=mtx.some(t=>t.kind==='expense'&&isCardDetail(t));
+    // כיסוי חלקי: פירוט האשראי לא מגיע עד סוף החודש (החודש הנוכחי, או חודש שהפירוט נעצר בתוכו)
+    const cardCovEnd = (lastCardDate && ym>=lastCardDate.slice(0,7)) ? (lastCardDate.slice(0,7)===ym?lastCardDate:'') : monthEnd(ym);
+    const isCurrent = ym===curYM;
+    const cardPartial = hasDetail && !isCurrent && cardCovEnd && cardCovEnd < monthEnd(ym);
+    return {ym, noData:mtx.length===0, needed, isCurrent, cardPartial, cardCovEnd, hasDetail};
   });
-  const anyMissing=monthRows.some(r=>r.noData||r.needed.length);
+  const detIssuer=(new Set(txs.filter(t=>t.kind==='expense'&&isCardDetail(t)).map(t=>detectIssuer(t.account)).filter(Boolean))); const primaryIssuer=[...detIssuer][0]||'כרטיס אשראי';
+  const anyIssue=monthRows.some(r=>r.noData||r.needed.length||r.isCurrent||r.cardPartial);
+  const upBtn=(iss)=>`<label class="btn-ghost" style="cursor:pointer;padding:4px 10px;font-size:12px">⬆️ ייבוא מסמך<input type="file" hidden accept=".csv,.pdf,text/csv,application/pdf,.xlsx,.xlsm" data-issuer="${esc(iss)}" /></label>`;
   const missingHTML=`<div class="card" style="margin-bottom:18px;border-color:color-mix(in srgb,var(--amber) 35%,var(--border))">
     <div class="card-header"><h2>📋 מה חסר להעלות · חצי שנה אחורה</h2></div>
     <div style="padding:4px 20px 16px">
-      <p class="hint" style="margin-bottom:12px">אלו התדפיסים שכדאי להעלות כדי לקבל תמונה מלאה. ליד כל חברת אשראי — כפתור העלאה ישיר.</p>
+      <p class="hint" style="margin-bottom:12px">אלו התדפיסים שכדאי להעלות כדי לקבל תמונה מלאה. ליד כל חודש — כפתור העלאה ישיר.</p>
       ${monthRows.map(r=>`<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <strong style="min-width:110px">${fmtMonth(r.ym)}</strong>
-        ${r.noData? '<span class="pill status-late">אין נתונים — העלה תדפיס בנק</span>'
-          : r.needed.length? r.needed.map(p=>`<span style="display:inline-flex;align-items:center;gap:6px"><span class="pill status-soon">${esc(p.issuer)} · ${money(p.total)}</span><label class="btn-ghost" style="cursor:pointer;padding:4px 10px;font-size:12px">⬆️ ייבוא מסמך<input type="file" hidden accept=".csv,.pdf,text/csv,application/pdf,.xlsx,.xlsm" data-issuer="${esc(p.issuer)}" /></label></span>`).join('')
+        ${r.noData? '<span class="pill status-late">אין נתונים — העלה תדפיס בנק</span>'+upBtn(primaryIssuer)
+          : r.needed.length? r.needed.map(p=>`<span style="display:inline-flex;align-items:center;gap:6px"><span class="pill status-soon">${esc(p.issuer)} · ${money(p.total)}</span>${upBtn(p.issuer)}</span>`).join('')
+          : r.isCurrent? `<span class="pill status-soon">⏳ החודש עדיין בעיצומו — הנתונים יתמלאו בסופו</span>`
+          : r.cardPartial? `<span style="display:inline-flex;align-items:center;gap:6px"><span class="pill status-soon">⏳ פירוט אשראי חלקי — עד ${fmtDate(r.cardCovEnd)} בלבד</span>${upBtn(primaryIssuer)}</span>`
           : '<span class="pill status-ok">מלא ✓</span>'}
       </div>`).join('')}
-      ${!anyMissing?'<div class="empty" style="padding:16px">הכל מלא — אין תדפיסים חסרים 🎉</div>':''}
+      ${!anyIssue?'<div class="empty" style="padding:16px">הכל מלא — אין תדפיסים חסרים 🎉</div>':''}
     </div></div>`;
   el.innerHTML=missingHTML+`<div class="card" style="padding:22px">
     <h2 style="margin:0 0 8px">📥 ייבוא תדפיס אשראי / בנק</h2>
