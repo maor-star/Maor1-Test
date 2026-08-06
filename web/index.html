@@ -721,6 +721,13 @@ function ensureDefaults(){
     db.transactions.forEach(t=>{ if(acctIsCard(t.account) && bankOp.test(strv(t.merchant)+' '+strv(t.description))){ t.account=''; t.source='bank'; } });
     db.defaultsV=14; save();
   }
+  if((db.defaultsV||0) < 15){
+    // «לא זוכרים» העברות/מזומן: מוחקים כללים קיימים על העברות כסף/מזומן/שיק/ביט —
+    // כל העברה היא ליעד אחר ולכן חייבת להיות מסווגת מחדש בכל פעם.
+    const MOVE15=/העבר|העב['׳]|לאחר.?נייד|משיכ|מזומן|כספומט|בנקט|שיק|פייבוקס|paybox|זיכוי|הפקד|ביט|bit/i;
+    db.rules=(db.rules||[]).filter(r=>!MOVE15.test(strv(r.match_text)));
+    db.defaultsV=15; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
@@ -733,6 +740,9 @@ function detectIssuer(text){ const t=strv(text); for(const k of CARD_ISSUERS){ i
 // «חיוב מרוכז»/שורת-סיכום: בית העסק הוא *עצמו* שם חברת אשראי (כמו «אמריקן אקספרס», «ישראכרט») — לא בית עסק אמיתי.
 // מבחין בין זה לבין חנות שרק מכילה תת-מחרוזת (כמו «מקס מודיעין»), שנשמרת.
 function isAggMerchant(name){ const n=strv(name).replace(/[\s.,'"״׳\-]/g,''); if(!n) return false; for(const k of CARD_ISSUERS){ const kk=k.replace(/[\s.,'"״׳\-]/g,''); if(kk && (n===kk || (n.startsWith(kk)&&n.length<=kk.length+3))) return true; } return false; }
+// העברת כסף / משיכת מזומן / שיק — כל אחת ליעד אחר, ולכן אין «לזכור» סיווג ולא להחיל על השאר; מסווגים כל אחת בנפרד.
+const MONEY_MOVE_RE=/העבר|העב['׳]|לאחר.?נייד|משיכ|מזומן|כספומט|בנקט|שיק|פייבוקס|paybox|זיכוי|הפקד/i;
+function isMoneyMovement(text){ const s=strv(text); return MONEY_MOVE_RE.test(s) || isBitTransfer(s); }
 // זיהוי העברת BIT / פייבוקס (לא לבלבל עם "ביטוח": מילת "ביט" חייבת לעמוד בפני עצמה)
 const BIT_RE=/(^|[^A-Za-z])BIT([^A-Za-z]|$)|(^|\s)ביט(\s|$)|PAYBOX|פייבוקס|פיי[ ]?בוקס/i;
 function isBitTransfer(text){ return BIT_RE.test(strv(text)); }
@@ -850,7 +860,8 @@ function h_transactions(m,id,sub,b,qp){
   if(id==='classify'){ // סיווג קבוצתי לפי רשימת מזהים
     const ids=(b.ids||[]).map(String); const cat=intOrNull(b.category_id);
     let n=0; db.transactions.forEach(t=>{ if(ids.includes(String(t.id))){ t.category_id=cat; n++; } });
-    if(b.make_rule && cat){ const key=strv(b.rule_text); if(key && !db.rules.some(r=>r.match_text===key && r.category_id===cat)) db.rules.push({id:uid(),match_text:key,category_id:cat}); }
+    // לא יוצרים כלל להעברות/מזומן/שיק — כל אחת ליעד אחר
+    if(b.make_rule && cat){ const key=strv(b.rule_text); if(key && !isMoneyMovement(key) && !db.rules.some(r=>r.match_text===key && r.category_id===cat)) db.rules.push({id:uid(),match_text:key,category_id:cat}); }
     return {ok:true,count:n};
   }
   if(id==='auto'){ // החלת כל הכללים על עסקאות שטרם סווגו (הוצאות והכנסות כאחד)
@@ -864,6 +875,12 @@ function h_transactions(m,id,sub,b,qp){
   }
   if(id==='classify-similar'){ // סיווג כל העסקאות מאותו מקור (גם אלו שכבר סווגו אחרת) + כלל לעתיד
     const key=strv(b.merchant); const cat=intOrNull(b.category_id); if(!key) return {count:0};
+    // העברת כסף / מזומן / שיק — לא יוצרים כלל («לא זוכרים»). עם מזהה עסקה — מסווגים רק אותה.
+    if(isMoneyMovement(key)){
+      if(b.tx_id){ const t=db.transactions.find(x=>String(x.id)===String(b.tx_id)); if(t) t.category_id=cat; return {count:t?1:0,single:true}; }
+      let m=0; db.transactions.forEach(t=>{ if((t.merchant||t.description||'').trim()===key){ t.category_id=cat; m++; } }); // תצוגה מקובצת: ללא כלל
+      return {count:m};
+    }
     let n=0; db.transactions.forEach(t=>{ if((t.merchant||t.description||'').trim()===key){ t.category_id=cat; n++; } });
     if(b.make_rule && cat && !db.rules.some(r=>r.match_text===key && r.category_id===cat)) db.rules.push({id:uid(),match_text:key,category_id:cat});
     return {count:n};
@@ -2513,7 +2530,7 @@ views.analytics=async()=>{
       <div class="panel" data-drill="merchfixed"><h3>🔁 הוצאות קבועות מזוהות</h3>${topFixed.length?barsHTML(topFixed.map(f=>({label:f.label+' · '+f.months+' חוד׳',value:f.value,color:f.color})),money,true):'<div class="empty">לא זוהו הוצאות קבועות</div>'}</div>
       ${state.month?'':`<div class="panel"><h3>🧭 מגמת 5 הקטגוריות המובילות לאורך זמן</h3>${multiLineChart(trendMonths,catSeries)}</div>`}
       <div class="panel" data-drill="dow" style="${state.month?'grid-column:1/-1':''}"><h3>🗓️ הוצאה ממוצעת לפי יום בשבוע</h3>${barsHTML(dowData,money,true)}</div>
-      <div class="panel" style="grid-column:1/-1"><h3>💥 10 העסקאות הגדולות</h3><div class="hint" style="margin-bottom:6px">בחרו סיווג ישירות מהרשימה כדי לתקן — השינוי חל על אותו בית עסק בכל החודשים ומתעדכן בכל הגרפים.</div><div class="table-wrap"><table style="width:100%"><thead><tr><th>תאריך</th><th>בית עסק</th><th style="min-width:170px">סיווג (ניתן לשינוי)</th><th class="tnum">סכום</th></tr></thead><tbody>${bigTx.map(t=>`<tr><td class="tnum" style="white-space:nowrap">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td><td><select class="big-cat" data-merch="${esc((t.merchant||t.description||'').trim())}" style="width:100%">${catSelectOptions(cats,t.category_id)}</select></td><td class="tnum amount-neg">${money(t.amount)}</td></tr>`).join('')||'<tr><td class="empty">אין נתונים</td></tr>'}</tbody></table></div></div>
+      <div class="panel" style="grid-column:1/-1"><h3>💥 10 העסקאות הגדולות</h3><div class="hint" style="margin-bottom:6px">בחרו סיווג ישירות מהרשימה כדי לתקן — השינוי חל על אותו בית עסק בכל החודשים ומתעדכן בכל הגרפים.</div><div class="table-wrap"><table style="width:100%"><thead><tr><th>תאריך</th><th>בית עסק</th><th style="min-width:170px">סיווג (ניתן לשינוי)</th><th class="tnum">סכום</th></tr></thead><tbody>${bigTx.map(t=>`<tr><td class="tnum" style="white-space:nowrap">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td><td><select class="big-cat" data-merch="${esc((t.merchant||t.description||'').trim())}" data-id="${t.id}" style="width:100%">${catSelectOptions(cats,t.category_id)}</select></td><td class="tnum amount-neg">${money(t.amount)}</td></tr>`).join('')||'<tr><td class="empty">אין נתונים</td></tr>'}</tbody></table></div></div>
       <div class="panel" style="grid-column:1/-1"><h3>📝 ניתוח חודשי מילולי</h3><div class="hint" style="margin-bottom:6px">סיכום מילולי אוטומטי לכל חודש — מה קרה, מה השתנה, ומהיכן יצא הכסף.</div>${narr||'<div class="empty">אין מספיק נתונים לניתוח חודשי.</div>'}</div>
     </div>`;
   // מגמות העומק והתובנות עולות למעלה — מיד אחרי כרטיסי הסיכום, כי זה החלק החשוב והמעניין
@@ -2522,7 +2539,7 @@ views.analytics=async()=>{
   // שינוי סיווג ישיר מטבלת "העסקאות הגדולות"
   el.querySelectorAll('.big-cat').forEach(sel=>sel.onchange=async()=>{
     const merch=sel.dataset.merch, val=sel.value;
-    try{ await api('/transactions/classify-similar',{method:'POST',body:{merchant:merch,category_id:val||null,make_rule:!!val}});
+    try{ await api('/transactions/classify-similar',{method:'POST',body:{merchant:merch,tx_id:sel.dataset.id,category_id:val||null,make_rule:!!val}});
       toast('סווג מחדש ✓'); render();
     }catch(e){ toast(e.message,true); } });
 
@@ -2563,12 +2580,12 @@ function showTxDrill(title,list){
   const body=`<div class="hint" style="margin-bottom:12px">${list.length} עסקאות · שינוי סיווג כאן חל על אותו בית עסק בכל החודשים ומתעדכן בגרפים.</div>
     <div class="drill-list" style="max-height:60vh;overflow:auto">${list.map(t=>`<div class="drill-item">
         <div class="drill-row"><span class="drill-date tnum">${fmtDate(t.tx_date)}</span><span class="drill-merch">${esc(t.merchant||t.description||'—')}</span><span class="drill-amt tnum ${t.kind==='income'?'amount-pos':'amount-neg'}">${money2(t.amount)}</span></div>
-        <select class="drill-cat" data-merch="${esc((t.merchant||t.description||'').trim())}">${catSelectOptions(db.categories,t.category_id)}</select>
+        <select class="drill-cat" data-merch="${esc((t.merchant||t.description||'').trim())}" data-id="${t.id}">${catSelectOptions(db.categories,t.category_id)}</select>
       </div>`).join('')||'<div class="empty">אין עסקאות</div>'}</div>`;
   openModal(title,body,async()=>{},{wide:true,submitLabel:'סגירה'});
   setTimeout(()=>{ document.querySelectorAll('.modal .drill-cat').forEach(sel=>sel.onchange=async()=>{
     const merch=sel.dataset.merch, val=sel.value;
-    try{ await api('/transactions/classify-similar',{method:'POST',body:{merchant:merch,category_id:val||null,make_rule:!!val}});
+    try{ await api('/transactions/classify-similar',{method:'POST',body:{merchant:merch,tx_id:sel.dataset.id,category_id:val||null,make_rule:!!val}});
       toast('סווג מחדש ✓'); const bd=sel.closest('.modal-backdrop'); if(bd) bd.remove(); render();
     }catch(e){ toast(e.message,true); } }); },0);
 }
@@ -2939,6 +2956,4 @@ async function boot(){
 boot();
 </script>
 
-
-</body>
-</html>
+</body></html>
