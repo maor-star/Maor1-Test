@@ -153,8 +153,11 @@ nav a.active::before{content:""; position:absolute; inset-inline-start:-14px; to
 /* ---------- Panels ---------- */
 .panels{display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:stretch}
 @media (max-width:1080px){.panels{grid-template-columns:1fr}}
-.panel{padding:22px 22px 20px; border-radius:var(--radius); background:linear-gradient(180deg,var(--surface),var(--surface-2)); border:1px solid var(--border); box-shadow:var(--shadow); transition:box-shadow .25s cubic-bezier(.22,.9,.3,1), border-color .25s, transform .25s; display:flex; flex-direction:column}
+.panel{padding:22px 22px 20px; border-radius:var(--radius); background:linear-gradient(180deg,var(--surface),var(--surface-2)); border:1px solid var(--border); box-shadow:var(--shadow); transition:box-shadow .25s cubic-bezier(.22,.9,.3,1), border-color .25s, transform .25s; display:flex; flex-direction:column; min-width:0}
 .panel>.chart-box,.panel>.table-wrap{margin-top:auto; margin-bottom:auto}
+/* קריטי למובייל: אפשר לגריד/פלקס להתכווץ מתחת לרוחב-התוכן של ה-SVG (viewBox) כדי שהעמוד לא יימתח */
+.panels>*{min-width:0} .stats-grid>*{min-width:0} .chart-box{min-width:0; max-width:100%}
+.panel svg{max-width:100%}
 .panel:hover{box-shadow:var(--shadow-lg); border-color:color-mix(in srgb,var(--accent) 22%,var(--border))}
 .panel h3{font-size:14px; margin:0 0 18px; padding-bottom:13px; border-bottom:1px solid color-mix(in srgb,var(--border) 70%,transparent); font-weight:800; letter-spacing:-.01em; display:flex; align-items:center; gap:8px}
 /* גרף SVG בתוך פאנל — ממלא את רוחב הפאנל בגובה מידתי, בלי שוליים ריקים */
@@ -333,6 +336,50 @@ code{background:var(--chip); padding:2px 7px; border-radius:6px; font-size:13px;
   .sidebar-foot{display:none}
   .view{padding:18px 16px}
   .topbar{padding:13px 16px}
+}
+/* ---- רשימת פירוט עסקאות (drill) — כרטיסים רספונסיביים ---- */
+.drill-list{display:flex; flex-direction:column; gap:10px}
+.drill-item{border:1px solid var(--border); border-radius:12px; padding:11px 13px; background:var(--surface-2); display:flex; flex-direction:column; gap:9px}
+.drill-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.drill-date{color:var(--muted); font-size:12.5px; white-space:nowrap}
+.drill-merch{flex:1; min-width:120px; font-weight:600; font-size:14px}
+.drill-amt{font-weight:800; white-space:nowrap}
+.drill-cat{width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--text); font-size:13.5px; font-family:inherit; font-weight:600}
+.drill-cat:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+
+/* ---- מובייל: ייצוב, ריווח וגלילה נוחים ---- */
+@media (max-width:720px){
+  .view{padding:16px 13px 44px}
+  .panels{gap:14px}
+  .panel{padding:16px 15px 15px; border-radius:14px}
+  .panel h3{font-size:13.5px; margin-bottom:13px; padding-bottom:11px}
+  .stats-grid{grid-template-columns:1fr; gap:12px; margin-bottom:18px}
+  .stat-card .value{font-size:23px}
+  .section-head{margin:26px 0 12px}
+  .section-head h2{font-size:17px}
+  .bar-label{width:auto; max-width:44%; flex:1 1 auto; font-size:12.5px}
+  .bar-value{width:auto; min-width:64px; font-size:12px}
+  .bar-track{min-width:36px}
+  .legend{gap:7px}
+  .legend span{padding:3px 9px; font-size:11px}
+  .donut-wrap{justify-content:center}
+  /* טבלאות רחבות — גלילה אופקית פנימית במקום למתוח את העמוד */
+  .table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch}
+  .table-wrap table{min-width:0}
+  /* מודאל כמעט מסך-מלא במובייל */
+  .modal,.modal.wide{max-width:none; width:100%; border-radius:18px 18px 0 0; max-height:94vh; margin-top:auto}
+  .modal-backdrop{align-items:flex-end; padding:0}
+  .topbar{padding:11px 14px; gap:10px}
+  .topbar h1{font-size:17px}
+  .month-picker{font-size:12px; padding:4px 5px 4px 9px}
+  .month-picker input{min-width:112px; padding:7px 9px}
+  .asst{padding:15px 14px}
+  .asst-msgs{max-height:300px}
+  .asst-bubble{max-width:90%}
+}
+@media (max-width:400px){
+  .stat-card .value{font-size:21px}
+  .bar-label{max-width:40%}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 </style>
@@ -2363,11 +2410,12 @@ views.analytics=async()=>{
 // חלון פירוט: כל העסקאות שמרכיבות מספר בגרף — עם אפשרות לשנות סיווג בשורה
 function showTxDrill(title,list){
   list=list.slice().sort((a,b)=>b.amount-a.amount);
-  const body=`<div class="hint" style="margin-bottom:10px">${list.length} עסקאות · שינוי סיווג כאן חל על אותו בית עסק בכל החודשים ומתעדכן בגרפים.</div>
-    <div class="table-wrap" style="max-height:62vh;overflow:auto"><table style="width:100%"><thead><tr><th>תאריך</th><th>בית עסק</th><th style="min-width:190px">שינוי סיווג</th><th>סכום</th></tr></thead>
-    <tbody>${list.map(t=>`<tr><td class="tnum">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td>
-      <td><select class="drill-cat" data-merch="${esc((t.merchant||t.description||'').trim())}" style="width:100%">${catSelectOptions(db.categories,t.category_id)}</select></td>
-      <td class="tnum ${t.kind==='income'?'amount-pos':'amount-neg'}">${money2(t.amount)}</td></tr>`).join('')||'<tr><td colspan="4"><div class="empty">אין עסקאות</div></td></tr>'}</tbody></table></div>`;
+  // רשימת כרטיסים רספונסיבית — עובד יפה גם במובייל (במקום טבלה רחבה שנחתכת)
+  const body=`<div class="hint" style="margin-bottom:12px">${list.length} עסקאות · שינוי סיווג כאן חל על אותו בית עסק בכל החודשים ומתעדכן בגרפים.</div>
+    <div class="drill-list" style="max-height:60vh;overflow:auto">${list.map(t=>`<div class="drill-item">
+        <div class="drill-row"><span class="drill-date tnum">${fmtDate(t.tx_date)}</span><span class="drill-merch">${esc(t.merchant||t.description||'—')}</span><span class="drill-amt tnum ${t.kind==='income'?'amount-pos':'amount-neg'}">${money2(t.amount)}</span></div>
+        <select class="drill-cat" data-merch="${esc((t.merchant||t.description||'').trim())}">${catSelectOptions(db.categories,t.category_id)}</select>
+      </div>`).join('')||'<div class="empty">אין עסקאות</div>'}</div>`;
   openModal(title,body,async()=>{},{wide:true,submitLabel:'סגירה'});
   setTimeout(()=>{ document.querySelectorAll('.modal .drill-cat').forEach(sel=>sel.onchange=async()=>{
     const merch=sel.dataset.merch, val=sel.value;
