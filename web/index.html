@@ -704,6 +704,23 @@ function ensureDefaults(){
     db.transactions=kept12;
     db.defaultsV=12; save();
   }
+  if((db.defaultsV||0) < 13){
+    // ניקוי כפילויות חכם: אותה עסקה (סוג+תאריך+בית עסק+סכום) — אסמכתא ריקה «תואמת לכל».
+    const seen13=new Map(); const kept13=[];
+    db.transactions.forEach(t=>{ const bk=[t.kind,strv(t.tx_date),strv(t.merchant||t.description).trim(),Math.abs(numv(t.amount))].join('|'); const ref=strv(t.ref); const a=seen13.get(bk);
+      if(a && (ref===''||a.some(x=>x===''||x===ref))) return; seen13.set(bk,[...(a||[]),ref]); kept13.push(t); });
+    db.transactions=kept13;
+    db.defaultsV=13; save();
+  }
+  if((db.defaultsV||0) < 14){
+    // תיקון תיוג שגוי: פעולות בנק (משכנתא/העברה/משיכה/שיק/הפקדה…) שיובאו מתדפיס עו״ש עם חשבון=חברת אשראי
+    // — סומנו בטעות כ«פירוט אשראי». מורידים אותן לחשבון בנק, כדי שלא יעוותו את זיהוי החודשים החלקיים ואת פילוח המקורות.
+    const CARDS14=['ישראכרט','אמריקן אקספרס','אמריקן','אמקס','לאומי קארד','דיינרס','כאל','מקס','ויזה','כרטיסי אשראי','כרטיס אשראי'];
+    const acctIsCard=a=>{ a=strv(a); return CARDS14.some(k=>k&&a.includes(k)); };
+    const bankOp=/משכנתא|העבר|העב['׳]|לאחר-נייד|משיכ|מזומן|כספומט|בנקט|פקדון|הפקד|זיכוי|קצבת|ע\.מפעולות|כרטיסי אשראי|פנקס|הקצאת|ריבית|עמל|ד\.ניהול|החזר|שיק/;
+    db.transactions.forEach(t=>{ if(acctIsCard(t.account) && bankOp.test(strv(t.merchant)+' '+strv(t.description))){ t.account=''; t.source='bank'; } });
+    db.defaultsV=14; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
@@ -805,10 +822,11 @@ function h_transactions(m,id,sub,b,qp){
   if(id==='import'){ // POST
     if(!Array.isArray(b.rows)||!b.rows.length) throw new Error('אין שורות לייבוא');
     const src=strv(b.source)||'credit_card', acct=strv(b.account);
-    const existing=new Set(db.transactions.map(t=>t.hash).filter(Boolean));
-    // מפתח «רופף» ללא חשבון/מקור — מונע כפילות של אותה עסקה שמופיעה בשני תדפיסים (עו״ש + כרטיס)
-    const looseKey=t=>[t.kind,strv(t.tx_date),strv(t.merchant||t.description).trim(),Math.abs(numv(t.amount)),strv(t.ref)].join('|');
-    const existingLoose=new Set(db.transactions.map(looseKey));
+    // מניעת כפילות חכמה: מפתח בסיס = סוג+תאריך+בית עסק+סכום. אסמכתא ריקה נחשבת «תואמת לכל»
+    // (כי בין תדפיסים שונים לפעמים יש אסמכתא ולפעמים לא) — כך עסקת בנק שחוזרת בשני תדפיסים נחסמת,
+    // אבל שתי רכישות אשראי שונות עם אסמכתאות שונות נשמרות שתיהן.
+    const baseKey=t=>[t.kind,strv(t.tx_date),strv(t.merchant||t.description).trim(),Math.abs(numv(t.amount))].join('|');
+    const refMap=new Map(); db.transactions.forEach(t=>{ const k=baseKey(t); const a=refMap.get(k)||[]; a.push(strv(t.ref)); refMap.set(k,a); });
     let added=0,skipped=0,autoCategorized=0;
     for(const r of b.rows){
       const date=strv(r.date), desc=strv(r.description), merchant=strv(r.merchant||r.description);
@@ -818,12 +836,13 @@ function h_transactions(m,id,sub,b,qp){
       if(isAggMerchant(merchant)){skipped++;continue;}                                 // «חיוב מרוכז»/שורת-סיכום (בית העסק=שם חברת אשראי) — לא מייבאים, הפירוט הוא מקור האמת
       const kind=r.kind==='income'?'income':'expense';
       const ref=strv(r.ref);
+      const bk=[kind,date,merchant.trim(),amount].join('|');
+      const seen=refMap.get(bk)||[];
+      if(seen.length && (ref==='' || seen.some(x=>x===''||x===ref))){skipped++;continue;} // כפילות
       const hash=[src,acct,date,desc,amount,kind].join('|')+(ref?'|'+ref:'');
-      const loose=[kind,date,merchant.trim(),amount,ref].join('|');
-      if(existing.has(hash)||existingLoose.has(loose)){skipped++;continue;}
       const cat=matchCategory(desc+' '+merchant, kind); if(cat) autoCategorized++;
       db.transactions.push({id:uid(),tx_date:date,source:src,account:acct,description:desc,merchant,amount,kind,category_id:cat,notes:'',hash});
-      existing.add(hash); existingLoose.add(loose); added++;
+      seen.push(ref); refMap.set(bk,seen); added++;
     }
     return {added,skipped,autoCategorized};
   }
@@ -1561,11 +1580,11 @@ views.import=async()=>{
   const applyDetected=(meta)=>{ if(meta&&meta.issuer){ const s=el.querySelector('#imp-source'); if(s) s.value='credit_card'; const a=el.querySelector('#imp-account'); if(a&&!a.value.trim()) a.value=meta.issuer; } };
   function processTabular(parsed, file){
     const grid = parsed.grid || [parsed.headers, ...parsed.rows];
-    const stmt = extractStatementTransactions(grid);
-    if(stmt.length>=3){
+    const rows = extractTabularRows(parsed);
+    if(rows.length>=3){
       const gridText=grid.map(r=>r.join(' ')).join(' ');
-      const meta={issuer: detectIssuer((file?file.name:'')+' '+gridText)||'', month: dominantMonth(stmt)};
-      applyDetected(meta); showPdfPreview(stmt, meta, {srcLabel:'מהקובץ', exact:true});
+      const meta={issuer: detectIssuer((file?file.name:'')+' '+gridText)||'', month: dominantMonth(rows)};
+      applyDetected(meta); showPdfPreview(rows, meta, {srcLabel:'מהקובץ', exact:true});
       return;
     }
     const meta=autoDetectStatement(parsed.headers,parsed.rows,file?file.name:''); applyDetected(meta); showMapper(parsed,{detected:meta});
@@ -1578,15 +1597,16 @@ views.import=async()=>{
       if(/\.xls$/i.test(file.name)&&!isXlsx){ resolve({rows:[],meta:{},error:'קובץ .xls ישן — שמרו כ‑XLSX/CSV'}); return; }
       const reader=new FileReader();
       reader.onload=async()=>{ try{
-        let rows=[], gridText='';
+        let rows=[], gridText='', fileType='other';
         if(isPdf){ const items=await extractPdfTransactions(reader.result); rows=items.map(i=>({date:i.date,description:i.description,merchant:i.description,amount:i.amount,kind:i.kind||'expense',ref:i.ref})); gridText=items.map(i=>i.description).join(' '); }
         else { const parsed = isXlsx? await parseXLSX(reader.result) : parseCSV(reader.result);
           const grid=parsed.grid||[parsed.headers,...parsed.rows]; gridText=grid.map(r=>r.join(' ')).join(' ');
-          const stmt=extractStatementTransactions(grid);
-          if(stmt.length>=3){ rows=stmt.map(i=>({date:i.date,description:i.description,merchant:i.merchant,amount:i.amount,kind:'expense',ref:i.ref})); }
-          else { const g=guessColumns(parsed.headers); rows=parsed.rows.map(r=>({date:normDate(r[g.date]),description:String(r[g.desc]||'').trim(),merchant:String(r[g.desc]||'').trim(),amount:Math.abs(parseAmount(r[g.amount])),kind:'expense'})).filter(r=>r.date&&r.amount>0); }
+          rows=extractTabularRows(parsed);
+          // סוג הקובץ: 'card' = תדפיס פירוט אשראי (מקטעים) · 'bank' = עו״ש (חובה/זכות או שיש הכנסות)
+          const bc=guessBankCols(parsed.headers);
+          fileType = extractStatementTransactions(grid).length>=3 ? 'card' : ((rows.some(r=>r.kind==='income')||(bc.debit>=0&&bc.credit>=0)) ? 'bank' : 'other');
         }
-        resolve({rows,meta:{issuer:detectIssuer(file.name+' '+gridText)||'',month:dominantMonth(rows)}});
+        resolve({rows,meta:{issuer:detectIssuer(file.name+' '+gridText)||'',month:dominantMonth(rows),type:fileType}});
       }catch(e){ resolve({rows:[],meta:{},error:e.message}); } };
       if(isPdf||isXlsx) reader.readAsArrayBuffer(file); else reader.readAsText(file,'utf-8');
     });
@@ -1599,8 +1619,10 @@ views.import=async()=>{
       mapper.innerHTML=`<div class="empty">מעבד קובץ ${k+1} מתוך ${files.length}… ⏳<br><span class="hint">${esc(file.name)}</span></div>`;
       const {rows,meta,error}=await readFileRows(file);
       if(error||!rows.length){ results.push({name:file.name,error:error||'לא זוהו עסקאות בקובץ'}); continue; }
-      const source= meta.issuer? 'credit_card' : defSource;
-      const account= meta.issuer || defAccount || file.name.replace(/\.[^.]+$/,'');
+      const isBank = meta.type==='bank';
+      // תדפיס בנק (עו״ש): מקור=בנק והחשבון אינו חברת אשראי (כדי שפעולות הבנק לא ייחשבו «פירוט אשראי»)
+      const source= isBank? 'bank' : (meta.issuer? 'credit_card' : defSource);
+      const account= isBank? 'עו״ש' : (meta.issuer || defAccount || file.name.replace(/\.[^.]+$/,''));
       try{ const res=await api('/transactions/import',{method:'POST',body:{source,account,rows}});
         results.push({name:file.name,issuer:meta.issuer,month:meta.month,added:res.added,skipped:res.skipped,autoCategorized:res.autoCategorized});
       }catch(e){ results.push({name:file.name,error:e.message}); } }
@@ -1721,6 +1743,27 @@ function parseCSV(text){ text=text.replace(/^﻿/,'').replace(/\r\n?/g,'\n');
   return {headers:data[hIdx].map(h=>h.trim()),rows:data.slice(hIdx+1)}; }
 function guessColumns(headers){ const find=(words,def)=>{ const i=headers.findIndex(h=>words.some(w=>h&&h.includes(w))); return i>=0?i:def; };
   return { date:find(['תאריך','date','יום'],0), desc:find(['תיאור','בית עסק','שם בית','פירוט','merchant','description','עסק'],1), amount:find(['סכום','חיוב','amount','זכות','חובה','ש"ח','₪'],headers.length-1) }; }
+// זיהוי תדפיס בנק (עו״ש) עם עמודות נפרדות חובה (הוצאה) / זכות (הכנסה)
+function guessBankCols(headers){ const idx=(words)=>headers.findIndex(h=>words.some(w=>h&&h.includes(w)));
+  return { date:idx(['תאריך']), debit:idx(['חובה']), credit:idx(['זכות']), desc:idx(['הפעולה','תיאור','שם בית עסק','בית עסק','פירוט','merchant','description','עסק']), ref:idx(['אסמכתא']) }; }
+// חילוץ שורות מקובץ טבלאי — תומך בתדפיס אשראי מרובה-מקטעים, בתדפיס בנק חובה/זכות (כולל הכנסות), ואחר-כך ניחוש עמודות
+function extractTabularRows(parsed){
+  const grid=parsed.grid||[parsed.headers,...parsed.rows];
+  const stmt=extractStatementTransactions(grid);
+  if(stmt.length>=3) return stmt.map(i=>({date:i.date,description:i.description,merchant:i.merchant,amount:i.amount,kind:'expense',ref:i.ref}));
+  const bc=guessBankCols(parsed.headers);
+  if(bc.date>=0 && bc.debit>=0 && bc.credit>=0){ // תדפיס בנק: חובה=הוצאה, זכות=הכנסה
+    const out=[]; const dcol=bc.desc>=0?bc.desc:1;
+    for(const r of parsed.rows){ const date=normDate(r[bc.date]); if(!date) continue;
+      const desc=String(r[dcol]==null?'':r[dcol]).trim(); const ref=bc.ref>=0?String(r[bc.ref]==null?'':r[bc.ref]).trim():'';
+      const deb=Math.abs(parseAmount(r[bc.debit])), cred=Math.abs(parseAmount(r[bc.credit]));
+      if(deb>0) out.push({date,description:desc,merchant:desc,amount:deb,kind:'expense',ref});
+      else if(cred>0) out.push({date,description:desc,merchant:desc,amount:cred,kind:'income',ref}); }
+    if(out.length>=3) return out;
+  }
+  const g=guessColumns(parsed.headers);
+  return parsed.rows.map(r=>({date:normDate(r[g.date]),description:String(r[g.desc]||'').trim(),merchant:String(r[g.desc]||'').trim(),amount:Math.abs(parseAmount(r[g.amount])),kind:'expense'})).filter(r=>r.date&&r.amount>0);
+}
 function parseAmount(v){ if(v==null) return 0; let s=String(v).replace(/[₪,\s]/g,'').replace(/["']/g,''); let neg=false;
   if(/^\(.*\)$/.test(s)){neg=true;s=s.slice(1,-1);} if(s.includes('-')){neg=true;s=s.replace(/-/g,'');}
   const n=parseFloat(s); if(isNaN(n))return 0; return neg?-n:n; }
@@ -1836,10 +1879,7 @@ function quickImportFile(file, source, account){
     const isPdf=/\.pdf$/i.test(file.name)||file.type==='application/pdf';
     const isXlsx=/\.xls[xm]$/i.test(file.name)||/spreadsheetml/.test(file.type||'');
     if(/\.xls$/i.test(file.name)&&!isXlsx){ resolve({added:0,error:'קובץ .xls ישן אינו נתמך — שמרו כ‑.xlsx או CSV.'}); return; }
-    const fromTable=(parsed)=>{ const grid=parsed.grid||[parsed.headers,...parsed.rows]; const stmt=extractStatementTransactions(grid);
-      if(stmt.length>=3) return stmt.map(i=>({date:i.date,description:i.description,merchant:i.merchant,amount:i.amount,kind:'expense',ref:i.ref}));
-      const g=guessColumns(parsed.headers);
-      return parsed.rows.map(r=>({date:normDate(r[g.date]),description:String(r[g.desc]||'').trim(),merchant:String(r[g.desc]||'').trim(),amount:Math.abs(parseAmount(r[g.amount])),kind:'expense'})).filter(r=>r.date&&r.amount>0); };
+    const fromTable=(parsed)=>extractTabularRows(parsed);
     const reader=new FileReader();
     reader.onload=async()=>{ try{
       let rows;
