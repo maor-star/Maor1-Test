@@ -959,7 +959,9 @@ function h_dashboard(qp){
     const e=db.transactions.filter(t=>t.kind==='expense'&&String(t.tx_date).slice(0,7)===m&&countsInTotal(t)&&!isMortgage(t)).reduce((s,t)=>s+t.amount,0);
     const ic=db.transactions.filter(t=>t.kind==='income'&&String(t.tx_date).slice(0,7)===m&&!isRent(t)).reduce((s,t)=>s+t.amount,0);
     trend.push({m,expenses:e,income:ic}); }
-  const upcomingMaintenance=db.components.map(compView).filter(c=>c.next_due&&c.days_left<=60).sort((a,c)=>a.next_due.localeCompare(c.next_due)).slice(0,8);
+  // תחזוקה הבאה — כל הרכיבים לפי מועד קרוב, כולל עתידיים ורכיבים שטרם תוזמנו (בלי חלון של 60 יום שהסתיר פריטים)
+  const compsAll=db.components.map(compView);
+  const upcomingMaintenance=[...compsAll.filter(c=>c.next_due).sort((a,c)=>a.next_due.localeCompare(c.next_due)), ...compsAll.filter(c=>!c.next_due)].slice(0,6);
   const expiringWarranties=db.warranties.map(warrantyView).filter(w=>w.effective_expiry&&w.days_left<=90).sort((a,c)=>a.effective_expiry.localeCompare(c.effective_expiry)).slice(0,8);
   // שלמות התמונה: מתוך כל ההוצאה שדורשת מהות (פירוט/רגיל + חיובים מרוכזים שממתינים לפירוט),
   // כמה כבר מסווג. חיוב מרוכז ללא פירוט = חוסר, ולכן לא מגיעים ל-100% עד שמעלים פירוט ומסווגים.
@@ -1175,7 +1177,7 @@ views.dashboard=async()=>{
     <div class="panels">
       <div class="panel"><h3>מגמת עלות אחזקת הבית (6 חודשים)</h3><div id="trend"></div></div>
       <div class="panel" data-drill="homecat"><h3>עלות הבית לפי קטגוריה</h3><div>${barsHTML(d.byCategory.map(c=>({label:c.name,value:c.total,color:c.color})),money,true)}</div></div>
-      <div class="panel"><h3>🛠️ תחזוקה קרובה</h3>${d.upcomingMaintenance.length?d.upcomingMaintenance.map(m=>`<div class="bar-row" style="justify-content:space-between"><div><strong>${esc(m.name)}</strong> <span class="muted">${esc(m.area||m.system)}</span></div>${statusPill(m.days_left)}</div>`).join(''):'<div class="empty">אין תחזוקה קרובה 🎉</div>'}</div>
+      <div class="panel"><h3>🛠️ תחזוקה הבאה <a class="link" data-nav="maintenance" style="font-weight:600;font-size:12px;margin-inline-start:auto">ניהול ←</a></h3>${d.upcomingMaintenance.length?d.upcomingMaintenance.map(m=>`<div class="bar-row" style="justify-content:space-between;gap:10px"><div style="min-width:0"><strong>${esc(m.name)}</strong> <span class="muted">${esc(m.area||m.system)}</span>${m.next_due?` <span class="hint">· ${fmtDate(m.next_due)}</span>`:''}</div>${m.next_due?statusPill(m.days_left):'<span class="pill status-none">הגדירו תאריך התחלה</span>'}</div>`).join(''):'<div class="empty">אין רכיבי תחזוקה. הוסיפו ב<a class="link" data-nav="maintenance">מסך התחזוקה</a>.</div>'}</div>
       <div class="panel"><h3>📜 אחריות שעומדת לפוג</h3>${d.expiringWarranties.length?d.expiringWarranties.map(w=>`<div class="bar-row" style="justify-content:space-between"><div><strong>${esc(w.item_name)}</strong> <span class="muted">${esc(w.brand||'')}</span></div>${statusPill(w.days_left,{soon:90})}</div>`).join(''):'<div class="empty">אין אחריות שעומדת לפוג</div>'}</div>
     </div>`;
   el.querySelector('#trend').innerHTML=trendChart(d.trend);
