@@ -681,6 +681,29 @@ function ensureDefaults(){
     db.transactions.forEach(t=>{ if(!t.category_id){ t.category_id = t.kind==='income'? otherIncId : otherId; } });
     db.defaultsV=10; save();
   }
+  if((db.defaultsV||0) < 11){
+    // מחיקת «חיובים מרוכזים» / שורות-סיכום שבהן בית העסק הוא שם חברת אשראי (למשל «אמריקן אקספרס», «ישראכרט»)
+    // — הם כפילות של הפירוט ומנפחים את החישובים. נשמור בתי-עסק אמיתיים שרק מכילים תת-מחרוזת (כמו «מקס מודיעין»).
+    const CARDS11=['ישראכרט','אמריקן אקספרס','אמריקן','אמקס','לאומי קארד','דיינרס','כאל','מקס','ויזה','כרטיסי אשראי','כרטיס אשראי','כ.אשראי','כ. אשראי'];
+    const clean11=s=>strv(s).replace(/[\s.,'"״׳\-]/g,'');
+    const isAggM11=name=>{ const n=clean11(name); if(!n)return false; for(const k of CARDS11){ const kk=clean11(k); if(kk&&(n===kk||(n.startsWith(kk)&&n.length<=kk.length+3))) return true; } return false; };
+    db.transactions=db.transactions.filter(t=>!(t.kind==='expense'&&isAggM11(t.merchant||t.description)));
+    // סיווג מחדש של מה שנותר ללא סיווג
+    const lById11=(id)=>db.categories.find(c=>c.id==id);
+    const lMatch11=(text,kind)=>{ const hay=strv(text).toLowerCase(); let rules=db.rules.filter(r=>{const c=lById11(r.category_id);return c&&(!kind||c.kind===kind);}); rules.sort((a,b)=>strv(b.match_text).length-strv(a.match_text).length); for(const r of rules){const mt=strv(r.match_text).toLowerCase(); if(mt&&hay.includes(mt)) return r.category_id;} return null; };
+    db.transactions.forEach(t=>{ if(!t.category_id){ const c=lMatch11((t.description||'')+' '+(t.merchant||''),t.kind); if(c) t.category_id=c; } });
+    const other11=(findCat('אחר')||{}).id, otherInc11=(findCat('הכנסה אחרת')||{}).id;
+    db.transactions.forEach(t=>{ if(!t.category_id){ t.category_id = t.kind==='income'? otherInc11 : other11; } });
+    db.defaultsV=11; save();
+  }
+  if((db.defaultsV||0) < 12){
+    // הסרת כפילויות בין-תדפיסים: אותה עסקה (סוג+תאריך+בית עסק+סכום+אסמכתא) שיובאה פעמיים מתדפיסים שונים
+    // (למשל משכנתא/העברה/משיכה שמופיעה גם בעו״ש וגם בתדפיס ישראכרט). שומרים את המופע הראשון (מקורי).
+    const seen12=new Set(); const kept12=[];
+    db.transactions.forEach(t=>{ const key=[t.kind,strv(t.tx_date),strv(t.merchant||t.description).trim(),Math.abs(numv(t.amount)),strv(t.ref)].join('|'); if(seen12.has(key)) return; seen12.add(key); kept12.push(t); });
+    db.transactions=kept12;
+    db.defaultsV=12; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
@@ -690,6 +713,9 @@ const proById = (id)=> db.professionals.find(p=>p.id==id);
 const CARD_ISSUERS=['ישראכרט','אמריקן אקספרס','אמריקן','אמקס','לאומי קארד','דיינרס','כאל','מקס','ויזה','כרטיסי אשראי','כרטיס אשראי','כ.אשראי','כ. אשראי'];
 function normIssuer(k){ if(k==='אמריקן'||k==='אמקס') return 'אמריקן אקספרס'; if(k==='כרטיס אשראי'||k==='כ.אשראי'||k==='כ. אשראי') return 'כרטיסי אשראי'; return k; }
 function detectIssuer(text){ const t=strv(text); for(const k of CARD_ISSUERS){ if(k && t.includes(k)) return normIssuer(k); } return null; }
+// «חיוב מרוכז»/שורת-סיכום: בית העסק הוא *עצמו* שם חברת אשראי (כמו «אמריקן אקספרס», «ישראכרט») — לא בית עסק אמיתי.
+// מבחין בין זה לבין חנות שרק מכילה תת-מחרוזת (כמו «מקס מודיעין»), שנשמרת.
+function isAggMerchant(name){ const n=strv(name).replace(/[\s.,'"״׳\-]/g,''); if(!n) return false; for(const k of CARD_ISSUERS){ const kk=k.replace(/[\s.,'"״׳\-]/g,''); if(kk && (n===kk || (n.startsWith(kk)&&n.length<=kk.length+3))) return true; } return false; }
 // זיהוי העברת BIT / פייבוקס (לא לבלבל עם "ביטוח": מילת "ביט" חייבת לעמוד בפני עצמה)
 const BIT_RE=/(^|[^A-Za-z])BIT([^A-Za-z]|$)|(^|\s)ביט(\s|$)|PAYBOX|פייבוקס|פיי[ ]?בוקס/i;
 function isBitTransfer(text){ return BIT_RE.test(strv(text)); }
@@ -780,19 +806,24 @@ function h_transactions(m,id,sub,b,qp){
     if(!Array.isArray(b.rows)||!b.rows.length) throw new Error('אין שורות לייבוא');
     const src=strv(b.source)||'credit_card', acct=strv(b.account);
     const existing=new Set(db.transactions.map(t=>t.hash).filter(Boolean));
+    // מפתח «רופף» ללא חשבון/מקור — מונע כפילות של אותה עסקה שמופיעה בשני תדפיסים (עו״ש + כרטיס)
+    const looseKey=t=>[t.kind,strv(t.tx_date),strv(t.merchant||t.description).trim(),Math.abs(numv(t.amount)),strv(t.ref)].join('|');
+    const existingLoose=new Set(db.transactions.map(looseKey));
     let added=0,skipped=0,autoCategorized=0;
     for(const r of b.rows){
       const date=strv(r.date), desc=strv(r.description), merchant=strv(r.merchant||r.description);
       const amount=Math.abs(numv(r.amount)); if(!date||amount<=0){skipped++;continue;}
       const yr=+String(date).slice(0,4); if(yr<2010||yr>2027){skipped++;continue;}   // תאריך לא-סביר (שגיאת פענוח)
       if(!desc&&!merchant){skipped++;continue;}                                        // שורת סיכום ללא בית עסק — לא עסקה
+      if(isAggMerchant(merchant)){skipped++;continue;}                                 // «חיוב מרוכז»/שורת-סיכום (בית העסק=שם חברת אשראי) — לא מייבאים, הפירוט הוא מקור האמת
       const kind=r.kind==='income'?'income':'expense';
       const ref=strv(r.ref);
       const hash=[src,acct,date,desc,amount,kind].join('|')+(ref?'|'+ref:'');
-      if(existing.has(hash)){skipped++;continue;}
+      const loose=[kind,date,merchant.trim(),amount,ref].join('|');
+      if(existing.has(hash)||existingLoose.has(loose)){skipped++;continue;}
       const cat=matchCategory(desc+' '+merchant, kind); if(cat) autoCategorized++;
       db.transactions.push({id:uid(),tx_date:date,source:src,account:acct,description:desc,merchant,amount,kind,category_id:cat,notes:'',hash});
-      existing.add(hash); added++;
+      existing.add(hash); existingLoose.add(loose); added++;
     }
     return {added,skipped,autoCategorized};
   }
@@ -1168,7 +1199,8 @@ views.dashboard=async()=>{
     </div>
     <div class="section-title" style="margin-top:0">🏡 תקציב הבית</div>
     <div class="stats-grid">
-      <div class="stat-card expense"><div class="label">🏡 עלות אחזקת הבית</div><div class="value tnum">${money(d.homeExpenses)}</div><div class="sub">${state.month?'בחודש הנבחר':'סך הכל'} · כל ההוצאות פחות משכנתא</div></div>
+      <div class="stat-card expense"><div class="label">💸 הוצאות אחזקת בית</div><div class="value tnum">${money(d.homeExpenses)}</div><div class="sub">${state.month?'בחודש':'סך הכל'} · ללא משכנתא${d.mortgage>0?` — עוד ${money(d.mortgage)} משכנתא (בנפרד)`:''}</div></div>
+      <div class="stat-card income"><div class="label">💰 הכנסות</div><div class="value tnum">${money(d.totalIncome-d.rentalIncome)}</div><div class="sub">${state.month?'בחודש':'סך הכל'} · ללא שכירות${d.rentalIncome>0?` — עוד ${money(d.rentalIncome)} משכירות (בנפרד)`:''}</div></div>
       <div class="stat-card accent"><div class="label">🔁 הוצאות קבועות (חודשי)</div><div class="value tnum">${money(d.recurringMonthly)}</div><div class="sub">תחזית שנתית: ${money(d.annualProjection)}</div></div>
       <div class="stat-card ${d.uncategorized?'warn':'accent'}"><div class="label">🏷️ עסקאות ללא סיווג</div><div class="value tnum">${d.uncategorized}</div><div class="sub">${d.uncategorized?'<a class="link" data-nav="review">סווג עכשיו ←</a>':'הכל מסווג ✔'}</div></div>
       <div class="stat-card ${d.completeness>=99?'income':d.completeness>=60?'warn':'expense'}"><div class="label">✅ שלמות התמונה</div><div class="value tnum">${d.completeness}%</div><div class="sub">${d.unclassifiedTotal>0?`<a class="link" data-nav="review">חסר סיווג/פירוט ${money(d.unclassifiedTotal)} ←</a>`:'הכל מסווג ומפורט ✔'}</div></div>
