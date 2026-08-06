@@ -488,12 +488,29 @@ async function pushRemote(){
 }
 function scheduleSync(){ if(!syncCode) return; clearTimeout(syncTimer); syncTimer=setTimeout(pushRemote,1500); }
 function adoptRemote(rdata){ db=rdata; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'].forEach(k=>{ if(!Array.isArray(db[k])) db[k]=[]; }); persistLocal(); }
+const SYNC_KEYS=['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'];
+// טביעת אצבע של התוכן בלבד (ללא חותמת הזמן) — כדי לזהות שינוי אמיתי ולא ריענון מיותר
+function dataSig(d){ if(!d) return ''; try{ return JSON.stringify(SYNC_KEYS.map(k=>d[k]||[])); }catch(e){ return 'x'+(d.updatedAt||''); } }
+// האם המשתמש באמצע פעולה? אז לא מרעננים כדי לא לסגור חלונות/למחוק הקלדה/לקפוץ למעלה
+function userBusy(){
+  if(document.querySelector('.modal-backdrop')) return true;
+  const a=document.activeElement; if(a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return true;
+  const asst=document.getElementById('asst-msgs'); if(asst && asst.children.length>1) return true; // שיחה פעילה עם העוזר
+  return false;
+}
 async function syncNow(){ // מיזוג יזום: הנתונים העדכניים ביותר מנצחים, אך נתונים אמיתיים לא נדרסים ע"י ריקים
-  if(document.querySelector('.modal-backdrop')) return; // לא מפריעים בזמן עריכה
   try{ const remote=await pullRemote(); const localReal=hasRealData(db), remoteReal=remote.data&&hasRealData(remote.data);
-    if(remoteReal && !localReal){ adoptRemote(remote.data); syncBadge('מסונכרן ☁️✓'); render(); }
-    else if(remoteReal && localReal && (remote.data.updatedAt||0) > (db.updatedAt||0)){ adoptRemote(remote.data); syncBadge('מסונכרן ☁️✓'); render(); }
-    else { await pushRemote(); }
+    let adopt=false;
+    if(remoteReal && !localReal) adopt=true;
+    else if(remoteReal && localReal && (remote.data.updatedAt||0) > (db.updatedAt||0)) adopt=true;
+    if(adopt){
+      // אותו תוכן בדיוק (רק חותמת זמן חדשה ממכשיר אחר) — מיישרים זמן בלבד, בלי ריענון
+      if(dataSig(remote.data)===dataSig(db)){ db.updatedAt=remote.data.updatedAt||db.updatedAt; persistLocal(); syncBadge('מסונכרן ☁️✓'); return; }
+      if(userBusy()){ syncBadge('מסונכרן ☁️✓'); return; } // ניקלוט בסבב הבא, לא מפריעים עכשיו
+      adoptRemote(remote.data); syncBadge('מסונכרן ☁️✓'); render({keepScroll:true}); // ריענון שקט ששומר על מיקום הגלילה
+    } else {
+      await pushRemote();
+    }
   }catch(e){ syncBadge('לא מקוון'); }
 }
 db = loadDB();
@@ -2909,15 +2926,19 @@ views.balance=async()=>{
 /* ============================ Router ============================ */
 const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',transactions:'עסקאות',review:'סיווג עסקאות',classifyall:'כל הסיווגים',import:'ייבוא תדפיסים',monthly:'לפי חודש',balance:'מאזן והצלבה',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',documents:'ארכיון מסמכים',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי'};
 function currentView(){ const hash=location.hash.replace('#/','')||'dashboard'; return views[hash]?hash:'dashboard'; }
-async function render(){
+async function render(opts){
+  opts=(opts&&opts.keepScroll)?opts:{}; // hashchange/אירועים מעבירים Event — מתייחסים אליו כרענדר רגיל
   const name=currentView();
   document.getElementById('page-title').textContent=TITLES[name];
   document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('active',a.dataset.view===name));
   document.getElementById('month-wrap').style.visibility=MONTH_VIEWS.has(name)?'visible':'hidden';
   const container=document.getElementById('view');
-  container.innerHTML='<div class="empty">טוען…</div>';
+  const y=window.scrollY;
+  // ברענדר שקט (סנכרון רקע) לא מציגים «טוען…» כדי שהגובה לא יקרוס והמסך לא יקפוץ למעלה
+  if(!opts.keepScroll) container.innerHTML='<div class="empty">טוען…</div>';
   try{ const el=await views[name](); container.innerHTML=''; container.appendChild(el); }
   catch(err){ container.innerHTML=`<div class="empty">שגיאה: ${esc(err.message)}</div>`; }
+  if(opts.keepScroll) window.scrollTo(0,y); // שמירה על מיקום הגלילה
 }
 document.getElementById('nav').addEventListener('click',e=>{ const a=e.target.closest('a[data-view]'); if(a){ e.preventDefault(); location.hash='#/'+a.dataset.view; } });
 document.addEventListener('click',e=>{ const n=e.target.closest('[data-nav]'); if(n){ e.preventDefault(); location.hash='#/'+n.dataset.nav; } });
