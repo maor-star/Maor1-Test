@@ -1,0 +1,13 @@
+# שירות systemd להרצת המשימה היומית של הסוכן (ריצה בודדת).
+# Type=oneshot — רץ, מסיים, ויוצא. המתזמן הוא agent.timer.
+# התאם את WorkingDirectory ו-User לסביבה שלך.
+[Unit]
+Description=Adnimation Daily Agent (one run)
+After=network.target
+
+[Service]
+Type=oneshot
+User=REPLACE_USER
+WorkingDirectory=/opt/office-app
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/office-app/agent/runOnce.js

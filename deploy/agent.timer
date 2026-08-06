@@ -1,0 +1,20 @@
+# טיימר systemd — מפעיל את agent.service פעם ביום.
+#
+# התקנה:
+#   sudo cp deploy/agent.service deploy/agent.timer /etc/systemd/system/
+#   # ערוך את REPLACE_USER והנתיבים ב-agent.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now agent.timer
+#   systemctl list-timers | grep agent      # אימות
+#   journalctl -u agent.service -f          # צפייה בלוגים
+[Unit]
+Description=Run the Adnimation daily agent every day
+
+[Timer]
+# כל יום ב-08:00 שעון מקומי. שנה לשעה הרצויה.
+OnCalendar=*-*-* 08:00:00
+# אם השרת היה כבוי בזמן הריצה — הרץ מיד עם ההדלקה.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
