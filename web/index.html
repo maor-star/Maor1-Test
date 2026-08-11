@@ -395,6 +395,10 @@ code{background:var(--chip); padding:2px 7px; border-radius:6px; font-size:13px;
 .lock-input{width:100%; text-align:center; font-size:22px; letter-spacing:.35em; padding:14px 12px; margin-bottom:10px;
   border:1.5px solid var(--border); border-radius:14px; background:var(--surface-2); color:var(--text)}
 .lock-input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 4px var(--grad-soft)}
+.lock-tabs{display:flex; gap:6px; background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:4px; margin-bottom:16px}
+.lock-tab{flex:1; padding:9px; border:none; border-radius:9px; background:transparent; color:var(--muted); font-size:14px; font-weight:700; cursor:pointer}
+.lock-tab.active{background:var(--surface); color:var(--text); box-shadow:0 1px 3px rgba(8,15,30,.12)}
+.lock-note{min-height:0; color:var(--muted); font-size:13px; line-height:1.6; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:10px; text-align:right}
 .lock-err{min-height:18px; color:var(--red); font-size:13px; font-weight:600; margin-bottom:6px}
 .lock-remember{display:flex; align-items:center; justify-content:center; gap:8px; color:var(--muted); font-size:13px; margin-bottom:16px; cursor:pointer}
 .lock-remember input{width:16px; height:16px; accent-color:var(--accent)}
@@ -402,6 +406,18 @@ code{background:var(--chip); padding:2px 7px; border-radius:6px; font-size:13px;
   font-size:16px; font-weight:800; cursor:pointer; box-shadow:0 10px 24px rgba(13,148,136,.3)}
 .lock-btn:hover{filter:brightness(1.05)}
 .lock-shake{animation:lock-shake .4s}
+/* ניהול משתמשים */
+.ulist{display:flex; flex-direction:column; gap:10px}
+.urow{display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:12px 14px; border:1px solid var(--border); border-radius:14px; background:var(--surface-2)}
+.uinfo{flex:1; min-width:160px}
+.uname{font-weight:700}
+.ubadge{font-size:11px; font-weight:700; color:var(--accent); border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border)); border-radius:6px; padding:1px 6px; margin-inline-start:4px}
+.uemail{color:var(--muted); font-size:13px; direction:ltr; text-align:right}
+.ustatus{font-size:13px; font-weight:700; white-space:nowrap}
+.ustatus.green{color:var(--green)} .ustatus.amber{color:var(--amber)} .ustatus.red{color:var(--red)}
+.uacts{display:flex; gap:8px; flex-wrap:wrap}
+.pill{display:inline-block; background:var(--amber); color:#fff; border-radius:999px; font-size:12px; font-weight:700; padding:1px 9px; vertical-align:middle}
+@media (max-width:560px){ .urow{flex-direction:column; align-items:stretch} .uacts{justify-content:flex-end} }
 @keyframes lock-shake{10%,90%{transform:translateX(-2px)}30%,70%{transform:translateX(6px)}50%{transform:translateX(-8px)}}
 </style>
 
@@ -452,11 +468,18 @@ code{background:var(--chip); padding:2px 7px; border-radius:6px; font-size:13px;
   <div class="lock-card">
     <div class="lock-logo">🏡</div>
     <h2 class="lock-title">ניהול הבית</h2>
-    <p class="lock-sub" id="lock-sub">הזינו את קוד הכניסה</p>
-    <form id="lock-form" autocomplete="off">
-      <input id="lock-pin" class="lock-input" type="password" inputmode="numeric" autocomplete="off" placeholder="קוד כניסה" />
-      <input id="lock-pin2" class="lock-input" type="password" inputmode="numeric" autocomplete="off" placeholder="אישור קוד" style="display:none" />
+    <p class="lock-sub" id="lock-sub">התחברו לחשבון שלכם</p>
+    <div class="lock-tabs">
+      <button type="button" class="lock-tab active" id="tab-login">כניסה</button>
+      <button type="button" class="lock-tab" id="tab-register">הרשמה</button>
+    </div>
+    <form id="lock-form" autocomplete="on">
+      <input id="a-name" class="lock-input" type="text" autocomplete="name" placeholder="שם מלא" style="display:none" />
+      <input id="a-email" class="lock-input" type="email" autocomplete="email" placeholder="אימייל" style="letter-spacing:normal;text-align:right;direction:ltr" />
+      <input id="a-pass" class="lock-input" type="password" autocomplete="current-password" placeholder="סיסמה" style="letter-spacing:normal;text-align:right;direction:ltr" />
+      <input id="a-pass2" class="lock-input" type="password" autocomplete="new-password" placeholder="אישור סיסמה" style="letter-spacing:normal;text-align:right;direction:ltr;display:none" />
       <div class="lock-err" id="lock-err"></div>
+      <div class="lock-note" id="lock-note" style="display:none"></div>
       <label class="lock-remember"><input type="checkbox" id="lock-remember" checked /> זכור אותי במכשיר הזה</label>
       <button type="submit" class="lock-btn" id="lock-btn">כניסה</button>
     </form>
@@ -495,37 +518,67 @@ function save(){
   _hasCardDetail=null; // איפוס מטמון (ייתכן שהשתנו שורות פירוט)
   persistLocal();
   const s=document.getElementById('save-state');
-  if(s && !syncCode){ s.textContent='נשמר ✔'; clearTimeout(saveTimer); saveTimer=setTimeout(()=>s.textContent='נשמר בדפדפן',1500); }
+  if(s && !authToken){ s.textContent='נשמר ✔'; clearTimeout(saveTimer); saveTimer=setTimeout(()=>s.textContent='נשמר בדפדפן',1500); }
   scheduleSync();
 }
-/* ---------- Cloud sync (S3 + Lambda) — אוטומטי, ללא קוד ---------- */
+/* ---------- Cloud sync (S3 + Lambda) — עם חשבון משתמש ואישור מנהל ---------- */
 const SYNC_API='https://cu3nr7fq95.execute-api.us-east-1.amazonaws.com';
-const FIXED_SYNC_KEY='bait-home-7c3f9a1e5b2d4680c1a94f28d6'; // מפתח קבוע: כל המכשירים מסתנכרנים אוטומטית
-let syncCode=FIXED_SYNC_KEY;
+const TOKEN_KEY='home-auth-token', USER_KEY='home-auth-user';
+let authToken=null, authUser=null;
+function loadAuth(){
+  try{ authToken=localStorage.getItem(TOKEN_KEY)||sessionStorage.getItem(TOKEN_KEY)||null; }catch(e){}
+  try{ const raw=localStorage.getItem(USER_KEY)||sessionStorage.getItem(USER_KEY); authUser=raw?JSON.parse(raw):null; }catch(e){}
+}
+function saveAuth(token,user,remember){
+  authToken=token; authUser=user;
+  try{
+    const store=remember?localStorage:sessionStorage, other=remember?sessionStorage:localStorage;
+    store.setItem(TOKEN_KEY,token); store.setItem(USER_KEY,JSON.stringify(user));
+    other.removeItem(TOKEN_KEY); other.removeItem(USER_KEY);
+  }catch(e){}
+}
+function clearAuth(){
+  authToken=null; authUser=null;
+  try{ localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(USER_KEY); }catch(e){}
+}
+// קריאה ל-API האימות. מחזיר {ok, status, data}
+async function authApi(action, body, useAuth){
+  const headers={'content-type':'application/json'};
+  if(useAuth && authToken) headers['authorization']='Bearer '+authToken;
+  const r=await fetch(SYNC_API+'/auth/'+action,{method:'POST',headers,body:JSON.stringify(body||{})});
+  let data={}; try{ data=await r.json(); }catch(e){}
+  return {ok:r.ok, status:r.status, data};
+}
 const hasRealData=(d)=> !!d && ['transactions','professionals','warranties','components','lighting','recurring','maintenance'].some(k=>Array.isArray(d[k])&&d[k].length>0);
-let syncTimer=null, syncBusy=false, syncPending=false;
+let syncTimer=null, syncBusy=false, syncPending=false, sessionExpired=false;
 function syncBadge(txt){ const s=document.getElementById('save-state'); if(s) s.textContent=txt; }
+function onSessionExpired(){ // הטוקן פג/נדחה — חוזרים למסך התחברות
+  if(sessionExpired) return; sessionExpired=true; clearTimeout(syncTimer); clearAuth();
+  syncBadge('נדרשת התחברות'); showAuthScreen('פג תוקף ההתחברות — היכנסו מחדש');
+}
 async function pullRemote(){
-  const r=await fetch(SYNC_API+'/data?code='+encodeURIComponent(syncCode));
+  const r=await fetch(SYNC_API+'/data',{headers:authToken?{authorization:'Bearer '+authToken}:{}});
+  if(r.status===401||r.status===403){ onSessionExpired(); throw new Error('unauthorized'); }
   if(!r.ok) throw new Error('טעינה מהענן נכשלה ('+r.status+')');
   return r.json();
 }
 async function pushRemote(){
-  if(!syncCode) return;
+  if(!authToken){ return; }
   if(syncBusy){ syncPending=true; return; }
   syncBusy=true; syncBadge('מסנכרן…☁️');
   try{
-    const r=await fetch(SYNC_API+'/data',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({code:syncCode,data:db})});
+    const r=await fetch(SYNC_API+'/data',{method:'PUT',headers:{'content-type':'application/json','authorization':'Bearer '+authToken},body:JSON.stringify({data:db})});
+    if(r.status===401||r.status===403){ onSessionExpired(); return; }
     if(!r.ok) throw new Error(r.status);
     syncBadge('מסונכרן ☁️✓');
   }catch(e){ syncBadge('שגיאת סנכרון ⚠️'); }
   finally{ syncBusy=false; if(syncPending){ syncPending=false; scheduleSync(); } }
 }
-function scheduleSync(){ if(!syncCode) return; clearTimeout(syncTimer); syncTimer=setTimeout(pushRemote,1500); }
+function scheduleSync(){ if(!authToken) return; clearTimeout(syncTimer); syncTimer=setTimeout(pushRemote,1500); }
 function adoptRemote(rdata){ db=rdata; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'].forEach(k=>{ if(!Array.isArray(db[k])) db[k]=[]; }); persistLocal(); }
 const SYNC_KEYS=['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'];
 // טביעת אצבע של התוכן בלבד (ללא חותמת הזמן) — כדי לזהות שינוי אמיתי ולא ריענון מיותר
-function dataSig(d){ if(!d) return ''; try{ return JSON.stringify([SYNC_KEYS.map(k=>d[k]||[]), d.pinHash||'']); }catch(e){ return 'x'+(d.updatedAt||''); } }
+function dataSig(d){ if(!d) return ''; try{ return JSON.stringify(SYNC_KEYS.map(k=>d[k]||[])); }catch(e){ return 'x'+(d.updatedAt||''); } }
 // האם המשתמש באמצע פעולה? אז לא מרעננים כדי לא לסגור חלונות/למחוק הקלדה/לקפוץ למעלה
 function userBusy(){
   if(document.querySelector('.modal-backdrop')) return true;
@@ -2761,6 +2814,50 @@ views.reconcile=async()=>{
 };
 
 // ===== Settings & backup =====
+// ===== ניהול משתמשים (מנהל בלבד) — אישור/דחייה/מחיקה =====
+views.users=async()=>{
+  const el=document.createElement('div');
+  if(!authUser||authUser.role!=='admin'){ el.innerHTML='<div class="empty">אזור זה מיועד למנהל בלבד.</div>'; return el; }
+  const STLABEL={pending:'⏳ ממתין לאישור',approved:'✅ מאושר',rejected:'⛔ נדחה'};
+  const STCLASS={pending:'amber',approved:'green',rejected:'red'};
+  let users=[];
+  const load=async()=>{ const res=await authApi('users',{},true); if(res.status===401||res.status===403){ onSessionExpired(); return; } users=(res.data.users||[]); };
+  await load();
+  const draw=()=>{
+    const pending=users.filter(u=>u.status==='pending');
+    const others=users.filter(u=>u.status!=='pending');
+    const row=(u)=>{
+      const isAdmin=u.role==='admin';
+      const acts=isAdmin?'<span class="hint" style="margin:0">מנהל ראשי</span>':`
+        ${u.status!=='approved'?`<button class="btn" data-approve="${esc(u.email)}" style="padding:6px 12px">אישור</button>`:''}
+        ${u.status!=='rejected'?`<button class="btn-ghost" data-reject="${esc(u.email)}" style="padding:6px 12px">${u.status==='approved'?'השעיה':'דחייה'}</button>`:''}
+        <button class="btn-ghost" data-remove="${esc(u.email)}" style="padding:6px 12px;color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,var(--border))">מחיקה</button>`;
+      return `<div class="urow">
+        <div class="uinfo"><div class="uname">${esc(u.name||'—')} ${isAdmin?'<span class="ubadge">מנהל</span>':''}</div><div class="uemail">${esc(u.email)}</div></div>
+        <span class="ustatus ${STCLASS[u.status]||''}">${STLABEL[u.status]||u.status}</span>
+        <div class="uacts">${acts}</div>
+      </div>`;
+    };
+    el.innerHTML=`
+      <div class="panel" style="margin-bottom:18px;${pending.length?'border-color:color-mix(in srgb,var(--amber) 45%,var(--border))':''}">
+        <h3>⏳ ממתינים לאישור ${pending.length?`<span class="pill">${pending.length}</span>`:''}</h3>
+        ${pending.length?`<div class="ulist">${pending.map(row).join('')}</div>`:'<p class="hint">אין בקשות הרשמה חדשות.</p>'}
+      </div>
+      <div class="panel">
+        <h3>👥 כל המשתמשים (${users.length})</h3>
+        <div class="ulist">${others.map(row).join('')||'<p class="hint">אין עדיין משתמשים מאושרים.</p>'}</div>
+      </div>
+      <p class="hint" style="margin-top:14px">רק משתמשים במצב «מאושר» יכולים להיכנס ולראות את הנתונים. אתה, כמנהל, תמיד מאושר.</p>`;
+    const act=async(email,status)=>{ const res=await authApi('approve',{email,status},true); if(!res.ok){ toast(res.data.error||'הפעולה נכשלה',true); return; } toast('עודכן ✓'); await load(); draw(); };
+    el.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>act(b.dataset.approve,'approved'));
+    el.querySelectorAll('[data-reject]').forEach(b=>b.onclick=()=>act(b.dataset.reject,'rejected'));
+    el.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>confirmDelete('למחוק את המשתמש '+b.dataset.remove+'? הוא יוכל להירשם מחדש.',async()=>{
+      const res=await authApi('remove',{email:b.dataset.remove},true); if(!res.ok){ toast(res.data.error||'המחיקה נכשלה',true); return; } toast('נמחק ✓'); await load(); draw(); }));
+  };
+  draw();
+  return el;
+};
+
 views.settings=async()=>{
   const [bk,cats,txs]=await Promise.all([api('/backup'),api('/categories'),api('/transactions')]);
   const counts={עסקאות:bk.data.transactions.length,קטגוריות:cats.length,'בעלי מקצוע':bk.data.professionals.length,אחריות:bk.data.warranties.length,רכיבים:bk.data.components.length,תאורה:bk.data.lighting.length,'הוצאות קבועות':bk.data.recurring.length};
@@ -2790,14 +2887,13 @@ views.settings=async()=>{
       </div>
     </div>
     <div class="panel" style="margin-top:18px; border-color:color-mix(in srgb,var(--accent) 30%,var(--border))">
-      <h3>🔐 קוד כניסה</h3>
-      <p class="hint" style="margin-bottom:14px" id="pin-status"></p>
+      <h3>👤 החשבון שלי</h3>
+      <p class="hint" style="margin-bottom:14px" id="acct-status"></p>
       <div style="display:flex; gap:10px; flex-wrap:wrap">
-        <button class="btn" id="pin-change">🔑 שינוי קוד כניסה</button>
-        <button class="btn-ghost" id="pin-forget">התנתקות ממכשיר זה</button>
-        <button class="btn-ghost" id="pin-remove" style="color:var(--red); border-color:color-mix(in srgb,var(--red) 40%,var(--border))">ביטול קוד הכניסה</button>
+        ${authUser&&authUser.role==='admin'?'<button class="btn" data-nav="users">👥 ניהול משתמשים</button>':''}
+        <button class="btn-ghost" id="acct-logout" style="color:var(--red); border-color:color-mix(in srgb,var(--red) 40%,var(--border))">התנתקות</button>
       </div>
-      <p class="hint" style="margin-top:12px">הקוד מגן על הכניסה למסך ומסתנכרן לכל המכשירים. «התנתקות» תדרוש להזין את הקוד שוב במכשיר הזה בכניסה הבאה.</p>
+      <p class="hint" style="margin-top:12px">הכניסה לאתר מוגנת בחשבון אישי. ${authUser&&authUser.role==='admin'?'כמנהל, אתה מאשר מי שנרשם דרך «ניהול משתמשים».':'רק משתמשים שהמנהל אישר יכולים להיכנס.'}</p>
     </div>
     <div class="panel" style="margin-top:18px">
       <h3>ℹ️ אודות</h3>
@@ -2830,31 +2926,14 @@ views.settings=async()=>{
       <button class="btn" id="sync-now">🔄 סנכרן עכשיו</button>
       <span class="hint" style="margin:0">הנתונים מסתנכרנים אוטומטית עם כל שינוי, וגם כל ~45 שניות.</span>
     </div>
-    <p class="hint" style="margin-top:12px">🔒 הכניסה לאפליקציה מוגנת בקוד כניסה (ניתן לשינוי למטה).</p>`;
+    <p class="hint" style="margin-top:12px">🔒 הנתונים מוגנים בשרת ונגישים רק למשתמשים מחוברים ומאושרים (ראה «החשבון שלי» למטה).</p>`;
   box.querySelector('#sync-now').onclick=async()=>{ toast('מסנכרן…'); await syncNow(); toast('סונכרן ☁️✓'); };
 
-  // ---- ניהול קוד כניסה ----
-  const pinStatus=el.querySelector('#pin-status');
-  const refreshPin=()=>{ pinStatus.innerHTML = db.pinHash ? '✅ קוד כניסה <strong>פעיל</strong>.' : '⚠️ אין קוד כניסה — כרגע כל מי שיש לו את הלינק יכול להיכנס.'; };
-  refreshPin();
-  el.querySelector('#pin-change').onclick=()=>{
-    const form=`<div class="hint" style="margin-bottom:12px">${db.pinHash?'הזינו את הקוד הנוכחי ואז קוד חדש (לפחות 4 תווים).':'הגדירו קוד כניסה חדש (לפחות 4 תווים).'}</div>
-      ${db.pinHash?'<div class="bar-row" style="margin-bottom:10px"><div class="bar-label" style="width:120px">קוד נוכחי</div><input name="cur" type="password" inputmode="numeric" autocomplete="off" style="flex:1" /></div>':''}
-      <div class="bar-row" style="margin-bottom:10px"><div class="bar-label" style="width:120px">קוד חדש</div><input name="n1" type="password" inputmode="numeric" autocomplete="off" style="flex:1" /></div>
-      <div class="bar-row"><div class="bar-label" style="width:120px">אישור קוד</div><input name="n2" type="password" inputmode="numeric" autocomplete="off" style="flex:1" /></div>`;
-    openModal('שינוי קוד כניסה',form,async fd=>{
-      if(db.pinHash){ const curH=await sha256(strv(fd.cur).trim()); if(curH!==db.pinHash) throw new Error('הקוד הנוכחי שגוי'); }
-      const n1=strv(fd.n1).trim(); if(n1.length<4) throw new Error('הקוד חייב להכיל לפחות 4 תווים');
-      if(n1!==strv(fd.n2).trim()) throw new Error('הקודים אינם תואמים');
-      const h=await sha256(n1); db.pinHash=h; save();
-      try{ localStorage.setItem(UNLOCK_KEY,h); }catch(e){}
-      toast('קוד הכניסה עודכן ✓'); refreshPin();
-    },{submitLabel:'שמירה'});
-  };
-  el.querySelector('#pin-forget').onclick=()=>{ try{ localStorage.removeItem(UNLOCK_KEY); }catch(e){} toast('נותקת ממכשיר זה — יידרש קוד בכניסה הבאה'); };
-  el.querySelector('#pin-remove').onclick=()=>confirmDelete('לבטל את קוד הכניסה? כל מי שיש לו את הלינק יוכל להיכנס.',async()=>{
-    delete db.pinHash; save(); try{ localStorage.removeItem(UNLOCK_KEY); }catch(e){} toast('קוד הכניסה בוטל'); refreshPin();
-  });
+  // ---- החשבון שלי ----
+  const acct=el.querySelector('#acct-status');
+  if(acct) acct.innerHTML = authUser ? `מחובר/ת כ־<strong>${esc(authUser.name||'')}</strong> · <span style="direction:ltr;display:inline-block">${esc(authUser.email||'')}</span>${authUser.role==='admin'?' · <strong style="color:var(--accent)">מנהל</strong>':''}` : 'לא מחובר.';
+  const lo=el.querySelector('#acct-logout');
+  if(lo) lo.onclick=()=>confirmDelete('להתנתק מהחשבון במכשיר זה?',async()=>{ clearTimeout(syncTimer); clearAuth(); showAuthScreen('התנתקת. היכנס/י מחדש כדי להמשיך.'); });
   return el;
 };
 
@@ -2992,7 +3071,7 @@ views.balance=async()=>{
 };
 
 /* ============================ Router ============================ */
-const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',transactions:'עסקאות',review:'סיווג עסקאות',classifyall:'כל הסיווגים',import:'ייבוא תדפיסים',monthly:'לפי חודש',balance:'מאזן והצלבה',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',documents:'ארכיון מסמכים',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי'};
+const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',transactions:'עסקאות',review:'סיווג עסקאות',classifyall:'כל הסיווגים',import:'ייבוא תדפיסים',monthly:'לפי חודש',balance:'מאזן והצלבה',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',documents:'ארכיון מסמכים',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי',users:'ניהול משתמשים'};
 function currentView(){ const hash=location.hash.replace('#/','')||'dashboard'; return views[hash]?hash:'dashboard'; }
 async function render(opts){
   opts=(opts&&opts.keepScroll)?opts:{}; // hashchange/אירועים מעבירים Event — מתייחסים אליו כרענדר רגיל
@@ -3035,53 +3114,107 @@ if(!location.hash) location.hash='#/dashboard';
   }, {passive:true});
   document.addEventListener('scroll',()=>{ if(tip.classList.contains('on')) tip.classList.remove('on'); }, {passive:true,capture:true});
 })();
-/* ---------- קוד כניסה (נעילת האפליקציה) ---------- */
-async function sha256(str){
-  try{ const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(String(str)));
-    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
-  catch(e){ let h=5381; const s=String(str); for(let i=0;i<s.length;i++){ h=(((h<<5)+h)^s.charCodeAt(i))>>>0; } return 'f'+h.toString(16); }
+/* ---------- מסך התחברות / הרשמה (חשבון משתמש + אישור מנהל) ---------- */
+let _authMode='login'; // 'login' | 'register'
+let _authResolve=null;
+function setAuthMode(mode){
+  _authMode=mode;
+  const name=document.getElementById('a-name'), pass2=document.getElementById('a-pass2');
+  const tabL=document.getElementById('tab-login'), tabR=document.getElementById('tab-register');
+  const btn=document.getElementById('lock-btn'), sub=document.getElementById('lock-sub');
+  const err=document.getElementById('lock-err'), note=document.getElementById('lock-note');
+  err.textContent=''; note.style.display='none';
+  const reg=mode==='register';
+  name.style.display=reg?'block':'none';
+  pass2.style.display=reg?'block':'none';
+  document.getElementById('a-pass').setAttribute('autocomplete',reg?'new-password':'current-password');
+  tabL.classList.toggle('active',!reg); tabR.classList.toggle('active',reg);
+  btn.textContent=reg?'הרשמה':'כניסה';
+  sub.textContent=reg?'צרו חשבון חדש — הכניסה תתאפשר לאחר אישור המנהל':'התחברו לחשבון שלכם';
 }
-const UNLOCK_KEY='home-unlock-v1';
-function gateUnlock(){
-  return new Promise(resolve=>{
-    const ov=document.getElementById('lock');
-    const sub=document.getElementById('lock-sub'), pin=document.getElementById('lock-pin'), pin2=document.getElementById('lock-pin2');
-    const err=document.getElementById('lock-err'), btn=document.getElementById('lock-btn'), form=document.getElementById('lock-form');
-    const isSet=!!db.pinHash;
-    // מכשיר שנזכר — כניסה אוטומטית
-    try{ const tok=localStorage.getItem(UNLOCK_KEY); if(isSet && tok && tok===db.pinHash){ ov.style.display='none'; return resolve(); } }catch(e){}
-    if(!isSet){ sub.textContent='הגדירו קוד כניסה חדש (לפחות 4 תווים) — יישמר לכל המכשירים'; pin.placeholder='קוד חדש'; pin2.style.display='block'; btn.textContent='הגדרת קוד'; }
-    else { sub.textContent='הזינו את קוד הכניסה'; pin2.style.display='none'; btn.textContent='כניסה'; }
-    ov.style.display='flex'; setTimeout(()=>pin.focus(),60);
-    const fail=(msg)=>{ err.textContent=msg; const c=ov.querySelector('.lock-card'); c.classList.remove('lock-shake'); void c.offsetWidth; c.classList.add('lock-shake'); pin.value=''; pin2.value=''; pin.focus(); };
-    form.onsubmit=async(e)=>{ e.preventDefault(); err.textContent='';
-      const v=(pin.value||'').trim();
-      const remember=document.getElementById('lock-remember').checked;
-      if(!isSet){
-        if(v.length<4) return fail('הקוד חייב להכיל לפחות 4 תווים');
-        if(v!==(pin2.value||'').trim()) return fail('הקודים אינם תואמים');
-        const h=await sha256(v); db.pinHash=h; save();
-        try{ if(remember) localStorage.setItem(UNLOCK_KEY,h); }catch(e){}
-        ov.style.display='none'; resolve();
+function showAuthScreen(message){
+  const ov=document.getElementById('lock'); ov.style.display='flex';
+  setAuthMode('login');
+  if(message){ const n=document.getElementById('lock-note'); n.textContent=message; n.style.display='block'; }
+  setTimeout(()=>document.getElementById('a-email').focus(),60);
+}
+function initAuthForm(){
+  document.getElementById('tab-login').onclick=()=>setAuthMode('login');
+  document.getElementById('tab-register').onclick=()=>setAuthMode('register');
+  const ov=document.getElementById('lock');
+  const email=document.getElementById('a-email'), pass=document.getElementById('a-pass'), pass2=document.getElementById('a-pass2'), name=document.getElementById('a-name');
+  const err=document.getElementById('lock-err'), note=document.getElementById('lock-note'), btn=document.getElementById('lock-btn');
+  const shake=()=>{ const c=ov.querySelector('.lock-card'); c.classList.remove('lock-shake'); void c.offsetWidth; c.classList.add('lock-shake'); };
+  const fail=(msg)=>{ err.textContent=msg; note.style.display='none'; shake(); };
+  document.getElementById('lock-form').onsubmit=async(e)=>{ e.preventDefault(); err.textContent=''; note.style.display='none';
+    const remember=document.getElementById('lock-remember').checked;
+    const em=(email.value||'').trim().toLowerCase(), pw=pass.value||'';
+    btn.disabled=true;
+    try{
+      if(_authMode==='register'){
+        const nm=(name.value||'').trim();
+        if(!nm) return fail('נא להזין שם מלא');
+        if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return fail('אימייל לא תקין');
+        if(pw.length<6) return fail('הסיסמה חייבת להכיל לפחות 6 תווים');
+        if(pw!==(pass2.value||'')) return fail('הסיסמאות אינן תואמות');
+        const res=await authApi('register',{email:em,name:nm,password:pw});
+        if(!res.ok) return fail(res.data.error||'ההרשמה נכשלה');
+        if(res.data.token){ // מנהל — נכנס מיד
+          saveAuth(res.data.token,res.data.user,remember); return finishAuth();
+        }
+        // ממתין לאישור
+        note.innerHTML='✅ בקשת ההרשמה נשלחה!<br>המנהל (maor@adnimation.com) צריך לאשר אותך. לאחר האישור תוכל להתחבר.';
+        note.style.display='block'; setAuthMode('login'); note.style.display='block'; email.value=em;
       } else {
-        const h=await sha256(v);
-        if(h!==db.pinHash) return fail('קוד שגוי, נסו שוב');
-        try{ if(remember) localStorage.setItem(UNLOCK_KEY,h); else localStorage.removeItem(UNLOCK_KEY); }catch(e){}
-        ov.style.display='none'; resolve();
+        if(!em||!pw) return fail('נא להזין אימייל וסיסמה');
+        const res=await authApi('login',{email:em,password:pw});
+        if(res.status===403 && res.data.status==='pending') return fail('החשבון ממתין לאישור המנהל');
+        if(res.status===403 && res.data.status==='rejected') return fail('הבקשה נדחתה. פנה למנהל.');
+        if(!res.ok) return fail(res.data.error||'אימייל או סיסמה שגויים');
+        saveAuth(res.data.token,res.data.user,remember); return finishAuth();
       }
-    };
+    }catch(ex){ fail('שגיאת רשת — נסו שוב'); }
+    finally{ btn.disabled=false; }
+  };
+}
+function finishAuth(){ // אחרי התחברות מוצלחת
+  sessionExpired=false;
+  document.getElementById('lock').style.display='none';
+  document.getElementById('a-pass').value=''; document.getElementById('a-pass2').value='';
+  if(_authResolve){ const r=_authResolve; _authResolve=null; r(); }
+  else { startApp(); }
+}
+function gateAuth(){
+  return new Promise(resolve=>{
+    _authResolve=resolve;
+    if(authToken){ resolve(); _authResolve=null; return; } // כבר מחוברים — ננסה, ואם הטוקן פג נחזור למסך
+    showAuthScreen();
   });
 }
-async function boot(){
-  syncBadge('טוען…☁️');
-  // משיכה ראשונית — כדי לקבל את הקוד והנתונים העדכניים (כולל קוד שהוגדר במכשיר אחר) עוד לפני הנעילה
-  try{ const remote=await pullRemote(); if(remote&&remote.data&&hasRealData(remote.data)&&(!hasRealData(db)||(remote.data.updatedAt||0)>=(db.updatedAt||0))) adoptRemote(remote.data); }catch(e){}
-  await gateUnlock();
+function applyRoleUI(){ // הצגת פריט ניהול משתמשים למנהל בלבד + שם המשתמש
+  const isAdmin=authUser&&authUser.role==='admin';
+  const nav=document.getElementById('nav');
+  let a=nav.querySelector('a[data-view="users"]');
+  if(isAdmin && !a){
+    a=document.createElement('a'); a.dataset.view='users';
+    a.innerHTML='<span class="ico">👥</span> <span>משתמשים</span>';
+    const settingsLink=nav.querySelector('a[data-view="settings"]');
+    nav.insertBefore(a,settingsLink);
+  } else if(!isAdmin && a){ a.remove(); }
+}
+let _appStarted=false;
+async function startApp(){
+  applyRoleUI();
+  if(!_appStarted){ _appStarted=true; setInterval(()=>{ if(authToken&&!sessionExpired) syncNow(); }, 45000); }
   render();
   syncBadge('מסתנכרן…☁️');
   await syncNow();
-  // רענון תקופתי כדי לקלוט שינויים ממכשירים אחרים
-  setInterval(syncNow, 45000);
+}
+async function boot(){
+  loadAuth();
+  initAuthForm();
+  await gateAuth();      // נחסם עד שיש טוקן
+  await startApp();
 }
 boot();
 </script>
