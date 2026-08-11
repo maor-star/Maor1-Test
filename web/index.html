@@ -382,6 +382,27 @@ code{background:var(--chip); padding:2px 7px; border-radius:6px; font-size:13px;
   .bar-label{max-width:40%}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+/* ---------- מסך נעילה / קוד כניסה ---------- */
+.lock{position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px;
+  background:radial-gradient(1200px 600px at 50% -10%,var(--bg-glow),transparent), var(--bg);
+  backdrop-filter:blur(4px)}
+.lock-card{width:min(380px,100%); background:var(--surface); border:1px solid var(--border); border-radius:22px;
+  box-shadow:0 30px 80px rgba(8,15,30,.35); padding:34px 26px 28px; text-align:center; animation:lock-in .35s ease}
+@keyframes lock-in{from{opacity:0; transform:translateY(14px) scale(.98)}to{opacity:1; transform:none}}
+.lock-logo{font-size:44px; line-height:1}
+.lock-title{margin:10px 0 2px; font-size:22px; font-weight:800; letter-spacing:-.02em}
+.lock-sub{margin:0 0 18px; color:var(--muted); font-size:14px}
+.lock-input{width:100%; text-align:center; font-size:22px; letter-spacing:.35em; padding:14px 12px; margin-bottom:10px;
+  border:1.5px solid var(--border); border-radius:14px; background:var(--surface-2); color:var(--text)}
+.lock-input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 4px var(--grad-soft)}
+.lock-err{min-height:18px; color:var(--red); font-size:13px; font-weight:600; margin-bottom:6px}
+.lock-remember{display:flex; align-items:center; justify-content:center; gap:8px; color:var(--muted); font-size:13px; margin-bottom:16px; cursor:pointer}
+.lock-remember input{width:16px; height:16px; accent-color:var(--accent)}
+.lock-btn{width:100%; padding:14px; border:none; border-radius:14px; background:var(--grad); color:var(--on-accent);
+  font-size:16px; font-weight:800; cursor:pointer; box-shadow:0 10px 24px rgba(13,148,136,.3)}
+.lock-btn:hover{filter:brightness(1.05)}
+.lock-shake{animation:lock-shake .4s}
+@keyframes lock-shake{10%,90%{transform:translateX(-2px)}30%,70%{transform:translateX(6px)}50%{transform:translateX(-8px)}}
 </style>
 
 <div class="app">
@@ -427,6 +448,20 @@ code{background:var(--chip); padding:2px 7px; border-radius:6px; font-size:13px;
   </main>
 </div>
 <div id="toast" class="toast"></div>
+<div id="lock" class="lock" style="display:none">
+  <div class="lock-card">
+    <div class="lock-logo">🏡</div>
+    <h2 class="lock-title">ניהול הבית</h2>
+    <p class="lock-sub" id="lock-sub">הזינו את קוד הכניסה</p>
+    <form id="lock-form" autocomplete="off">
+      <input id="lock-pin" class="lock-input" type="password" inputmode="numeric" autocomplete="off" placeholder="קוד כניסה" />
+      <input id="lock-pin2" class="lock-input" type="password" inputmode="numeric" autocomplete="off" placeholder="אישור קוד" style="display:none" />
+      <div class="lock-err" id="lock-err"></div>
+      <label class="lock-remember"><input type="checkbox" id="lock-remember" checked /> זכור אותי במכשיר הזה</label>
+      <button type="submit" class="lock-btn" id="lock-btn">כניסה</button>
+    </form>
+  </div>
+</div>
 
 <script>
 /* ============================ Local data store ============================ */
@@ -490,7 +525,7 @@ function scheduleSync(){ if(!syncCode) return; clearTimeout(syncTimer); syncTime
 function adoptRemote(rdata){ db=rdata; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'].forEach(k=>{ if(!Array.isArray(db[k])) db[k]=[]; }); persistLocal(); }
 const SYNC_KEYS=['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'];
 // טביעת אצבע של התוכן בלבד (ללא חותמת הזמן) — כדי לזהות שינוי אמיתי ולא ריענון מיותר
-function dataSig(d){ if(!d) return ''; try{ return JSON.stringify(SYNC_KEYS.map(k=>d[k]||[])); }catch(e){ return 'x'+(d.updatedAt||''); } }
+function dataSig(d){ if(!d) return ''; try{ return JSON.stringify([SYNC_KEYS.map(k=>d[k]||[]), d.pinHash||'']); }catch(e){ return 'x'+(d.updatedAt||''); } }
 // האם המשתמש באמצע פעולה? אז לא מרעננים כדי לא לסגור חלונות/למחוק הקלדה/לקפוץ למעלה
 function userBusy(){
   if(document.querySelector('.modal-backdrop')) return true;
@@ -2754,6 +2789,16 @@ views.settings=async()=>{
         <button class="btn-ghost" id="reset" style="color:var(--red); border-color:color-mix(in srgb,var(--red) 40%,var(--border))">מחיקת כל הנתונים</button>
       </div>
     </div>
+    <div class="panel" style="margin-top:18px; border-color:color-mix(in srgb,var(--accent) 30%,var(--border))">
+      <h3>🔐 קוד כניסה</h3>
+      <p class="hint" style="margin-bottom:14px" id="pin-status"></p>
+      <div style="display:flex; gap:10px; flex-wrap:wrap">
+        <button class="btn" id="pin-change">🔑 שינוי קוד כניסה</button>
+        <button class="btn-ghost" id="pin-forget">התנתקות ממכשיר זה</button>
+        <button class="btn-ghost" id="pin-remove" style="color:var(--red); border-color:color-mix(in srgb,var(--red) 40%,var(--border))">ביטול קוד הכניסה</button>
+      </div>
+      <p class="hint" style="margin-top:12px">הקוד מגן על הכניסה למסך ומסתנכרן לכל המכשירים. «התנתקות» תדרוש להזין את הקוד שוב במכשיר הזה בכניסה הבאה.</p>
+    </div>
     <div class="panel" style="margin-top:18px">
       <h3>ℹ️ אודות</h3>
       <div class="row muted" style="font-size:13px; line-height:1.9">
@@ -2785,8 +2830,31 @@ views.settings=async()=>{
       <button class="btn" id="sync-now">🔄 סנכרן עכשיו</button>
       <span class="hint" style="margin:0">הנתונים מסתנכרנים אוטומטית עם כל שינוי, וגם כל ~45 שניות.</span>
     </div>
-    <p class="hint" style="margin-top:12px">🔒 ההגנה על הנתונים היא הכתובת הפרטית של האתר. מי שיש לו את הלינק — רואה את הנתונים. (ניתן להוסיף סיסמה בעתיד.)</p>`;
+    <p class="hint" style="margin-top:12px">🔒 הכניסה לאפליקציה מוגנת בקוד כניסה (ניתן לשינוי למטה).</p>`;
   box.querySelector('#sync-now').onclick=async()=>{ toast('מסנכרן…'); await syncNow(); toast('סונכרן ☁️✓'); };
+
+  // ---- ניהול קוד כניסה ----
+  const pinStatus=el.querySelector('#pin-status');
+  const refreshPin=()=>{ pinStatus.innerHTML = db.pinHash ? '✅ קוד כניסה <strong>פעיל</strong>.' : '⚠️ אין קוד כניסה — כרגע כל מי שיש לו את הלינק יכול להיכנס.'; };
+  refreshPin();
+  el.querySelector('#pin-change').onclick=()=>{
+    const form=`<div class="hint" style="margin-bottom:12px">${db.pinHash?'הזינו את הקוד הנוכחי ואז קוד חדש (לפחות 4 תווים).':'הגדירו קוד כניסה חדש (לפחות 4 תווים).'}</div>
+      ${db.pinHash?'<div class="bar-row" style="margin-bottom:10px"><div class="bar-label" style="width:120px">קוד נוכחי</div><input name="cur" type="password" inputmode="numeric" autocomplete="off" style="flex:1" /></div>':''}
+      <div class="bar-row" style="margin-bottom:10px"><div class="bar-label" style="width:120px">קוד חדש</div><input name="n1" type="password" inputmode="numeric" autocomplete="off" style="flex:1" /></div>
+      <div class="bar-row"><div class="bar-label" style="width:120px">אישור קוד</div><input name="n2" type="password" inputmode="numeric" autocomplete="off" style="flex:1" /></div>`;
+    openModal('שינוי קוד כניסה',form,async fd=>{
+      if(db.pinHash){ const curH=await sha256(strv(fd.cur).trim()); if(curH!==db.pinHash) throw new Error('הקוד הנוכחי שגוי'); }
+      const n1=strv(fd.n1).trim(); if(n1.length<4) throw new Error('הקוד חייב להכיל לפחות 4 תווים');
+      if(n1!==strv(fd.n2).trim()) throw new Error('הקודים אינם תואמים');
+      const h=await sha256(n1); db.pinHash=h; save();
+      try{ localStorage.setItem(UNLOCK_KEY,h); }catch(e){}
+      toast('קוד הכניסה עודכן ✓'); refreshPin();
+    },{submitLabel:'שמירה'});
+  };
+  el.querySelector('#pin-forget').onclick=()=>{ try{ localStorage.removeItem(UNLOCK_KEY); }catch(e){} toast('נותקת ממכשיר זה — יידרש קוד בכניסה הבאה'); };
+  el.querySelector('#pin-remove').onclick=()=>confirmDelete('לבטל את קוד הכניסה? כל מי שיש לו את הלינק יוכל להיכנס.',async()=>{
+    delete db.pinHash; save(); try{ localStorage.removeItem(UNLOCK_KEY); }catch(e){} toast('קוד הכניסה בוטל'); refreshPin();
+  });
   return el;
 };
 
@@ -2967,7 +3035,48 @@ if(!location.hash) location.hash='#/dashboard';
   }, {passive:true});
   document.addEventListener('scroll',()=>{ if(tip.classList.contains('on')) tip.classList.remove('on'); }, {passive:true,capture:true});
 })();
+/* ---------- קוד כניסה (נעילת האפליקציה) ---------- */
+async function sha256(str){
+  try{ const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(String(str)));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
+  catch(e){ let h=5381; const s=String(str); for(let i=0;i<s.length;i++){ h=(((h<<5)+h)^s.charCodeAt(i))>>>0; } return 'f'+h.toString(16); }
+}
+const UNLOCK_KEY='home-unlock-v1';
+function gateUnlock(){
+  return new Promise(resolve=>{
+    const ov=document.getElementById('lock');
+    const sub=document.getElementById('lock-sub'), pin=document.getElementById('lock-pin'), pin2=document.getElementById('lock-pin2');
+    const err=document.getElementById('lock-err'), btn=document.getElementById('lock-btn'), form=document.getElementById('lock-form');
+    const isSet=!!db.pinHash;
+    // מכשיר שנזכר — כניסה אוטומטית
+    try{ const tok=localStorage.getItem(UNLOCK_KEY); if(isSet && tok && tok===db.pinHash){ ov.style.display='none'; return resolve(); } }catch(e){}
+    if(!isSet){ sub.textContent='הגדירו קוד כניסה חדש (לפחות 4 תווים) — יישמר לכל המכשירים'; pin.placeholder='קוד חדש'; pin2.style.display='block'; btn.textContent='הגדרת קוד'; }
+    else { sub.textContent='הזינו את קוד הכניסה'; pin2.style.display='none'; btn.textContent='כניסה'; }
+    ov.style.display='flex'; setTimeout(()=>pin.focus(),60);
+    const fail=(msg)=>{ err.textContent=msg; const c=ov.querySelector('.lock-card'); c.classList.remove('lock-shake'); void c.offsetWidth; c.classList.add('lock-shake'); pin.value=''; pin2.value=''; pin.focus(); };
+    form.onsubmit=async(e)=>{ e.preventDefault(); err.textContent='';
+      const v=(pin.value||'').trim();
+      const remember=document.getElementById('lock-remember').checked;
+      if(!isSet){
+        if(v.length<4) return fail('הקוד חייב להכיל לפחות 4 תווים');
+        if(v!==(pin2.value||'').trim()) return fail('הקודים אינם תואמים');
+        const h=await sha256(v); db.pinHash=h; save();
+        try{ if(remember) localStorage.setItem(UNLOCK_KEY,h); }catch(e){}
+        ov.style.display='none'; resolve();
+      } else {
+        const h=await sha256(v);
+        if(h!==db.pinHash) return fail('קוד שגוי, נסו שוב');
+        try{ if(remember) localStorage.setItem(UNLOCK_KEY,h); else localStorage.removeItem(UNLOCK_KEY); }catch(e){}
+        ov.style.display='none'; resolve();
+      }
+    };
+  });
+}
 async function boot(){
+  syncBadge('טוען…☁️');
+  // משיכה ראשונית — כדי לקבל את הקוד והנתונים העדכניים (כולל קוד שהוגדר במכשיר אחר) עוד לפני הנעילה
+  try{ const remote=await pullRemote(); if(remote&&remote.data&&hasRealData(remote.data)&&(!hasRealData(db)||(remote.data.updatedAt||0)>=(db.updatedAt||0))) adoptRemote(remote.data); }catch(e){}
+  await gateUnlock();
   render();
   syncBadge('מסתנכרן…☁️');
   await syncNow();
