@@ -1083,13 +1083,14 @@ function h_shopping(m,id,b){
   const enrich=(s)=>{ const li=db.lighting.find(x=>x.id==s.lighting_id); const pr=db.professionals.find(x=>x.id==s.pro_id);
     return {...s,
       lighting_name: li?((strv(li.area)?strv(li.area)+' · ':'')+(strv(li.fixture)||strv(li.bulb_type)||'נורה')):'',
+      image: strv(s.image) || (li?strv(li.image):''), // תמונת המוצר: תמונה משלו, אחרת תמונת הנורה המקושרת
       pro_name: pr?strv(pr.name):'', pro_phone: pr?strv(pr.phone):'' }; };
   if(m==='GET'){ const order={todo:0,bought:1,installed:2};
     return clone(db.shopping).map(enrich).sort((a,c)=> (order[a.status]??0)-(order[c.status]??0) || strv(c.created_at).localeCompare(strv(a.created_at))); }
   const fields=(s)=>{ s.name=strv(b.name); s.quantity=intOrNull(b.quantity)??1;
     s.status=['todo','bought','installed'].includes(b.status)?b.status:'todo';
     s.lighting_id=intOrNull(b.lighting_id); s.pro_id=intOrNull(b.pro_id);
-    s.est_cost=numv(b.est_cost); s.url=strv(b.url); s.notes=strv(b.notes); return s; };
+    s.est_cost=numv(b.est_cost); s.url=strv(b.url); s.image=strv(b.image); s.notes=strv(b.notes); return s; };
   if(m==='POST'){ if(!strv(b.name)) throw new Error('יש להזין שם פריט'); const s=fields({id:uid(),created_at:new Date().toISOString()}); db.shopping.push(s); return {id:s.id}; }
   if(m==='PUT'){ const s=db.shopping.find(x=>x.id==id); if(!s) throw new Error('לא נמצא'); fields(s); return {ok:true}; }
   if(m==='DELETE'){ db.shopping=db.shopping.filter(s=>s.id!=id); return {ok:true}; }
@@ -2451,7 +2452,16 @@ views.shopping=async()=>{
     <div class="field"><label>👷 בעל מקצוע להתקנה</label><select name="pro_id">${proOpts(r.pro_id)}</select></div>
     <div class="field-row"><div class="field"><label>מחיר משוער ליח׳ (₪)</label><input name="est_cost" type="number" step="0.01" min="0" value="${r.est_cost??''}" /></div><div class="field"><label>סטטוס</label><select name="status"><option value="todo" ${r.status!=='bought'&&r.status!=='installed'?'selected':''}>לקנות</option><option value="bought" ${r.status==='bought'?'selected':''}>נקנה</option><option value="installed" ${r.status==='installed'?'selected':''}>הותקן</option></select></div></div>
     <div class="field"><label>קישור למוצר (אופציונלי)</label><input name="url" value="${esc(r.url||'')}" placeholder="https://…" /></div>
+    <div class="field"><label>תמונת המוצר</label>
+      <input type="hidden" name="image" value="${esc(r.image||'')}" />
+      <div class="img-uploader"><div class="img-prev" id="shop-prev">${r.image?`<img src="${esc(r.image)}" alt="תצוגה" />`:'<span>אין תמונה</span>'}</div>
+      <div><input type="file" id="shop-file" accept="image/*" class="img-file" /><div class="hint">צלמו/בחרו תמונה של המוצר. אם מקושר לנורה — תמונת הנורה תוצג אוטומטית.</div>
+      ${r.image?'<button type="button" class="btn-ghost" id="shop-clear" style="margin-top:8px;padding:5px 12px">הסר תמונה</button>':''}</div></div></div>
     <div class="field"><label>הערות</label><input name="notes" value="${esc(r.notes||'')}" /></div>`;
+  const wireShopImg=()=>{ const file=document.getElementById('shop-file'); const prev=document.getElementById('shop-prev'); const hidden=document.querySelector('.modal input[name="image"]');
+    const clearImg=()=>{ hidden.value=''; prev.innerHTML='<span>אין תמונה</span>'; document.getElementById('shop-clear')?.remove(); };
+    if(file) file.onchange=()=>{ const f=file.files[0]; if(!f) return; resizeImage(f,420,(u)=>{ hidden.value=u; prev.innerHTML=`<img src="${u}" alt="תצוגה" />`; if(!document.getElementById('shop-clear')){ const bn=document.createElement('button'); bn.type='button'; bn.className='btn-ghost'; bn.id='shop-clear'; bn.style.cssText='margin-top:8px;padding:5px 12px'; bn.textContent='הסר תמונה'; bn.onclick=clearImg; file.parentElement.appendChild(bn);} }); };
+    document.getElementById('shop-clear') && (document.getElementById('shop-clear').onclick=clearImg); };
   const cell=(r)=>{
     const linkLight=r.lighting_name?`<span class="chip-link">💡 ${esc(r.lighting_name)}</span>`:'<span class="muted">—</span>';
     const linkPro=r.pro_name?`<span class="chip-link">👷 ${esc(r.pro_name)}${r.pro_phone?` · <a class="link" href="tel:${esc(r.pro_phone)}">חיוג</a>`:''}</span>`:'<span class="muted">—</span>';
@@ -2460,7 +2470,9 @@ views.shopping=async()=>{
     const quick = r.status==='todo'?`<button class="btn-ghost" data-mark="bought" data-id="${r.id}" style="padding:5px 10px">סמן כנקנה</button>`
       : r.status==='bought'?`<button class="btn-ghost" data-mark="installed" data-id="${r.id}" style="padding:5px 10px">סמן כהותקן</button>`
       : `<button class="btn-ghost" data-mark="todo" data-id="${r.id}" style="padding:5px 10px">החזר לרשימה</button>`;
+    const thumb=r.image?`<img src="${esc(r.image)}" class="bulb-thumb" data-shopimg="${esc(r.image)}" alt="מוצר" />`:'<span class="bulb-thumb empty-thumb">🛒</span>';
     return `<tr class="${r.status!=='todo'?'row-done':''}">
+      <td>${thumb}</td>
       <td><strong>${nm}</strong>${r.notes?`<div class="hint" style="margin:2px 0 0">${esc(r.notes)}</div>`:''}</td>
       <td class="tnum">${r.quantity}</td>
       <td>${linkLight}</td>
@@ -2476,11 +2488,12 @@ views.shopping=async()=>{
       <div class="stat-card income"><div class="label">✔ נקנו / הותקנו</div><div class="value tnum">${rows.length-todo.length}</div><div class="sub">${money(boughtEst)}</div></div>
     </div>
     <div class="card"><div class="card-header"><h2>רשימת קניות לבית</h2><button class="btn" id="add">+ פריט לקנייה</button></div>
-    ${rows.length?`<div class="table-wrap"><table><thead><tr><th>פריט</th><th>כמות</th><th>נורה מקושרת</th><th>מתקין</th><th>מחיר משוער</th><th>סטטוס</th><th></th></tr></thead><tbody>${rows.map(cell).join('')}</tbody></table></div>`
+    ${rows.length?`<div class="table-wrap"><table><thead><tr><th>תמונה</th><th>פריט</th><th>כמות</th><th>נורה מקושרת</th><th>מתקין</th><th>מחיר משוער</th><th>סטטוס</th><th></th></tr></thead><tbody>${rows.map(cell).join('')}</tbody></table></div>`
       :'<div class="empty">אין עדיין פריטים. הוסיפו דברים לקנות — אפשר לקשר כל פריט לנורה קיימת בבית ולבעל מקצוע שיתקין. אפשר גם להוסיף ישירות ממסך «תאורה» בלחיצה על 🛒.</div>'}
     </div>`;
-  el.querySelector('#add').onclick=()=>openModal('פריט לקנייה',form(),async fd=>{await api('/shopping',{method:'POST',body:fd});toast('נוסף לרשימה 🛒');render();},{wide:true});
-  el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.id==b.dataset.edit);openModal('עריכת פריט',form(r),async fd=>{await api('/shopping/'+r.id,{method:'PUT',body:fd});toast('עודכן');render();},{wide:true});});
+  el.querySelector('#add').onclick=()=>{ openModal('פריט לקנייה',form(),async fd=>{await api('/shopping',{method:'POST',body:fd});toast('נוסף לרשימה 🛒');render();},{wide:true}); setTimeout(wireShopImg,0); };
+  el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.id==b.dataset.edit);openModal('עריכת פריט',form(r),async fd=>{await api('/shopping/'+r.id,{method:'PUT',body:fd});toast('עודכן');render();},{wide:true}); setTimeout(wireShopImg,0);});
+  el.querySelectorAll('[data-shopimg]').forEach(img=>img.onclick=()=>lightbox(img.dataset.shopimg));
   el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>confirmDelete('למחוק פריט זה מרשימת הקניות?',async()=>{await api('/shopping/'+b.dataset.del,{method:'DELETE'});toast('נמחק');render();}));
   el.querySelectorAll('[data-mark]').forEach(b=>b.onclick=async()=>{ const r=rows.find(x=>String(x.id)===String(b.dataset.id)); if(!r) return; await api('/shopping/'+r.id,{method:'PUT',body:{...r,status:b.dataset.mark}}); toast('עודכן ✓'); render(); });
   return el;
