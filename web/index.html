@@ -414,7 +414,9 @@ code{background:var(--chip); padding:2px 7px; border-radius:6px; font-size:13px;
 .ubadge{font-size:11px; font-weight:700; color:var(--accent); border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border)); border-radius:6px; padding:1px 6px; margin-inline-start:4px}
 .uemail{color:var(--muted); font-size:13px; direction:ltr; text-align:right}
 .ustatus{font-size:13px; font-weight:700; white-space:nowrap}
-.ustatus.green{color:var(--green)} .ustatus.amber{color:var(--amber)} .ustatus.red{color:var(--red)}
+.ustatus.green{color:var(--green)} .ustatus.amber{color:var(--amber)} .ustatus.red{color:var(--red)} .ustatus.accent{color:var(--accent)}
+.chip-link{display:inline-block; background:var(--surface-2); border:1px solid var(--border); border-radius:999px; padding:2px 10px; font-size:12.5px; max-width:100%}
+.row-done td{opacity:.62}
 .uacts{display:flex; gap:8px; flex-wrap:wrap}
 .pill{display:inline-block; background:var(--amber); color:#fff; border-radius:999px; font-size:12px; font-weight:700; padding:1px 9px; vertical-align:middle}
 @media (max-width:560px){ .urow{flex-direction:column; align-items:stretch} .uacts{justify-content:flex-end} }
@@ -443,6 +445,7 @@ code{background:var(--chip); padding:2px 7px; border-radius:6px; font-size:13px;
       <a data-view="documents"><span class="ico">📁</span> <span>ארכיון מסמכים</span></a>
       <a data-view="professionals"><span class="ico">👷</span> <span>בעלי מקצוע</span></a>
       <a data-view="lighting"><span class="ico">💡</span> <span>תאורה</span></a>
+      <a data-view="shopping"><span class="ico">🛒</span> <span>רשימת קניות</span></a>
       <a data-view="categories"><span class="ico">🗂️</span> <span>קטגוריות</span></a>
       <a data-view="settings"><span class="ico">⚙️</span> <span>הגדרות וגיבוי</span></a>
     </nav>
@@ -503,7 +506,7 @@ function seedDB(){
   addCat('משכורת','#15803d','income',0);
   addCat('הכנסה אחרת','#22c55e','income',0);
   addCat('העברה בין חשבונות','#94a3b8','expense',0);
-  return {seq, categories:cats, rules:[], transactions:[], recurring:[], professionals:[], warranties:[], components:[], maintenance:[], lighting:[], documents:[]};
+  return {seq, categories:cats, rules:[], transactions:[], recurring:[], professionals:[], warranties:[], components:[], maintenance:[], lighting:[], documents:[], shopping:[]};
 }
 function loadDB(){
   try{ const raw = localStorage.getItem(LS_KEY); if(raw){ return JSON.parse(raw); } }catch(e){}
@@ -575,8 +578,8 @@ async function pushRemote(){
   finally{ syncBusy=false; if(syncPending){ syncPending=false; scheduleSync(); } }
 }
 function scheduleSync(){ if(!authToken) return; clearTimeout(syncTimer); syncTimer=setTimeout(pushRemote,1500); }
-function adoptRemote(rdata){ db=rdata; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'].forEach(k=>{ if(!Array.isArray(db[k])) db[k]=[]; }); persistLocal(); }
-const SYNC_KEYS=['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting'];
+function adoptRemote(rdata){ db=rdata; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting','shopping'].forEach(k=>{ if(!Array.isArray(db[k])) db[k]=[]; }); persistLocal(); }
+const SYNC_KEYS=['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting','shopping'];
 // טביעת אצבע של התוכן בלבד (ללא חותמת הזמן) — כדי לזהות שינוי אמיתי ולא ריענון מיותר
 function dataSig(d){ if(!d) return ''; try{ return JSON.stringify(SYNC_KEYS.map(k=>d[k]||[])); }catch(e){ return 'x'+(d.updatedAt||''); } }
 // האם המשתמש באמצע פעולה? אז לא מרעננים כדי לא לסגור חלונות/למחוק הקלדה/לקפוץ למעלה
@@ -901,6 +904,7 @@ function route(parts, method, b, qp){
     case 'components': return h_components(method,id,sub,b);
     case 'recurring': return h_recurring(method,id,b);
     case 'lighting': return h_lighting(method,id,b);
+    case 'shopping': return h_shopping(method,id,b);
     case 'documents': return h_documents(method,id,b);
     case 'dashboard': return h_dashboard(qp);
     case 'reconcile': return reconciliation();
@@ -1074,6 +1078,22 @@ function h_lighting(m,id,b){
   if(m==='PUT'){ const l=db.lighting.find(x=>x.id==id); if(!l) throw new Error('לא נמצא'); fields(l); return {ok:true}; }
   if(m==='DELETE'){ db.lighting=db.lighting.filter(l=>l.id!=id); return {ok:true}; }
 }
+function h_shopping(m,id,b){
+  if(!Array.isArray(db.shopping)) db.shopping=[];
+  const enrich=(s)=>{ const li=db.lighting.find(x=>x.id==s.lighting_id); const pr=db.professionals.find(x=>x.id==s.pro_id);
+    return {...s,
+      lighting_name: li?((strv(li.area)?strv(li.area)+' · ':'')+(strv(li.fixture)||strv(li.bulb_type)||'נורה')):'',
+      pro_name: pr?strv(pr.name):'', pro_phone: pr?strv(pr.phone):'' }; };
+  if(m==='GET'){ const order={todo:0,bought:1,installed:2};
+    return clone(db.shopping).map(enrich).sort((a,c)=> (order[a.status]??0)-(order[c.status]??0) || strv(c.created_at).localeCompare(strv(a.created_at))); }
+  const fields=(s)=>{ s.name=strv(b.name); s.quantity=intOrNull(b.quantity)??1;
+    s.status=['todo','bought','installed'].includes(b.status)?b.status:'todo';
+    s.lighting_id=intOrNull(b.lighting_id); s.pro_id=intOrNull(b.pro_id);
+    s.est_cost=numv(b.est_cost); s.url=strv(b.url); s.notes=strv(b.notes); return s; };
+  if(m==='POST'){ if(!strv(b.name)) throw new Error('יש להזין שם פריט'); const s=fields({id:uid(),created_at:new Date().toISOString()}); db.shopping.push(s); return {id:s.id}; }
+  if(m==='PUT'){ const s=db.shopping.find(x=>x.id==id); if(!s) throw new Error('לא נמצא'); fields(s); return {ok:true}; }
+  if(m==='DELETE'){ db.shopping=db.shopping.filter(s=>s.id!=id); return {ok:true}; }
+}
 function h_documents(m,id,b){
   if(!Array.isArray(db.documents)) db.documents=[];
   if(m==='GET') return clone(db.documents).sort((a,c)=> strv(c.created_at).localeCompare(strv(a.created_at)) || strv(a.name).localeCompare(strv(c.name),'he'));
@@ -1088,8 +1108,8 @@ function h_backup(m,b){
   if(m==='POST'){ // ייבוא/שחזור — מחליף את כל הנתונים
     const d = b && b.data ? b.data : b;
     if(!d || typeof d!=='object' || !Array.isArray(d.transactions)) throw new Error('קובץ גיבוי לא תקין');
-    ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting','documents'].forEach(k=>{ if(!Array.isArray(d[k])) d[k]=[]; });
-    if(typeof d.seq!=='number'){ let mx=0; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting','documents'].forEach(k=>d[k].forEach(x=>{ if(x&&x.id>mx)mx=x.id; })); d.seq=mx; }
+    ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting','documents','shopping'].forEach(k=>{ if(!Array.isArray(d[k])) d[k]=[]; });
+    if(typeof d.seq!=='number'){ let mx=0; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting','documents','shopping'].forEach(k=>d[k].forEach(x=>{ if(x&&x.id>mx)mx=x.id; })); d.seq=mx; }
     db=d; save(); return {ok:true};
   }
 }
@@ -2390,7 +2410,7 @@ views.lighting=async()=>{
     ${rows.length?`<div class="table-wrap"><table><thead><tr><th>תמונה</th><th>חדר</th><th>מנורה</th><th>סוג</th><th>בית נורה</th><th>הספק</th><th>גוון</th><th>כמות</th><th>מחיר ליח׳</th><th>הוחלף</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr>
       <td>${r.image?`<img src="${esc(r.image)}" class="bulb-thumb" data-img="${r.id}" alt="נורה" />`:'<span class="bulb-thumb empty-thumb">💡</span>'}</td>
       <td><strong>${esc(r.area)||'—'}</strong></td><td>${esc(r.fixture)||'—'}</td><td>${esc(r.bulb_type)}</td><td>${esc(r.base)||'—'}</td><td>${r.wattage?r.wattage+'W':'—'}</td><td>${esc(r.color_temp)||'—'}</td><td class="tnum">${r.quantity}</td><td class="tnum">${r.cost?money2(r.cost):'—'}</td><td class="tnum">${r.last_replaced?fmtDate(r.last_replaced):'—'}</td>
-      <td style="text-align:left"><button class="icon-btn" data-edit="${r.id}">✏️</button><button class="btn-danger" data-del="${r.id}">🗑</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">אין נורות עדיין. תעדו את סוגי הנורות בכל חדר, עם תמונה ומחיר, כדי לדעת בדיוק מה לקנות בהחלפה.</div>'}</div>${datalist('areas',AREAS)}${datalist('bases',BULB_BASES)}`;
+      <td style="text-align:left;white-space:nowrap"><button class="icon-btn" data-cart="${r.id}" title="הוסף לרשימת קניות">🛒</button><button class="icon-btn" data-edit="${r.id}">✏️</button><button class="btn-danger" data-del="${r.id}">🗑</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">אין נורות עדיין. תעדו את סוגי הנורות בכל חדר, עם תמונה ומחיר, כדי לדעת בדיוק מה לקנות בהחלפה.</div>'}</div>${datalist('areas',AREAS)}${datalist('bases',BULB_BASES)}`;
   const form=(r={})=>`<div class="field-row"><div class="field"><label>חדר / אזור</label><input name="area" list="areas" value="${esc(r.area||'')}" /></div><div class="field"><label>שם המנורה / גוף תאורה</label><input name="fixture" value="${esc(r.fixture||'')}" placeholder="נברשת סלון / ספוט…" /></div></div>
     <div class="field-row-3"><div class="field"><label>סוג נורה</label><select name="bulb_type">${BULB_TYPES.map(t=>`<option ${r.bulb_type===t?'selected':''}>${t}</option>`).join('')}</select></div><div class="field"><label>בית נורה</label><input name="base" list="bases" value="${esc(r.base||'')}" /></div><div class="field"><label>הספק (W)</label><input name="wattage" type="number" step="0.5" min="0" value="${r.wattage??''}" /></div></div>
     <div class="field-row-3"><div class="field"><label>גוון (K)</label><input name="color_temp" value="${esc(r.color_temp||'')}" placeholder="3000K / חם…" /></div><div class="field"><label>כמות</label><input name="quantity" type="number" min="1" value="${r.quantity??1}" /></div><div class="field"><label>מחיר ליחידה (₪)</label><input name="cost" type="number" step="0.01" min="0" value="${r.cost??''}" /></div></div>
@@ -2408,6 +2428,61 @@ views.lighting=async()=>{
   el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.id==b.dataset.edit);openModal('עריכת נורה',form(r),async fd=>{await api('/lighting/'+r.id,{method:'PUT',body:fd});toast('עודכן');render();},{wide:true}); setTimeout(wireImage,0);});
   el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>confirmDelete('למחוק?',async()=>{await api('/lighting/'+b.dataset.del,{method:'DELETE'});toast('נמחק');render();}));
   el.querySelectorAll('[data-img]').forEach(img=>img.onclick=()=>lightbox(img.src));
+  // הוספה מהירה לרשימת הקניות — פריט מקושר לנורה זו
+  el.querySelectorAll('[data-cart]').forEach(b=>b.onclick=async()=>{ const r=rows.find(x=>x.id==b.dataset.cart);
+    const name=[strv(r.bulb_type)||'נורה',strv(r.base),r.wattage?r.wattage+'W':'',strv(r.color_temp)].filter(Boolean).join(' ');
+    await api('/shopping',{method:'POST',body:{name,quantity:r.quantity||1,lighting_id:r.id,est_cost:r.cost||'',status:'todo'}});
+    toast('נוסף לרשימת הקניות 🛒'); });
+  return el;
+};
+// ===== רשימת קניות — פריטים לקנייה, מקושרים לנורות בבית ולבעל מקצוע להתקנה =====
+views.shopping=async()=>{
+  const [rows,lights,pros]=await Promise.all([api('/shopping'),api('/lighting'),api('/professionals')]);
+  const el=document.createElement('div');
+  const todo=rows.filter(r=>r.status==='todo');
+  const totalEst=todo.reduce((s,r)=>s+numv(r.est_cost)*(r.quantity||1),0);
+  const boughtEst=rows.filter(r=>r.status!=='todo').reduce((s,r)=>s+numv(r.est_cost)*(r.quantity||1),0);
+  const ST={todo:{t:'🛒 לקנות',c:'amber'},bought:{t:'✔ נקנה',c:'green'},installed:{t:'🔧 הותקן',c:'accent'}};
+  const lightOpts=(sel)=>`<option value="">— ללא קישור לנורה —</option>`+lights.map(l=>`<option value="${l.id}" ${l.id==sel?'selected':''}>${esc((strv(l.area)?strv(l.area)+' · ':'')+(strv(l.fixture)||strv(l.bulb_type)||'נורה')+(l.quantity?` (×${l.quantity})`:''))}</option>`).join('');
+  const proOpts=(sel)=>`<option value="">— ללא בעל מקצוע —</option>`+pros.map(p=>`<option value="${p.id}" ${p.id==sel?'selected':''}>${esc(strv(p.name)+(p.trade?' · '+strv(p.trade):''))}</option>`).join('');
+  const form=(r={})=>`
+    <div class="field-row"><div class="field"><label>מה צריך לקנות? *</label><input name="name" value="${esc(r.name||'')}" required placeholder="נורת LED E27 9W / ספוט שקוע…" /></div><div class="field"><label>כמות</label><input name="quantity" type="number" min="1" value="${r.quantity??1}" /></div></div>
+    <div class="field"><label>💡 מקושר לנורה בבית</label><select name="lighting_id">${lightOpts(r.lighting_id)}</select><div class="hint">בחרו נורה קיימת כדי לדעת בדיוק איזה סוג ובית-נורה לקנות.</div></div>
+    <div class="field"><label>👷 בעל מקצוע להתקנה</label><select name="pro_id">${proOpts(r.pro_id)}</select></div>
+    <div class="field-row"><div class="field"><label>מחיר משוער ליח׳ (₪)</label><input name="est_cost" type="number" step="0.01" min="0" value="${r.est_cost??''}" /></div><div class="field"><label>סטטוס</label><select name="status"><option value="todo" ${r.status!=='bought'&&r.status!=='installed'?'selected':''}>לקנות</option><option value="bought" ${r.status==='bought'?'selected':''}>נקנה</option><option value="installed" ${r.status==='installed'?'selected':''}>הותקן</option></select></div></div>
+    <div class="field"><label>קישור למוצר (אופציונלי)</label><input name="url" value="${esc(r.url||'')}" placeholder="https://…" /></div>
+    <div class="field"><label>הערות</label><input name="notes" value="${esc(r.notes||'')}" /></div>`;
+  const cell=(r)=>{
+    const linkLight=r.lighting_name?`<span class="chip-link">💡 ${esc(r.lighting_name)}</span>`:'<span class="muted">—</span>';
+    const linkPro=r.pro_name?`<span class="chip-link">👷 ${esc(r.pro_name)}${r.pro_phone?` · <a class="link" href="tel:${esc(r.pro_phone)}">חיוג</a>`:''}</span>`:'<span class="muted">—</span>';
+    const price=r.est_cost?money(numv(r.est_cost)*(r.quantity||1)):'—';
+    const nm=r.url?`<a class="link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a>`:esc(r.name);
+    const quick = r.status==='todo'?`<button class="btn-ghost" data-mark="bought" data-id="${r.id}" style="padding:5px 10px">סמן כנקנה</button>`
+      : r.status==='bought'?`<button class="btn-ghost" data-mark="installed" data-id="${r.id}" style="padding:5px 10px">סמן כהותקן</button>`
+      : `<button class="btn-ghost" data-mark="todo" data-id="${r.id}" style="padding:5px 10px">החזר לרשימה</button>`;
+    return `<tr class="${r.status!=='todo'?'row-done':''}">
+      <td><strong>${nm}</strong>${r.notes?`<div class="hint" style="margin:2px 0 0">${esc(r.notes)}</div>`:''}</td>
+      <td class="tnum">${r.quantity}</td>
+      <td>${linkLight}</td>
+      <td>${linkPro}</td>
+      <td class="tnum">${price}</td>
+      <td><span class="ustatus ${ST[r.status]?.c||''}">${ST[r.status]?.t||r.status}</span></td>
+      <td style="text-align:left;white-space:nowrap">${quick} <button class="icon-btn" data-edit="${r.id}">✏️</button><button class="btn-danger" data-del="${r.id}">🗑</button></td></tr>`;
+  };
+  el.innerHTML=`
+    <div class="stats-grid">
+      <div class="stat-card accent"><div class="label">🛒 פריטים לקנייה</div><div class="value tnum">${todo.length}</div></div>
+      <div class="stat-card expense"><div class="label">💰 עלות משוערת</div><div class="value tnum">${money(totalEst)}</div><div class="sub">סכום הפריטים שנותרו לקנות</div></div>
+      <div class="stat-card income"><div class="label">✔ נקנו / הותקנו</div><div class="value tnum">${rows.length-todo.length}</div><div class="sub">${money(boughtEst)}</div></div>
+    </div>
+    <div class="card"><div class="card-header"><h2>רשימת קניות לבית</h2><button class="btn" id="add">+ פריט לקנייה</button></div>
+    ${rows.length?`<div class="table-wrap"><table><thead><tr><th>פריט</th><th>כמות</th><th>נורה מקושרת</th><th>מתקין</th><th>מחיר משוער</th><th>סטטוס</th><th></th></tr></thead><tbody>${rows.map(cell).join('')}</tbody></table></div>`
+      :'<div class="empty">אין עדיין פריטים. הוסיפו דברים לקנות — אפשר לקשר כל פריט לנורה קיימת בבית ולבעל מקצוע שיתקין. אפשר גם להוסיף ישירות ממסך «תאורה» בלחיצה על 🛒.</div>'}
+    </div>`;
+  el.querySelector('#add').onclick=()=>openModal('פריט לקנייה',form(),async fd=>{await api('/shopping',{method:'POST',body:fd});toast('נוסף לרשימה 🛒');render();},{wide:true});
+  el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const r=rows.find(x=>x.id==b.dataset.edit);openModal('עריכת פריט',form(r),async fd=>{await api('/shopping/'+r.id,{method:'PUT',body:fd});toast('עודכן');render();},{wide:true});});
+  el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>confirmDelete('למחוק פריט זה מרשימת הקניות?',async()=>{await api('/shopping/'+b.dataset.del,{method:'DELETE'});toast('נמחק');render();}));
+  el.querySelectorAll('[data-mark]').forEach(b=>b.onclick=async()=>{ const r=rows.find(x=>String(x.id)===String(b.dataset.id)); if(!r) return; await api('/shopping/'+r.id,{method:'PUT',body:{...r,status:b.dataset.mark}}); toast('עודכן ✓'); render(); });
   return el;
 };
 // הקטנת תמונה לפני שמירה ב-localStorage
@@ -3071,7 +3146,7 @@ views.balance=async()=>{
 };
 
 /* ============================ Router ============================ */
-const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',transactions:'עסקאות',review:'סיווג עסקאות',classifyall:'כל הסיווגים',import:'ייבוא תדפיסים',monthly:'לפי חודש',balance:'מאזן והצלבה',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',documents:'ארכיון מסמכים',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי',users:'ניהול משתמשים'};
+const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',transactions:'עסקאות',review:'סיווג עסקאות',classifyall:'כל הסיווגים',import:'ייבוא תדפיסים',monthly:'לפי חודש',balance:'מאזן והצלבה',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',documents:'ארכיון מסמכים',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',shopping:'רשימת קניות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי',users:'ניהול משתמשים'};
 function currentView(){ const hash=location.hash.replace('#/','')||'dashboard'; return views[hash]?hash:'dashboard'; }
 async function render(opts){
   opts=(opts&&opts.keepScroll)?opts:{}; // hashchange/אירועים מעבירים Event — מתייחסים אליו כרענדר רגיל
