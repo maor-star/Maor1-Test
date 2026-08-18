@@ -1,0 +1,20 @@
+{
+  "name": "office-app-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "אפליקציית ניהול המשרד על Cloudflare Workers + D1",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create office-app-db",
+    "db:init": "wrangler d1 execute office-app-db --remote --file=./schema.sql",
+    "db:init:local": "wrangler d1 execute office-app-db --local --file=./schema.sql"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
