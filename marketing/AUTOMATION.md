@@ -72,3 +72,42 @@ Four things in the console unblock most of what is currently stalled:
    review, the newsletter's market updates, and the comment round.
 3. **Graphic language** — unblocks every post carrying an image.
 4. **Competitors** — unblocks the monitoring cycle and the category analysis.
+
+## Connectors
+
+Four are live on the account and now carry part of the cadence.
+
+| Connector | What it holds |
+|---|---|
+| **Google Calendar** | The cadence as recurring events on `maor@adnimation.com` — daily publish slot (08:30 ET / 15:30 IL), Sunday weekly cycle, biweekly newsletter, monthly report. Times are pinned to `America/New_York` so they stay correct through daylight saving on both sides. |
+| **Google Drive** | Folder `Adnimation Marketing` (`1fv5_pq2x9igZLuA4WbGmG4Ph6hx_WcuW`) with the graphic-language intake doc. |
+| **Gmail** | The biweekly newsletter issue exists as a draft, with its two market-update slots left visibly empty. |
+| **Slack** | Handoffs go as a DM to `U0Y53ATQ9`, not to `#general`. |
+
+### Drive scoping — a real safety rule, not a preference
+
+The Drive root holds named partner and client material: a Taboola strategic memo,
+Advertising.com and Blitzinteractive meeting notes, a PurpleTV report, a PR draft.
+Under the names rule, none of those may reach published content.
+
+**The agent reads only from the `Adnimation Marketing` folder.** Anything it should
+be able to use goes in there; everything else stays out. Giving a scheduled,
+unattended session Drive-wide read access is the single most likely way a client or
+partner name ends up in a post by accident.
+
+### Slack scoping
+
+`#general` is company-wide, every team member. Draft copy and approval nudges do not
+belong there. The DM is the handoff channel unless a dedicated marketing channel is
+created, at which point it can move.
+
+## The skill
+
+`.claude/skills/adnimation-brand/` encodes the rulebook as a project skill —
+positioning, pillars, audiences, the disclosure boundary, the 50% lock, voice and
+banned language, with `references/` for governance, channels and worked voice
+examples.
+
+This matters for autonomy: any session working in this repository loads it
+automatically, including the scheduled ones. The rules stop depending on whatever
+was pasted into a trigger prompt and become part of the environment.
