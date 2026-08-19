@@ -17,7 +17,7 @@ every cycle.
 | Trigger ID | When (UTC) | Local | What it does |
 |---|---|---|---|
 | `trig_01H2vAGPeN9TrRNRdLzcsymi` | `7 10 * * 0` | Sun 06:07 ET | Weekly cycle — reads decisions, extracts topics and gaps from the inspiration sources, builds next week's calendar against the required mix, drafts the posts, files them as pending |
-| `trig_016FiaNmAZrSP8e5KKiS92sY` | `27 12 * * 1-4` | Mon–Thu 08:27 ET | Daily handoff — finds what is approved and due, runs the pre-flight, writes final copy to `marketing/ready-to-post/` |
+| `trig_01LH5xggMn9ViqBqjGnG5gd8` | `27 12 * * 1-4` | Mon–Thu 08:27 ET | Daily handoff — finds what is approved and due, runs the pre-flight, writes final copy to `marketing/ready-to-post/`, and sends approved press pitches if Gmail is available |
 | `trig_01B3Bz2PV1cQ6b15WEXDZVCU` | `9 11 1 * *` | 1st, 07:09 ET | Monthly report, next month's calendar, three blog topics, Tier 2 roundup. Quarterly months also run the message audit |
 
 Cron is evaluated in **UTC**, so these shift by an hour when US daylight saving
@@ -43,11 +43,19 @@ ad-analytics readers. LinkedIn's posting API requires an approved application wi
 its own OAuth flow. So the chain ends at finished copy in `marketing/ready-to-post/`,
 and the paste is manual. Nothing in this repo will ever claim a post went live.
 
-**2 · Fired sessions carry no connectors.** Routines created this way store no MCP
-connector grants, so the scheduled sessions have no Gmail and no Slack — they cannot
-email or message you when work is ready. The output lands in this repo and in the
-session's own transcript. If you want a notification, recreate the routines from the
-claude.ai routines UI, which can attach connectors.
+**2 · Fired sessions carry no connectors.** Attaching them programmatically is
+refused for this organization — `create_trigger` returns *"the connectors parameter
+is not available for this organization"* — so the scheduled sessions have no Gmail
+and no Slack and cannot email or message you when work is ready. Output lands in
+this repo and in the session's own transcript.
+
+**Fix, and it is worth doing:** recreate the three routines from the claude.ai
+Routines UI, which can attach connectors, or add connectors to the existing ones
+there. The prompts already handle it — each notification step is written as
+conditional, so the moment Gmail or Slack is attached the routine starts sending
+without any further change. That single step turns the daily handoff from "a file
+appeared in the repo" into "the copy is in your inbox at 08:27", and lets approved
+press pitches actually go out.
 
 **3 · The weekly routine may not be able to write back to the console.** The Artifact
 tool is not in the fired sessions' tool list. The commit to `marketing/posts/` is the
