@@ -1,60 +1,39 @@
-# 🏢 ניהול משרד
+# Adnimation — Brand &amp; Marketing
 
-אפליקציית ווב לניהול המשרד — מעקב אחר **הוצאות המשרד**, **שעות העובדים**, ו**הכנסות והוצאות החברה**, עם דשבורד וסיכומים.
+Working repository for the brand and marketing programme: positioning reference,
+content calendar, drafts, approval queue, monitoring, and the scheduled automation
+that runs the cycle.
 
-## יכולות
+Everything lives under [`marketing/`](marketing/). Start with
+[`marketing/README.md`](marketing/README.md).
 
-- **דשבורד** — סיכום הכנסות, הוצאות, עלות שכר ורווח נקי; גרף מגמה ל‑6 חודשים; פילוח הוצאות לפי קטגוריה ושעות/עלות לפי עובד.
-- **עובדים** — ניהול רשימת עובדים, תפקיד, שכר לשעה וסטטוס פעיל.
-- **שעות עבודה** — רישום שעות לכל עובד עם חישוב עלות אוטומטי לפי השכר השעתי.
-- **הוצאות** — רישום הוצאות לפי קטגוריה, ספק, תיאור וסכום.
-- **הכנסות** — רישום הכנסות מלקוחות.
-- **סינון לפי חודש** — כל המסכים ניתנים לסינון לפי חודש נבחר או תצוגת "הכל".
+## Live surfaces
 
-הכל בעברית עם תמיכת RTL. המטבע: שקל חדש (₪).
+| Surface | What it is |
+|---|---|
+| [Marketing console](https://claude.ai/code/artifact/a31759dc-117f-4ef3-829b-7552bc7838b6) | Approve posts and brand actions; enter competitors, inspiration sources, graphic language, and the basis for the 50% claim. Saves its own state. |
+| [Operating system](https://claude.ai/code/artifact/17f553b5-9d06-4aa0-b6cf-2542a2f295cb) | The full reference — pillars, audiences, channel specs, governance, templates |
 
-## הרצה
-
-דרוש [Node.js](https://nodejs.org) גרסה 18 ומעלה.
-
-```bash
-npm install
-npm start
-```
-
-ואז לפתוח בדפדפן: <http://localhost:3000>
-
-לפיתוח עם ריענון אוטומטי:
-
-```bash
-npm run dev
-```
-
-## פריסה לענן (Google Cloud)
-
-מדריך פריסה מלא צעד‑אחר‑צעד ל‑Google Compute Engine נמצא ב‑[DEPLOY.md](DEPLOY.md).
-בקצרה: יוצרים שרת VM, מורידים את הקוד, ומריצים `sudo bash deploy/setup.sh` — והאפליקציה עולה אוטומטית עם שירות שמרים אותה מחדש אחרי אתחול או קריסה.
-
-## מבנה הפרויקט
+## Layout
 
 ```
-├── server.js        שרת Express + REST API
-├── db.js            הגדרת מסד הנתונים (SQLite) והסכמה
-├── public/
-│   ├── index.html   מבנה העמוד
-│   ├── styles.css   עיצוב
-│   └── app.js       לוגיקת ה‑SPA (מסכים, טפסים, גרפים)
-└── data/            מסד הנתונים נשמר כאן (נוצר אוטומטית, לא ב‑git)
+marketing/
+  README.md          operating rules, the two-list autonomy split, the names rule
+  AUTOMATION.md      the three scheduled routines and their real limits
+  brand/             messaging reference, visual system spec
+  monitoring/        competitors, analysts, publications — read each cycle
+  calendar/          one file per week
+  posts/             LinkedIn drafts
+  blog/              articles, drafts and published
+  ready-to-post/     approved copy, cleared for publishing
+  reports/           monthly performance, quarterly audit
+  templates/         frozen announcement structures
+  approvals/         the queue and its blocking questions
+cloud/               how marketing assets get deployed, and what credentials that needs
 ```
 
-## טכנולוגיה
+## Cloud
 
-- **שרת:** Node.js + Express
-- **מסד נתונים:** SQLite (באמצעות `better-sqlite3`) — הנתונים נשמרים מקומית בקובץ `data/office.db`
-- **צד לקוח:** JavaScript מודרני (ללא שלב build), עיצוב RTL מותאם
-
-## הערות
-
-- כרגע המערכת מיועדת למנהל יחיד ללא מסך התחברות. ניתן להוסיף בהמשך משתמשים והרשאות.
-- הרווח הנקי מחושב כ: הכנסות − הוצאות ישירות − עלות שכר.
-- כדי לאפס את כל הנתונים, ניתן למחוק את התיקייה `data/`.
+Marketing assets — the blog, landing pages, the console — deploy to AWS or
+Cloudflare. See [`cloud/README.md`](cloud/README.md) for the connection
+requirements and the current status of each.
