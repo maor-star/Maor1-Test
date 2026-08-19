@@ -7,10 +7,31 @@ console for state and this repo for rules, does the work, and commits back here.
 
 **https://claude.ai/code/artifact/a31759dc-117f-4ef3-829b-7552bc7838b6**
 
-A live page that saves its own state. It holds the approval queue, the competitor
-list, the inspiration sources, the graphic language, and the basis for the 50%
-claim. What you enter there persists in the page itself and is read at the start of
-every cycle.
+A live page that saves its own state. What you enter persists in the page itself and
+is read at the start of every cycle.
+
+It opens on **the plan** — every piece of content as a card in one of six stages:
+
+    Idea -> Drafting -> Needs you -> Approved -> Scheduled -> Published
+
+Cards are colour-coded by kind (LinkedIn, blog, press, category, newsletter), so the
+whole programme reads in one glance and anything stuck in "Needs you" is visibly the
+thing holding the line up.
+
+Below that: **Needs you** (approve, send back with a note, or park), **Ideas**
+(capture anything — the weekly cycle turns what fits into drafts), **Graphics**
+(an index of files held in Drive), then the inputs — inspiration sources,
+competitors, graphic language, and the basis for the 50% claim — and the cadence.
+
+Sending an item back to drafting attaches your note, and the next weekly cycle
+rewrites it against that note rather than resubmitting the same thing.
+
+### Why graphics live in Drive rather than in the page
+
+A published artifact on this account cannot accept file uploads — the `assets`
+capability is not available here. So the page holds an index (name, type, Drive
+link, where it may be used) and the files themselves sit in the marketing folder.
+A link to the real file also beats a copy that drifts out of date.
 
 ## The routines
 
