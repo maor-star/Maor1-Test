@@ -23,7 +23,5 @@ bucket_name = "easy-weight-loss-photos"
 [vars]
 APP_TZ = "Asia/Jerusalem"
 
-# SESSION_SECRET ו-ADMIN_PASSWORD אינם נשמרים כאן. מגדירים אותם כסודות:
+# SESSION_SECRET אינו נשמר כאן. מגדירים אותו כסוד:
 #   wrangler secret put SESSION_SECRET
-#   wrangler secret put ADMIN_EMAIL
-#   wrangler secret put ADMIN_PASSWORD

@@ -82,12 +82,6 @@ export function requireAuth(req, res, next) {
   next();
 }
 
-export function requireAdmin(req, res, next) {
-  if (!req.user) return res.status(401).json({ error: 'נדרשת התחברות' });
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'הפעולה מותרת למנהל בלבד' });
-  next();
-}
-
 /** Strips secrets before a profile is sent to the browser. */
 export function publicProfile(row) {
   if (!row) return null;

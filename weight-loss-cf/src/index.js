@@ -77,23 +77,6 @@ const requireAuth = async (c, next) => {
   await next();
 };
 
-const requireAdmin = async (c, next) => {
-  const user = c.get('user');
-  if (!user) throw fail('נדרשת התחברות', 401);
-  if (user.role !== 'admin') throw fail('הפעולה מותרת למנהל בלבד', 403);
-  await next();
-};
-
-/** Creates the bootstrap admin on first use; D1 has no startup hook to do it in. */
-async function ensureAdmin(env) {
-  const exists = await env.DB.prepare("SELECT 1 AS ok FROM profiles WHERE role = 'admin' LIMIT 1").first();
-  if (exists) return;
-  const email = (env.ADMIN_EMAIL || 'admin@easyweightloss.local').toLowerCase();
-  const password = env.ADMIN_PASSWORD || 'admin1234';
-  await env.DB.prepare("INSERT INTO profiles (email, password_hash, role, full_name) VALUES (?, ?, 'admin', ?)")
-    .bind(email, await hashPassword(password), env.ADMIN_NAME || 'המאמן').run();
-}
-
 // ---------- Auth ----------
 app.post('/api/auth/register', async (c) => {
   const body = await c.req.json();
@@ -115,7 +98,6 @@ app.post('/api/auth/register', async (c) => {
 });
 
 app.post('/api/auth/login', async (c) => {
-  await ensureAdmin(c.env);
   const body = await c.req.json();
   const email = str(body.email).toLowerCase();
   const user = await c.env.DB.prepare('SELECT * FROM profiles WHERE email = ?').bind(email).first();
@@ -137,6 +119,26 @@ app.get('/api/me', async (c) => {
   const user = c.get('user');
   if (!user) return c.json(null);
   await refreshStreak(c.env, user.id, today(c));
+  return c.json(await profileState(c.env, user.id));
+});
+
+/** Goals are set by the person they belong to; there is no coach to set them. */
+app.put('/api/me/goals', requireAuth, async (c) => {
+  const body = await c.req.json();
+  const user = c.get('user');
+  await c.env.DB.prepare(`
+    UPDATE profiles
+    SET full_name = ?, daily_calories_goal = ?, daily_protein_goal = ?, weekly_workouts_goal = ?
+    WHERE id = ?
+  `).bind(
+    str(body.full_name) || user.full_name,
+    intInRange(body.daily_calories_goal, { min: 500, max: 10000, label: 'יעד הקלוריות' }),
+    intInRange(body.daily_protein_goal, { min: 10, max: 500, label: 'יעד החלבון' }),
+    intInRange(body.weekly_workouts_goal, { min: 0, max: 14, label: 'יעד האימונים' }),
+    user.id
+  ).run();
+  // A lower goal can put a badge within reach immediately.
+  await evaluateBadges(c.env, user.id, today(c));
   return c.json(await profileState(c.env, user.id));
 });
 
@@ -244,6 +246,9 @@ app.post('/api/weigh-ins', requireAuth, async (c) => {
   const weight = num(body.weight);
   if (!(weight > 20 && weight < 400)) throw fail('יש להזין משקל בין 20 ל-400 ק"ג');
 
+  const waist = body.waist === undefined || body.waist === '' ? null : num(body.waist);
+  if (waist !== null && !(waist > 30 && waist < 250)) throw fail('היקף המותניים חייב להיות בין 30 ל-250 ס"מ');
+
   const userId = c.get('user').id;
   const week = weekKey(date);
   const photo = body.photo ? await savePhoto(c.env, body.photo) : null;
@@ -253,14 +258,16 @@ app.post('/api/weigh-ins', requireAuth, async (c) => {
 
   if (existing) {
     if (photo && existing.photo_url) await c.env.PHOTOS.delete(existing.photo_url);
-    await c.env.DB.prepare(
-      'UPDATE weekly_weigh_ins SET date = ?, weight = ?, photo_url = COALESCE(?, photo_url) WHERE id = ?'
-    ).bind(date, weight, photo, existing.id).run();
+    await c.env.DB.prepare(`
+      UPDATE weekly_weigh_ins
+      SET date = ?, weight = ?, waist = COALESCE(?, waist), photo_url = COALESCE(?, photo_url)
+      WHERE id = ?
+    `).bind(date, weight, waist, photo, existing.id).run();
   } else {
     await c.env.DB.prepare(`
-      INSERT INTO weekly_weigh_ins (user_id, date, week, weight, photo_url, points_awarded)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(userId, date, week, weight, photo, XP.WEIGH_IN).run();
+      INSERT INTO weekly_weigh_ins (user_id, date, week, weight, waist, photo_url, points_awarded)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(userId, date, week, weight, waist, photo, XP.WEIGH_IN).run();
     await applyPointsDelta(c.env, userId, 0, XP.WEIGH_IN);
   }
 
@@ -273,13 +280,13 @@ app.post('/api/weigh-ins', requireAuth, async (c) => {
   });
 });
 
-/** Progress photos are streamed from R2 so only their owner (or an admin) can read them. */
+/** Progress photos are streamed from R2 and readable only by the person who uploaded them. */
 app.get('/api/weigh-ins/:id/photo', requireAuth, async (c) => {
   const user = c.get('user');
   const row = await c.env.DB.prepare('SELECT * FROM weekly_weigh_ins WHERE id = ?')
     .bind(c.req.param('id')).first();
   if (!row || !row.photo_url) throw fail('התמונה לא נמצאה', 404);
-  if (row.user_id !== user.id && user.role !== 'admin') throw fail('אין הרשאה', 403);
+  if (row.user_id !== user.id) throw fail('אין הרשאה', 403);
 
   const object = await c.env.PHOTOS.get(row.photo_url);
   if (!object) throw fail('התמונה לא נמצאה', 404);
@@ -321,12 +328,18 @@ async function clientStats(env, userId, todayDate) {
     WHERE user_id = ? AND strength_workout_done = 1 AND date BETWEEN ? AND ?
   `).bind(userId, start, shiftDate(start, 6)).first();
 
+  const totalWorkouts = (await env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM daily_logs WHERE user_id = ? AND strength_workout_done = 1'
+  ).bind(userId).first()).n;
+
   const proteinGoalDays = logs.filter(
     (l) => profile.daily_protein_goal > 0 && l.protein_consumed >= profile.daily_protein_goal
   ).length;
 
   const first = weighIns[0];
   const last = weighIns[weighIns.length - 1];
+  const firstWaist = weighIns.find((w) => w.waist != null);
+  const lastWaist = [...weighIns].reverse().find((w) => w.waist != null);
 
   return {
     today: todayDate,
@@ -334,158 +347,77 @@ async function clientStats(env, userId, todayDate) {
     logs,
     weigh_ins: weighIns,
     workouts_this_week: workouts.n,
+    total_workouts: totalWorkouts,
+    weeks_in_program: weighIns.length,
     weekly_workouts_goal: profile.weekly_workouts_goal,
     protein_goal_days_30: proteinGoalDays,
     logged_days_30: logs.length,
     weight_start: first ? first.weight : null,
     weight_latest: last ? last.weight : null,
     weight_change: first && last ? Number((last.weight - first.weight).toFixed(1)) : null,
+    waist_change: firstWaist && lastWaist && firstWaist.id !== lastWaist.id
+      ? Number((lastWaist.waist - firstWaist.waist).toFixed(1)) : null,
   };
 }
 
 app.get('/api/stats', requireAuth, async (c) => c.json(await clientStats(c.env, c.get('user').id, today(c))));
 
-// ---------- Blog ----------
-app.get('/api/posts', requireAuth, async (c) => {
-  const { results } = await c.env.DB.prepare(`
-    SELECT p.*, pr.full_name AS author_name
-    FROM posts p LEFT JOIN profiles pr ON pr.id = p.author_id
-    ORDER BY p.published_at DESC
-  `).all();
-  return c.json(results);
-});
+// ---------- The group ----------
+/**
+ * Everyone using the app is in one group. Members see each other's headline
+ * numbers only — never another member's daily logs, photos or email.
+ */
+async function memberSummary(env, row, todayDate) {
+  const stats = await clientStats(env, row.id, todayDate);
+  return {
+    id: row.id,
+    full_name: row.full_name,
+    total_points: row.total_points,
+    current_streak: row.current_streak,
+    level: levelInfo(row.total_points),
+    weeks_in_program: stats.weeks_in_program,
+    weight_change: stats.weight_change,
+    waist_change: stats.waist_change,
+    workouts_this_week: stats.workouts_this_week,
+    weekly_workouts_goal: stats.weekly_workouts_goal,
+    total_workouts: stats.total_workouts,
+    protein_goal_days_30: stats.protein_goal_days_30,
+    logged_days_30: stats.logged_days_30,
+  };
+}
 
-app.post('/api/posts', requireAdmin, async (c) => {
-  const body = await c.req.json();
-  const title = str(body.title);
-  if (!title) throw fail('יש להזין כותרת');
-  const info = await c.env.DB.prepare('INSERT INTO posts (title, content, author_id) VALUES (?, ?, ?)')
-    .bind(title, str(body.content), c.get('user').id).run();
-  return c.json(await c.env.DB.prepare('SELECT * FROM posts WHERE id = ?').bind(info.meta.last_row_id).first());
-});
-
-app.put('/api/posts/:id', requireAdmin, async (c) => {
-  const body = await c.req.json();
-  const title = str(body.title);
-  if (!title) throw fail('יש להזין כותרת');
-  await c.env.DB.prepare('UPDATE posts SET title = ?, content = ? WHERE id = ?')
-    .bind(title, str(body.content), c.req.param('id')).run();
-  return c.json(await c.env.DB.prepare('SELECT * FROM posts WHERE id = ?').bind(c.req.param('id')).first());
-});
-
-app.delete('/api/posts/:id', requireAdmin, async (c) => {
-  await c.env.DB.prepare('DELETE FROM posts WHERE id = ?').bind(c.req.param('id')).run();
-  return c.json({ ok: true });
-});
-
-// ---------- Admin ----------
-app.get('/api/admin/clients', requireAdmin, async (c) => {
-  const { results } = await c.env.DB.prepare(`
-    SELECT p.id, p.email, p.full_name, p.role, p.active, p.total_points, p.current_streak,
-           p.daily_calories_goal, p.daily_protein_goal, p.weekly_workouts_goal, p.created_at,
-           (SELECT COUNT(*) FROM daily_logs l WHERE l.user_id = p.id) AS log_count,
-           (SELECT MAX(date) FROM daily_logs l WHERE l.user_id = p.id) AS last_log_date,
-           (SELECT COUNT(*) FROM user_badges ub WHERE ub.user_id = p.id) AS badge_count,
-           (SELECT weight FROM weekly_weigh_ins w WHERE w.user_id = p.id ORDER BY w.date DESC LIMIT 1) AS latest_weight
-    FROM profiles p
-    WHERE p.role = 'client'
-    ORDER BY p.active DESC, p.full_name
-  `).all();
+app.get('/api/group', requireAuth, async (c) => {
   const todayDate = today(c);
-  return c.json(results.map((r) => ({
-    ...r,
-    logged_today: r.last_log_date === todayDate,
-    level: levelInfo(r.total_points),
-  })));
-});
-
-app.post('/api/admin/clients', requireAdmin, async (c) => {
-  const body = await c.req.json();
-  const email = str(body.email).toLowerCase();
-  const password = String(body.password || '');
-  const fullName = str(body.full_name);
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw fail('כתובת אימייל לא תקינה');
-  if (password.length < 6) throw fail('הסיסמה חייבת להכיל לפחות 6 תווים');
-  if (!fullName) throw fail('יש להזין שם מלא');
-  if (await c.env.DB.prepare('SELECT 1 AS ok FROM profiles WHERE email = ?').bind(email).first()) {
-    throw fail('כתובת האימייל כבר רשומה במערכת');
-  }
-  const info = await c.env.DB.prepare(`
-    INSERT INTO profiles (email, password_hash, role, full_name,
-                          daily_calories_goal, daily_protein_goal, weekly_workouts_goal)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    email, await hashPassword(password), body.role === 'admin' ? 'admin' : 'client', fullName,
-    intInRange(body.daily_calories_goal ?? 1800, { min: 500, max: 10000, label: 'יעד הקלוריות' }),
-    intInRange(body.daily_protein_goal ?? 130, { min: 10, max: 500, label: 'יעד החלבון' }),
-    intInRange(body.weekly_workouts_goal ?? 3, { min: 0, max: 14, label: 'יעד האימונים' })
-  ).run();
-  const row = await c.env.DB.prepare('SELECT * FROM profiles WHERE id = ?').bind(info.meta.last_row_id).first();
-  return c.json(publicProfile(row));
-});
-
-app.put('/api/admin/clients/:id', requireAdmin, async (c) => {
-  const body = await c.req.json();
-  const target = await c.env.DB.prepare('SELECT * FROM profiles WHERE id = ?').bind(c.req.param('id')).first();
-  if (!target) throw fail('המשתמש לא נמצא', 404);
-
-  await c.env.DB.prepare(`
-    UPDATE profiles
-    SET full_name = ?, daily_calories_goal = ?, daily_protein_goal = ?, weekly_workouts_goal = ?, active = ?
-    WHERE id = ?
-  `).bind(
-    str(body.full_name) || target.full_name,
-    intInRange(body.daily_calories_goal ?? target.daily_calories_goal, { min: 500, max: 10000, label: 'יעד הקלוריות' }),
-    intInRange(body.daily_protein_goal ?? target.daily_protein_goal, { min: 10, max: 500, label: 'יעד החלבון' }),
-    intInRange(body.weekly_workouts_goal ?? target.weekly_workouts_goal, { min: 0, max: 14, label: 'יעד האימונים' }),
-    body.active === undefined ? target.active : (bool(body.active) ? 1 : 0),
-    target.id
-  ).run();
-
-  if (body.new_password) {
-    if (String(body.new_password).length < 6) throw fail('הסיסמה חייבת להכיל לפחות 6 תווים');
-    await c.env.DB.prepare('UPDATE profiles SET password_hash = ? WHERE id = ?')
-      .bind(await hashPassword(String(body.new_password)), target.id).run();
-  }
-
-  // Goals changed, so previously unearned badges may now be within reach.
-  await evaluateBadges(c.env, target.id, today(c));
-  const row = await c.env.DB.prepare('SELECT * FROM profiles WHERE id = ?').bind(target.id).first();
-  return c.json(publicProfile(row));
-});
-
-app.delete('/api/admin/clients/:id', requireAdmin, async (c) => {
-  if (Number(c.req.param('id')) === c.get('user').id) throw fail('לא ניתן למחוק את המשתמש שלך');
-  // R2 objects are not covered by the foreign-key cascade, so clear them first.
   const { results } = await c.env.DB.prepare(
-    'SELECT photo_url FROM weekly_weigh_ins WHERE user_id = ? AND photo_url IS NOT NULL'
-  ).bind(c.req.param('id')).all();
-  await Promise.all(results.map((r) => c.env.PHOTOS.delete(r.photo_url)));
-  await c.env.DB.prepare('DELETE FROM profiles WHERE id = ?').bind(c.req.param('id')).run();
-  return c.json({ ok: true });
-});
+    'SELECT * FROM profiles WHERE active = 1 ORDER BY total_points DESC'
+  ).all();
+  const members = [];
+  for (const row of results) members.push(await memberSummary(c.env, row, todayDate));
 
-app.get('/api/admin/clients/:id', requireAdmin, async (c) => {
-  const profile = await c.env.DB.prepare('SELECT * FROM profiles WHERE id = ?').bind(c.req.param('id')).first();
-  if (!profile) throw fail('המשתמש לא נמצא', 404);
-  const { results: badges } = await c.env.DB.prepare(`
-    SELECT b.*, ub.earned_at FROM user_badges ub JOIN badges b ON b.id = ub.badge_id
-    WHERE ub.user_id = ? ORDER BY ub.earned_at DESC
-  `).bind(profile.id).all();
+  // Only members who actually lost weight contribute to the group total.
+  const lost = members.reduce((sum, m) => sum + (m.weight_change < 0 ? -m.weight_change : 0), 0);
+
   return c.json({
-    profile: { ...publicProfile(profile), level: levelInfo(profile.total_points) },
-    stats: await clientStats(c.env, profile.id, today(c)),
-    badges,
+    total_kg_lost: Number(lost.toFixed(1)),
+    member_count: members.length,
+    workouts_this_week: members.reduce((sum, m) => sum + m.workouts_this_week, 0),
+    longest_streak: members.reduce((max, m) => Math.max(max, m.current_streak), 0),
+    members,
   });
 });
 
-app.put('/api/admin/weigh-ins/:id/feedback', requireAdmin, async (c) => {
-  const body = await c.req.json();
-  const row = await c.env.DB.prepare('SELECT * FROM weekly_weigh_ins WHERE id = ?').bind(c.req.param('id')).first();
-  if (!row) throw fail('השקילה לא נמצאה', 404);
-  await c.env.DB.prepare('UPDATE weekly_weigh_ins SET admin_feedback = ? WHERE id = ?')
-    .bind(str(body.admin_feedback), row.id).run();
-  return c.json(await c.env.DB.prepare('SELECT * FROM weekly_weigh_ins WHERE id = ?').bind(row.id).first());
+// ---------- Articles ----------
+app.get('/api/posts', requireAuth, async (c) => {
+  const { results } = await c.env.DB.prepare(
+    'SELECT id, slug, title, category, excerpt, read_minutes, published_at FROM posts ORDER BY published_at DESC, id'
+  ).all();
+  return c.json(results);
+});
+
+app.get('/api/posts/:slug', requireAuth, async (c) => {
+  const post = await c.env.DB.prepare('SELECT * FROM posts WHERE slug = ?').bind(c.req.param('slug')).first();
+  if (!post) throw fail('המאמר לא נמצא', 404);
+  return c.json(post);
 });
 
 app.all('/api/*', (c) => c.json({ error: 'המסלול לא נמצא' }, 404));

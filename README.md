@@ -37,7 +37,7 @@ npm run dev
 
 ## אפליקציות נוספות ברפו
 
-- [`weight-loss/`](weight-loss/README.md) — **הדרך הקלה לרדת במשקל**: מעקב תזונה, אימונים ומשקל עם מנוע גיימיפיקציה (נקודות, רצפים ותגים), אזור מאמן וניהול בלוג. פרויקט עצמאי עם `package.json` משלו — `cd weight-loss && npm install && npm start`.
+- [`weight-loss/`](weight-loss/README.md) — **הדרך הקלה לירידה במשקל**: מעקב תזונה, אימונים ומשקל עם מנוע גיימיפיקציה (נקודות, רצפים ותגים), מסך קבוצה, עמוד מדע וספריית מאמרים. בנוי לפי חבילת עיצוב Industry. פרויקט עצמאי — `cd weight-loss && npm install && npm start`.
 - [`weight-loss-cf/`](weight-loss-cf/README.md) — **אותה אפליקציה, פורט ל-Cloudflare Workers**: Hono במקום Express, D1 במקום SQLite מקומי, R2 לתמונות ההתקדמות. הפרונטאנד משותף ומסונכרן אוטומטית בפריסה.
 
 ## מבנה הפרויקט
