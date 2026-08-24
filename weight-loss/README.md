@@ -72,7 +72,24 @@ npm start
 | `SECURE_COOKIES` | `false` | `true` כשהאתר מוגש ב-HTTPS |
 | `APP_TZ` | `Asia/Jerusalem` | אזור הזמן שלפיו נקבע "היום" לצורך רצפים ודיווחים |
 
-## פריסה לשרת
+## פריסה
+
+### AWS — stack חדש
+
+```bash
+DOMAIN=app.example.com bash deploy/aws-deploy.sh
+```
+
+יוצר CloudFormation stack עם EC2 (‏t3.micro כברירת מחדל), כתובת IP קבועה, ‏Caddy ל-HTTPS אוטומטי
+ו-Session Manager לגישה לשרת בלי מפתח SSH. הסקריפט ממתין עד שהאפליקציה עונה בפועל — אם ה-stack
+הצליח, האתר באוויר. בלי `DOMAIN` האתר יוגש ב-HTTP בלבד, וסיסמאות יעברו ללא הצפנה.
+
+התבנית עצמה ב-`deploy/aws-cloudformation.yaml`. מחיקה מלאה:
+`aws cloudformation delete-stack --stack-name easy-weight-loss`.
+
+עלות משוערת: כ-8–12 דולר לחודש ל-t3.micro עם דיסק 20GB.
+
+### שרת קיים (GCE, ‏VPS, כל Debian/Ubuntu)
 
 ```bash
 sudo bash deploy/setup.sh
@@ -87,7 +104,10 @@ sudo bash deploy/setup.sh
 ├── db.js                  סכמת מסד הנתונים (SQLite), זריעת תגים ומאמרים
 ├── auth.js                הצפנת סיסמאות (scrypt) ועוגיית סשן חתומה
 ├── gamification.js        חישוב XP, רצפים, רמות ותגים
-├── deploy/setup.sh        התקנה ושירות systemd
+├── deploy/
+│   ├── aws-cloudformation.yaml   תבנית ה-stack ל-AWS
+│   ├── aws-deploy.sh             יצירת ה-stack והמתנה עד שהאתר עונה
+│   └── setup.sh                  התקנה על שרת קיים
 ├── public/
 │   ├── index.html         שלד האפליקציה ומסך ההתחברות
 │   ├── design-system.css  מערכת העיצוב Industry — מקור האמת לצבע, טיפוגרפיה ומרווחים
