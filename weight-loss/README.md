@@ -76,9 +76,20 @@ npm start
 
 ### AWS — stack חדש
 
+**מק / לינוקס / AWS CloudShell:**
+
 ```bash
 DOMAIN=app.example.com bash deploy/aws-deploy.sh
 ```
+
+**ווינדוס (PowerShell):**
+
+```powershell
+.\deploy\aws-deploy.ps1 -Domain app.example.com
+```
+
+גרסת ה-PowerShell עצמאית — אם התבנית אינה לצידה היא נמשכת מ-GitHub, כך שאפשר להוריד
+את הקובץ הזה לבדו ולהריץ אותו בלי git.
 
 יוצר CloudFormation stack עם EC2 (‏t3.micro כברירת מחדל), כתובת IP קבועה, ‏Caddy ל-HTTPS אוטומטי
 ו-Session Manager לגישה לשרת בלי מפתח SSH. הסקריפט ממתין עד שהאפליקציה עונה בפועל — אם ה-stack
@@ -106,7 +117,8 @@ sudo bash deploy/setup.sh
 ├── gamification.js        חישוב XP, רצפים, רמות ותגים
 ├── deploy/
 │   ├── aws-cloudformation.yaml   תבנית ה-stack ל-AWS
-│   ├── aws-deploy.sh             יצירת ה-stack והמתנה עד שהאתר עונה
+│   ├── aws-deploy.sh             יצירת ה-stack (bash)
+│   ├── aws-deploy.ps1            יצירת ה-stack (PowerShell, לווינדוס)
 │   └── setup.sh                  התקנה על שרת קיים
 ├── public/
 │   ├── index.html         שלד האפליקציה ומסך ההתחברות
