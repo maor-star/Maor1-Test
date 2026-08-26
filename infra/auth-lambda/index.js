@@ -178,6 +178,13 @@ async function handleData(method, event) {
   if (method === 'PUT' || method === 'POST') {
     let body = {};
     try { body = readBody(event); } catch (e) { return resp(400, { error: 'bad json' }); }
+    // בקרת גרסאות אופטימית: אם הלקוח שלח baseUpdatedAt והענן חדש ממנו — דוחים כדי לא לדרוס נתונים חדשים יותר.
+    if (body.baseUpdatedAt != null) {
+      const cur = await getJson(key, { updatedAt: 0 });
+      if ((cur.updatedAt || 0) > Number(body.baseUpdatedAt)) {
+        return resp(409, { conflict: true, data: cur.data, updatedAt: cur.updatedAt || 0 });
+      }
+    }
     const updatedAt = Date.now();
     await putJson(key, { data: body.data, updatedAt });
     return resp(200, { ok: true, updatedAt });

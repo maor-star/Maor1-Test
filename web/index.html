@@ -518,6 +518,7 @@ let saveTimer;
 function persistLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(db)); }catch(e){} }
 function save(){
   db.updatedAt=Date.now();
+  dirty=true; // יש שינוי מקומי שצריך להעלות
   _hasCardDetail=null; // איפוס מטמון (ייתכן שהשתנו שורות פירוט)
   persistLocal();
   const s=document.getElementById('save-state');
@@ -554,6 +555,8 @@ async function authApi(action, body, useAuth){
 }
 const hasRealData=(d)=> !!d && ['transactions','professionals','warranties','components','lighting','recurring','maintenance'].some(k=>Array.isArray(d[k])&&d[k].length>0);
 let syncTimer=null, syncBusy=false, syncPending=false, sessionExpired=false;
+let baseUA=0;      // חותמת הזמן (מהשרת) של הגרסה שעליה אנו מבוססים — למניעת דריסה של נתונים חדשים יותר
+let dirty=false;   // יש שינוי מקומי שטרם נדחף לענן
 function syncBadge(txt){ const s=document.getElementById('save-state'); if(s) s.textContent=txt; }
 function onSessionExpired(){ // הטוקן פג/נדחה — חוזרים למסך התחברות
   if(sessionExpired) return; sessionExpired=true; clearTimeout(syncTimer); clearAuth();
@@ -570,15 +573,23 @@ async function pushRemote(){
   if(syncBusy){ syncPending=true; return; }
   syncBusy=true; syncBadge('מסנכרן…☁️');
   try{
-    const r=await fetch(SYNC_API+'/data',{method:'PUT',headers:{'content-type':'application/json','authorization':'Bearer '+authToken},body:JSON.stringify({data:db})});
+    // שולחים את הגרסה שעליה אנו מבוססים; השרת ידחה אם מישהו כתב אחרינו (מונע דריסה)
+    const r=await fetch(SYNC_API+'/data',{method:'PUT',headers:{'content-type':'application/json','authorization':'Bearer '+authToken},body:JSON.stringify({data:db,baseUpdatedAt:baseUA})});
     if(r.status===401||r.status===403){ onSessionExpired(); return; }
+    if(r.status===409){ // מישהו עדכן במקביל — קולטים את גרסת הענן במקום לדרוס
+      const cur=await r.json();
+      if(cur&&cur.data){ const changed=dataSig(cur.data)!==dataSig(db); adoptRemote(cur.data,cur.updatedAt);
+        if(changed && !userBusy()) render({keepScroll:true}); }
+      syncBadge('מסונכרן ☁️✓'); return;
+    }
     if(!r.ok) throw new Error(r.status);
+    const res=await r.json(); if(res&&res.updatedAt) baseUA=res.updatedAt; dirty=false;
     syncBadge('מסונכרן ☁️✓');
   }catch(e){ syncBadge('שגיאת סנכרון ⚠️'); }
   finally{ syncBusy=false; if(syncPending){ syncPending=false; scheduleSync(); } }
 }
 function scheduleSync(){ if(!authToken) return; clearTimeout(syncTimer); syncTimer=setTimeout(pushRemote,1500); }
-function adoptRemote(rdata){ db=rdata; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting','shopping'].forEach(k=>{ if(!Array.isArray(db[k])) db[k]=[]; }); persistLocal(); }
+function adoptRemote(rdata,envUA){ db=rdata; ['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting','shopping'].forEach(k=>{ if(!Array.isArray(db[k])) db[k]=[]; }); if(envUA) baseUA=envUA; dirty=false; persistLocal(); }
 const SYNC_KEYS=['categories','rules','transactions','recurring','professionals','warranties','components','maintenance','lighting','shopping'];
 // טביעת אצבע של התוכן בלבד (ללא חותמת הזמן) — כדי לזהות שינוי אמיתי ולא ריענון מיותר
 function dataSig(d){ if(!d) return ''; try{ return JSON.stringify(SYNC_KEYS.map(k=>d[k]||[])); }catch(e){ return 'x'+(d.updatedAt||''); } }
@@ -589,20 +600,22 @@ function userBusy(){
   const asst=document.getElementById('asst-msgs'); if(asst && asst.children.length>1) return true; // שיחה פעילה עם העוזר
   return false;
 }
-async function syncNow(){ // מיזוג יזום: הנתונים העדכניים ביותר מנצחים, אך נתונים אמיתיים לא נדרסים ע"י ריקים
-  try{ const remote=await pullRemote(); const localReal=hasRealData(db), remoteReal=remote.data&&hasRealData(remote.data);
-    let adopt=false;
-    if(remoteReal && !localReal) adopt=true;
-    else if(remoteReal && localReal && (remote.data.updatedAt||0) > (db.updatedAt||0)) adopt=true;
-    if(adopt){
-      // אותו תוכן בדיוק (רק חותמת זמן חדשה ממכשיר אחר) — מיישרים זמן בלבד, בלי ריענון
-      if(dataSig(remote.data)===dataSig(db)){ db.updatedAt=remote.data.updatedAt||db.updatedAt; persistLocal(); syncBadge('מסונכרן ☁️✓'); return; }
-      if(userBusy()){ syncBadge('מסונכרן ☁️✓'); return; } // ניקלוט בסבב הבא, לא מפריעים עכשיו
-      adoptRemote(remote.data); syncBadge('מסונכרן ☁️✓'); render({keepScroll:true}); // ריענון שקט ששומר על מיקום הגלילה
-    } else {
-      await pushRemote();
+async function syncNow(){
+  // הענן הוא מקור האמת המשותף: קולטים ממנו כל גרסה חדשה יותר, ודוחפים רק כשיש שינוי מקומי — לעולם לא דורסים נתונים חדשים יותר.
+  try{ const remote=await pullRemote();
+    const remoteUA=remote.updatedAt||0;
+    const remoteReal=remote.data&&hasRealData(remote.data), localReal=hasRealData(db);
+    // הענן מכיל גרסה חדשה יותר מזו שעליה אנו מבוססים? → נקלוט אותה
+    if(remoteReal && (remoteUA>baseUA || !localReal)){
+      if(dataSig(remote.data)===dataSig(db)){ baseUA=remoteUA; dirty=false; persistLocal(); syncBadge('מסונכרן ☁️✓'); return; } // אותו תוכן — יישור חותמת בלבד
+      if(userBusy() && dirty){ syncBadge('מסונכרן ☁️✓'); return; } // עריכה מקומית פעילה — נמתין לסבב הבא
+      adoptRemote(remote.data,remoteUA); syncBadge('מסונכרן ☁️✓'); if(!userBusy()) render({keepScroll:true});
+      return;
     }
-  }catch(e){ syncBadge('לא מקוון'); }
+    // אין חדש בענן — אם יש לנו שינוי מקומי, נדחוף אותו
+    if(dirty){ await pushRemote(); }
+    else syncBadge('מסונכרן ☁️✓');
+  }catch(e){ if(!sessionExpired) syncBadge('לא מקוון'); }
 }
 db = loadDB();
 const uid = ()=> ++db.seq;
@@ -3294,9 +3307,17 @@ let _appStarted=false;
 async function startApp(){
   applyRoleUI();
   if(!_appStarted){ _appStarted=true; setInterval(()=>{ if(authToken&&!sessionExpired) syncNow(); }, 45000); }
-  render();
   syncBadge('מסתנכרן…☁️');
-  await syncNow();
+  // טעינה ראשונית: הענן הוא מקור האמת — קולטים ממנו אם יש בו נתונים; אם ריק, זורעים ממה שקיים מקומית
+  try{
+    const remote=await pullRemote(); const remoteUA=remote.updatedAt||0;
+    if(remote.data && hasRealData(remote.data)){ adoptRemote(remote.data,remoteUA); }
+    else if(hasRealData(db)){ baseUA=remoteUA; dirty=true; }
+    else { baseUA=remoteUA; }
+    syncBadge('מסונכרן ☁️✓');
+  }catch(e){ if(!sessionExpired) syncBadge('לא מקוון'); }
+  render();
+  if(dirty) scheduleSync();
 }
 async function boot(){
   loadAuth();
