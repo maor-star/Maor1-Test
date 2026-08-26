@@ -54,7 +54,7 @@ aws cloudformation wait stack-create-complete --stack-name "$STACK" --region "$R
 echo
 echo "───────────────────────────────────────────────"
 aws cloudformation describe-stacks --stack-name "$STACK" --region "$REGION" \
-  --query 'Stacks[0].Outputs[].{מפתח:OutputKey,ערך:OutputValue}' --output table
+  --query 'Stacks[0].Outputs[].{"מפתח":OutputKey,"ערך":OutputValue}' --output table
 echo "───────────────────────────────────────────────"
 
 if [ -n "$DOMAIN" ]; then
