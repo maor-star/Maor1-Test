@@ -123,7 +123,7 @@ main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6)
   display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
   gap: calc(var(--space-8) * 1.8); align-items: end;
 }
-.hero:has(.hero-note) { grid-template-columns: 1fr; align-items: start; }
+.hero .gate-actions { margin-top: var(--space-6); }
 .hero-note { margin: var(--space-4) 0 0; font-size: 13px; color: var(--color-neutral-600); }
 .hero h1 { font-size: clamp(38px, 5vw, 58px); margin: var(--space-2) 0 var(--space-3); }
 .hero p { margin: 0; max-width: 46ch; color: var(--color-neutral-700); }

@@ -672,30 +672,39 @@ async function viewSettings(el) {
 async function viewHome(el) {
   const [summary, posts] = await Promise.all([api('/public/summary'), api('/posts')]);
 
-  el.innerHTML = `
-    <div class="hero">
-      <div class="kicker">Body Recomp</div>
-      <h1>שלושה יעדים יומיים.<br />הגוף עושה את השאר.</h1>
-      <p>קלוריות, חלבון ואימון כוח — שלושת המשתנים שהספרות מזהה כמכריעים בשינוי הרכב הגוף.
-         כל השאר כאן הוא רק דרך לעקוב אחריהם ברציפות.</p>
-      <div class="gate-actions" style="margin-top:var(--space-6)">
-        <button class="btn btn-primary" data-auth="register" type="button">הצטרפות לקבוצה</button>
-        <a class="btn btn-secondary" href="#/science">קודם כל, המדע</a>
-      </div>
-      <p class="hero-note">הקריאה פתוחה לכולם. חשבון נדרש רק כדי להצטרף לקבוצה ולרשום משקלים.</p>
-    </div>
+  // The same framed two-column hero a member sees, with the group's public
+  // numbers standing in for the personal ones. Below the privacy floor there
+  // are no group numbers to show, so the programme's own shape fills the block.
+  const cells = summary.totals_visible
+    ? [
+        { value: nf(summary.total_kg_lost, 1), cap: 'ק״ג ירדו יחד', accent: true },
+        { value: nf(summary.member_count), cap: 'חברים פעילים' },
+        { value: nf(summary.workouts_this_week), cap: 'אימוני כוח השבוע' },
+        { value: nf(summary.longest_streak), cap: 'הרצף הארוך בקבוצה' },
+      ]
+    : [
+        { value: '3', cap: 'יעדים יומיים', accent: true },
+        { value: '1', cap: 'שקילה בשבוע' },
+        { value: nf(summary.post_count), cap: 'מאמרים פתוחים' },
+        { value: '0', cap: 'עלות בשקלים' },
+      ];
 
-    ${summary.totals_visible ? `
-      <div class="statrow bp">
-        ${corners()}
-        <div>
-          <div class="val big">${nf(summary.total_kg_lost, 1)}<span style="font-size:.4em"> ק״ג</span></div>
-          <div class="cap">ירידה מצטברת של הקבוצה</div>
+  el.innerHTML = `
+    <section class="hero bp">
+      ${corners()}
+      <div>
+        <div class="label">מבוסס מדע · שינוי הרכב גוף</div>
+        <h1>הדרך הקלה לירידה במשקל</h1>
+        <p>לא נשקלים כל בוקר. עומדים בשלושה יעדים יומיים — קלוריות, חלבון ואימון כוח —
+           וסופרים את הימים שבהם עמדת בהם. הגוף עושה את השאר.</p>
+        <div class="gate-actions">
+          <button class="btn btn-primary" data-auth="register" type="button">הצטרפות לקבוצה</button>
+          <a class="btn btn-secondary" href="#/science">קודם כל, המדע</a>
         </div>
-        <div><div class="val">${nf(summary.member_count)}</div><div class="cap">חברים פעילים</div></div>
-        <div><div class="val">${nf(summary.workouts_this_week)}</div><div class="cap">אימוני כוח השבוע</div></div>
-        <div><div class="val">${nf(summary.longest_streak)}</div><div class="cap">הרצף הארוך בקבוצה</div></div>
-      </div>` : ''}
+        <p class="hero-note">הקריאה פתוחה לכולם. חשבון נדרש רק כדי להצטרף לקבוצה ולרשום משקלים.</p>
+      </div>
+      ${statBlock(cells, { framed: false })}
+    </section>
 
     <div class="sec">
       <div class="kicker">איך זה עובד</div>
