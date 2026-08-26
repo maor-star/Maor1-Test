@@ -105,10 +105,10 @@ Resources:
     Type: AWS::EC2::Instance
     CreationPolicy:
       ResourceSignal:
-        Timeout: PT15M
+        Timeout: PT20M
         Count: 1
     Properties:
-      ImageId: '{{resolve:ssm:/aws/service/ami-al2023-latest/al2023-ami-kernel-default-x86_64}}'
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
       InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref InstanceProfile
       KeyName: !If [HasKey, !Ref KeyName, !Ref 'AWS::NoValue']
@@ -128,6 +128,27 @@ Resources:
           set -euxo pipefail
           exec > >(tee /var/log/ewl-bootstrap.log) 2>&1
 
+          # AL2023 does not ship aws-cfn-bootstrap in the AMI, so cfn-signal has to be
+          # installed before anything else can fail — otherwise a failed boot is
+          # indistinguishable from a hung one and the stack just times out.
+          dnf -y install aws-cfn-bootstrap
+
+          # The instance is deleted on failure, so the log dies with it. Send the tail
+          # of it back as the signal reason, which survives in the stack events.
+          signal() {
+            rc=$?
+            set +e
+            if [ "$rc" -eq 0 ]; then
+              reason="Application is serving requests on port 3100"
+            else
+              reason="bootstrap failed rc=$rc :: $(tail -c 700 /var/log/ewl-bootstrap.log | tr -cd '[:alnum:][:space:]:/._=+-' | tr -s '[:space:]' ' ')"
+            fi
+            CFN=$(command -v cfn-signal || echo /opt/aws/bin/cfn-signal)
+            "$CFN" -e "$rc" --reason "$reason" --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}
+            exit "$rc"
+          }
+          trap signal EXIT
+
           APP_DIR=/opt/easy-weight-loss
           ENV_FILE=/etc/easy-weight-loss.env
           DOMAIN="${DomainName}"
@@ -135,9 +156,16 @@ Resources:
           dnf -y update
           dnf -y install git gcc-c++ make python3 tar
 
-          # Node.js 20
-          curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-          dnf -y install nodejs
+          # Node.js 20 from the distro repo; NodeSource only as a fallback, since its
+          # installer tracks el9 rather than AL2023 and can drift.
+          if ! dnf -y install nodejs20 nodejs20-npm; then
+            curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+            dnf -y install nodejs
+          fi
+          # The systemd unit calls /usr/bin/node, so make sure that path resolves.
+          [ -x /usr/bin/node ] || ln -sf "$(command -v node || echo /usr/bin/node-20)" /usr/bin/node
+          node --version
+          npm --version
 
           # Application code
           git clone --depth 1 --branch "${RepoBranch}" "${RepoUrl}" "$APP_DIR"
@@ -222,14 +250,13 @@ Resources:
           systemctl daemon-reload
           systemctl enable --now caddy
 
-          # Report success only once the app actually answers
-          for i in $(seq 1 30); do
+          # Report success only once the app actually answers. The EXIT trap turns the
+          # final curl's status into the stack signal, so a dead app fails the stack.
+          for i in $(seq 1 40); do
             if curl -fsS http://127.0.0.1:3100/ >/dev/null; then break; fi
             sleep 3
           done
           curl -fsS http://127.0.0.1:3100/ >/dev/null
-
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}
 
 Outputs:
   PublicIp:
