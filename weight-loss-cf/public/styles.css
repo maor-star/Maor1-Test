@@ -173,6 +173,21 @@ main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6)
 
 /* ── Rules of thumb ────────────────────────────────────────────────────── */
 .rules { display: grid; gap: var(--space-4); }
+
+/* One rule shows at a time; the others stay in the flow so the block keeps its height. */
+#tip-rotator { position: relative; display: block; min-height: 78px; }
+#tip-rotator .rule {
+  position: absolute; inset: 0 0 auto 0;
+  opacity: 0; visibility: hidden; transition: opacity .5s ease;
+}
+#tip-rotator .rule.is-shown { opacity: 1; visibility: visible; position: relative; }
+.rule-ticks { display: flex; gap: 6px; padding-top: var(--space-3); }
+.rule-ticks i {
+  width: 18px; height: 2px; background: var(--color-neutral-300);
+  cursor: pointer; transition: background .3s ease;
+}
+.rule-ticks i.on { background: var(--color-accent); }
+.rule-ticks i:hover { background: var(--color-accent-400); }
 .rule {
   border-inline-start: 2px solid var(--color-accent); padding-inline-start: var(--space-4);
   font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 19px; line-height: 1.25;

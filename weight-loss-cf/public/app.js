@@ -170,6 +170,42 @@ async function loadTips() {
   return tipsCache;
 }
 
+/**
+ * One rule of thumb at a time, swapped every few seconds. Which one shows first
+ * follows the day, so two people opening the app together see the same line.
+ */
+function tipRotator(tips) {
+  if (!tips.length) return '<div class="empty">אין עדיין כללי אצבע</div>';
+  const start = Math.floor(Date.parse(todayISO()) / 86400000) % tips.length;
+  return `
+    <div class="rules" id="tip-rotator" data-index="${start}">
+      ${tips.map((t, i) => `<div class="rule ${i === start ? 'is-shown' : ''}">${esc(t.text)}</div>`).join('')}
+      <div class="rule-ticks">${tips.map((_, i) => `<i class="${i === start ? 'on' : ''}"></i>`).join('')}</div>
+    </div>`;
+}
+
+/** Starts the swap once the markup is on the page. Honours reduced-motion by standing still. */
+let tipTimer;
+function startTipRotation() {
+  clearInterval(tipTimer);
+  const box = document.getElementById('tip-rotator');
+  if (!box) return;
+  const rules = [...box.querySelectorAll('.rule')];
+  const ticks = [...box.querySelectorAll('.rule-ticks i')];
+  if (rules.length < 2) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  const show = (next) => {
+    rules.forEach((r, i) => r.classList.toggle('is-shown', i === next));
+    ticks.forEach((t, i) => t.classList.toggle('on', i === next));
+    box.dataset.index = String(next);
+  };
+  tipTimer = setInterval(() => show((Number(box.dataset.index) + 1) % rules.length), 7000);
+
+  // Clicking a tick jumps straight to that rule and stops the automatic swap.
+  ticks.forEach((tick, i) => tick.addEventListener('click', () => { clearInterval(tipTimer); show(i); }));
+}
+
 async function viewDashboard(el) {
   const [me, stats, tips] = await Promise.all([api('/me'), api('/stats'), loadTips()]);
   state.me = me;
@@ -236,7 +272,7 @@ async function viewDashboard(el) {
 
         <div>
           <div class="label">כלל האצבע</div>
-          <div class="rules">${tips.map((t) => `<div class="rule">${esc(t.text)}</div>`).join('')}</div>
+          ${tipRotator(tips)}
         </div>
       </div>
     </div>
@@ -249,6 +285,8 @@ async function viewDashboard(el) {
         </div>
         <div class="badges">${me.badges.map(badgeCard).join('')}</div>
       </div>` : ''}`;
+
+  startTipRotation();
 
   el.querySelector('#checkin-form').addEventListener('submit', async (e) => {
     e.preventDefault();
