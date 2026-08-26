@@ -421,6 +421,11 @@ app.get('/api/posts/:slug', asyncRoute((req, res) => {
   res.json(post);
 }));
 
+/** The collective target, readable by visitors — it is the site's slogan. */
+app.get('/api/public/goal', asyncRoute((req, res) => {
+  res.json({ goal_kg: Number(setting('group_goal_kg', '200')) });
+}));
+
 // ---------- Tips (the rules of thumb on the dashboard) ----------
 app.get('/api/tips', asyncRoute((req, res) => {
   res.json(db.prepare('SELECT * FROM tips ORDER BY position, id').all());

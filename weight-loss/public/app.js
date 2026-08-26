@@ -778,7 +778,9 @@ async function viewSettings(el) {
 // ---------------- Welcome (visitors) ----------------
 /** What the site is, before anyone has handed over an email address. */
 async function viewHome(el) {
-  const [summary, posts] = await Promise.all([api('/public/summary'), api('/posts')]);
+  const [summary, posts, group] = await Promise.all([
+    api('/public/summary'), api('/posts'), api('/public/goal'),
+  ]);
 
   // The same framed two-column hero a member sees, with the group's public
   // numbers standing in for the personal ones. Below the privacy floor there
@@ -802,7 +804,8 @@ async function viewHome(el) {
       ${corners()}
       <div>
         <div class="label">מבוסס מדע · שינוי הרכב גוף</div>
-        <h1>הדרך הקלה לירידה במשקל</h1>
+        <h1>יחד נוריד ${nf(group.goal_kg)} קילו שומן</h1>
+        <p class="slogan-sub">הדרך הקלה לירידה במשקל</p>
         <p>לא נשקלים כל בוקר. עומדים בשלושה יעדים יומיים — קלוריות, חלבון ואימון כוח —
            וסופרים את הימים שבהם עמדת בהם. הגוף עושה את השאר.</p>
         <div class="gate-actions">
@@ -904,28 +907,13 @@ function renderGate(el, route) {
 const CATEGORIES = ['תזונה', 'אימונים', 'מנטלי', 'כללי'];
 
 async function viewEditor(el) {
-  const [posts, tips, group] = await Promise.all([api('/editor/posts'), api('/tips'), api('/group')]);
+  const [posts, tips] = await Promise.all([api('/editor/posts'), api('/tips')]);
 
   el.innerHTML = `
     <div class="sec">
       <div class="kicker">עריכה</div>
       <h2>תוכן ויעדים</h2>
       <p>מה שנכתב כאן מופיע מיד באתר. אין שלב פרסום נפרד.</p>
-    </div>
-
-    <div class="panel bp" style="max-width:560px">
-      ${corners()}
-      <header><h3>היעד הקבוצתי</h3></header>
-      <form id="goal-form">
-        <div class="field">
-          <label for="gk">כמה ק״ג הקבוצה שואפת להוריד ביחד</label>
-          <input class="input" id="gk" type="number" name="goal_kg" min="1" max="100000" value="${group.goal_kg}" required />
-        </div>
-        <button type="submit" class="btn btn-primary btn-block">שמירת היעד</button>
-      </form>
-      <p class="note-line">
-        כרגע ירדו ${nf(group.total_kg_lost, 1)} ק״ג — ${group.goal_progress_pct}% מהיעד.
-      </p>
     </div>
 
     <div>
@@ -982,15 +970,6 @@ async function viewEditor(el) {
     </div>`;
 
   const reload = () => { tipsCache = null; render(); };
-
-  el.querySelector('#goal-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-      await api('/settings/group-goal', { method: 'PUT', body: Object.fromEntries(new FormData(e.target).entries()) });
-      toast('היעד עודכן');
-      reload();
-    } catch (err) { toast(err.message, true); }
-  });
 
   el.querySelector('#tip-form').addEventListener('submit', async (e) => {
     e.preventDefault();

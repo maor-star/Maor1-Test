@@ -315,19 +315,6 @@ main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6)
 .dialog-actions { display: flex; gap: var(--space-3); justify-content: flex-start; }
 .dialog textarea.input { min-height: 200px; line-height: 1.7; }
 
-/* ── Members ribbon — sits under the header on every page ──────────────── */
-.ribbon {
-  background: var(--color-accent-900);
-  color: var(--color-bg);
-  text-align: center;
-  padding: 7px var(--space-4);
-  font-family: var(--font-heading);
-  font-weight: var(--font-heading-weight);
-  font-size: 14px;
-  letter-spacing: .01em;
-}
-.ribbon .heart { color: #e2564d; font-family: var(--font-body); }
-
 /* ── Small action buttons, for table rows and list rows ────────────────── */
 .btn-sm { font-size: 13px; padding: 4px var(--space-3); min-height: 0; }
 .row-actions { display: flex; gap: 6px; justify-content: flex-start; white-space: nowrap; }
@@ -354,8 +341,7 @@ main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6)
 .add-row .input { flex: 1; }
 
 @media (max-width: 700px) {
-  .ribbon { font-size: 12.5px; padding: 6px var(--space-3); }
-  .sec-row { flex-direction: column; align-items: stretch; }
+    .sec-row { flex-direction: column; align-items: stretch; }
   .sec-row .btn { align-self: flex-start; }
   .rowlist .row { flex-direction: column; align-items: stretch; gap: var(--space-3); }
   .add-row { flex-direction: column; }
@@ -364,4 +350,49 @@ main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6)
   .brand { font-size: 17px; }
   .brand small { display: none; }
   .readout { border-inline-start: 0; padding-inline-start: 0; margin-inline-start: auto; gap: var(--space-3); }
+}
+
+/* ── Page footer ───────────────────────────────────────────────────────── */
+/* Mirrors the header: the same hairline, edge to edge, closing the page. */
+.site-footer {
+  margin-top: auto;
+  border-top: 1px solid var(--color-divider);
+  background: var(--color-bg);
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 15px;
+  color: var(--color-neutral-700);
+}
+.site-footer .heart { color: #c0463d; font-family: var(--font-body); }
+
+/* The shell fills the viewport so the footer sits at the bottom on short pages. */
+#app { display: flex; flex-direction: column; min-height: 100vh; }
+main { flex: 1; }
+
+/* ── Section rules ─────────────────────────────────────────────────────── */
+/* Every separator in the page body is the same hairline as the header and the
+   footer, and runs the full width of the content column — so the page reads as
+   one ruled sheet rather than blocks with different edges. */
+.screen > .sec + *,
+.screen > .sec-row + * { margin-top: 0; }
+.screen > .sec,
+.screen > .sec-row {
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+}
+.screen > .sec-sub { border-bottom: 0; padding-bottom: 0; }
+
+/* The home page's slogan sits above the product name. */
+.slogan-sub {
+  margin: var(--space-2) 0 var(--space-3) !important;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: clamp(19px, 2.2vw, 24px);
+  color: var(--color-accent-700);
+}
+
+@media (max-width: 700px) {
+  .site-footer { font-size: 13.5px; padding: var(--space-6) var(--space-3); }
 }

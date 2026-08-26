@@ -440,6 +440,11 @@ app.get('/api/posts/:slug', requireAuth, async (c) => {
   return c.json(post);
 });
 
+/** The collective target, readable by visitors — it is the site's slogan. */
+app.get('/api/public/goal', async (c) => {
+  return c.json({ goal_kg: Number(await setting(c.env, 'group_goal_kg', '200')) });
+});
+
 // ---------- Tips ----------
 app.get('/api/tips', async (c) => {
   const { results } = await c.env.DB.prepare('SELECT * FROM tips ORDER BY position, id').all();
