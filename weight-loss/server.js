@@ -44,6 +44,18 @@ function fail(message, status = 400) {
   return err;
 }
 
+/** Content authoring is the one elevated capability; there is no coach area. */
+function requireEditor(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'נדרשת התחברות' });
+  if (!req.user.is_editor) return res.status(403).json({ error: 'הפעולה מותרת לעורך התוכן בלבד' });
+  next();
+}
+
+const setting = (key, fallback) => {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+  return row ? row.value : fallback;
+};
+
 function intInRange(value, { min, max, label }) {
   const n = Math.round(num(value));
   if (!Number.isFinite(n) || n < min || n > max) {
@@ -74,9 +86,11 @@ app.post('/api/auth/register', asyncRoute((req, res) => {
   if (db.prepare('SELECT 1 FROM profiles WHERE email = ?').get(email)) {
     throw fail('כתובת האימייל כבר רשומה במערכת');
   }
+  // Whoever opens the app first is its editor; everyone after them is a member.
+  const isFirst = db.prepare('SELECT COUNT(*) AS n FROM profiles').get().n === 0;
   const info = db.prepare(
-    'INSERT INTO profiles (email, password_hash, full_name) VALUES (?, ?, ?)'
-  ).run(email, hashPassword(password), fullName);
+    'INSERT INTO profiles (email, password_hash, full_name, is_editor) VALUES (?, ?, ?, ?)'
+  ).run(email, hashPassword(password), fullName, isFirst ? 1 : 0);
   const user = db.prepare('SELECT * FROM profiles WHERE id = ?').get(info.lastInsertRowid);
   startSession(res, user);
   res.json(profileState(user.id));
@@ -354,8 +368,14 @@ function groupAggregate() {
   // Only members who actually lost weight contribute to the group total.
   const lost = members.reduce((sum, m) => sum + (m.weight_change < 0 ? -m.weight_change : 0), 0);
 
+  const goalKg = Number(setting('group_goal_kg', '200'));
+  const total = Number(lost.toFixed(1));
+
   return {
-    total_kg_lost: Number(lost.toFixed(1)),
+    total_kg_lost: total,
+    goal_kg: goalKg,
+    goal_progress_pct: goalKg > 0 ? Math.min(100, Math.round((total / goalKg) * 100)) : 0,
+    goal_remaining_kg: goalKg > 0 ? Number(Math.max(0, goalKg - total).toFixed(1)) : 0,
     member_count: members.length,
     workouts_this_week: members.reduce((sum, m) => sum + m.workouts_this_week, 0),
     longest_streak: members.reduce((max, m) => Math.max(max, m.current_streak), 0),
@@ -399,6 +419,93 @@ app.get('/api/posts/:slug', asyncRoute((req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE slug = ?').get(req.params.slug);
   if (!post) throw fail('המאמר לא נמצא', 404);
   res.json(post);
+}));
+
+// ---------- Tips (the rules of thumb on the dashboard) ----------
+app.get('/api/tips', asyncRoute((req, res) => {
+  res.json(db.prepare('SELECT * FROM tips ORDER BY position, id').all());
+}));
+
+app.post('/api/tips', requireEditor, asyncRoute((req, res) => {
+  const text = str(req.body.text);
+  if (!text) throw fail('יש להזין טקסט');
+  if (text.length > 200) throw fail('טיפ הוא שורה אחת — עד 200 תווים');
+  const next = db.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS n FROM tips').get().n;
+  const info = db.prepare('INSERT INTO tips (text, position) VALUES (?, ?)').run(text, next);
+  res.json(db.prepare('SELECT * FROM tips WHERE id = ?').get(info.lastInsertRowid));
+}));
+
+app.put('/api/tips/:id', requireEditor, asyncRoute((req, res) => {
+  const text = str(req.body.text);
+  if (!text) throw fail('יש להזין טקסט');
+  if (text.length > 200) throw fail('טיפ הוא שורה אחת — עד 200 תווים');
+  const info = db.prepare('UPDATE tips SET text = ? WHERE id = ?').run(text, req.params.id);
+  if (!info.changes) throw fail('הטיפ לא נמצא', 404);
+  res.json(db.prepare('SELECT * FROM tips WHERE id = ?').get(req.params.id));
+}));
+
+app.delete('/api/tips/:id', requireEditor, asyncRoute((req, res) => {
+  db.prepare('DELETE FROM tips WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+}));
+
+// ---------- Articles: authoring ----------
+/** Hebrew titles do not transliterate into a useful slug, so slugs are generated. */
+function uniqueSlug() {
+  for (let i = 0; i < 50; i++) {
+    const slug = 'post-' + crypto.randomUUID().slice(0, 8);
+    if (!db.prepare('SELECT 1 FROM posts WHERE slug = ?').get(slug)) return slug;
+  }
+  throw fail('לא הצלחנו לייצר מזהה למאמר');
+}
+
+function readPost(body) {
+  const title = str(body.title);
+  if (!title) throw fail('יש להזין כותרת');
+  const content = str(body.content);
+  if (!content) throw fail('יש להזין תוכן');
+  // ~200 Hebrew words a minute, rounded up, so the badge is never "0 דקות".
+  const readMinutes = body.read_minutes
+    ? intInRange(body.read_minutes, { min: 1, max: 90, label: 'זמן הקריאה' })
+    : Math.max(1, Math.round(content.split(/\s+/).length / 200));
+  return { title, content, read_minutes: readMinutes, category: str(body.category) || 'כללי', excerpt: str(body.excerpt) };
+}
+
+app.post('/api/posts', requireEditor, asyncRoute((req, res) => {
+  const post = readPost(req.body);
+  const info = db.prepare(`
+    INSERT INTO posts (slug, title, category, excerpt, content, read_minutes)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(uniqueSlug(), post.title, post.category, post.excerpt, post.content, post.read_minutes);
+  res.json(db.prepare('SELECT * FROM posts WHERE id = ?').get(info.lastInsertRowid));
+}));
+
+app.put('/api/posts/:id', requireEditor, asyncRoute((req, res) => {
+  const post = readPost(req.body);
+  const info = db.prepare(`
+    UPDATE posts SET title = ?, category = ?, excerpt = ?, content = ?, read_minutes = ?
+    WHERE id = ?
+  `).run(post.title, post.category, post.excerpt, post.content, post.read_minutes, req.params.id);
+  if (!info.changes) throw fail('המאמר לא נמצא', 404);
+  res.json(db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id));
+}));
+
+app.delete('/api/posts/:id', requireEditor, asyncRoute((req, res) => {
+  db.prepare('DELETE FROM posts WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+}));
+
+/** Every article, including the fields the list view omits. */
+app.get('/api/editor/posts', requireEditor, asyncRoute((req, res) => {
+  res.json(db.prepare('SELECT * FROM posts ORDER BY published_at DESC, id DESC').all());
+}));
+
+// ---------- The group target ----------
+app.put('/api/settings/group-goal', requireEditor, asyncRoute((req, res) => {
+  const kg = intInRange(req.body.goal_kg, { min: 1, max: 100000, label: 'היעד הקבוצתי' });
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value')
+    .run('group_goal_kg', String(kg));
+  res.json(groupAggregate());
 }));
 
 app.listen(PORT, () => console.log(`הדרך הקלה לירידה במשקל — פועל על http://localhost:${PORT}`));

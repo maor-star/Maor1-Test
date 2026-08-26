@@ -24,6 +24,19 @@ class AppError extends Error {
 }
 const fail = (message, status = 400) => new AppError(message, status);
 
+/** Content authoring is the one elevated capability; there is no coach area. */
+const requireEditor = async (c, next) => {
+  const user = c.get('user');
+  if (!user) throw fail('נדרשת התחברות', 401);
+  if (!user.is_editor) throw fail('הפעולה מותרת לעורך התוכן בלבד', 403);
+  await next();
+};
+
+async function setting(env, key, fallback) {
+  const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first();
+  return row ? row.value : fallback;
+}
+
 function intInRange(value, { min, max, label }) {
   const n = Math.round(num(value));
   if (!Number.isFinite(n) || n < min || n > max) {
@@ -89,9 +102,11 @@ app.post('/api/auth/register', async (c) => {
   if (await c.env.DB.prepare('SELECT 1 AS ok FROM profiles WHERE email = ?').bind(email).first()) {
     throw fail('כתובת האימייל כבר רשומה במערכת');
   }
+  // Whoever opens the app first is its editor; everyone after them is a member.
+  const count = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM profiles').first();
   const info = await c.env.DB.prepare(
-    "INSERT INTO profiles (email, password_hash, role, full_name) VALUES (?, ?, 'client', ?)"
-  ).bind(email, await hashPassword(password), fullName).run();
+    "INSERT INTO profiles (email, password_hash, role, full_name, is_editor) VALUES (?, ?, 'client', ?, ?)"
+  ).bind(email, await hashPassword(password), fullName, count.n === 0 ? 1 : 0).run();
   const user = { id: info.meta.last_row_id };
   await startSession(c, user);
   return c.json(await profileState(c.env, user.id));
@@ -396,9 +411,14 @@ app.get('/api/group', requireAuth, async (c) => {
 
   // Only members who actually lost weight contribute to the group total.
   const lost = members.reduce((sum, m) => sum + (m.weight_change < 0 ? -m.weight_change : 0), 0);
+  const goalKg = Number(await setting(c.env, 'group_goal_kg', '200'));
+  const total = Number(lost.toFixed(1));
 
   return c.json({
-    total_kg_lost: Number(lost.toFixed(1)),
+    total_kg_lost: total,
+    goal_kg: goalKg,
+    goal_progress_pct: goalKg > 0 ? Math.min(100, Math.round((total / goalKg) * 100)) : 0,
+    goal_remaining_kg: goalKg > 0 ? Number(Math.max(0, goalKg - total).toFixed(1)) : 0,
     member_count: members.length,
     workouts_this_week: members.reduce((sum, m) => sum + m.workouts_this_week, 0),
     longest_streak: members.reduce((max, m) => Math.max(max, m.current_streak), 0),
@@ -418,6 +438,96 @@ app.get('/api/posts/:slug', requireAuth, async (c) => {
   const post = await c.env.DB.prepare('SELECT * FROM posts WHERE slug = ?').bind(c.req.param('slug')).first();
   if (!post) throw fail('המאמר לא נמצא', 404);
   return c.json(post);
+});
+
+// ---------- Tips ----------
+app.get('/api/tips', async (c) => {
+  const { results } = await c.env.DB.prepare('SELECT * FROM tips ORDER BY position, id').all();
+  return c.json(results);
+});
+
+app.post('/api/tips', requireEditor, async (c) => {
+  const body = await c.req.json();
+  const text = str(body.text);
+  if (!text) throw fail('יש להזין טקסט');
+  if (text.length > 200) throw fail('טיפ הוא שורה אחת — עד 200 תווים');
+  const row = await c.env.DB.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS n FROM tips').first();
+  const info = await c.env.DB.prepare('INSERT INTO tips (text, position) VALUES (?, ?)').bind(text, row.n).run();
+  return c.json(await c.env.DB.prepare('SELECT * FROM tips WHERE id = ?').bind(info.meta.last_row_id).first());
+});
+
+app.put('/api/tips/:id', requireEditor, async (c) => {
+  const body = await c.req.json();
+  const text = str(body.text);
+  if (!text) throw fail('יש להזין טקסט');
+  if (text.length > 200) throw fail('טיפ הוא שורה אחת — עד 200 תווים');
+  const info = await c.env.DB.prepare('UPDATE tips SET text = ? WHERE id = ?').bind(text, c.req.param('id')).run();
+  if (!info.meta.changes) throw fail('הטיפ לא נמצא', 404);
+  return c.json(await c.env.DB.prepare('SELECT * FROM tips WHERE id = ?').bind(c.req.param('id')).first());
+});
+
+app.delete('/api/tips/:id', requireEditor, async (c) => {
+  await c.env.DB.prepare('DELETE FROM tips WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+// ---------- Articles: authoring ----------
+/** Hebrew titles do not transliterate into a useful slug, so slugs are generated. */
+async function uniqueSlug(env) {
+  for (let i = 0; i < 50; i++) {
+    const slug = 'post-' + crypto.randomUUID().slice(0, 8);
+    if (!(await env.DB.prepare('SELECT 1 AS ok FROM posts WHERE slug = ?').bind(slug).first())) return slug;
+  }
+  throw fail('לא הצלחנו לייצר מזהה למאמר');
+}
+
+function readPost(body) {
+  const title = str(body.title);
+  if (!title) throw fail('יש להזין כותרת');
+  const content = str(body.content);
+  if (!content) throw fail('יש להזין תוכן');
+  // ~200 Hebrew words a minute, rounded up, so the badge is never "0 דקות".
+  const readMinutes = body.read_minutes
+    ? intInRange(body.read_minutes, { min: 1, max: 90, label: 'זמן הקריאה' })
+    : Math.max(1, Math.round(content.split(/\s+/).length / 200));
+  return { title, content, read_minutes: readMinutes, category: str(body.category) || 'כללי', excerpt: str(body.excerpt) };
+}
+
+app.post('/api/posts', requireEditor, async (c) => {
+  const post = readPost(await c.req.json());
+  const info = await c.env.DB.prepare(`
+    INSERT INTO posts (slug, title, category, excerpt, content, read_minutes) VALUES (?, ?, ?, ?, ?, ?)
+  `).bind(await uniqueSlug(c.env), post.title, post.category, post.excerpt, post.content, post.read_minutes).run();
+  return c.json(await c.env.DB.prepare('SELECT * FROM posts WHERE id = ?').bind(info.meta.last_row_id).first());
+});
+
+app.put('/api/posts/:id', requireEditor, async (c) => {
+  const post = readPost(await c.req.json());
+  const info = await c.env.DB.prepare(`
+    UPDATE posts SET title = ?, category = ?, excerpt = ?, content = ?, read_minutes = ? WHERE id = ?
+  `).bind(post.title, post.category, post.excerpt, post.content, post.read_minutes, c.req.param('id')).run();
+  if (!info.meta.changes) throw fail('המאמר לא נמצא', 404);
+  return c.json(await c.env.DB.prepare('SELECT * FROM posts WHERE id = ?').bind(c.req.param('id')).first());
+});
+
+app.delete('/api/posts/:id', requireEditor, async (c) => {
+  await c.env.DB.prepare('DELETE FROM posts WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+app.get('/api/editor/posts', requireEditor, async (c) => {
+  const { results } = await c.env.DB.prepare('SELECT * FROM posts ORDER BY published_at DESC, id DESC').all();
+  return c.json(results);
+});
+
+// ---------- The group target ----------
+app.put('/api/settings/group-goal', requireEditor, async (c) => {
+  const body = await c.req.json();
+  const kg = intInRange(body.goal_kg, { min: 1, max: 100000, label: 'היעד הקבוצתי' });
+  await c.env.DB.prepare(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value'
+  ).bind('group_goal_kg', String(kg)).run();
+  return c.json({ ok: true, goal_kg: kg });
 });
 
 app.all('/api/*', (c) => c.json({ error: 'המסלול לא נמצא' }, 404));

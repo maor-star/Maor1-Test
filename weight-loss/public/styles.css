@@ -113,9 +113,19 @@ main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6)
 .sec h2 { margin: 0; }
 .sec p { margin: 0; max-width: 68ch; color: var(--color-neutral-700); }
 .label {
+  display: block;
   font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--color-neutral-600); text-align: start;
+  margin-bottom: var(--space-3);
 }
+/* A label used inline inside a framed block sets its own spacing. */
+.panel > .label, .statgrid .label { margin-bottom: 0; }
+
+/* The muted one-liner that sits under a block. */
+.note-line { margin: 0; font-size: 13px; color: var(--color-neutral-700); }
+
+/* A second-level section heading, one step down from the screen's h2. */
+.sec-sub h2 { font-size: clamp(21px, 2.4vw, 26px); }
 
 /* ── Hero ──────────────────────────────────────────────────────────────── */
 .hero {
@@ -135,7 +145,7 @@ main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6)
 .statgrid > div:nth-child(n + 3) { border-top: 1px solid var(--color-divider); }
 .statgrid .val {
   font-family: var(--font-heading); font-weight: 700; font-size: 32px; line-height: 1;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .statgrid .val.accent { color: var(--color-accent-700); }
 .statgrid .cap { font-size: 11px; color: var(--color-neutral-600); margin-top: 3px; }
@@ -145,9 +155,9 @@ main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6)
 .statrow > div + div { border-inline-end: 1px solid var(--color-divider); }
 .statrow .val {
   font-family: var(--font-heading); font-weight: 700; font-size: 30px; line-height: 1;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-.statrow .val.big { font-size: clamp(46px, 7vw, 76px); color: var(--color-accent); }
+.statrow .val.big { font-size: clamp(40px, 7vw, 76px); color: var(--color-accent); }
 .statrow .val.accent { color: var(--color-accent-700); }
 .statrow .cap { font-size: 11px; color: var(--color-neutral-600); margin-top: 4px; }
 
@@ -280,4 +290,63 @@ main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6)
   .member { grid-template-columns: 1fr; gap: var(--space-2); }
   .readout { gap: var(--space-3); padding-inline-start: var(--space-3); }
   .readout-guest .btn { padding-inline: var(--space-3); font-size: 13px; }
+}
+
+/* ── Dialog ────────────────────────────────────────────────────────────── */
+.dialog-backdrop { z-index: 60; }
+.dialog { max-height: 88vh; }
+.dialog-form { display: flex; flex-direction: column; min-height: 0; gap: var(--space-4); }
+.dialog-body { overflow-y: auto; }
+.dialog-actions { display: flex; gap: var(--space-3); justify-content: flex-start; }
+.dialog textarea.input { min-height: 200px; line-height: 1.7; }
+
+/* ── Members ribbon — sits under the header on every page ──────────────── */
+.ribbon {
+  background: var(--color-accent-900);
+  color: var(--color-bg);
+  text-align: center;
+  padding: 7px var(--space-4);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 14px;
+  letter-spacing: .01em;
+}
+.ribbon .heart { color: #e2564d; font-family: var(--font-body); }
+
+/* ── Small action buttons, for table rows and list rows ────────────────── */
+.btn-sm { font-size: 13px; padding: 4px var(--space-3); min-height: 0; }
+.row-actions { display: flex; gap: 6px; justify-content: flex-start; white-space: nowrap; }
+
+/* ── Row list — the editor's tips, and anything else that is a plain list ─ */
+.rowlist { display: grid; border: 1px solid var(--color-divider); }
+.rowlist > * + * { border-top: 1px solid var(--color-divider); }
+.rowlist .row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-4); padding: var(--space-3) var(--space-4);
+}
+.rowlist .row-text {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 16px; line-height: 1.35;
+}
+.rowlist .row:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+
+/* ── Section head with an action on the far side ───────────────────────── */
+.sec-row { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); }
+.sec-row .sec { flex: 1; }
+
+/* ── Inline add form ───────────────────────────────────────────────────── */
+.add-row { display: flex; gap: var(--space-3); margin-top: var(--space-4); }
+.add-row .input { flex: 1; }
+
+@media (max-width: 700px) {
+  .ribbon { font-size: 12.5px; padding: 6px var(--space-3); }
+  .sec-row { flex-direction: column; align-items: stretch; }
+  .sec-row .btn { align-self: flex-start; }
+  .rowlist .row { flex-direction: column; align-items: stretch; gap: var(--space-3); }
+  .add-row { flex-direction: column; }
+  /* the header reads as one bar rather than three stacked fragments */
+  .topbar-inner { row-gap: var(--space-2); }
+  .brand { font-size: 17px; }
+  .brand small { display: none; }
+  .readout { border-inline-start: 0; padding-inline-start: 0; margin-inline-start: auto; gap: var(--space-3); }
 }

@@ -27,6 +27,7 @@ db.exec(`
     total_points         INTEGER NOT NULL DEFAULT 0,
     current_streak       INTEGER NOT NULL DEFAULT 0,
     active               INTEGER NOT NULL DEFAULT 1,
+    is_editor            INTEGER NOT NULL DEFAULT 0,
     created_at           TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -84,6 +85,20 @@ db.exec(`
     published_at  TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 
+  /* Values the editor can change without a deploy. */
+  CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
+  /* The rules of thumb on the dashboard. */
+  CREATE TABLE IF NOT EXISTS tips (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    text       TEXT    NOT NULL,
+    position   INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_logs_user_date  ON daily_logs(user_id, date);
   CREATE INDEX IF NOT EXISTS idx_weigh_user_date ON weekly_weigh_ins(user_id, date);
   CREATE INDEX IF NOT EXISTS idx_userbadge_user  ON user_badges(user_id);
@@ -100,6 +115,7 @@ addColumn('posts', 'slug', 'TEXT');
 addColumn('posts', 'category', "TEXT NOT NULL DEFAULT ''");
 addColumn('posts', 'excerpt', "TEXT NOT NULL DEFAULT ''");
 addColumn('posts', 'read_minutes', 'INTEGER NOT NULL DEFAULT 5');
+addColumn('profiles', 'is_editor', 'INTEGER NOT NULL DEFAULT 0');
 
 // ---- Seed the master list of badges ----
 export const BADGE_SEED = [
@@ -224,6 +240,23 @@ export const POST_SEED = [
 אם הפספוסים חוזרים על עצמם שלוש פעמים בשבוע, זו כבר לא תקלה — זה סימן שהיעד לא מתאים לשלב הנוכחי. עדיף יעד צנוע יותר שאפשר לעמוד בו, מאשר יעד נכון על הנייר שנשבר כל שבוע.`,
   },
 ];
+
+/** The collective target, in kilograms. The editor can change it in the app. */
+export const DEFAULT_GROUP_GOAL_KG = 200;
+
+db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
+  .run('group_goal_kg', String(DEFAULT_GROUP_GOAL_KG));
+
+export const TIP_SEED = [
+  'תמיד עדיף לא לאכול 100 קלוריות מאשר להתאמן ולהוריד אותם',
+  'אימון אחד לא משנה כלום. שלושה בשבוע, חצי שנה, משנים הכל',
+  'המשקל בבוקר הוא רעש. הרצף הוא הנתון',
+];
+
+if (db.prepare('SELECT COUNT(*) AS n FROM tips').get().n === 0) {
+  const insertTip = db.prepare('INSERT INTO tips (text, position) VALUES (?, ?)');
+  db.transaction((rows) => rows.forEach((text, i) => insertTip.run(text, i)))(TIP_SEED);
+}
 
 const upsertPost = db.prepare(`
   INSERT INTO posts (slug, title, category, excerpt, content, read_minutes)

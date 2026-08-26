@@ -114,15 +114,64 @@ function statBlock(cells, { framed = true } = {}) {
   </div>`;
 }
 
+// ---------------- Dialog ----------------
+/** Built on the design system's .dialog classes: square, hairline, no rounding. */
+function openModal(title, fieldsHTML, onSubmit, submitLabel = 'שמירה') {
+  const backdrop = document.createElement('div');
+  backdrop.className = 'dialog-backdrop';
+  backdrop.innerHTML = `
+    <div class="dialog bp" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+      ${corners()}
+      <div class="dialog-title">${esc(title)}</div>
+      <form class="dialog-form">
+        <div class="dialog-body">${fieldsHTML}</div>
+        <div class="dialog-actions">
+          <button type="button" class="btn btn-secondary" data-close>ביטול</button>
+          <button type="submit" class="btn btn-primary">${esc(submitLabel)}</button>
+        </div>
+      </form>
+    </div>`;
+  document.body.appendChild(backdrop);
+
+  const close = () => { backdrop.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop || e.target.hasAttribute('data-close')) close();
+  });
+
+  backdrop.querySelector('.dialog-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const button = e.target.querySelector('button[type=submit]');
+    button.disabled = true;
+    try {
+      await onSubmit(Object.fromEntries(new FormData(e.target).entries()), e.target);
+      close();
+    } catch (err) {
+      toast(err.message, true);
+      button.disabled = false;
+    }
+  });
+
+  backdrop.querySelector('input, textarea, select')?.focus();
+  return backdrop;
+}
+
+function confirmAction(message, onConfirm) {
+  return openModal('אישור', `<p style="margin:0; line-height:1.7">${esc(message)}</p>`, onConfirm, 'אישור');
+}
+
 // ---------------- Dashboard ----------------
-const RULES = [
-  'תמיד עדיף לא לאכול 100 קלוריות מאשר להוריד אותן',
-  'אימון אחד לא משנה כלום. שלושה בשבוע, חצי שנה, משנים הכל',
-  'המשקל בבוקר הוא רעש. הרצף הוא הנתון',
-];
+/** Filled from /api/tips on first use so the editor's changes show up. */
+let tipsCache = null;
+async function loadTips() {
+  if (!tipsCache) tipsCache = await api('/tips');
+  return tipsCache;
+}
 
 async function viewDashboard(el) {
-  const [me, stats] = await Promise.all([api('/me'), api('/stats')]);
+  const [me, stats, tips] = await Promise.all([api('/me'), api('/stats'), loadTips()]);
   state.me = me;
   const today = stats.logs.find((l) => l.date === stats.today);
   const calories = today ? today.calories_consumed : 0;
@@ -186,8 +235,8 @@ async function viewDashboard(el) {
         </div>
 
         <div>
-          <div class="label" style="margin-bottom:var(--space-3)">כלל האצבע</div>
-          <div class="rules">${RULES.map((r) => `<div class="rule">${esc(r)}</div>`).join('')}</div>
+          <div class="label">כלל האצבע</div>
+          <div class="rules">${tips.map((t) => `<div class="rule">${esc(t.text)}</div>`).join('')}</div>
         </div>
       </div>
     </div>
@@ -286,7 +335,7 @@ async function viewProgress(el) {
 
     <div class="split split-wide">
       <div>
-        <div class="label" style="margin-bottom:var(--space-3)">
+        <div class="label">
           משקל · ק״ג${stats.weight_change !== null
             ? ` — ${ltr(`${nf(stats.weight_start, 1)} → ${nf(stats.weight_latest, 1)} · ${signed(stats.weight_change)}`)}` : ''}
         </div>
@@ -332,19 +381,19 @@ async function viewProgress(el) {
 
     <div class="split">
       <div>
-        <div class="label" style="margin-bottom:var(--space-3)">קלוריות · 30 יום</div>
+        <div class="label">קלוריות · 30 יום</div>
         ${barChart(stats.logs.map((l) => ({ value: l.calories_consumed, label: fmtDate(l.date), short: shortDate(l.date) })),
           { goal: me.daily_calories_goal, goodWhen: 'below' })}
       </div>
       <div>
-        <div class="label" style="margin-bottom:var(--space-3)">חלבון · 30 יום</div>
+        <div class="label">חלבון · 30 יום</div>
         ${barChart(stats.logs.map((l) => ({ value: l.protein_consumed, label: fmtDate(l.date), short: shortDate(l.date) })),
           { goal: me.daily_protein_goal, unit: ' ג׳' })}
       </div>
     </div>
 
     <div>
-      <div class="label" style="margin-bottom:var(--space-3)">שקילות</div>
+      <div class="label">שקילות</div>
       ${rows.length ? `
         <div class="table-wrap">
           <table class="table">
@@ -422,7 +471,7 @@ async function viewGroup(el) {
             <span style="width:${Math.min(100, pct(member.workouts_this_week, member.weekly_workouts_goal))}%"></span>
           </div>
         </div>
-        <p style="margin:0; font-size:13px; color:var(--color-neutral-700)">
+        <p class="note-line">
           ${member.logged_days_30} ימי דיווח ו-${member.protein_goal_days_30} ימים ביעד החלבון ב-30 הימים האחרונים.
         </p>
       </div>`;
@@ -441,14 +490,35 @@ async function viewGroup(el) {
         <div class="val big">${nf(group.total_kg_lost, 1)}<span style="font-size:.4em"> ק״ג</span></div>
         <div class="cap">ירידה מצטברת של הקבוצה</div>
       </div>
+      <div>
+        <div class="val accent">${nf(group.goal_kg)}<span style="font-size:.5em"> ק״ג</span></div>
+        <div class="cap">היעד הקבוצתי</div>
+      </div>
       <div><div class="val">${nf(group.member_count)}</div><div class="cap">חברים פעילים</div></div>
       <div><div class="val">${nf(group.workouts_this_week)}</div><div class="cap">אימוני כוח השבוע</div></div>
       <div><div class="val">${nf(group.longest_streak)}</div><div class="cap">הרצף הארוך בקבוצה</div></div>
     </div>
 
+    <div>
+      <div class="goal">
+        <div class="goal-top">
+          <span class="goal-name">בדרך ל-${nf(group.goal_kg)} ק״ג</span>
+          <span class="goal-val">${ltr(`${nf(group.total_kg_lost, 1)} / ${nf(group.goal_kg)}`)} · ${group.goal_progress_pct}%</span>
+        </div>
+        <div class="bar ${group.goal_progress_pct >= 100 ? 'met' : ''}">
+          <span style="width:${group.goal_progress_pct}%"></span>
+        </div>
+        <p class="note-line" style="margin-top:6px">
+          ${group.goal_progress_pct >= 100
+            ? 'היעד הושג. הגיע הזמן לקבוע חדש.'
+            : `נותרו ${nf(group.goal_remaining_kg, 1)} ק״ג ליעד.`}
+        </p>
+      </div>
+    </div>
+
     <div class="split split-wide">
       <div>
-        <div class="label" style="margin-bottom:var(--space-3)">החברים</div>
+        <div class="label">החברים</div>
         <div class="members" id="members">
           ${group.members.map((m) => `
             <button class="member ${m.id === selected?.id ? 'active' : ''}" data-id="${m.id}" type="button">
@@ -521,8 +591,8 @@ async function viewScience(el) {
     </div>
 
     <div class="split">
-      <div class="sec">
-        <h2 style="font-size:26px">למה לא נשקלים כל יום</h2>
+      <div class="sec sec-sub">
+        <h2>למה לא נשקלים כל יום</h2>
         <p>משקל יומי מושפע ממלח, פחמימות, מים ושינה, ותנודות של קילו וחצי הן שגרה.
            שקילה שבועית אחת מסננת את הרעש ומשאירה מגמה.</p>
         <p>לכן הדיווח היומי במערכת עוסק במה שבשליטתך — קלוריות, חלבון ואימון —
@@ -530,7 +600,7 @@ async function viewScience(el) {
       </div>
 
       <div>
-        <div class="label" style="margin-bottom:var(--space-4)">הפניות</div>
+        <div class="label">הפניות</div>
         <div class="refs">
           ${REFERENCES.map((r) => `<div class="ref"><b>${esc(r.cite)}</b><p>${esc(r.body)}</p></div>`).join('')}
         </div>
@@ -638,7 +708,7 @@ async function viewSettings(el) {
           </div>
           <button type="submit" class="btn btn-secondary btn-block">עדכון הסיסמה</button>
         </form>
-        <p style="margin:0; font-size:13px; color:var(--color-neutral-700)">
+        <p class="note-line">
           החשבון רשום לכתובת ${esc(me.email)}.
         </p>
       </div>
@@ -777,7 +847,7 @@ function renderGate(el, route) {
     <div class="panel bp">
       ${corners()}
       <header><h3>הרשמה</h3></header>
-      <p style="margin:0; color:var(--color-neutral-700)">
+      <p class="note-line" style="font-size:15px">
         שם, אימייל וסיסמה — פחות מדקה, בלי עלות.
       </p>
       <div class="gate-actions">
@@ -792,6 +862,178 @@ function renderGate(el, route) {
 }
 
 // ---------------- Routing ----------------
+// ---------------- Editor ----------------
+const CATEGORIES = ['תזונה', 'אימונים', 'מנטלי', 'כללי'];
+
+async function viewEditor(el) {
+  const [posts, tips, group] = await Promise.all([api('/editor/posts'), api('/tips'), api('/group')]);
+
+  el.innerHTML = `
+    <div class="sec">
+      <div class="kicker">עריכה</div>
+      <h2>תוכן ויעדים</h2>
+      <p>מה שנכתב כאן מופיע מיד באתר. אין שלב פרסום נפרד.</p>
+    </div>
+
+    <div class="panel bp" style="max-width:560px">
+      ${corners()}
+      <header><h3>היעד הקבוצתי</h3></header>
+      <form id="goal-form">
+        <div class="field">
+          <label for="gk">כמה ק״ג הקבוצה שואפת להוריד ביחד</label>
+          <input class="input" id="gk" type="number" name="goal_kg" min="1" max="100000" value="${group.goal_kg}" required />
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">שמירת היעד</button>
+      </form>
+      <p class="note-line">
+        כרגע ירדו ${nf(group.total_kg_lost, 1)} ק״ג — ${group.goal_progress_pct}% מהיעד.
+      </p>
+    </div>
+
+    <div>
+      <div class="sec-row" style="margin-bottom:var(--space-6)">
+        <div class="sec">
+          <div class="kicker">ספריית התוכן</div>
+          <h2>מאמרים</h2>
+          <p>${posts.length} מאמרים באתר. עריכה נכנסת לתוקף מיד.</p>
+        </div>
+        <button class="btn btn-primary" id="new-post" type="button">מאמר חדש</button>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>כותרת</th><th>קטגוריה</th><th>קריאה</th><th>פורסם</th><th></th></tr></thead>
+          <tbody>
+            ${posts.map((p) => `
+              <tr data-post="${p.id}">
+                <td>${esc(p.title)}</td>
+                <td><span class="tag tag-accent">${esc(p.category)}</span></td>
+                <td>${p.read_minutes} דק׳</td>
+                <td>${fmtDate(p.published_at)}</td>
+                <td>
+                  <span class="row-actions">
+                    <button class="btn btn-secondary btn-sm" data-edit-post type="button">עריכה</button>
+                    <button class="btn btn-secondary btn-sm" data-del-post type="button">מחיקה</button>
+                  </span>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec" style="margin-bottom:var(--space-6)">
+        <div class="kicker">כלל האצבע</div>
+        <h2>כללי אצבע</h2>
+        <p>שורה אחת כל אחד. מופיעים בדאשבורד של כל חבר בקבוצה.</p>
+      </div>
+      <div class="rowlist" id="tip-list">
+        ${tips.map((t) => `
+          <div class="row" data-tip="${t.id}">
+            <span class="row-text">${esc(t.text)}</span>
+            <span class="row-actions">
+              <button class="btn btn-secondary btn-sm" data-edit-tip type="button">עריכה</button>
+              <button class="btn btn-secondary btn-sm" data-del-tip type="button">מחיקה</button>
+            </span>
+          </div>`).join('')}
+      </div>
+      <form id="tip-form" class="add-row">
+        <input class="input" name="text" maxlength="200" placeholder="כלל אצבע חדש — שורה אחת" required />
+        <button type="submit" class="btn btn-primary">הוספה</button>
+      </form>
+    </div>`;
+
+  const reload = () => { tipsCache = null; render(); };
+
+  el.querySelector('#goal-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await api('/settings/group-goal', { method: 'PUT', body: Object.fromEntries(new FormData(e.target).entries()) });
+      toast('היעד עודכן');
+      reload();
+    } catch (err) { toast(err.message, true); }
+  });
+
+  el.querySelector('#tip-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await api('/tips', { method: 'POST', body: Object.fromEntries(new FormData(e.target).entries()) });
+      toast('הטיפ נוסף');
+      reload();
+    } catch (err) { toast(err.message, true); }
+  });
+
+  el.querySelectorAll('[data-edit-tip]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const row = button.closest('[data-tip]');
+      const tip = tips.find((t) => t.id === Number(row.dataset.tip));
+      openModal('עריכת כלל אצבע', `
+        <div class="field"><label>הטקסט</label>
+          <input class="input" name="text" maxlength="200" value="${esc(tip.text)}" required /></div>`,
+        async (form) => {
+          await api('/tips/' + tip.id, { method: 'PUT', body: form });
+          toast('הטיפ עודכן');
+          reload();
+        });
+    });
+  });
+
+  el.querySelectorAll('[data-del-tip]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const tip = tips.find((t) => t.id === Number(button.closest('[data-tip]').dataset.tip));
+      confirmAction(`למחוק את הכלל "${tip.text}"?`, async () => {
+        await api('/tips/' + tip.id, { method: 'DELETE' });
+        toast('נמחק');
+        reload();
+      });
+    });
+  });
+
+  const postFields = (post = {}) => `
+    <div class="field"><label>כותרת</label>
+      <input class="input" name="title" value="${esc(post.title || '')}" required /></div>
+    <div class="field" style="margin-top:10px"><label>קטגוריה</label>
+      <select class="input" name="category">
+        ${CATEGORIES.map((c) => `<option ${post.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+      </select></div>
+    <div class="field" style="margin-top:10px"><label>תקציר — השורה שמופיעה בכרטיס</label>
+      <input class="input" name="excerpt" value="${esc(post.excerpt || '')}" /></div>
+    <div class="field" style="margin-top:10px"><label>זמן קריאה בדקות — ריק לחישוב אוטומטי</label>
+      <input class="input" type="number" name="read_minutes" min="1" max="90" value="${post.read_minutes || ''}" /></div>
+    <div class="field" style="margin-top:10px"><label>תוכן — שורה ריקה מפרידה פסקאות, ו-**כותרת** יוצרת כותרת משנה</label>
+      <textarea class="input" name="content" rows="14" required>${esc(post.content || '')}</textarea></div>`;
+
+  el.querySelector('#new-post').addEventListener('click', () => {
+    openModal('מאמר חדש', postFields(), async (form) => {
+      await api('/posts', { method: 'POST', body: form });
+      toast('המאמר פורסם');
+      render();
+    }, 'פרסום');
+  });
+
+  el.querySelectorAll('[data-edit-post]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const post = posts.find((p) => p.id === Number(button.closest('[data-post]').dataset.post));
+      openModal('עריכת מאמר', postFields(post), async (form) => {
+        await api('/posts/' + post.id, { method: 'PUT', body: form });
+        toast('המאמר עודכן');
+        render();
+      });
+    });
+  });
+
+  el.querySelectorAll('[data-del-post]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const post = posts.find((p) => p.id === Number(button.closest('[data-post]').dataset.post));
+      confirmAction(`למחוק את "${post.title}"?`, async () => {
+        await api('/posts/' + post.id, { method: 'DELETE' });
+        toast('נמחק');
+        render();
+      });
+    });
+  });
+}
+
 const ROUTES = [
   { path: 'home', title: 'ראשי', render: viewHome, open: true, guestOnly: true },
   { path: 'dashboard', title: 'דאשבורד', render: viewDashboard },
@@ -800,6 +1042,7 @@ const ROUTES = [
   { path: 'science', title: 'המדע', render: viewScience, open: true },
   { path: 'articles', title: 'מאמרים', render: viewArticles, open: true },
   { path: 'settings', title: 'הגדרות', render: viewSettings },
+  { path: 'editor', title: 'עריכה', render: viewEditor, editorOnly: true },
 ];
 
 const homePath = () => (state.me ? 'dashboard' : 'home');
@@ -812,8 +1055,12 @@ function renderChrome() {
   // Visitors get the tabs that work without an account; members lose the welcome tab.
   document.getElementById('tabs').innerHTML = ROUTES
     .filter((r) => (signedIn ? !r.guestOnly : r.open))
+    .filter((r) => !r.editorOnly || state.me?.is_editor)
     .map((r) => `<a href="#/${r.path}" class="${path === r.path || path.startsWith(r.path + '/') ? 'active' : ''}">${r.title}</a>`)
     .join('');
+
+  // On a narrow screen the strip scrolls, so bring the current tab into view.
+  document.querySelector('#tabs a.active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
 
   document.getElementById('readout-member').classList.toggle('hidden', !signedIn);
   document.getElementById('readout-guest').classList.toggle('hidden', signedIn);
@@ -835,6 +1082,8 @@ async function render() {
   try {
     if (article) await viewArticle(el, decodeURIComponent(article[1]));
     else if (!route || (route.guestOnly && state.me)) { location.hash = '#/' + homePath(); return; }
+    // The editor tab is not just hidden from members — the route itself is closed.
+    else if (route.editorOnly && !state.me?.is_editor) { location.hash = '#/' + homePath(); return; }
     else if (!route.open && !state.me) renderGate(el, route);
     else await route.render(el);
     renderChrome();
