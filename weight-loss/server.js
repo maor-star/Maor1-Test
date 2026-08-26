@@ -347,30 +347,55 @@ function memberSummary(row) {
   };
 }
 
-app.get('/api/group', requireAuth, asyncRoute((req, res) => {
+function groupAggregate() {
   const rows = db.prepare('SELECT * FROM profiles WHERE active = 1 ORDER BY total_points DESC').all();
   const members = rows.map(memberSummary);
 
   // Only members who actually lost weight contribute to the group total.
   const lost = members.reduce((sum, m) => sum + (m.weight_change < 0 ? -m.weight_change : 0), 0);
 
-  res.json({
+  return {
     total_kg_lost: Number(lost.toFixed(1)),
     member_count: members.length,
     workouts_this_week: members.reduce((sum, m) => sum + m.workouts_this_week, 0),
     longest_streak: members.reduce((max, m) => Math.max(max, m.current_streak), 0),
     members,
+  };
+}
+
+app.get('/api/group', requireAuth, asyncRoute((req, res) => res.json(groupAggregate())));
+
+// ---------- Public ----------
+/**
+ * Below this many members the group totals are one person's numbers wearing a
+ * plural, so visitors get the member count alone until the group is big enough
+ * to hide an individual.
+ */
+const MIN_MEMBERS_FOR_PUBLIC_TOTALS = 3;
+
+/** The headline numbers for visitors. Never names a member or their figures. */
+app.get('/api/public/summary', asyncRoute((req, res) => {
+  const group = groupAggregate();
+  const enough = group.member_count >= MIN_MEMBERS_FOR_PUBLIC_TOTALS;
+  res.json({
+    member_count: group.member_count,
+    totals_visible: enough,
+    total_kg_lost: enough ? group.total_kg_lost : null,
+    workouts_this_week: enough ? group.workouts_this_week : null,
+    longest_streak: enough ? group.longest_streak : null,
+    post_count: db.prepare('SELECT COUNT(*) AS n FROM posts').get().n,
   });
 }));
 
 // ---------- Articles ----------
-app.get('/api/posts', requireAuth, asyncRoute((req, res) => {
+/** Open to visitors: the articles are the part of the app that needs no account. */
+app.get('/api/posts', asyncRoute((req, res) => {
   res.json(db.prepare(
     'SELECT id, slug, title, category, excerpt, read_minutes, published_at FROM posts ORDER BY published_at DESC, id'
   ).all());
 }));
 
-app.get('/api/posts/:slug', requireAuth, asyncRoute((req, res) => {
+app.get('/api/posts/:slug', asyncRoute((req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE slug = ?').get(req.params.slug);
   if (!post) throw fail('המאמר לא נמצא', 404);
   res.json(post);

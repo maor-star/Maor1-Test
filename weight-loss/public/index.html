@@ -9,13 +9,14 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%235980a6'/><text x='50' y='72' font-size='64' font-family='sans-serif' font-weight='700' fill='%23f2f2f3' text-anchor='middle'>ה</text></svg>" />
 </head>
 <body>
-  <!-- Sign in / sign up, shown until a session exists -->
-  <div id="auth" class="auth hidden">
+  <!-- Sign in / sign up. A visitor can browse without it; it opens from any members-only screen. -->
+  <div id="auth" class="auth hidden" role="dialog" aria-modal="true" aria-labelledby="auth-heading">
     <div class="auth-card bp">
       <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+      <button class="auth-close" id="auth-close" type="button" aria-label="סגירה וחזרה לאתר">✕</button>
       <div class="auth-brand">
         <div class="kicker">Body Recomp</div>
-        <h1>הדרך הקלה לירידה במשקל</h1>
+        <h1 id="auth-heading">הדרך הקלה לירידה במשקל</h1>
         <p>שלושה יעדים יומיים. הגוף עושה את השאר.</p>
       </div>
 
@@ -53,15 +54,21 @@
         </div>
         <nav class="tabs" id="tabs"></nav>
         <div class="readout">
-          <div>
-            <div class="val accent" id="xp-readout">0</div>
-            <div class="cap">XP</div>
+          <div class="readout-member hidden" id="readout-member">
+            <div>
+              <div class="val accent" id="xp-readout">0</div>
+              <div class="cap">XP</div>
+            </div>
+            <div>
+              <div class="val" id="streak-readout">0</div>
+              <div class="cap">רצף</div>
+            </div>
+            <button class="btn btn-secondary" id="logout" type="button">יציאה</button>
           </div>
-          <div>
-            <div class="val" id="streak-readout">0</div>
-            <div class="cap">רצף</div>
+          <div class="readout-guest hidden" id="readout-guest">
+            <button class="btn btn-secondary" data-auth="login" type="button">התחברות</button>
+            <button class="btn btn-primary" data-auth="register" type="button">הרשמה</button>
           </div>
-          <button class="btn btn-secondary" id="logout" type="button">יציאה</button>
         </div>
       </div>
     </header>
