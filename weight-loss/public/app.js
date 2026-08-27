@@ -1430,9 +1430,9 @@ async function render() {
   el.innerHTML = '<div class="empty">טוען…</div>';
   try {
     if (article) await viewArticle(el, decodeURIComponent(article[1]));
-    else if (!route || (route.guestOnly && state.me)) { location.hash = '#/' + homePath(); return; }
+    else if (!route || (route.guestOnly && state.me)) { location.hash = '#/' + homePath(); return true; }
     // The editor tab is not just hidden from members — the route itself is closed.
-    else if (route.editorOnly && !state.me?.is_editor) { location.hash = '#/' + homePath(); return; }
+    else if (route.editorOnly && !state.me?.is_editor) { location.hash = '#/' + homePath(); return true; }
     else if (!route.open && !state.me) renderGate(el, route);
     else await route.render(el);
     renderChrome();
@@ -1529,8 +1529,13 @@ async function boot() {
     state.me = null;
   }
   closeAuth();
+  // Reveal the shell only once the first screen is in the DOM. Showing an empty
+  // shell first parks the footer in the middle of the viewport and then throws it
+  // down the page when the content lands — that is the load "jump".
+  // A redirect resolves to true, so follow it to the screen it lands on.
+  let hops = 0;
+  while ((await render()) === true && hops++ < 3);
   showApp();
-  render();
 }
 
 document.getElementById('logout').addEventListener('click', async () => {

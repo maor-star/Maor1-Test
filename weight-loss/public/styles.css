@@ -2,6 +2,13 @@
    Every value comes from the Industry tokens in design-system.css — no raw hexes,
    no ad-hoc spacing. Load design-system.css first. */
 
+:root {
+  /* The ink the blueprint registration marks are drawn in — the same value
+     design-system.css uses for .corner, lifted into a token so the section
+     rules can end in exactly the same cross. */
+  --mark-ink: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
 html { direction: rtl; }
 body { min-height: 100vh; }
 .hidden { display: none !important; }
@@ -102,7 +109,10 @@ body.modal-open { overflow: hidden; }
 .readout .cap { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.55; }
 .menu-toggle { display: none; }
 
-main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6) 80px; }
+/* width:100% matters: an auto cross-axis margin on a flex item cancels the
+   stretch, and the column would otherwise shrink to fit its own content —
+   making every screen a different width. */
+main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6) 80px; }
 .screen { display: grid; gap: var(--space-8); }
 
 /* ── Section headings ──────────────────────────────────────────────────── */
@@ -247,7 +257,25 @@ main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6)
 
 /* ── Science ───────────────────────────────────────────────────────────── */
 .mechanisms { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-8); }
-.mechanism { display: grid; gap: var(--space-3); align-content: start; padding-top: var(--space-4); border-top: 1px solid var(--color-divider); }
+.mechanism {
+  position: relative;
+  display: grid; gap: var(--space-3); align-content: start;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-divider);
+}
+/* The column rule is a drawn edge like the box's, so it ends in the same cross. */
+.mechanism::before,
+.mechanism::after {
+  content: "";
+  position: absolute;
+  top: -6px;
+  width: 11px; height: 11px;
+  background:
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 1px 100% no-repeat,
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 100% 1px no-repeat;
+}
+.mechanism::before { inset-inline-start: -6px; }
+.mechanism::after { inset-inline-end: -6px; }
 .mechanism .num {
   font-family: var(--font-heading); font-weight: 700; font-size: 44px; line-height: 1;
   color: var(--color-neutral-400); font-variant-numeric: tabular-nums;
@@ -356,8 +384,8 @@ main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6)
 /* ── Page footer ───────────────────────────────────────────────────────── */
 /* Mirrors the header: the same hairline, edge to edge, closing the page. */
 .site-footer {
+  position: relative;
   margin-top: auto;
-  border-top: 1px solid var(--color-divider);
   background: var(--color-bg);
   text-align: center;
   padding: var(--space-6) var(--space-4);
@@ -367,6 +395,19 @@ main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6)
   color: var(--color-neutral-700);
 }
 .site-footer .heart { color: #c0463d; font-family: var(--font-body); }
+/* The footer rule follows the content column rather than the page edge, and ends
+   in the same registration marks as every other line on the site. */
+.site-footer::before {
+  content: "";
+  position: absolute; top: -5px;
+  inset-inline-start: 50%; transform: translateX(50%);
+  width: min(1180px - 2 * var(--space-6), 100% - 2 * var(--space-6));
+  height: 11px; pointer-events: none;
+  background:
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 100% 1px no-repeat,
+    linear-gradient(var(--mark-ink), var(--mark-ink)) left  center / 1px 100% no-repeat,
+    linear-gradient(var(--mark-ink), var(--mark-ink)) right center / 1px 100% no-repeat;
+}
 
 /* The shell fills the viewport so the footer sits at the bottom on short pages. */
 #app { display: flex; flex-direction: column; min-height: 100vh; }
@@ -380,10 +421,35 @@ main { flex: 1; }
 .screen > .sec-row + * { margin-top: 0; }
 .screen > .sec,
 .screen > .sec-row {
+  position: relative;
   padding-bottom: var(--space-4);
   border-bottom: 1px solid var(--color-divider);
 }
+
+/* The framed box at the top ends its lines in a registration cross. A rule that
+   just stops is a different language, so every section rule gets the same two
+   marks at its ends — drawn exactly like .corner, from the same two hairlines. */
+.screen > .sec::before,
+.screen > .sec::after,
+.screen > .sec-row::before,
+.screen > .sec-row::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  width: 11px;
+  height: 11px;
+  background:
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 1px 100% no-repeat,
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 100% 1px no-repeat;
+}
+.screen > .sec::before,
+.screen > .sec-row::before { inset-inline-start: -6px; }
+.screen > .sec::after,
+.screen > .sec-row::after { inset-inline-end: -6px; }
+
 .screen > .sec-sub { border-bottom: 0; padding-bottom: 0; }
+.screen > .sec-sub::before,
+.screen > .sec-sub::after { content: none; }
 
 /* A block that draws its own top edge would stack a second rule under the
    section's. One line, never two — the page keeps a single hairline weight. */
@@ -397,6 +463,16 @@ main { flex: 1; }
 .screen > .sec-row:has(+ .table-wrap),
 .screen > .sec-row:has(+ .rowlist) { border-bottom: 0; padding-bottom: var(--space-2); }
 
+.screen > .sec:has(+ .articles)::before, .screen > .sec:has(+ .articles)::after,
+.screen > .sec:has(+ .mechanisms)::before, .screen > .sec:has(+ .mechanisms)::after,
+.screen > .sec:has(+ .badges)::before, .screen > .sec:has(+ .badges)::after,
+.screen > .sec:has(+ .rowlist)::before, .screen > .sec:has(+ .rowlist)::after,
+.screen > .sec:has(+ .table-wrap)::before, .screen > .sec:has(+ .table-wrap)::after,
+.screen > .sec:has(+ .bp)::before, .screen > .sec:has(+ .bp)::after,
+.screen > .sec:has(+ .statrow)::before, .screen > .sec:has(+ .statrow)::after,
+.screen > .sec-row:has(+ .table-wrap)::before, .screen > .sec-row:has(+ .table-wrap)::after,
+.screen > .sec-row:has(+ .rowlist)::before, .screen > .sec-row:has(+ .rowlist)::after { content: none; }
+
 /* The home page's slogan sits above the product name. */
 .slogan-sub {
   margin: var(--space-2) 0 var(--space-3) !important;
@@ -408,6 +484,7 @@ main { flex: 1; }
 
 @media (max-width: 700px) {
   .site-footer { font-size: 13.5px; padding: var(--space-6) var(--space-3); }
+  .site-footer::before { width: min(1180px - 2 * var(--space-4), 100% - 2 * var(--space-4)); }
 }
 
 /* ── Tags hug their text ───────────────────────────────────────────────── */
