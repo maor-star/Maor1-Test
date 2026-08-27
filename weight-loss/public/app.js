@@ -167,51 +167,53 @@ function confirmAction(message, onConfirm) {
 
 // ---------------- Dashboard ----------------
 /** Filled from /api/tips on first use so the editor's changes show up. */
-let tipsCache = null;
-async function loadTips() {
-  if (!tipsCache) tipsCache = await api('/tips');
-  return tipsCache;
+let tipsCache = {};
+async function loadTips(kind = 'rule') {
+  if (!tipsCache[kind]) tipsCache[kind] = await api('/tips?kind=' + kind);
+  return tipsCache[kind];
 }
 
 /**
  * One rule of thumb at a time, swapped every few seconds. Which one shows first
  * follows the day, so two people opening the app together see the same line.
  */
-function tipRotator(tips, goalKg) {
+function tipRotator(tips, goalKg, emptyText = 'אין עדיין כללי אצבע') {
   const lines = [
     ...(goalKg ? [{ text: `יעד לקבוצה — ${nf(goalKg)} קילו שומן`, isGoal: true }] : []),
     ...tips,
   ];
-  if (!lines.length) return '<div class="empty">אין עדיין כללי אצבע</div>';
+  if (!lines.length) return `<div class="empty">${esc(emptyText)}</div>`;
   const start = Math.floor(Date.parse(todayISO()) / 86400000) % lines.length;
-  const tips_ = lines;
   return `
-    <div class="rules" id="tip-rotator" data-index="${start}">
-      ${tips_.map((t, i) => `<div class="rule ${t.isGoal ? 'is-goal' : ''} ${i === start ? 'is-shown' : ''}">${esc(t.text)}</div>`).join('')}
-      <div class="rule-ticks">${tips_.map((_, i) => `<i class="${i === start ? 'on' : ''}"></i>`).join('')}</div>
+    <div class="rules" data-index="${start}">
+      ${lines.map((t, i) => `<div class="rule ${t.isGoal ? 'is-goal' : ''} ${i === start ? 'is-shown' : ''}">${esc(t.text)}</div>`).join('')}
+      <div class="rule-ticks">${lines.map((_, i) => `<i class="${i === start ? 'on' : ''}"></i>`).join('')}</div>
     </div>`;
 }
 
 /** Starts the swap once the markup is on the page. Honours reduced-motion by standing still. */
-let tipTimer;
+let tipTimers = [];
 function startTipRotation() {
-  clearInterval(tipTimer);
-  const box = document.getElementById('tip-rotator');
-  if (!box) return;
-  const rules = [...box.querySelectorAll('.rule')];
-  const ticks = [...box.querySelectorAll('.rule-ticks i')];
-  if (rules.length < 2) return;
+  tipTimers.forEach(clearInterval);
+  tipTimers = [];
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-  const show = (next) => {
-    rules.forEach((r, i) => r.classList.toggle('is-shown', i === next));
-    ticks.forEach((t, i) => t.classList.toggle('on', i === next));
-    box.dataset.index = String(next);
-  };
-  tipTimer = setInterval(() => show((Number(box.dataset.index) + 1) % rules.length), 7000);
+  document.querySelectorAll('.rules[data-index]').forEach((box) => {
+    const rules = [...box.querySelectorAll('.rule')];
+    const ticks = [...box.querySelectorAll('.rule-ticks i')];
+    if (rules.length < 2) return;
 
-  // Clicking a tick jumps straight to that rule and stops the automatic swap.
-  ticks.forEach((tick, i) => tick.addEventListener('click', () => { clearInterval(tipTimer); show(i); }));
+    const show = (next) => {
+      rules.forEach((r, i) => r.classList.toggle('is-shown', i === next));
+      ticks.forEach((t, i) => t.classList.toggle('on', i === next));
+      box.dataset.index = String(next);
+    };
+    const timer = setInterval(() => show((Number(box.dataset.index) + 1) % rules.length), 7000);
+    tipTimers.push(timer);
+
+    // Clicking a tick jumps straight to that line and stops the automatic swap.
+    ticks.forEach((tick, i) => tick.addEventListener('click', () => { clearInterval(timer); show(i); }));
+  });
 }
 
 async function viewDashboard(el) {
@@ -899,9 +901,10 @@ function groupChart(data) {
 
 async function viewHome(el) {
   const signedIn = !!state.me;
-  const [summary, posts, goal, progress, group] = await Promise.all([
+  const [summary, posts, goal, progress, group, slogans] = await Promise.all([
     api('/public/summary'), api('/posts'), api('/public/goal'), api('/public/progress'),
     signedIn ? api('/group') : Promise.resolve(null),
+    loadTips('slogan'),
   ]);
 
   let selected = group?.members?.[0] ?? null;
@@ -942,6 +945,12 @@ async function viewHome(el) {
       </div>
       ${statBlock(cells, { framed: false })}
     </section>
+
+    ${slogans.length ? `
+      <section class="slogans">
+        <div class="label">סיסמאות הקבוצה</div>
+        ${tipRotator(slogans, 0, '')}
+      </section>` : ''}
 
     ${group ? `
       <div class="sec">
@@ -1098,11 +1107,12 @@ function renderGate(el, route) {
 
 // ---------------- Routing ----------------
 // ---------------- Editor ----------------
-const CATEGORIES = ['תזונה', 'אימונים', 'מנטלי', 'כללי'];
+const CATEGORIES = ['תזונה', 'אימונים', 'מנטלי', 'מטבוליזם', 'כללי'];
 
 async function viewEditor(el) {
-  const [posts, tips, inbox, recipes] = await Promise.all([
-    api('/editor/posts'), api('/tips'), api('/editor/inbox'), api('/editor/recipes'),
+  const [posts, tips, slogans, inbox, recipes, members] = await Promise.all([
+    api('/editor/posts'), api('/tips'), api('/tips?kind=slogan'),
+    api('/editor/inbox'), api('/editor/recipes'), api('/editor/members'),
   ]);
   const totalUnread = inbox.reduce((n, m) => n + m.unread, 0);
 
@@ -1205,6 +1215,50 @@ async function viewEditor(el) {
         <input class="input" name="text" maxlength="200" placeholder="כלל אצבע חדש — שורה אחת" required />
         <button type="submit" class="btn btn-primary">הוספה</button>
       </form>
+    </div>
+
+    <div>
+      <div class="sec" style="margin-bottom:var(--space-6)">
+        <div class="kicker">סיסמאות</div>
+        <h2>הטיקר בדף הבית</h2>
+        <p>שורה אחת כל אחת, מתחלפות אחת לכמה שניות בראש דף הבית. ${slogans.length} כרגע.</p>
+      </div>
+      <div class="rowlist" id="slogan-list">
+        ${slogans.map((t) => `
+          <div class="row" data-slogan="${t.id}">
+            <span class="row-text">${esc(t.text)}</span>
+            <span class="row-actions">
+              <button class="btn btn-secondary btn-sm" data-edit-slogan type="button">עריכה</button>
+              <button class="btn btn-secondary btn-sm" data-del-slogan type="button">מחיקה</button>
+            </span>
+          </div>`).join('')}
+      </div>
+      <form id="slogan-form" class="add-row">
+        <input class="input" name="text" maxlength="200" placeholder="סיסמה חדשה — שורה אחת" required />
+        <button type="submit" class="btn btn-primary">הוספה</button>
+      </form>
+    </div>
+
+    <div>
+      <div class="sec" style="margin-bottom:var(--space-6)">
+        <div class="kicker">הרשאות</div>
+        <h2>מי יכול לערוך</h2>
+        <p>לעורך יש גישה לעמוד הזה — מאמרים, סיסמאות, מתכונים ותיבת המסרים.</p>
+      </div>
+      <div class="rowlist">
+        ${members.map((m) => `
+          <div class="row" data-account="${m.id}">
+            <span>
+              <span class="row-text">${esc(m.full_name)}${m.is_editor ? ' <span class="tag tag-accent">עורך</span>' : ''}</span>
+              <span class="facts">${esc(m.email)}</span>
+            </span>
+            <span class="row-actions">
+              <button class="btn btn-secondary btn-sm" data-toggle-editor data-grant="${m.is_editor ? 0 : 1}" type="button">
+                ${m.is_editor ? 'הסרת הרשאה' : 'הפיכה לעורך'}
+              </button>
+            </span>
+          </div>`).join('')}
+      </div>
     </div>`;
 
   // --- the thread with one member ---
@@ -1293,7 +1347,7 @@ async function viewEditor(el) {
     });
   });
 
-  const reload = () => { tipsCache = null; render(); };
+  const reload = () => { tipsCache = {}; render(); };
 
   el.querySelector('#tip-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1302,6 +1356,58 @@ async function viewEditor(el) {
       toast('הטיפ נוסף');
       reload();
     } catch (err) { toast(err.message, true); }
+  });
+
+  el.querySelector('#slogan-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const body = Object.fromEntries(new FormData(e.target).entries());
+      await api('/tips', { method: 'POST', body: { ...body, kind: 'slogan' } });
+      toast('הסיסמה נוספה');
+      reload();
+    } catch (err) { toast(err.message, true); }
+  });
+
+  el.querySelectorAll('[data-edit-slogan]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const slogan = slogans.find((t) => t.id === Number(button.closest('[data-slogan]').dataset.slogan));
+      openModal('עריכת סיסמה', `
+        <div class="field"><label>הטקסט</label>
+          <input class="input" name="text" maxlength="200" value="${esc(slogan.text)}" required /></div>`,
+        async (form) => {
+          await api('/tips/' + slogan.id, { method: 'PUT', body: form });
+          toast('עודכן');
+          reload();
+        });
+    });
+  });
+
+  el.querySelectorAll('[data-del-slogan]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const slogan = slogans.find((t) => t.id === Number(button.closest('[data-slogan]').dataset.slogan));
+      confirmAction(`למחוק את "${slogan.text}"?`, async () => {
+        await api('/tips/' + slogan.id, { method: 'DELETE' });
+        toast('נמחק');
+        reload();
+      });
+    });
+  });
+
+  el.querySelectorAll('[data-toggle-editor]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = Number(button.closest('[data-account]').dataset.account);
+      const member = members.find((m) => m.id === id);
+      const grant = button.dataset.grant === '1';
+      confirmAction(
+        grant ? `לתת ל${member.full_name} הרשאת עריכה מלאה?` : `להסיר מ${member.full_name} את הרשאת העריכה?`,
+        async () => {
+          await api(`/editor/members/${id}/editor`, { method: 'PUT', body: { is_editor: grant ? 1 : 0 } });
+          toast(grant ? 'ההרשאה ניתנה' : 'ההרשאה הוסרה');
+          // Revoking your own rights closes this screen, so re-resolve the route.
+          if (id === state.me.id) return boot();
+          render();
+        });
+    });
   });
 
   el.querySelectorAll('[data-edit-tip]').forEach((button) => {

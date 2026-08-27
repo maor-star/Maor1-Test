@@ -187,11 +187,10 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 /* One rule shows at a time; the others stay in the flow so the block keeps its height. */
 /* Every line is laid out; only one is painted. The block therefore keeps the
    height of the tallest line and never resizes as the lines swap. */
-#tip-rotator { position: relative; display: grid; }
-#tip-rotator .rule { grid-area: 1 / 1; }
-#tip-rotator .rule { opacity: 0; visibility: hidden; transition: opacity .5s ease; }
-#tip-rotator .rule.is-shown { opacity: 1; visibility: visible; }
-#tip-rotator .rule.is-goal { color: var(--color-accent-700); }
+.rules[data-index] { position: relative; display: grid; }
+.rules[data-index] .rule { grid-area: 1 / 1; opacity: 0; visibility: hidden; transition: opacity .5s ease; }
+.rules[data-index] .rule.is-shown { opacity: 1; visibility: visible; }
+.rules[data-index] .rule.is-goal { color: var(--color-accent-700); }
 .rule-ticks { grid-area: 2 / 1; display: flex; gap: 6px; padding-top: var(--space-3); }
 .rule-ticks i {
   width: 18px; height: 2px; background: var(--color-neutral-300);
@@ -199,6 +198,26 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 }
 .rule-ticks i.on { background: var(--color-accent); }
 .rule-ticks i:hover { background: var(--color-accent-400); }
+
+/* The slogan band sits between the hero and the group numbers. It draws its own
+   bottom rule with the same registration marks as the rest of the page. */
+.screen > .slogans {
+  position: relative;
+  display: grid; gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+}
+.screen > .slogans::before,
+.screen > .slogans::after {
+  content: ""; position: absolute; bottom: -6px; width: 11px; height: 11px;
+  background:
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 1px 100% no-repeat,
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 100% 1px no-repeat;
+}
+.screen > .slogans::before { inset-inline-start: -6px; }
+.screen > .slogans::after  { inset-inline-end: -6px; }
+.slogans .rule { font-size: 22px; }
+@media (max-width: 720px) { .slogans .rule { font-size: 18px; } }
 .rule {
   border-inline-start: 2px solid var(--color-accent); padding-inline-start: var(--space-4);
   font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 19px; line-height: 1.25;

@@ -441,7 +441,9 @@ app.get('/api/posts/:slug', asyncRoute((req, res) => {
  */
 app.get('/api/public/progress', asyncRoute((req, res) => {
   const members = db.prepare("SELECT id, full_name FROM profiles WHERE active = 1").all();
-  const enough = members.length >= MIN_MEMBERS_FOR_PUBLIC_TOTALS;
+  // The floor keeps one or two members from being identifiable to a passing visitor.
+  // Members of the group are meant to see each other, so for them it does not apply.
+  const enough = req.user || members.length >= MIN_MEMBERS_FOR_PUBLIC_TOTALS;
   if (!enough) return res.json({ visible: false, series: [], total: [], goal_kg: Number(setting('group_goal_kg', '200')) });
 
   // Every date anyone weighed in on, in order — the shared x-axis.
@@ -474,15 +476,17 @@ app.get('/api/public/goal', asyncRoute((req, res) => {
 
 // ---------- Tips (the rules of thumb on the dashboard) ----------
 app.get('/api/tips', asyncRoute((req, res) => {
-  res.json(db.prepare('SELECT * FROM tips ORDER BY position, id').all());
+  const kind = req.query.kind === 'slogan' ? 'slogan' : 'rule';
+  res.json(db.prepare('SELECT * FROM tips WHERE kind = ? ORDER BY position, id').all(kind));
 }));
 
 app.post('/api/tips', requireEditor, asyncRoute((req, res) => {
   const text = str(req.body.text);
   if (!text) throw fail('יש להזין טקסט');
   if (text.length > 200) throw fail('טיפ הוא שורה אחת — עד 200 תווים');
-  const next = db.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS n FROM tips').get().n;
-  const info = db.prepare('INSERT INTO tips (text, position) VALUES (?, ?)').run(text, next);
+  const kind = req.body.kind === 'slogan' ? 'slogan' : 'rule';
+  const next = db.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS n FROM tips WHERE kind = ?').get(kind).n;
+  const info = db.prepare('INSERT INTO tips (text, position, kind) VALUES (?, ?, ?)').run(text, next, kind);
   res.json(db.prepare('SELECT * FROM tips WHERE id = ?').get(info.lastInsertRowid));
 }));
 
@@ -648,6 +652,32 @@ app.put('/api/editor/members/:id/note', requireEditor, asyncRoute((req, res) => 
   const info = db.prepare('UPDATE profiles SET coach_note = ? WHERE id = ?').run(note || null, req.params.id);
   if (!info.changes) throw fail('החבר לא נמצא', 404);
   res.json({ ok: true, coach_note: note });
+}));
+
+/** Everyone with an account, editors included — the inbox deliberately leaves editors out. */
+app.get('/api/editor/members', requireEditor, asyncRoute((req, res) => {
+  res.json(db.prepare(`
+    SELECT id, full_name, email, is_editor FROM profiles
+    WHERE active = 1 ORDER BY is_editor DESC, full_name
+  `).all());
+}));
+
+/** Editor rights are granted from inside the app, so nobody has to touch the database. */
+app.put('/api/editor/members/:id/editor', requireEditor, asyncRoute((req, res) => {
+  const id = Number(req.params.id);
+  const wanted = req.body.is_editor ? 1 : 0;
+  const target = db.prepare('SELECT id, full_name, is_editor FROM profiles WHERE id = ?').get(id);
+  if (!target) throw fail('החבר לא נמצא', 404);
+
+  // Removing the last editor would lock the editing area for everyone, including the
+  // person doing it, and there is no way back in from the app itself.
+  if (!wanted) {
+    const editors = db.prepare('SELECT COUNT(*) AS n FROM profiles WHERE is_editor = 1 AND active = 1').get().n;
+    if (editors <= 1) throw fail('זה העורך האחרון — צריך להשאיר לפחות אחד');
+  }
+
+  db.prepare('UPDATE profiles SET is_editor = ? WHERE id = ?').run(wanted, id);
+  res.json({ ok: true, id, is_editor: wanted });
 }));
 
 // ---------- Recipes ----------
