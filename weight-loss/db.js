@@ -28,6 +28,9 @@ db.exec(`
     current_streak       INTEGER NOT NULL DEFAULT 0,
     active               INTEGER NOT NULL DEFAULT 1,
     is_editor            INTEGER NOT NULL DEFAULT 0,
+    target_weight        REAL,
+    photo_url            TEXT,
+    coach_note           TEXT,
     created_at           TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -99,6 +102,27 @@ db.exec(`
     created_at TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 
+  /* Two-way messages between a member and the coach. */
+  CREATE TABLE IF NOT EXISTS messages (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    from_coach  INTEGER NOT NULL DEFAULT 0,
+    body        TEXT    NOT NULL,
+    read_at     TEXT,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
+  /* A recipe with no user_id is for the whole group. */
+  CREATE TABLE IF NOT EXISTS recipes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER REFERENCES profiles(id) ON DELETE CASCADE,
+    title      TEXT    NOT NULL,
+    body       TEXT    NOT NULL DEFAULT '',
+    created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_msg_user   ON messages(user_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_recipe_user ON recipes(user_id);
   CREATE INDEX IF NOT EXISTS idx_logs_user_date  ON daily_logs(user_id, date);
   CREATE INDEX IF NOT EXISTS idx_weigh_user_date ON weekly_weigh_ins(user_id, date);
   CREATE INDEX IF NOT EXISTS idx_userbadge_user  ON user_badges(user_id);
@@ -116,6 +140,9 @@ addColumn('posts', 'category', "TEXT NOT NULL DEFAULT ''");
 addColumn('posts', 'excerpt', "TEXT NOT NULL DEFAULT ''");
 addColumn('posts', 'read_minutes', 'INTEGER NOT NULL DEFAULT 5');
 addColumn('profiles', 'is_editor', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('profiles', 'target_weight', 'REAL');
+addColumn('profiles', 'photo_url', 'TEXT');
+addColumn('profiles', 'coach_note', 'TEXT');
 
 // ---- Seed the master list of badges ----
 export const BADGE_SEED = [

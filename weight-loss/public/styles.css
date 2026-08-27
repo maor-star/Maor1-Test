@@ -175,13 +175,14 @@ main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6)
 .rules { display: grid; gap: var(--space-4); }
 
 /* One rule shows at a time; the others stay in the flow so the block keeps its height. */
-#tip-rotator { position: relative; display: block; min-height: 78px; }
-#tip-rotator .rule {
-  position: absolute; inset: 0 0 auto 0;
-  opacity: 0; visibility: hidden; transition: opacity .5s ease;
-}
-#tip-rotator .rule.is-shown { opacity: 1; visibility: visible; position: relative; }
-.rule-ticks { display: flex; gap: 6px; padding-top: var(--space-3); }
+/* Every line is laid out; only one is painted. The block therefore keeps the
+   height of the tallest line and never resizes as the lines swap. */
+#tip-rotator { position: relative; display: grid; }
+#tip-rotator .rule { grid-area: 1 / 1; }
+#tip-rotator .rule { opacity: 0; visibility: hidden; transition: opacity .5s ease; }
+#tip-rotator .rule.is-shown { opacity: 1; visibility: visible; }
+#tip-rotator .rule.is-goal { color: var(--color-accent-700); }
+.rule-ticks { grid-area: 2 / 1; display: flex; gap: 6px; padding-top: var(--space-3); }
 .rule-ticks i {
   width: 18px; height: 2px; background: var(--color-neutral-300);
   cursor: pointer; transition: background .3s ease;
@@ -384,6 +385,18 @@ main { flex: 1; }
 }
 .screen > .sec-sub { border-bottom: 0; padding-bottom: 0; }
 
+/* A block that draws its own top edge would stack a second rule under the
+   section's. One line, never two — the page keeps a single hairline weight. */
+.screen > .sec:has(+ .articles),
+.screen > .sec:has(+ .mechanisms),
+.screen > .sec:has(+ .badges),
+.screen > .sec:has(+ .rowlist),
+.screen > .sec:has(+ .table-wrap),
+.screen > .sec:has(+ .bp),
+.screen > .sec:has(+ .statrow),
+.screen > .sec-row:has(+ .table-wrap),
+.screen > .sec-row:has(+ .rowlist) { border-bottom: 0; padding-bottom: var(--space-2); }
+
 /* The home page's slogan sits above the product name. */
 .slogan-sub {
   margin: var(--space-2) 0 var(--space-3) !important;
@@ -396,3 +409,69 @@ main { flex: 1; }
 @media (max-width: 700px) {
   .site-footer { font-size: 13.5px; padding: var(--space-6) var(--space-3); }
 }
+
+/* ── Tags hug their text ───────────────────────────────────────────────── */
+/* .tag is inline-flex, but as a grid item it stretches to the whole column
+   and the tint reads as a band across the card. */
+.tag { justify-self: start; width: fit-content; }
+
+/* ── Identity block: picture beside the name ───────────────────────────── */
+.hero-id { display: flex; align-items: flex-start; gap: var(--space-6); }
+.hero-id > div:last-child { min-width: 0; }
+
+.photo-slot {
+  position: relative; flex: none;
+  width: 120px; height: 120px;
+  display: grid; place-items: center;
+  cursor: pointer; overflow: hidden;
+  background: var(--color-surface);
+}
+.photo-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-slot:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.photo-slot .photo-empty {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 13px; color: var(--color-neutral-600); text-align: center; line-height: 1.3;
+}
+.photo-slot > .corner { z-index: 1; }
+
+/* ── The coach's emphases ──────────────────────────────────────────────── */
+.note-card { border-inline-start: 2px solid var(--color-accent); }
+.coach-note {
+  margin: 0;
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: clamp(18px, 2.2vw, 22px); line-height: 1.4;
+}
+
+/* ── The thread with the coach ─────────────────────────────────────────── */
+.thread {
+  display: grid; gap: var(--space-4);
+  max-height: 340px; overflow-y: auto;
+  padding-inline-end: var(--space-2);
+}
+.msg { display: grid; gap: 4px; max-width: 46ch; }
+.msg-who { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--color-neutral-600); }
+.msg-body {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-divider);
+  line-height: 1.6; white-space: pre-wrap;
+}
+.msg.from-me { justify-self: start; }
+.msg.from-coach { justify-self: end; }
+.msg.from-coach .msg-body {
+  background: var(--color-accent-100);
+  border-color: var(--color-accent-300);
+}
+.msg.from-coach .msg-who { color: var(--color-accent-700); }
+
+@media (max-width: 700px) {
+  .hero-id { flex-direction: column; gap: var(--space-4); }
+  .photo-slot { width: 96px; height: 96px; }
+  .thread { max-height: 300px; }
+  .msg { max-width: 100%; }
+}
+
+/* A row that carries a second line of context under its title. */
+.rowlist .row > span:first-child { display: grid; gap: 3px; min-width: 0; }
+.rowlist .facts { font-size: 13px; color: var(--color-neutral-600); }
+.rowlist .row-text .tag { display: inline-flex; margin-inline-start: var(--space-2); }
+.dialog .thread { max-height: 300px; }

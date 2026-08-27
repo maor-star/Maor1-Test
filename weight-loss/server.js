@@ -313,6 +313,12 @@ function personalStats(userId) {
 
   const first = weighIns[0];
   const last = weighIns[weighIns.length - 1];
+
+  // One weigh-in per calendar week: if this week is done, the next one opens Monday.
+  const thisWeek = weekKey(today);
+  const weighedThisWeek = weighIns.some((w) => w.week === thisWeek);
+  const nextWeighIn = weighedThisWeek ? shiftDate(start, 7) : today;
+
   const firstWaist = weighIns.find((w) => w.waist != null);
   const lastWaist = [...weighIns].reverse().find((w) => w.waist != null);
 
@@ -327,6 +333,13 @@ function personalStats(userId) {
     protein_goal_days_30: proteinGoalDays,
     logged_days_30: logs.length,
     weeks_in_program: weighIns.length,
+    weighed_this_week: weighedThisWeek,
+    next_weigh_in: nextWeighIn,
+    target_weight: profile.target_weight,
+    to_target: profile.target_weight && last
+      ? Number((last.weight - profile.target_weight).toFixed(1)) : null,
+    coach_note: profile.coach_note,
+    has_photo: !!profile.photo_url,
     weight_start: first ? first.weight : null,
     weight_latest: last ? last.weight : null,
     weight_change: first && last ? Number((last.weight - first.weight).toFixed(1)) : null,
@@ -421,6 +434,39 @@ app.get('/api/posts/:slug', asyncRoute((req, res) => {
   res.json(post);
 }));
 
+/**
+ * Every member's cumulative loss over time, plus the group's running total.
+ * Public, so it carries first names only and stays behind the same member
+ * floor that hides the headline numbers for a group of one or two.
+ */
+app.get('/api/public/progress', asyncRoute((req, res) => {
+  const members = db.prepare("SELECT id, full_name FROM profiles WHERE active = 1").all();
+  const enough = members.length >= MIN_MEMBERS_FOR_PUBLIC_TOTALS;
+  if (!enough) return res.json({ visible: false, series: [], total: [], goal_kg: Number(setting('group_goal_kg', '200')) });
+
+  // Every date anyone weighed in on, in order — the shared x-axis.
+  const dates = db.prepare('SELECT DISTINCT date FROM weekly_weigh_ins ORDER BY date').all().map((r) => r.date);
+
+  const series = members.map((m) => {
+    const rows = db.prepare('SELECT date, weight FROM weekly_weigh_ins WHERE user_id = ? ORDER BY date').all(m.id);
+    if (!rows.length) return null;
+    const start = rows[0].weight;
+    // Carry the last known weight forward, so a missed week is a flat line, not a gap.
+    let last = 0;
+    const points = dates.map((d) => {
+      const row = [...rows].reverse().find((r) => r.date <= d);
+      if (row) last = Number((start - row.weight).toFixed(1));
+      return row ? last : null;
+    });
+    return { name: m.full_name.split(' ')[0], points };
+  }).filter(Boolean);
+
+  const total = dates.map((_, i) =>
+    Number(series.reduce((sum, s) => sum + Math.max(0, s.points[i] ?? 0), 0).toFixed(1)));
+
+  res.json({ visible: true, dates, series, total, goal_kg: Number(setting('group_goal_kg', '200')) });
+}));
+
 /** The collective target, readable by visitors — it is the site's slogan. */
 app.get('/api/public/goal', asyncRoute((req, res) => {
   res.json({ goal_kg: Number(setting('group_goal_kg', '200')) });
@@ -511,6 +557,144 @@ app.put('/api/settings/group-goal', requireEditor, asyncRoute((req, res) => {
   db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value')
     .run('group_goal_kg', String(kg));
   res.json(groupAggregate());
+}));
+
+// ---------- The personal target and photo ----------
+app.put('/api/me/target-weight', requireAuth, asyncRoute((req, res) => {
+  const raw = req.body.target_weight;
+  const target = raw === '' || raw === null || raw === undefined ? null : num(raw);
+  if (target !== null && !(target > 20 && target < 400)) throw fail('יעד המשקל חייב להיות בין 20 ל-400 ק"ג');
+  db.prepare('UPDATE profiles SET target_weight = ? WHERE id = ?').run(target, req.user.id);
+  res.json(profileState(req.user.id));
+}));
+
+app.post('/api/me/photo', requireAuth, asyncRoute((req, res) => {
+  const previous = req.user.photo_url;
+  const name = savePhoto(req.body.photo);
+  db.prepare('UPDATE profiles SET photo_url = ? WHERE id = ?').run(name, req.user.id);
+  if (previous && existsSync(join(uploadsDir, previous))) unlinkSync(join(uploadsDir, previous));
+  res.json(profileState(req.user.id));
+}));
+
+/** Profile photos are visible to the group, unlike progress photos. */
+app.get('/api/members/:id/photo', requireAuth, asyncRoute((req, res) => {
+  const row = db.prepare('SELECT photo_url FROM profiles WHERE id = ?').get(req.params.id);
+  if (!row || !row.photo_url) throw fail('אין תמונה', 404);
+  const path = join(uploadsDir, row.photo_url);
+  if (!existsSync(path)) throw fail('אין תמונה', 404);
+  res.sendFile(path);
+}));
+
+// ---------- Messages ----------
+/** The member's own thread with the coach, oldest first. */
+app.get('/api/messages', requireAuth, asyncRoute((req, res) => {
+  const rows = db.prepare('SELECT * FROM messages WHERE user_id = ? ORDER BY created_at, id').all(req.user.id);
+  // Anything the coach sent is now seen.
+  db.prepare("UPDATE messages SET read_at = datetime('now') WHERE user_id = ? AND from_coach = 1 AND read_at IS NULL")
+    .run(req.user.id);
+  res.json(rows);
+}));
+
+/** Messages the member has not opened yet — these pop up on the dashboard. */
+app.get('/api/messages/unread', requireAuth, asyncRoute((req, res) => {
+  res.json(db.prepare(
+    'SELECT * FROM messages WHERE user_id = ? AND from_coach = 1 AND read_at IS NULL ORDER BY created_at'
+  ).all(req.user.id));
+}));
+
+app.post('/api/messages', requireAuth, asyncRoute((req, res) => {
+  const body = str(req.body.body);
+  if (!body) throw fail('אין מה לשלוח');
+  if (body.length > 2000) throw fail('ההודעה ארוכה מדי (עד 2000 תווים)');
+  const info = db.prepare('INSERT INTO messages (user_id, from_coach, body) VALUES (?, 0, ?)').run(req.user.id, body);
+  res.json(db.prepare('SELECT * FROM messages WHERE id = ?').get(info.lastInsertRowid));
+}));
+
+/** The coach's inbox: one row per member, newest first, unread from members counted. */
+app.get('/api/editor/inbox', requireEditor, asyncRoute((req, res) => {
+  res.json(db.prepare(`
+    SELECT p.id, p.full_name, p.photo_url IS NOT NULL AS has_photo, p.coach_note,
+           (SELECT COUNT(*) FROM messages m WHERE m.user_id = p.id AND m.from_coach = 0 AND m.read_at IS NULL) AS unread,
+           (SELECT COUNT(*) FROM messages m WHERE m.user_id = p.id) AS total,
+           (SELECT body FROM messages m WHERE m.user_id = p.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_body,
+           (SELECT created_at FROM messages m WHERE m.user_id = p.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_at
+    FROM profiles p
+    WHERE p.active = 1 AND p.is_editor = 0
+    ORDER BY unread DESC, last_at DESC, p.full_name
+  `).all());
+}));
+
+app.get('/api/editor/inbox/:id', requireEditor, asyncRoute((req, res) => {
+  const member = db.prepare('SELECT id, full_name, coach_note, target_weight FROM profiles WHERE id = ?').get(req.params.id);
+  if (!member) throw fail('החבר לא נמצא', 404);
+  const messages = db.prepare('SELECT * FROM messages WHERE user_id = ? ORDER BY created_at, id').all(member.id);
+  db.prepare("UPDATE messages SET read_at = datetime('now') WHERE user_id = ? AND from_coach = 0 AND read_at IS NULL")
+    .run(member.id);
+  res.json({ member, messages });
+}));
+
+app.post('/api/editor/inbox/:id', requireEditor, asyncRoute((req, res) => {
+  const body = str(req.body.body);
+  if (!body) throw fail('אין מה לשלוח');
+  if (body.length > 2000) throw fail('ההודעה ארוכה מדי (עד 2000 תווים)');
+  if (!db.prepare('SELECT 1 FROM profiles WHERE id = ?').get(req.params.id)) throw fail('החבר לא נמצא', 404);
+  const info = db.prepare('INSERT INTO messages (user_id, from_coach, body) VALUES (?, 1, ?)').run(req.params.id, body);
+  res.json(db.prepare('SELECT * FROM messages WHERE id = ?').get(info.lastInsertRowid));
+}));
+
+/** The coach's emphases for one member, shown on their dashboard. */
+app.put('/api/editor/members/:id/note', requireEditor, asyncRoute((req, res) => {
+  const note = str(req.body.coach_note);
+  const info = db.prepare('UPDATE profiles SET coach_note = ? WHERE id = ?').run(note || null, req.params.id);
+  if (!info.changes) throw fail('החבר לא נמצא', 404);
+  res.json({ ok: true, coach_note: note });
+}));
+
+// ---------- Recipes ----------
+/** Everything addressed to this member, plus everything addressed to the group. */
+app.get('/api/recipes', requireAuth, asyncRoute((req, res) => {
+  res.json(db.prepare(`
+    SELECT * FROM recipes WHERE user_id IS NULL OR user_id = ?
+    ORDER BY (user_id IS NULL), created_at DESC, id DESC
+  `).all(req.user.id));
+}));
+
+app.get('/api/editor/recipes', requireEditor, asyncRoute((req, res) => {
+  res.json(db.prepare(`
+    SELECT r.*, p.full_name AS member_name
+    FROM recipes r LEFT JOIN profiles p ON p.id = r.user_id
+    ORDER BY r.created_at DESC, r.id DESC
+  `).all());
+}));
+
+function readRecipe(body) {
+  const title = str(body.title);
+  if (!title) throw fail('יש להזין שם למתכון');
+  const userId = body.user_id === '' || body.user_id === undefined || body.user_id === null || body.user_id === '0'
+    ? null : Math.round(num(body.user_id));
+  if (userId !== null && !db.prepare('SELECT 1 FROM profiles WHERE id = ?').get(userId)) {
+    throw fail('החבר לא נמצא');
+  }
+  return { title, body: str(body.body), user_id: userId };
+}
+
+app.post('/api/recipes', requireEditor, asyncRoute((req, res) => {
+  const r = readRecipe(req.body);
+  const info = db.prepare('INSERT INTO recipes (user_id, title, body) VALUES (?, ?, ?)').run(r.user_id, r.title, r.body);
+  res.json(db.prepare('SELECT * FROM recipes WHERE id = ?').get(info.lastInsertRowid));
+}));
+
+app.put('/api/recipes/:id', requireEditor, asyncRoute((req, res) => {
+  const r = readRecipe(req.body);
+  const info = db.prepare('UPDATE recipes SET user_id = ?, title = ?, body = ? WHERE id = ?')
+    .run(r.user_id, r.title, r.body, req.params.id);
+  if (!info.changes) throw fail('המתכון לא נמצא', 404);
+  res.json(db.prepare('SELECT * FROM recipes WHERE id = ?').get(req.params.id));
+}));
+
+app.delete('/api/recipes/:id', requireEditor, asyncRoute((req, res) => {
+  db.prepare('DELETE FROM recipes WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
 }));
 
 app.listen(PORT, () => console.log(`הדרך הקלה לירידה במשקל — פועל על http://localhost:${PORT}`));

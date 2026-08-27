@@ -30,6 +30,9 @@ const signed = (n, digits = 1) => `${n > 0 ? '+' : ''}${nf(n, digits)}`;
 /** The four registration marks every framed object in this system wears. */
 const corners = () => '<i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>';
 
+/** When the group starts together. */
+const START_DATE = '1.9.26';
+
 const state = { me: null };
 
 let toastTimer;
@@ -174,13 +177,18 @@ async function loadTips() {
  * One rule of thumb at a time, swapped every few seconds. Which one shows first
  * follows the day, so two people opening the app together see the same line.
  */
-function tipRotator(tips) {
-  if (!tips.length) return '<div class="empty">אין עדיין כללי אצבע</div>';
-  const start = Math.floor(Date.parse(todayISO()) / 86400000) % tips.length;
+function tipRotator(tips, goalKg) {
+  const lines = [
+    ...(goalKg ? [{ text: `יעד לקבוצה — ${nf(goalKg)} קילו שומן`, isGoal: true }] : []),
+    ...tips,
+  ];
+  if (!lines.length) return '<div class="empty">אין עדיין כללי אצבע</div>';
+  const start = Math.floor(Date.parse(todayISO()) / 86400000) % lines.length;
+  const tips_ = lines;
   return `
     <div class="rules" id="tip-rotator" data-index="${start}">
-      ${tips.map((t, i) => `<div class="rule ${i === start ? 'is-shown' : ''}">${esc(t.text)}</div>`).join('')}
-      <div class="rule-ticks">${tips.map((_, i) => `<i class="${i === start ? 'on' : ''}"></i>`).join('')}</div>
+      ${tips_.map((t, i) => `<div class="rule ${t.isGoal ? 'is-goal' : ''} ${i === start ? 'is-shown' : ''}">${esc(t.text)}</div>`).join('')}
+      <div class="rule-ticks">${tips_.map((_, i) => `<i class="${i === start ? 'on' : ''}"></i>`).join('')}</div>
     </div>`;
 }
 
@@ -207,31 +215,45 @@ function startTipRotation() {
 }
 
 async function viewDashboard(el) {
-  const [me, stats, tips] = await Promise.all([api('/me'), api('/stats'), loadTips()]);
+  const [me, stats, tips, goal, unread, recipes] = await Promise.all([
+    api('/me'), api('/stats'), loadTips(), api('/public/goal'),
+    api('/messages/unread'), api('/recipes'),
+  ]);
   state.me = me;
   const today = stats.logs.find((l) => l.date === stats.today);
   const calories = today ? today.calories_consumed : 0;
   const protein = today ? today.protein_consumed : 0;
+  const weightPoints = stats.weigh_ins.map((w) => ({ value: w.weight, label: fmtDate(w.date), short: shortDate(w.date) }));
 
   el.innerHTML = `
     <section class="hero bp">
       ${corners()}
-      <div>
-        <div class="label">מבוסס מדע · שינוי הרכב גוף</div>
-        <h1>${esc(me.full_name)}</h1>
-        <p>לא נשקלים כל בוקר. עומדים בשלושה יעדים יומיים — קלוריות, חלבון ואימון כוח —
-           וסופרים את הימים שבהם עמדת בהם. הגוף עושה את השאר.</p>
+      <div class="hero-id">
+        ${photoSlot(me, stats)}
+        <div>
+          <div class="label">מבוסס מדע · שינוי הרכב גוף</div>
+          <h1>${esc(me.full_name)}</h1>
+          <p>לא נשקלים כל בוקר. עומדים בשלושה יעדים יומיים — קלוריות, חלבון ואימון כוח —
+             וסופרים את הימים שבהם עמדת בהם. הגוף עושה את השאר.</p>
+        </div>
       </div>
       ${statBlock([
+        { value: stats.weight_latest ? nf(stats.weight_latest, 1) : '—', cap: 'משקל נוכחי · ק״ג', accent: true },
+        { value: stats.target_weight ? nf(stats.target_weight, 1) : '—', cap: 'יעד המשקל · ק״ג' },
+        { value: stats.to_target === null ? '—' : nf(Math.max(0, stats.to_target), 1), cap: 'נותרו ליעד · ק״ג' },
         { value: nf(me.current_streak), cap: 'ימי רצף' },
-        { value: `רמה ${me.level.level}`, cap: esc(me.level.title) },
-        { value: nf(me.total_points), cap: 'נקודות', accent: true },
-        { value: ltr(`${stats.workouts_this_week} / ${stats.weekly_workouts_goal}`), cap: 'אימוני כוח השבוע' },
       ], { framed: false })}
     </section>
 
+    ${stats.coach_note ? `
+      <section class="panel bp note-card">
+        ${corners()}
+        <header><h3>הדגשים שלך</h3><span class="when">ממאור</span></header>
+        <p class="coach-note">${esc(stats.coach_note)}</p>
+      </section>` : ''}
+
     <div class="split">
-      <div class="panel bp">
+      <section class="panel bp">
         ${corners()}
         <header>
           <h3>דיווח יומי</h3>
@@ -255,38 +277,103 @@ async function viewDashboard(el) {
           </label>
           <button type="submit" class="btn btn-primary btn-block">${today ? 'עדכון הדיווח' : 'שמור דיווח'}</button>
         </form>
+      </section>
+
+      <section class="panel bp">
+        ${corners()}
+        <header>
+          <h3>שקילה</h3>
+          <span class="when">${stats.weighed_this_week ? `הבאה ${fmtDate(stats.next_weigh_in)}` : 'פתוחה השבוע'}</span>
+        </header>
+        ${stats.weighed_this_week ? `
+          <p class="note-line">נשקלת השבוע. השקילה הבאה נפתחת ביום שני, ${fmtDate(stats.next_weigh_in)}.</p>` : ''}
+        <form id="weigh-form">
+          <div class="form-row">
+            <div class="field">
+              <label for="wg">משקל נוכחי (ק״ג)</label>
+              <input class="input" id="wg" type="number" name="weight" min="20" max="400" step="0.1"
+                     value="${stats.weight_latest ?? ''}" required />
+            </div>
+            <div class="field">
+              <label for="ws">היקף מותניים (ס״מ)</label>
+              <input class="input" id="ws" type="number" name="waist" min="30" max="250" step="0.1" />
+            </div>
+          </div>
+          <div class="field" style="margin-top:10px">
+            <label for="wt">יעד המשקל שלך (ק״ג)</label>
+            <input class="input" id="wt" type="number" name="target_weight" min="20" max="400" step="0.1"
+                   value="${stats.target_weight ?? ''}" placeholder="לא נקבע" />
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">${stats.weighed_this_week ? 'עדכון השקילה' : `שמור שקילה · ${ltr('+100 XP')}`}</button>
+        </form>
+      </section>
+    </div>
+
+    <div class="sec">
+      <div class="kicker">היעדים של היום</div>
+      <h2>שלוש שורות. זה כל מה שנמדד.</h2>
+    </div>
+    <div class="split">
+      <div class="goals">
+        ${goalRow('קלוריות', calories, me.daily_calories_goal, { goodWhen: 'below' })}
+        ${goalRow('חלבון', protein, me.daily_protein_goal, { unit: ' ג׳' })}
+        ${goalRow('אימוני כוח בשבוע', stats.workouts_this_week, stats.weekly_workouts_goal)}
       </div>
-
-      <div style="display:grid; gap:var(--space-8)">
-        <div>
-          <div class="sec" style="margin-bottom:var(--space-4)">
-            <h2>היעדים של היום</h2>
-            <p>שלוש שורות. זה כל מה שנמדד.</p>
-          </div>
-          <div class="goals">
-            ${goalRow('קלוריות', calories, me.daily_calories_goal, { goodWhen: 'below' })}
-            ${goalRow('חלבון', protein, me.daily_protein_goal, { unit: ' ג׳' })}
-            ${goalRow('אימוני כוח בשבוע', stats.workouts_this_week, stats.weekly_workouts_goal)}
-          </div>
-        </div>
-
-        <div>
-          <div class="label">כלל האצבע</div>
-          ${tipRotator(tips)}
-        </div>
+      <div>
+        <div class="label">כלל האצבע</div>
+        ${tipRotator(tips, goal.goal_kg)}
       </div>
     </div>
 
+    <div class="sec">
+      <div class="kicker">ההתקדמות שלך</div>
+      <h2>מגמת המשקל</h2>
+    </div>
+    <section class="panel bp">
+      ${corners()}
+      ${lineChart(weightPoints, { unit: ' ק״ג' })}
+    </section>
+
+    <div class="sec">
+      <div class="kicker">מסרים</div>
+      <h2>הקו הישיר למאור</h2>
+      <p>מה שתכתוב כאן מגיע רק אליו, והתשובה תופיע לך כאן ובחלון קופץ.</p>
+    </div>
+    <section class="panel bp" id="thread-panel">
+      ${corners()}
+      <div id="thread" class="thread"><div class="empty">טוען…</div></div>
+      <form id="msg-form" class="add-row">
+        <input class="input" name="body" maxlength="2000" placeholder="לכתוב למאור…" required />
+        <button type="submit" class="btn btn-primary">שליחה</button>
+      </form>
+    </section>
+
+    ${recipes.length ? `
+      <div class="sec">
+        <div class="kicker">מתכונים</div>
+        <h2>מה לאכול</h2>
+        <p>מתכונים שמאור שלח — אישית אליך או לכל הקבוצה.</p>
+      </div>
+      <div class="articles">
+        ${recipes.map((r) => `
+          <article class="article bp">
+            ${corners()}
+            <span class="tag ${r.user_id ? 'tag-accent' : 'tag-neutral'}">${r.user_id ? 'אישי' : 'לכל הקבוצה'}</span>
+            <h3>${esc(r.title)}</h3>
+            <p>${esc(r.body)}</p>
+          </article>`).join('')}
+      </div>` : ''}
+
     ${me.badges.length ? `
-      <div>
-        <div class="sec" style="margin-bottom:var(--space-4)">
-          <div class="kicker">הישגים</div>
-          <h2>התגים שצברת</h2>
-        </div>
-        <div class="badges">${me.badges.map(badgeCard).join('')}</div>
-      </div>` : ''}`;
+      <div class="sec">
+        <div class="kicker">הישגים</div>
+        <h2>התגים שצברת</h2>
+      </div>
+      <div class="badges">${me.badges.map(badgeCard).join('')}</div>` : ''}`;
 
   startTipRotation();
+  loadThread();
+  unread.forEach((m, i) => setTimeout(() => showCoachMessage(m), 400 + i * 300));
 
   el.querySelector('#checkin-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -311,6 +398,93 @@ async function viewDashboard(el) {
       button.disabled = false;
     }
   });
+
+  el.querySelector('#weigh-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const button = e.target.querySelector('button[type=submit]');
+    button.disabled = true;
+    const form = new FormData(e.target);
+    try {
+      // The personal target rides on the same form; it is saved even when unchanged.
+      await api('/me/target-weight', { method: 'PUT', body: { target_weight: form.get('target_weight') } });
+      const result = await api('/weigh-ins', {
+        method: 'POST',
+        body: { weight: form.get('weight'), waist: form.get('waist') },
+      });
+      state.me = result.profile;
+      announce(result);
+      renderChrome();
+      render();
+    } catch (err) {
+      toast(err.message, true);
+      button.disabled = false;
+    }
+  });
+
+  el.querySelector('#msg-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = e.target.querySelector('input[name=body]');
+    const body = input.value.trim();
+    if (!body) return;
+    try {
+      await api('/messages', { method: 'POST', body: { body } });
+      input.value = '';
+      loadThread();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  el.querySelector('#photo-input')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      await api('/me/photo', { method: 'POST', body: { photo: await readImageAsDataURL(file, 600) } });
+      toast('התמונה עודכנה');
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+}
+
+/** The member's own picture, or the frame waiting for one. */
+function photoSlot(me, stats) {
+  return `
+    <label class="photo-slot bp" title="החלפת תמונה">
+      ${corners()}
+      ${stats.has_photo
+        ? `<img src="/api/members/${me.id}/photo?v=${Date.now()}" alt="התמונה של ${esc(me.full_name)}" width="120" height="120" />`
+        : '<span class="photo-empty">הוספת<br />תמונה</span>'}
+      <input type="file" id="photo-input" accept="image/png,image/jpeg,image/webp" hidden />
+    </label>`;
+}
+
+/** The thread with the coach, loaded separately so the dashboard paints first. */
+async function loadThread() {
+  const box = document.getElementById('thread');
+  if (!box) return;
+  try {
+    const messages = await api('/messages');
+    box.innerHTML = messages.length
+      ? messages.map((m) => `
+          <div class="msg ${m.from_coach ? 'from-coach' : 'from-me'}">
+            <div class="msg-who">${m.from_coach ? 'מאור' : 'אתה'} · ${fmtDate(m.created_at)}</div>
+            <div class="msg-body">${esc(m.body)}</div>
+          </div>`).join('')
+      : '<div class="empty">עוד לא כתבתם. שאלה, קושי או ניצחון — הכל מתאים.</div>';
+    box.scrollTop = box.scrollHeight;
+  } catch {
+    box.innerHTML = '<div class="empty">לא הצלחנו לטעון את המסרים</div>';
+  }
+}
+
+/** A message from the coach the member has not seen yet. */
+function showCoachMessage(message) {
+  openModal('מסר ממאור', `
+    <p class="coach-note" style="margin:0">${esc(message.body)}</p>
+    <p class="note-line" style="margin-top:12px">${fmtDate(message.created_at)}</p>`,
+    async () => {}, 'קראתי');
 }
 
 /** Reward feedback shared by the daily log and the weigh-in. */
@@ -479,112 +653,6 @@ async function viewProgress(el) {
       toast(err.message, true);
       button.disabled = false;
     }
-  });
-}
-
-// ---------------- The group ----------------
-async function viewGroup(el) {
-  const group = await api('/group');
-  let selected = group.members[0];
-
-  const panel = (member) => {
-    if (!member) return '<div class="empty">אין עדיין חברים בקבוצה</div>';
-    return `
-      <div class="panel bp">
-        ${corners()}
-        <div class="label">אזור אישי</div>
-        <h3 style="margin:0; font-size:26px">${esc(member.full_name)}</h3>
-        ${statBlock([
-          { value: member.weight_change === null ? '—' : signed(member.weight_change), cap: 'ק״ג מאז ההתחלה', accent: true },
-          { value: nf(member.current_streak), cap: 'ימי רצף' },
-          { value: nf(member.total_points), cap: 'נקודות' },
-          { value: nf(member.weeks_in_program), cap: 'שבועות בתוכנית' },
-        ], { framed: false })}
-        <div class="goal">
-          <div class="goal-top">
-            <span class="goal-name">אימוני כוח השבוע</span>
-            <span class="goal-val">${ltr(`${member.workouts_this_week} / ${member.weekly_workouts_goal}`)}</span>
-          </div>
-          <div class="bar ${member.workouts_this_week >= member.weekly_workouts_goal ? 'met' : ''}">
-            <span style="width:${Math.min(100, pct(member.workouts_this_week, member.weekly_workouts_goal))}%"></span>
-          </div>
-        </div>
-        <p class="note-line">
-          ${member.logged_days_30} ימי דיווח ו-${member.protein_goal_days_30} ימים ביעד החלבון ב-30 הימים האחרונים.
-        </p>
-      </div>`;
-  };
-
-  el.innerHTML = `
-    <div class="sec">
-      <div class="kicker">קבוצה וחברים</div>
-      <h2>כמה ירדנו יחד</h2>
-      <p>הסכום של כל החברים בקבוצה, מאז היום הראשון. לכל אחד יש אזור אישי משלו — לחיצה על שם פותחת אותו.</p>
-    </div>
-
-    <div class="statrow bp">
-      ${corners()}
-      <div>
-        <div class="val big">${nf(group.total_kg_lost, 1)}<span style="font-size:.4em"> ק״ג</span></div>
-        <div class="cap">ירידה מצטברת של הקבוצה</div>
-      </div>
-      <div>
-        <div class="val accent">${nf(group.goal_kg)}<span style="font-size:.5em"> ק״ג</span></div>
-        <div class="cap">היעד הקבוצתי</div>
-      </div>
-      <div><div class="val">${nf(group.member_count)}</div><div class="cap">חברים פעילים</div></div>
-      <div><div class="val">${nf(group.workouts_this_week)}</div><div class="cap">אימוני כוח השבוע</div></div>
-      <div><div class="val">${nf(group.longest_streak)}</div><div class="cap">הרצף הארוך בקבוצה</div></div>
-    </div>
-
-    <div>
-      <div class="goal">
-        <div class="goal-top">
-          <span class="goal-name">בדרך ל-${nf(group.goal_kg)} ק״ג</span>
-          <span class="goal-val">${ltr(`${nf(group.total_kg_lost, 1)} / ${nf(group.goal_kg)}`)} · ${group.goal_progress_pct}%</span>
-        </div>
-        <div class="bar ${group.goal_progress_pct >= 100 ? 'met' : ''}">
-          <span style="width:${group.goal_progress_pct}%"></span>
-        </div>
-        <p class="note-line" style="margin-top:6px">
-          ${group.goal_progress_pct >= 100
-            ? 'היעד הושג. הגיע הזמן לקבוע חדש.'
-            : `נותרו ${nf(group.goal_remaining_kg, 1)} ק״ג ליעד.`}
-        </p>
-      </div>
-    </div>
-
-    <div class="split split-wide">
-      <div>
-        <div class="label">החברים</div>
-        <div class="members" id="members">
-          ${group.members.map((m) => `
-            <button class="member ${m.id === selected?.id ? 'active' : ''}" data-id="${m.id}" type="button">
-              <span>
-                <span class="who">${esc(m.full_name)}</span>
-                <span class="facts">
-                  <span>${ltr(`${m.weeks_in_program} שב׳`)}</span>
-                  <span>${ltr(`${m.current_streak} רצף`)}</span>
-                  <span>${ltr(`${nf(m.total_points)} XP`)}</span>
-                </span>
-              </span>
-              <span class="kg">${m.weight_change === null ? '—' : ltr(`${signed(m.weight_change)} ק״ג`)}</span>
-            </button>`).join('')}
-        </div>
-      </div>
-      <div id="member-panel">${panel(selected)}</div>
-    </div>
-
-    <p class="disclaimer">
-      חברי הקבוצה רואים זה את זה רק את המספרים שלמעלה. הדיווחים היומיים, השקילות והתמונות נשארים פרטיים.
-    </p>`;
-
-  el.querySelectorAll('.member').forEach((button) => {
-    button.addEventListener('click', () => {
-      selected = group.members.find((m) => m.id === Number(button.dataset.id));
-      el.querySelectorAll('.member').forEach((b) => b.classList.toggle('active', b === button));
-      document.getElementById('member-panel').innerHTML = panel(selected);
-    });
   });
 }
 
@@ -777,14 +845,67 @@ async function viewSettings(el) {
 
 // ---------------- Welcome (visitors) ----------------
 /** What the site is, before anyone has handed over an email address. */
+/**
+ * Every member's cumulative loss on one set of axes, with the group's running
+ * total drawn heavier on top. Same hairline grid and steel line as every other
+ * chart in the app; members are separated by dash pattern rather than by colour,
+ * because the system carries a single accent.
+ */
+function groupChart(data) {
+  const { dates, series, total } = data;
+  if (!series.length || dates.length < 2) {
+    return '<div class="empty">הגרף ייפתח כשיהיו לפחות שתי שקילות בקבוצה</div>';
+  }
+  const W = 900, H = 340, padX = 54, padTop = 26, padBottom = 46;
+  const max = Math.max(...total, ...series.flatMap((s) => s.points.filter((p) => p !== null)), 1) * 1.12;
+  const x = (i) => padX + (i * (W - padX * 2)) / (dates.length - 1);
+  const y = (v) => H - padBottom - (v / max) * (H - padTop - padBottom);
+
+  const line = (points) => points
+    .map((v, i) => (v === null ? null : `${x(i).toFixed(1)},${y(v).toFixed(1)}`))
+    .filter(Boolean)
+    .map((pt, i) => `${i ? 'L' : 'M'}${pt}`)
+    .join(' ');
+
+  const dashes = ['4 3', '7 3', '2 3', '10 4', '5 2 2 2'];
+  const ticks = [0, max / 2, max];
+  const every = Math.ceil(dates.length / 8);
+
+  return `
+    <svg class="chart chart-group" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img"
+         aria-label="ירידה מצטברת של ${series.length} חברים לאורך ${dates.length} שקילות">
+      ${ticks.map((t) => `
+        <line class="grid-line" x1="${padX}" y1="${y(t).toFixed(1)}" x2="${W - padX}" y2="${y(t).toFixed(1)}"/>
+        <text class="lbl" x="${W - padX + 7}" y="${(y(t) + 3).toFixed(1)}">${nf(t, 0)}</text>`).join('')}
+
+      ${series.map((s, i) => `
+        <path class="line line-member" d="${line(s.points)}" stroke-dasharray="${dashes[i % dashes.length]}"/>`).join('')}
+
+      <path class="line line-total" d="${line(total)}"/>
+      ${total.map((v, i) => `<circle class="dot dot-total" cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3"><title>${esc(dates[i])}: ${nf(v, 1)} ק״ג</title></circle>`).join('')}
+
+      ${dates.map((d, i) => (i % every === 0 || i === dates.length - 1)
+        ? `<text class="lbl" x="${x(i).toFixed(1)}" y="${H - 12}" text-anchor="middle">${esc(shortDate(d))}</text>` : '').join('')}
+    </svg>
+
+    <div class="chart-legend">
+      <span class="key key-total">הקבוצה — ${nf(total[total.length - 1], 1)} ק״ג</span>
+      ${series.map((s, i) => `
+        <span class="key">
+          <i style="border-top-style:dashed"></i>${esc(s.name)} · ${ltr(nf(s.points[s.points.length - 1] ?? 0, 1))}
+        </span>`).join('')}
+    </div>`;
+}
+
 async function viewHome(el) {
-  const [summary, posts, group] = await Promise.all([
-    api('/public/summary'), api('/posts'), api('/public/goal'),
+  const signedIn = !!state.me;
+  const [summary, posts, goal, progress, group] = await Promise.all([
+    api('/public/summary'), api('/posts'), api('/public/goal'), api('/public/progress'),
+    signedIn ? api('/group') : Promise.resolve(null),
   ]);
 
-  // The same framed two-column hero a member sees, with the group's public
-  // numbers standing in for the personal ones. Below the privacy floor there
-  // are no group numbers to show, so the programme's own shape fills the block.
+  let selected = group?.members?.[0] ?? null;
+
   const cells = summary.totals_visible
     ? [
         { value: nf(summary.total_kg_lost, 1), cap: 'ק״ג ירדו יחד', accent: true },
@@ -796,7 +917,7 @@ async function viewHome(el) {
         { value: '3', cap: 'יעדים יומיים', accent: true },
         { value: '1', cap: 'שקילה בשבוע' },
         { value: nf(summary.post_count), cap: 'מאמרים פתוחים' },
-        { value: '0', cap: 'עלות בשקלים' },
+        { value: nf(goal.goal_kg), cap: 'ק״ג היעד' },
       ];
 
   el.innerHTML = `
@@ -804,102 +925,175 @@ async function viewHome(el) {
       ${corners()}
       <div>
         <div class="label">מבוסס מדע · שינוי הרכב גוף</div>
-        <h1>יחד נוריד ${nf(group.goal_kg)} קילו שומן</h1>
-        <p class="slogan-sub">הדרך הקלה לירידה במשקל</p>
+        <h1>יעד לקבוצה — ${nf(goal.goal_kg)} קילו שומן</h1>
+        <p class="slogan-sub">הדרך הקלה לירידה במשקל · מתחילים ${esc(START_DATE)}</p>
         <p>לא נשקלים כל בוקר. עומדים בשלושה יעדים יומיים — קלוריות, חלבון ואימון כוח —
            וסופרים את הימים שבהם עמדת בהם. הגוף עושה את השאר.</p>
-        <div class="gate-actions">
-          <button class="btn btn-primary" data-auth="register" type="button">הצטרפות לקבוצה</button>
-          <a class="btn btn-secondary" href="#/science">קודם כל, המדע</a>
-        </div>
-        <p class="hero-note">הקריאה פתוחה לכולם. חשבון נדרש רק כדי להצטרף לקבוצה ולרשום משקלים.</p>
+        ${signedIn ? `
+          <div class="gate-actions">
+            <a class="btn btn-primary" href="#/dashboard">לדאשבורד שלי</a>
+            <a class="btn btn-secondary" href="#/progress">ההתקדמות שלי</a>
+          </div>` : `
+          <div class="gate-actions">
+            <button class="btn btn-primary" data-auth="register" type="button">הצטרפות לקבוצה</button>
+            <a class="btn btn-secondary" href="#/science">קודם כל, המדע</a>
+          </div>
+          <p class="hero-note">הקריאה פתוחה לכולם. חשבון נדרש רק כדי להצטרף לקבוצה ולרשום משקלים.</p>`}
       </div>
       ${statBlock(cells, { framed: false })}
     </section>
+
+    ${group ? `
+      <div class="sec">
+        <div class="kicker">איפה הקבוצה עומדת</div>
+        <h2>בדרך ל-${nf(group.goal_kg)} ק״ג</h2>
+      </div>
+      <section class="panel bp">
+        ${corners()}
+        <div class="goal">
+          <div class="goal-top">
+            <span class="goal-name">ירידה מצטברת</span>
+            <span class="goal-val">${ltr(`${nf(group.total_kg_lost, 1)} / ${nf(group.goal_kg)}`)} · ${group.goal_progress_pct}%</span>
+          </div>
+          <div class="bar ${group.goal_progress_pct >= 100 ? 'met' : ''}">
+            <span style="width:${group.goal_progress_pct}%"></span>
+          </div>
+          <p class="note-line" style="margin-top:6px">
+            ${group.goal_progress_pct >= 100
+              ? 'היעד הושג. הגיע הזמן לקבוע חדש.'
+              : `נותרו ${nf(group.goal_remaining_kg, 1)} ק״ג ליעד.`}
+          </p>
+        </div>
+      </section>` : ''}
+
+    ${progress.visible ? `
+      <div class="sec">
+        <div class="kicker">שבוע אחרי שבוע</div>
+        <h2>הירידה של כולם</h2>
+        <p>הקו המלא הוא הסכום של כל החברים. כל קו מקווקו הוא חבר אחד.</p>
+      </div>
+      <section class="panel bp">
+        ${corners()}
+        ${groupChart(progress)}
+      </section>` : ''}
+
+    ${group ? `
+      <div class="sec">
+        <div class="kicker">החברים</div>
+        <h2>מי בקבוצה</h2>
+        <p>לחיצה על שם פותחת את האזור האישי שלו כאן, מתחת לרשימה.</p>
+      </div>
+      <div class="split split-wide">
+        <div class="members" id="members">
+          ${group.members.map((m) => `
+            <button class="member ${m.id === selected?.id ? 'active' : ''}" data-id="${m.id}" type="button">
+              <span>
+                <span class="who">${esc(m.full_name)}</span>
+                <span class="facts">
+                  <span>${ltr(`${m.weeks_in_program} שב׳`)}</span>
+                  <span>${ltr(`${m.current_streak} רצף`)}</span>
+                  <span>${ltr(`${nf(m.total_points)} XP`)}</span>
+                </span>
+              </span>
+              <span class="kg">${m.weight_change === null ? '—' : ltr(`${signed(m.weight_change)} ק״ג`)}</span>
+            </button>`).join('')}
+        </div>
+        <div id="member-panel">${memberPanel(selected)}</div>
+      </div>
+      <p class="disclaimer">
+        חברי הקבוצה רואים זה את זה רק את המספרים שלמעלה. הדיווחים היומיים, השקילות והתמונות נשארים פרטיים.
+      </p>` : ''}
 
     <div class="sec">
       <div class="kicker">איך זה עובד</div>
       <h2>שלושה מספרים ביום, שקילה אחת בשבוע</h2>
     </div>
-
     <div class="mechanisms">
       ${[
-        { title: 'מדווחים שלושה מספרים', body: 'קלוריות, חלבון והאם היה אימון כוח. דיווח אחד ביום, פחות מחצי דקה.' },
-        { title: 'נשקלים פעם בשבוע', body: 'משקל יומי מושפע ממלח, מים ושינה. שקילה שבועית מסננת את הרעש ומשאירה מגמה.' },
-        { title: 'רואים את הקבוצה', body: 'החברים רואים זה את זה — זה מה שמחזיק את הרצף כשהמוטיבציה נגמרת.' },
+        { t: 'מדווחים שלושה מספרים', b: 'קלוריות, חלבון והאם היה אימון כוח. דיווח אחד ביום, פחות מחצי דקה.' },
+        { t: 'נשקלים פעם בשבוע', b: 'משקל יומי מושפע ממלח, מים ושינה. שקילה שבועית מסננת את הרעש ומשאירה מגמה.' },
+        { t: 'רואים את הקבוצה', b: 'החברים רואים זה את זה — זה מה שמחזיק את הרצף כשהמוטיבציה נגמרת.' },
       ].map((m, i) => `
         <div class="mechanism">
           <div class="num">${String(i + 1).padStart(2, '0')}</div>
-          <h3>${esc(m.title)}</h3>
-          <p>${esc(m.body)}</p>
+          <h3>${esc(m.t)}</h3>
+          <p>${esc(m.b)}</p>
         </div>`).join('')}
     </div>
 
-    ${posts.length ? `
-      <div class="sec">
-        <div class="kicker">מאמרים · פתוח לכולם</div>
-        <h2>קריאה קצרה לכל שלב בדרך</h2>
-        <p>אין צורך בחשבון כדי לקרוא — כל המאמרים פתוחים.</p>
-      </div>
-      <div class="articles">
-        ${posts.slice(0, 3).map((p) => `
-          <a class="article bp" href="#/articles/${encodeURIComponent(p.slug)}">
-            ${corners()}
-            <span class="tag tag-accent">${esc(p.category)}</span>
-            <h3>${esc(p.title)}</h3>
-            <p>${esc(p.excerpt)}</p>
-            <span class="meta">${p.read_minutes} דקות קריאה</span>
-          </a>`).join('')}
-      </div>
-      ${posts.length > 3 ? '<div><a class="btn btn-ghost" href="#/articles">כל המאמרים →</a></div>' : ''}` : ''}
+    <div class="sec">
+      <div class="kicker">מאמרים · פתוח לכולם</div>
+      <h2>קריאה קצרה לכל שלב בדרך</h2>
+      <p>אין צורך בחשבון כדי לקרוא — כל המאמרים פתוחים.</p>
+    </div>
+    <div class="articles">
+      ${posts.slice(0, 3).map((p) => `
+        <a class="article bp" href="#/articles/${encodeURIComponent(p.slug)}">
+          ${corners()}
+          <span class="tag tag-accent">${esc(p.category)}</span>
+          <h3>${esc(p.title)}</h3>
+          <p>${esc(p.excerpt)}</p>
+          <span class="meta">${p.read_minutes} דקות קריאה</span>
+        </a>`).join('')}
+    </div>
 
     <p class="disclaimer">המידע כאן הוא חינוכי ואינו מחליף ייעוץ רפואי או תזונתי אישי.</p>`;
+
+  el.querySelectorAll('.member').forEach((button) => {
+    button.addEventListener('click', () => {
+      selected = group.members.find((m) => m.id === Number(button.dataset.id));
+      el.querySelectorAll('.member').forEach((b) => b.classList.toggle('active', b === button));
+      document.getElementById('member-panel').innerHTML = memberPanel(selected);
+    });
+  });
 }
 
-/** Why this particular screen needs an account, said in its own terms. */
-const GATES = {
-  dashboard: {
-    title: 'הדיווח היומי נשמר בחשבון',
-    body: 'הדאשבורד עוקב אחרי הקלוריות, החלבון והאימונים שלך יום אחרי יום — ולכן הוא צריך מקום לשמור אותם.',
-  },
-  progress: {
-    title: 'ההתקדמות מתחילה בשקילה הראשונה',
-    body: 'הגרפים כאן נבנים מהשקילות השבועיות שלך. בלי חשבון אין מה לצייר.',
-  },
-  group: {
-    title: 'הקבוצה פתוחה לחברים רשומים',
-    body: 'חברי הקבוצה רואים את המספרים הראשיים אחד של השני — זה מה שמחזיק את המחויבות. הדיווחים היומיים, התמונות והאימייל נשארים פרטיים לחלוטין.',
-  },
-  settings: {
-    title: 'היעדים נשמרים בחשבון',
-    body: 'יעד קלוריות, חלבון ואימונים הם הגדרות אישיות, ולכן הם דורשים חשבון.',
-  },
-};
-
-function renderGate(el, route) {
-  const gate = GATES[route.path] || { title: 'החלק הזה דורש חשבון', body: '' };
-  el.innerHTML = `
-    <div class="sec">
-      <div class="kicker">${esc(route.title)}</div>
-      <h2>${esc(gate.title)}</h2>
-      <p>${esc(gate.body)}</p>
-    </div>
-
-    <div class="panel bp">
+/** One member's headline numbers — the same block the group screen used to show. */
+function memberPanel(member) {
+  if (!member) return '<div class="empty">אין עדיין חברים בקבוצה</div>';
+  return `
+    <section class="panel bp">
       ${corners()}
-      <header><h3>הרשמה</h3></header>
-      <p class="note-line" style="font-size:15px">
-        שם, אימייל וסיסמה — פחות מדקה, בלי עלות.
-      </p>
-      <div class="gate-actions">
-        <button class="btn btn-primary" data-auth="register" type="button">הרשמה והצטרפות לקבוצה</button>
-        <button class="btn btn-secondary" data-auth="login" type="button">כבר יש לי חשבון</button>
+      <div class="label">אזור אישי</div>
+      <h3 style="margin:0; font-size:26px">${esc(member.full_name)}</h3>
+      ${statBlock([
+        { value: member.weight_change === null ? '—' : signed(member.weight_change), cap: 'ק״ג מאז ההתחלה', accent: true },
+        { value: nf(member.current_streak), cap: 'ימי רצף' },
+        { value: nf(member.total_points), cap: 'נקודות' },
+        { value: nf(member.weeks_in_program), cap: 'שבועות בתוכנית' },
+      ], { framed: false })}
+      <div class="goal">
+        <div class="goal-top">
+          <span class="goal-name">אימוני כוח השבוע</span>
+          <span class="goal-val">${ltr(`${member.workouts_this_week} / ${member.weekly_workouts_goal}`)}</span>
+        </div>
+        <div class="bar ${member.workouts_this_week >= member.weekly_workouts_goal ? 'met' : ''}">
+          <span style="width:${Math.min(100, pct(member.workouts_this_week, member.weekly_workouts_goal))}%"></span>
+        </div>
       </div>
-    </div>
+      <p class="note-line">
+        ${member.logged_days_30} ימי דיווח ו-${member.protein_goal_days_30} ימים ביעד החלבון ב-30 הימים האחרונים.
+      </p>
+    </section>`;
+}
 
-    <p class="disclaimer">
-      <a href="#/articles">המאמרים</a> ו<a href="#/science">המדע</a> פתוחים לכולם, בלי הרשמה ובלי חשבון.
-    </p>`;
+/** Shown instead of a members-only screen when a visitor asks for it. */
+function renderGate(el, route) {
+  el.innerHTML = `
+    <section class="hero bp">
+      ${corners()}
+      <div>
+        <div class="label">חברים בלבד</div>
+        <h1>${esc(route.title)}</h1>
+        <p>המסך הזה נפתח לחברי הקבוצה. ההרשמה לוקחת פחות מדקה, ומשם אפשר לדווח,
+           להישקל ולראות את ההתקדמות של כולם.</p>
+        <div class="gate-actions">
+          <button class="btn btn-primary" data-auth="register" type="button">הרשמה והצטרפות לקבוצה</button>
+          <button class="btn btn-secondary" data-auth="login" type="button">כבר יש לי חשבון</button>
+        </div>
+        <p class="hero-note">המאמרים והמדע פתוחים לקריאה גם בלי חשבון.</p>
+      </div>
+    </section>`;
 }
 
 // ---------------- Routing ----------------
@@ -907,13 +1101,57 @@ function renderGate(el, route) {
 const CATEGORIES = ['תזונה', 'אימונים', 'מנטלי', 'כללי'];
 
 async function viewEditor(el) {
-  const [posts, tips] = await Promise.all([api('/editor/posts'), api('/tips')]);
+  const [posts, tips, inbox, recipes] = await Promise.all([
+    api('/editor/posts'), api('/tips'), api('/editor/inbox'), api('/editor/recipes'),
+  ]);
+  const totalUnread = inbox.reduce((n, m) => n + m.unread, 0);
 
   el.innerHTML = `
     <div class="sec">
       <div class="kicker">עריכה</div>
-      <h2>תוכן ויעדים</h2>
+      <h2>תוכן ומסרים</h2>
       <p>מה שנכתב כאן מופיע מיד באתר. אין שלב פרסום נפרד.</p>
+    </div>
+
+    <div class="sec">
+      <div class="kicker">${totalUnread ? `${totalUnread} ממתינות לך` : 'תיבת המסרים'}</div>
+      <h2>מי כתב לך</h2>
+      <p>לחיצה על "שיחה" פותחת את ההתכתבות, ו"דגשים" קובע את מה שיופיע בראש הדאשבורד שלו.</p>
+    </div>
+    <div class="rowlist">
+      ${inbox.length ? inbox.map((m) => `
+        <div class="row" data-member="${m.id}">
+          <span>
+            <span class="row-text">${esc(m.full_name)}${m.unread ? ` <span class="tag tag-accent">${m.unread} חדש</span>` : ''}</span>
+            <span class="facts">${m.last_body ? esc(m.last_body.slice(0, 70)) : 'עוד לא נכתב דבר'}</span>
+          </span>
+          <span class="row-actions">
+            <button class="btn btn-secondary btn-sm" data-open-thread type="button">שיחה</button>
+            <button class="btn btn-secondary btn-sm" data-edit-note type="button">דגשים</button>
+          </span>
+        </div>`).join('') : '<div class="empty">אין עדיין חברים בקבוצה</div>'}
+    </div>
+
+    <div class="sec">
+      <div class="kicker">מתכונים</div>
+      <h2>מה לשלוח לאכול</h2>
+      <p>מתכון בלי שיוך מגיע לכל הקבוצה; עם שיוך מגיע רק לחבר שנבחר.</p>
+    </div>
+    <div class="rowlist">
+      ${recipes.length ? recipes.map((r) => `
+        <div class="row" data-recipe="${r.id}">
+          <span>
+            <span class="row-text">${esc(r.title)}</span>
+            <span class="facts">${r.member_name ? 'ל' + esc(r.member_name) : 'לכל הקבוצה'}</span>
+          </span>
+          <span class="row-actions">
+            <button class="btn btn-secondary btn-sm" data-edit-recipe type="button">עריכה</button>
+            <button class="btn btn-secondary btn-sm" data-del-recipe type="button">מחיקה</button>
+          </span>
+        </div>`).join('') : '<div class="empty">עוד לא נשלחו מתכונים</div>'}
+    </div>
+    <div class="add-row">
+      <button class="btn btn-primary" id="new-recipe" type="button">מתכון חדש</button>
     </div>
 
     <div>
@@ -968,6 +1206,92 @@ async function viewEditor(el) {
         <button type="submit" class="btn btn-primary">הוספה</button>
       </form>
     </div>`;
+
+  // --- the thread with one member ---
+  el.querySelectorAll('[data-open-thread]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const id = button.closest('[data-member]').dataset.member;
+      const { member, messages } = await api('/editor/inbox/' + id);
+      const backdrop = openModal(`שיחה עם ${member.full_name}`, `
+        <div class="thread" id="editor-thread">
+          ${messages.length ? messages.map((m) => `
+            <div class="msg ${m.from_coach ? 'from-coach' : 'from-me'}">
+              <div class="msg-who">${m.from_coach ? 'אתה' : esc(member.full_name)} · ${fmtDate(m.created_at)}</div>
+              <div class="msg-body">${esc(m.body)}</div>
+            </div>`).join('') : '<div class="empty">עוד לא נכתב דבר</div>'}
+        </div>
+        <div class="field" style="margin-top:14px">
+          <label for="reply">התשובה שלך — היא תקפוץ לו בכניסה הבאה</label>
+          <textarea class="input" id="reply" name="body" rows="4" maxlength="2000" required></textarea>
+        </div>`,
+        async (form) => {
+          await api('/editor/inbox/' + id, { method: 'POST', body: form });
+          toast('נשלח');
+          render();
+        }, 'שליחה');
+      const box = backdrop.querySelector('#editor-thread');
+      if (box) box.scrollTop = box.scrollHeight;
+    });
+  });
+
+  // --- the emphases shown on that member's dashboard ---
+  el.querySelectorAll('[data-edit-note]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const member = inbox.find((m) => m.id === Number(button.closest('[data-member]').dataset.member));
+      openModal(`דגשים ל${member.full_name}`, `
+        <div class="field">
+          <label for="note">שורה או שתיים שיופיעו בראש הדאשבורד שלו</label>
+          <textarea class="input" id="note" name="coach_note" rows="3">${esc(member.coach_note || '')}</textarea>
+        </div>`,
+        async (form) => {
+          await api(`/editor/members/${member.id}/note`, { method: 'PUT', body: form });
+          toast('הדגשים נשמרו');
+          render();
+        });
+    });
+  });
+
+  // --- recipes ---
+  const recipeFields = (r = {}) => `
+    <div class="field"><label>שם המתכון</label>
+      <input class="input" name="title" value="${esc(r.title || '')}" required /></div>
+    <div class="field" style="margin-top:10px"><label>למי</label>
+      <select class="input" name="user_id">
+        <option value="">לכל הקבוצה</option>
+        ${inbox.map((m) => `<option value="${m.id}" ${r.user_id === m.id ? 'selected' : ''}>${esc(m.full_name)}</option>`).join('')}
+      </select></div>
+    <div class="field" style="margin-top:10px"><label>המתכון</label>
+      <textarea class="input" name="body" rows="8">${esc(r.body || '')}</textarea></div>`;
+
+  el.querySelector('#new-recipe')?.addEventListener('click', () => {
+    openModal('מתכון חדש', recipeFields(), async (form) => {
+      await api('/recipes', { method: 'POST', body: form });
+      toast('נשלח');
+      render();
+    }, 'שליחה');
+  });
+
+  el.querySelectorAll('[data-edit-recipe]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const recipe = recipes.find((r) => r.id === Number(button.closest('[data-recipe]').dataset.recipe));
+      openModal('עריכת מתכון', recipeFields(recipe), async (form) => {
+        await api('/recipes/' + recipe.id, { method: 'PUT', body: form });
+        toast('עודכן');
+        render();
+      });
+    });
+  });
+
+  el.querySelectorAll('[data-del-recipe]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const recipe = recipes.find((r) => r.id === Number(button.closest('[data-recipe]').dataset.recipe));
+      confirmAction(`למחוק את "${recipe.title}"?`, async () => {
+        await api('/recipes/' + recipe.id, { method: 'DELETE' });
+        toast('נמחק');
+        render();
+      });
+    });
+  });
 
   const reload = () => { tipsCache = null; render(); };
 
@@ -1052,10 +1376,9 @@ async function viewEditor(el) {
 }
 
 const ROUTES = [
-  { path: 'home', title: 'ראשי', render: viewHome, open: true, guestOnly: true },
+  { path: 'home', title: 'ראשי', render: viewHome, open: true },
   { path: 'dashboard', title: 'דאשבורד', render: viewDashboard },
   { path: 'progress', title: 'התקדמות', render: viewProgress },
-  { path: 'group', title: 'הקבוצה', render: viewGroup },
   { path: 'science', title: 'המדע', render: viewScience, open: true },
   { path: 'articles', title: 'מאמרים', render: viewArticles, open: true },
   { path: 'settings', title: 'הגדרות', render: viewSettings },
@@ -1076,8 +1399,13 @@ function renderChrome() {
     .map((r) => `<a href="#/${r.path}" class="${path === r.path || path.startsWith(r.path + '/') ? 'active' : ''}">${r.title}</a>`)
     .join('');
 
-  // On a narrow screen the strip scrolls, so bring the current tab into view.
-  document.querySelector('#tabs a.active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  // Bring the current tab into view by scrolling the strip itself. Using
+  // scrollIntoView here would move the whole page and make it jump on render.
+  const strip = document.getElementById('tabs');
+  const current = strip.querySelector('a.active');
+  if (current && strip.scrollWidth > strip.clientWidth) {
+    strip.scrollLeft = current.offsetLeft - (strip.clientWidth - current.offsetWidth) / 2;
+  }
 
   document.getElementById('readout-member').classList.toggle('hidden', !signedIn);
   document.getElementById('readout-guest').classList.toggle('hidden', signedIn);
@@ -1095,6 +1423,10 @@ async function render() {
 
   renderChrome();
   el.className = 'screen';
+  // Hold the previous height while the next screen loads, so nothing collapses
+  // and springs back. Cleared as soon as the new markup is in.
+  const held = el.offsetHeight;
+  el.style.minHeight = held > 200 ? `${held}px` : '';
   el.innerHTML = '<div class="empty">טוען…</div>';
   try {
     if (article) await viewArticle(el, decodeURIComponent(article[1]));
@@ -1107,6 +1439,8 @@ async function render() {
   } catch (err) {
     if (/התחברות/.test(err.message)) return boot();
     el.innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+  } finally {
+    el.style.minHeight = '';
   }
 }
 
