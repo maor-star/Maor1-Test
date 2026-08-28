@@ -11,6 +11,11 @@ mkdirSync(join(dirname(dbPath), 'uploads'), { recursive: true });
 
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
+// WAL defaults to synchronous = NORMAL, which does not flush to disk on every commit:
+// a hard crash or a lost instance can take the last few transactions with it, and one
+// of those is somebody's registration. FULL costs an fsync per write, which at this
+// site's write volume is free, and makes a commit mean the data is actually on disk.
+db.pragma('synchronous = FULL');
 db.pragma('foreign_keys = ON');
 
 // ---- Schema ----

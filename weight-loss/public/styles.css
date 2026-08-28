@@ -1,9 +1,9 @@
 /* App layer for "הדרך הקלה לירידה במשקל".
-   Every value comes from the Industry tokens in design-system.css — no raw hexes,
+   Every value comes from the Industry tokens in design-system.css, no raw hexes,
    no ad-hoc spacing. Load design-system.css first. */
 
 :root {
-  /* The ink the blueprint registration marks are drawn in — the same value
+  /* The ink the blueprint registration marks are drawn in, the same value
      design-system.css uses for .corner, lifted into a token so the section
      rules can end in exactly the same cross. */
   --mark-ink: color-mix(in srgb, var(--color-text) 55%, transparent);
@@ -116,7 +116,7 @@ body.modal-open { overflow: hidden; }
 .menu-toggle { display: none; }
 
 /* width:100% matters: an auto cross-axis margin on a flex item cancels the
-   stretch, and the column would otherwise shrink to fit its own content —
+   stretch, and the column would otherwise shrink to fit its own content ,
    making every screen a different width. */
 main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6) 80px; }
 .screen { display: grid; gap: var(--space-8); }
@@ -167,7 +167,7 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
   width: clamp(112px, 10.5vw, 152px); height: auto;
   aspect-ratio: 1; object-fit: cover; object-position: center 25%;
   border-radius: 50%;
-  /* A hairline ring, offset by the page ground — the same two-line language the
+  /* A hairline ring, offset by the page ground, the same two-line language the
      framed boxes use, bent around a circle. */
   box-shadow:
     0 0 0 1px var(--color-divider),
@@ -335,7 +335,7 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .avatar-sm.avatar-blank { font-size: 12px; }
 .share-name { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 
-/* Who wrote it — under the standfirst, and again at the end of the piece. */
+/* Who wrote it, under the standfirst, and again at the end of the piece. */
 .byline {
   margin: var(--space-2) 0 0;
   font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
@@ -467,7 +467,7 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .btn-sm { font-size: 13px; padding: 4px var(--space-3); min-height: 0; }
 .row-actions { display: flex; gap: 6px; justify-content: flex-start; white-space: nowrap; }
 
-/* ── Row list — the editor's tips, and anything else that is a plain list ─ */
+/* ── Row list, the editor's tips, and anything else that is a plain list ─ */
 .rowlist { display: grid; border: 1px solid var(--color-divider); }
 .rowlist > * + * { border-top: 1px solid var(--color-divider); }
 .rowlist .row {
@@ -534,7 +534,7 @@ main { flex: 1; }
 
 /* ── Section rules ─────────────────────────────────────────────────────── */
 /* Every separator in the page body is the same hairline as the header and the
-   footer, and runs the full width of the content column — so the page reads as
+   footer, and runs the full width of the content column, so the page reads as
    one ruled sheet rather than blocks with different edges. */
 .screen > .sec + *,
 .screen > .sec-row + * { margin-top: 0; }
@@ -547,7 +547,7 @@ main { flex: 1; }
 
 /* The framed box at the top ends its lines in a registration cross. A rule that
    just stops is a different language, so every section rule gets the same two
-   marks at its ends — drawn exactly like .corner, from the same two hairlines. */
+   marks at its ends, drawn exactly like .corner, from the same two hairlines. */
 .screen > .sec::before,
 .screen > .sec::after,
 .screen > .sec-row::before,
@@ -571,7 +571,7 @@ main { flex: 1; }
 .screen > .sec-sub::after { content: none; }
 
 /* A block that draws its own top edge would stack a second rule under the
-   section's. One line, never two — the page keeps a single hairline weight. */
+   section's. One line, never two, the page keeps a single hairline weight. */
 .screen > .sec:has(+ .articles),
 .screen > .sec:has(+ .mechanisms),
 .screen > .sec:has(+ .badges),

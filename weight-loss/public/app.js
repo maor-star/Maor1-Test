@@ -179,7 +179,7 @@ async function loadTips(kind = 'rule') {
  */
 function tipRotator(tips, goalKg, emptyText = 'אין עדיין כללי אצבע') {
   const lines = [
-    ...(goalKg ? [{ text: `יעד לקבוצה — ${nf(goalKg)} קילו שומן`, isGoal: true }] : []),
+    ...(goalKg ? [{ text: `יעד לקבוצה: ${nf(goalKg)} קילו שומן`, isGoal: true }] : []),
     ...tips,
   ];
   if (!lines.length) return `<div class="empty">${esc(emptyText)}</div>`;
@@ -235,14 +235,14 @@ async function viewDashboard(el) {
         <div>
           <div class="label">מבוסס מדע · שינוי הרכב גוף</div>
           <h1>${esc(me.full_name)}</h1>
-          <p>לא נשקלים כל בוקר. עומדים בשלושה יעדים יומיים — קלוריות, חלבון ואימון כוח —
+          <p>לא נשקלים כל בוקר. עומדים בשלושה יעדים יומיים (קלוריות, חלבון ואימון כוח)
              וסופרים את הימים שבהם עמדת בהם. הגוף עושה את השאר.</p>
         </div>
       </div>
       ${statBlock([
-        { value: stats.weight_latest ? nf(stats.weight_latest, 1) : '—', cap: 'משקל נוכחי · ק״ג', accent: true },
-        { value: stats.target_weight ? nf(stats.target_weight, 1) : '—', cap: 'יעד המשקל · ק״ג' },
-        { value: stats.to_target === null ? '—' : nf(Math.max(0, stats.to_target), 1), cap: 'נותרו ליעד · ק״ג' },
+        { value: stats.weight_latest ? nf(stats.weight_latest, 1) : '-', cap: 'משקל נוכחי · ק״ג', accent: true },
+        { value: stats.target_weight ? nf(stats.target_weight, 1) : '-', cap: 'יעד המשקל · ק״ג' },
+        { value: stats.to_target === null ? '-' : nf(Math.max(0, stats.to_target), 1), cap: 'נותרו ליעד · ק״ג' },
         { value: nf(me.current_streak), cap: 'ימי רצף' },
       ], { framed: false })}
     </section>
@@ -354,7 +354,7 @@ async function viewDashboard(el) {
       <div class="sec">
         <div class="kicker">מתכונים</div>
         <h2>מה לאכול</h2>
-        <p>מתכונים שמאור שלח — אישית אליך או לכל הקבוצה.</p>
+        <p>מתכונים שמאור שלח, אישית אליך או לכל הקבוצה.</p>
       </div>
       <div class="articles">
         ${recipes.map((r) => `
@@ -474,7 +474,7 @@ async function loadThread() {
             <div class="msg-who">${m.from_coach ? 'מאור' : 'אתה'} · ${fmtDate(m.created_at)}</div>
             <div class="msg-body">${esc(m.body)}</div>
           </div>`).join('')
-      : '<div class="empty">עוד לא כתבתם. שאלה, קושי או ניצחון — הכל מתאים.</div>';
+      : '<div class="empty">עוד לא כתבתם. שאלה, קושי או ניצחון. הכל מתאים.</div>';
     box.scrollTop = box.scrollHeight;
   } catch {
     box.innerHTML = '<div class="empty">לא הצלחנו לטעון את המסרים</div>';
@@ -494,7 +494,7 @@ function announce(result) {
   if (result.points_gained > 0) toast(`נשמר · ${nf(result.points_gained)} נקודות`);
   else toast('הדיווח עודכן');
   (result.new_badges || []).forEach((badge, i) => {
-    setTimeout(() => toast(`תג חדש — ${badge.name}`), 1600 * (i + 1));
+    setTimeout(() => toast(`תג חדש: ${badge.name}`), 1600 * (i + 1));
   });
 }
 
@@ -546,14 +546,14 @@ async function viewProgress(el) {
     <div class="sec">
       <div class="kicker">${stats.weeks_in_program} שבועות בתוכנית</div>
       <h2>ההתקדמות שלך</h2>
-      <p>המשקל הוא מדד אחד מתוך כמה. כשמסת השריר עולה במקביל, המשקל יורד לאט יותר — וזו בדיוק המטרה.</p>
+      <p>המשקל הוא מדד אחד מתוך כמה. כשמסת השריר עולה במקביל, המשקל יורד לאט יותר, וזו בדיוק המטרה.</p>
     </div>
 
     <div class="split split-wide">
       <div>
         <div class="label">
           משקל · ק״ג${stats.weight_change !== null
-            ? ` — ${ltr(`${nf(stats.weight_start, 1)} → ${nf(stats.weight_latest, 1)} · ${signed(stats.weight_change)}`)}` : ''}
+            ? `: ${ltr(`${nf(stats.weight_start, 1)} → ${nf(stats.weight_latest, 1)} · ${signed(stats.weight_change)}`)}` : ''}
         </div>
         ${lineChart(points, { unit: ' ק״ג' })}
       </div>
@@ -592,7 +592,7 @@ async function viewProgress(el) {
       <div><div class="val accent">${nf(stats.total_workouts)}</div><div class="cap">אימוני כוח שהושלמו</div></div>
       <div><div class="val">${nf(stats.protein_goal_days_30)}</div><div class="cap">ימים ביעד החלבון · 30 יום</div></div>
       <div><div class="val">${nf(stats.logged_days_30)}</div><div class="cap">ימי דיווח · 30 יום</div></div>
-      <div><div class="val">${stats.waist_change === null ? '—' : signed(stats.waist_change)}</div><div class="cap">שינוי בהיקף המותניים · ס״מ</div></div>
+      <div><div class="val">${stats.waist_change === null ? '-' : signed(stats.waist_change)}</div><div class="cap">שינוי בהיקף המותניים · ס״מ</div></div>
     </div>
 
     <div class="split">
@@ -621,9 +621,9 @@ async function viewProgress(el) {
                 return `<tr>
                   <td>${fmtDate(w.date)}</td>
                   <td>${ltr(nf(w.weight, 1))}</td>
-                  <td>${diff === null ? '—' : ltr(signed(diff))}</td>
-                  <td>${w.waist == null ? '—' : ltr(nf(w.waist, 1))}</td>
-                  <td>${w.photo_url ? `<a href="/api/weigh-ins/${w.id}/photo" target="_blank" rel="noopener">צפייה</a>` : '—'}</td>
+                  <td>${diff === null ? '-' : ltr(signed(diff))}</td>
+                  <td>${w.waist == null ? '-' : ltr(nf(w.waist, 1))}</td>
+                  <td>${w.photo_url ? `<a href="/api/weigh-ins/${w.id}/photo" target="_blank" rel="noopener">צפייה</a>` : '-'}</td>
                 </tr>`;
               }).join('')}
             </tbody>
@@ -664,7 +664,7 @@ async function viewProgress(el) {
 const MECHANISMS = [
   {
     title: 'גירעון קלורי קובע את הכיוון',
-    body: 'ירידה במשקל דורשת צריכה נמוכה מההוצאה. גודל הגירעון קובע את הקצב, אבל לא את ההרכב — כמה מהירידה תגיע משומן וכמה משריר נקבע בשני המנגנונים הבאים.',
+    body: 'ירידה במשקל דורשת צריכה נמוכה מההוצאה. גודל הגירעון קובע את הקצב, אבל לא את ההרכב. כמה מהירידה תגיע משומן וכמה משריר נקבע בשני המנגנונים הבאים.',
   },
   {
     title: 'חלבון שומר על מסת השריר',
@@ -672,7 +672,7 @@ const MECHANISMS = [
   },
   {
     title: 'אימון כוח הוא האות לגוף',
-    body: 'אימון התנגדות מספק את הגירוי שמכוון את הגוף לשמר — ובתנאים מסוימים גם להוסיף — רקמת שריר תוך כדי ירידה בשומן. בלעדיו, חלק מהירידה יבוא מהשריר.',
+    body: 'אימון התנגדות מספק את הגירוי שמכוון את הגוף לשמר (ובתנאים מסוימים גם להוסיף) רקמת שריר תוך כדי ירידה בשומן. בלעדיו, חלק מהירידה יבוא מהשריר.',
   },
 ];
 
@@ -705,8 +705,8 @@ async function viewScience(el) {
         <h2>למה לא נשקלים כל יום</h2>
         <p>משקל יומי מושפע ממלח, פחמימות, מים ושינה, ותנודות של קילו וחצי הן שגרה.
            שקילה שבועית אחת מסננת את הרעש ומשאירה מגמה.</p>
-        <p>לכן הדיווח היומי במערכת עוסק במה שבשליטתך — קלוריות, חלבון ואימון —
-           והשקילה נשארת מדד מגמה שבועי.</p>
+        <p>לכן הדיווח היומי במערכת עוסק במה שבשליטתך: קלוריות, חלבון ואימון.
+           השקילה נשארת מדד מגמה שבועי.</p>
       </div>
 
       <div>
@@ -777,7 +777,7 @@ async function viewSettings(el) {
     <div class="sec">
       <div class="kicker">הגדרות</div>
       <h2>היעדים שלך</h2>
-      <p>שלושת המספרים שהמערכת מודדת מולם. אפשר לשנות אותם בכל שלב —
+      <p>שלושת המספרים שהמערכת מודדת מולם. אפשר לשנות אותם בכל שלב.
          עדיף יעד שאפשר לעמוד בו ברציפות מאשר יעד שאפתני שנשבר כל שבוע.</p>
     </div>
 
@@ -911,7 +911,7 @@ function groupChart(data) {
     </svg>
 
     <div class="chart-legend">
-      <span class="key key-total">הקבוצה — ${nf(total[total.length - 1], 1)} ק״ג</span>
+      <span class="key key-total">הקבוצה · ${nf(total[total.length - 1], 1)} ק״ג</span>
       ${series.map((s, i) => `
         <span class="key">
           <i style="border-top-style:dashed"></i>${esc(s.name)} · ${ltr(nf(s.points[s.points.length - 1] ?? 0, 1))}
@@ -948,9 +948,9 @@ async function viewHome(el) {
       ${corners()}
       <div>
         <div class="label">מבוסס מדע · שינוי הרכב גוף</div>
-        <h1>יעד לקבוצה — ${nf(goal.goal_kg)} קילו שומן</h1>
+        <h1>יעד לקבוצה: ${nf(goal.goal_kg)} קילו שומן</h1>
         <p class="slogan-sub">הדרך הקלה לירידה במשקל · מתחילים ${esc(START_DATE)}</p>
-        <p>לא נשקלים כל בוקר. עומדים בשלושה יעדים יומיים — קלוריות, חלבון ואימון כוח —
+        <p>לא נשקלים כל בוקר. עומדים בשלושה יעדים יומיים (קלוריות, חלבון ואימון כוח)
            וסופרים את הימים שבהם עמדת בהם. הגוף עושה את השאר.</p>
         ${signedIn ? `
           <div class="gate-actions">
@@ -1050,7 +1050,7 @@ async function viewHome(el) {
                   <span>${ltr(`${nf(m.total_points)} XP`)}</span>
                 </span>
               </span>
-              <span class="kg">${m.weight_change === null ? '—' : ltr(`${signed(m.weight_change)} ק״ג`)}</span>
+              <span class="kg">${m.weight_change === null ? '-' : ltr(`${signed(m.weight_change)} ק״ג`)}</span>
             </button>`).join('')}
         </div>
         <div id="member-panel">${memberPanel(selected)}</div>
@@ -1067,7 +1067,7 @@ async function viewHome(el) {
       ${[
         { t: 'מדווחים שלושה מספרים', b: 'קלוריות, חלבון והאם היה אימון כוח. דיווח אחד ביום, פחות מחצי דקה.' },
         { t: 'נשקלים פעם בשבוע', b: 'משקל יומי מושפע ממלח, מים ושינה. שקילה שבועית מסננת את הרעש ומשאירה מגמה.' },
-        { t: 'רואים את הקבוצה', b: 'החברים רואים זה את זה — זה מה שמחזיק את הרצף כשהמוטיבציה נגמרת.' },
+        { t: 'רואים את הקבוצה', b: 'החברים רואים זה את זה. זה מה שמחזיק את הרצף כשהמוטיבציה נגמרת.' },
       ].map((m, i) => `
         <div class="mechanism">
           <div class="num">${String(i + 1).padStart(2, '0')}</div>
@@ -1079,7 +1079,7 @@ async function viewHome(el) {
     <div class="sec">
       <div class="kicker">מאמרים · פתוח לכולם</div>
       <h2>קריאה קצרה לכל שלב בדרך</h2>
-      <p>אין צורך בחשבון כדי לקרוא — כל המאמרים פתוחים.</p>
+      <p>אין צורך בחשבון כדי לקרוא. כל המאמרים פתוחים.</p>
     </div>
     <div class="articles">
       ${posts.slice(0, 3).map((p) => `
@@ -1104,7 +1104,7 @@ async function viewHome(el) {
   });
 }
 
-/** One member's headline numbers — the same block the group screen used to show. */
+/** One member's headline numbers: the same block the group screen used to show. */
 function memberPanel(member) {
   if (!member) return '<div class="empty">אין עדיין חברים בקבוצה</div>';
   return `
@@ -1113,7 +1113,7 @@ function memberPanel(member) {
       <div class="label">אזור אישי</div>
       <h3 style="margin:0; font-size:26px">${esc(member.full_name)}</h3>
       ${statBlock([
-        { value: member.weight_change === null ? '—' : signed(member.weight_change), cap: 'ק״ג מאז ההתחלה', accent: true },
+        { value: member.weight_change === null ? '-' : signed(member.weight_change), cap: 'ק״ג מאז ההתחלה', accent: true },
         { value: nf(member.current_streak), cap: 'ימי רצף' },
         { value: nf(member.total_points), cap: 'נקודות' },
         { value: nf(member.weeks_in_program), cap: 'שבועות בתוכנית' },
@@ -1264,7 +1264,7 @@ async function viewEditor(el) {
           </div>`).join('')}
       </div>
       <form id="tip-form" class="add-row">
-        <input class="input" name="text" maxlength="200" placeholder="כלל אצבע חדש — שורה אחת" required />
+        <input class="input" name="text" maxlength="200" placeholder="כלל אצבע חדש, שורה אחת" required />
         <button type="submit" class="btn btn-primary">הוספה</button>
       </form>
     </div>
@@ -1286,7 +1286,7 @@ async function viewEditor(el) {
           </div>`).join('')}
       </div>
       <form id="slogan-form" class="add-row">
-        <input class="input" name="text" maxlength="200" placeholder="סיסמה חדשה — שורה אחת" required />
+        <input class="input" name="text" maxlength="200" placeholder="סיסמה חדשה, שורה אחת" required />
         <button type="submit" class="btn btn-primary">הוספה</button>
       </form>
     </div>
@@ -1295,7 +1295,7 @@ async function viewEditor(el) {
       <div class="sec" style="margin-bottom:var(--space-6)">
         <div class="kicker">הרשאות</div>
         <h2>מי יכול לערוך</h2>
-        <p>לעורך יש גישה לעמוד הזה — מאמרים, סיסמאות, מתכונים ותיבת המסרים.</p>
+        <p>לעורך יש גישה לעמוד הזה: מאמרים, סיסמאות, מתכונים ותיבת המסרים.</p>
       </div>
       <div class="rowlist">
         ${members.map((m) => `
@@ -1327,7 +1327,7 @@ async function viewEditor(el) {
             </div>`).join('') : '<div class="empty">עוד לא נכתב דבר</div>'}
         </div>
         <div class="field" style="margin-top:14px">
-          <label for="reply">התשובה שלך — היא תקפוץ לו בכניסה הבאה</label>
+          <label for="reply">התשובה שלך. היא תקפוץ לו בכניסה הבאה</label>
           <textarea class="input" id="reply" name="body" rows="4" maxlength="2000" required></textarea>
         </div>`,
         async (form) => {
@@ -1495,13 +1495,13 @@ async function viewEditor(el) {
       <select class="input" name="category">
         ${CATEGORIES.map((c) => `<option ${post.category === c ? 'selected' : ''}>${c}</option>`).join('')}
       </select></div>
-    <div class="field" style="margin-top:10px"><label>תקציר — השורה שמופיעה בכרטיס</label>
+    <div class="field" style="margin-top:10px"><label>תקציר, השורה שמופיעה בכרטיס</label>
       <input class="input" name="excerpt" value="${esc(post.excerpt || '')}" /></div>
     <div class="field" style="margin-top:10px"><label>כותב</label>
       <input class="input" name="author" value="${esc(post.author || 'מאור דוידוביץ')}" /></div>
-    <div class="field" style="margin-top:10px"><label>זמן קריאה בדקות — ריק לחישוב אוטומטי</label>
+    <div class="field" style="margin-top:10px"><label>זמן קריאה בדקות, ריק לחישוב אוטומטי</label>
       <input class="input" type="number" name="read_minutes" min="1" max="90" value="${post.read_minutes || ''}" /></div>
-    <div class="field" style="margin-top:10px"><label>תוכן — שורה ריקה מפרידה פסקאות, ו-**כותרת** יוצרת כותרת משנה</label>
+    <div class="field" style="margin-top:10px"><label>תוכן, שורה ריקה מפרידה פסקאות, ו-**כותרת** יוצרת כותרת משנה</label>
       <textarea class="input" name="content" rows="14" required>${esc(post.content || '')}</textarea></div>`;
 
   el.querySelector('#new-post').addEventListener('click', () => {
@@ -1616,7 +1616,7 @@ async function render() {
   try {
     if (article) await viewArticle(el, decodeURIComponent(article[1]));
     else if (!route || (route.guestOnly && state.me)) { location.hash = '#/' + homePath(); return true; }
-    // The editor tab is not just hidden from members — the route itself is closed.
+    // The editor tab is not just hidden from members; the route itself is closed.
     else if (route.editorOnly && !state.me?.is_editor) { location.hash = '#/' + homePath(); return true; }
     else if (!route.open && !state.me) renderGate(el, route);
     else await route.render(el);
@@ -1630,7 +1630,7 @@ async function render() {
 }
 
 // ---------------- Auth overlay ----------------
-/** The sign-in card sits over the site rather than in front of it — closing it returns you to what you were reading. */
+/** The sign-in card sits over the site rather than in front of it: closing it returns you to what you were reading. */
 let authMode = 'login';
 
 function applyAuthMode() {
@@ -1716,7 +1716,7 @@ async function boot() {
   closeAuth();
   // Reveal the shell only once the first screen is in the DOM. Showing an empty
   // shell first parks the footer in the middle of the viewport and then throws it
-  // down the page when the content lands — that is the load "jump".
+  // down the page when the content lands. That is the load "jump".
   // A redirect resolves to true, so follow it to the screen it lands on.
   let hops = 0;
   while ((await render()) === true && hops++ < 3);

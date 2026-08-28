@@ -353,7 +353,7 @@ app.get('/api/stats', requireAuth, asyncRoute((req, res) => res.json(personalSta
 // ---------- The group ----------
 /**
  * Everyone using the app is in one group. Members see each other's headline
- * numbers only — never another member's daily logs, photos or email.
+ * numbers only, never another member's daily logs, photos or email.
  */
 function memberSummary(row) {
   const stats = personalStats(row.id);
@@ -472,7 +472,7 @@ app.get('/api/public/progress', asyncRoute((req, res) => {
   const enough = req.user || members.length >= MIN_MEMBERS_FOR_PUBLIC_TOTALS;
   if (!enough) return res.json({ visible: false, series: [], total: [], goal_kg: Number(setting('group_goal_kg', '200')) });
 
-  // Every date anyone weighed in on, in order — the shared x-axis.
+  // Every date anyone weighed in on, in order, the shared x-axis.
   const dates = db.prepare('SELECT DISTINCT date FROM weekly_weigh_ins ORDER BY date').all().map((r) => r.date);
 
   const series = members.map((m) => {
@@ -495,7 +495,7 @@ app.get('/api/public/progress', asyncRoute((req, res) => {
   res.json({ visible: true, dates, series, total, goal_kg: Number(setting('group_goal_kg', '200')) });
 }));
 
-/** The collective target, readable by visitors — it is the site's slogan. */
+/** The collective target, readable by visitors, it is the site's slogan. */
 app.get('/api/public/goal', asyncRoute((req, res) => {
   res.json({ goal_kg: Number(setting('group_goal_kg', '200')) });
 }));
@@ -509,7 +509,7 @@ app.get('/api/tips', asyncRoute((req, res) => {
 app.post('/api/tips', requireEditor, asyncRoute((req, res) => {
   const text = str(req.body.text);
   if (!text) throw fail('יש להזין טקסט');
-  if (text.length > 200) throw fail('טיפ הוא שורה אחת — עד 200 תווים');
+  if (text.length > 200) throw fail('טיפ הוא שורה אחת, עד 200 תווים');
   const kind = req.body.kind === 'slogan' ? 'slogan' : 'rule';
   const next = db.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS n FROM tips WHERE kind = ?').get(kind).n;
   const info = db.prepare('INSERT INTO tips (text, position, kind) VALUES (?, ?, ?)').run(text, next, kind);
@@ -519,7 +519,7 @@ app.post('/api/tips', requireEditor, asyncRoute((req, res) => {
 app.put('/api/tips/:id', requireEditor, asyncRoute((req, res) => {
   const text = str(req.body.text);
   if (!text) throw fail('יש להזין טקסט');
-  if (text.length > 200) throw fail('טיפ הוא שורה אחת — עד 200 תווים');
+  if (text.length > 200) throw fail('טיפ הוא שורה אחת, עד 200 תווים');
   const info = db.prepare('UPDATE tips SET text = ? WHERE id = ?').run(text, req.params.id);
   if (!info.changes) throw fail('הטיפ לא נמצא', 404);
   res.json(db.prepare('SELECT * FROM tips WHERE id = ?').get(req.params.id));
@@ -658,7 +658,7 @@ app.get('/api/messages', requireAuth, asyncRoute((req, res) => {
   res.json(rows);
 }));
 
-/** Messages the member has not opened yet — these pop up on the dashboard. */
+/** Messages the member has not opened yet, these pop up on the dashboard. */
 app.get('/api/messages/unread', requireAuth, asyncRoute((req, res) => {
   res.json(db.prepare(
     'SELECT * FROM messages WHERE user_id = ? AND from_coach = 1 AND read_at IS NULL ORDER BY created_at'
@@ -713,7 +713,7 @@ app.put('/api/editor/members/:id/note', requireEditor, asyncRoute((req, res) => 
   res.json({ ok: true, coach_note: note });
 }));
 
-/** Everyone with an account, editors included — the inbox deliberately leaves editors out. */
+/** Everyone with an account, editors included, the inbox deliberately leaves editors out. */
 app.get('/api/editor/members', requireEditor, asyncRoute((req, res) => {
   res.json(db.prepare(`
     SELECT id, full_name, email, is_editor FROM profiles
@@ -732,7 +732,7 @@ app.put('/api/editor/members/:id/editor', requireEditor, asyncRoute((req, res) =
   // person doing it, and there is no way back in from the app itself.
   if (!wanted) {
     const editors = db.prepare('SELECT COUNT(*) AS n FROM profiles WHERE is_editor = 1 AND active = 1').get().n;
-    if (editors <= 1) throw fail('זה העורך האחרון — צריך להשאיר לפחות אחד');
+    if (editors <= 1) throw fail('זה העורך האחרון, צריך להשאיר לפחות אחד');
   }
 
   db.prepare('UPDATE profiles SET is_editor = ? WHERE id = ?').run(wanted, id);
@@ -786,4 +786,4 @@ app.delete('/api/recipes/:id', requireEditor, asyncRoute((req, res) => {
   res.json({ ok: true });
 }));
 
-app.listen(PORT, () => console.log(`הדרך הקלה לירידה במשקל — פועל על http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`הדרך הקלה לירידה במשקל, פועל על http://localhost:${PORT}`));
