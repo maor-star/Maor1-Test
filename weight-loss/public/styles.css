@@ -148,6 +148,45 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .hero h1 { font-size: clamp(38px, 5vw, 58px); margin: var(--space-2) 0 var(--space-3); }
 .hero p { margin: 0; max-width: 46ch; color: var(--color-neutral-700); }
 
+/* The right-hand column of the hero: portrait above, headline numbers below. */
+.hero-side { display: grid; gap: var(--space-6); align-content: end; }
+
+/* A fixed aspect ratio, so the block holds its height before the photo decodes
+   and the page never jumps when it arrives. */
+.portrait { position: relative; margin: 0; }
+.portrait img {
+  display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: center 22%;
+  border: 1px solid var(--color-divider);
+  filter: saturate(0.92) contrast(1.04);
+}
+.portrait figcaption {
+  margin-top: var(--space-2);
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+/* The same registration marks that terminate every other line on the site. */
+.portrait::before, .portrait::after {
+  content: ""; position: absolute; top: -6px; width: 11px; height: 11px; pointer-events: none;
+  background:
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 1px 100% no-repeat,
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 100% 1px no-repeat;
+}
+.portrait::before { inset-inline-start: -6px; }
+.portrait::after  { inset-inline-end: -6px; }
+
+/* Who contributed what to the one shared target. */
+.share { border-top: 1px solid var(--color-divider); margin-top: var(--space-6); padding-top: var(--space-5); }
+.share .label { margin-bottom: var(--space-3); }
+.share-row {
+  display: grid; grid-template-columns: minmax(90px, 1fr) minmax(0, 3fr) auto;
+  gap: var(--space-4); align-items: center; padding: var(--space-2) 0;
+}
+.share-row + .share-row { border-top: 1px solid var(--color-divider); }
+.share-name { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-bar { height: 6px; background: var(--color-neutral-200); display: block; }
+.share-bar i { display: block; height: 100%; background: var(--color-accent); }
+.share-kg { font-variant-numeric: tabular-nums; font-size: 14px; color: var(--color-neutral-700); white-space: nowrap; }
+
 /* ── Divided stat block ────────────────────────────────────────────────── */
 .statgrid { display: grid; grid-template-columns: 1fr 1fr; }
 .statgrid > div { padding: var(--space-3) var(--space-4); }
@@ -263,7 +302,7 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 /* ── Group ─────────────────────────────────────────────────────────────── */
 .members { display: grid; }
 .member {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-4);
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-4);
   padding: var(--space-3) var(--space-4); border: 1px solid var(--color-divider); border-bottom: 0;
   background: transparent; cursor: pointer; text-align: start; font: inherit; color: inherit; width: 100%;
 }
@@ -273,6 +312,57 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .member .who { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 17px; }
 .member .facts { display: flex; gap: var(--space-4); font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }
 .member .kg { font-family: var(--font-heading); font-weight: 700; font-size: 20px; color: var(--color-accent-700); font-variant-numeric: tabular-nums; }
+
+/* A face beside the name. Square like everything else here, never a circle. */
+.avatar {
+  display: block; flex: none; object-fit: cover; object-position: center 25%;
+  border: 1px solid var(--color-divider); background: var(--color-neutral-200);
+}
+.avatar-md { width: 44px; height: 44px; }
+.avatar-sm { width: 26px; height: 26px; }
+.avatar-blank {
+  display: grid; place-items: center;
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  color: var(--color-neutral-600);
+}
+.avatar-md.avatar-blank { font-size: 18px; }
+.avatar-sm.avatar-blank { font-size: 12px; }
+.share-name { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+
+/* Who wrote it — under the standfirst, and again at the end of the piece. */
+.byline {
+  margin: var(--space-2) 0 0;
+  font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+.byline-end {
+  margin-top: var(--space-6); padding-top: var(--space-4);
+  border-top: 1px solid var(--color-divider);
+}
+
+/* The illustration at the head of an article, and its smaller twin on the card.
+   Both declare an aspect ratio so the page holds its height before the image loads. */
+.article-figure { position: relative; margin: 0; }
+.article-figure img {
+  display: block; width: 100%; aspect-ratio: 16 / 7; object-fit: cover; object-position: center 30%;
+  border: 1px solid var(--color-divider);
+  filter: saturate(0.92) contrast(1.04);
+}
+.article-figure::before, .article-figure::after {
+  content: ""; position: absolute; top: -6px; width: 11px; height: 11px; pointer-events: none;
+  background:
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 1px 100% no-repeat,
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 100% 1px no-repeat;
+}
+.article-figure::before { inset-inline-start: -6px; }
+.article-figure::after  { inset-inline-end: -6px; }
+
+.card-figure { display: block; margin-bottom: var(--space-4); }
+.card-figure img {
+  display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; object-position: center 30%;
+  border: 1px solid var(--color-divider);
+  filter: saturate(0.92) contrast(1.04);
+}
 
 /* ── Science ───────────────────────────────────────────────────────────── */
 .mechanisms { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-8); }
@@ -340,6 +430,9 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 /* ── Responsive ────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; gap: var(--space-8); padding: var(--space-6); }
+  .share-row { grid-template-columns: minmax(96px, 1.2fr) minmax(0, 1.4fr) auto; gap: var(--space-3); }
+  .avatar-md { width: 38px; height: 38px; }
+  .portrait img { aspect-ratio: 3 / 2; }
   .split, .split-wide { grid-template-columns: 1fr; gap: var(--space-8); }
 }
 @media (max-width: 700px) {

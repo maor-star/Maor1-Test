@@ -360,6 +360,7 @@ function memberSummary(row) {
   return {
     id: row.id,
     full_name: row.full_name,
+    has_photo: !!row.photo_url,
     total_points: row.total_points,
     current_streak: row.current_streak,
     level: levelInfo(row.total_points),
@@ -420,11 +421,36 @@ app.get('/api/public/summary', asyncRoute((req, res) => {
   });
 }));
 
+/**
+ * The portrait on the home page is the editor's own profile photo, so it is changed
+ * by uploading a new one from the dashboard rather than by a deploy.
+ */
+function heroProfile() {
+  return db.prepare(
+    'SELECT id, full_name, photo_url FROM profiles WHERE is_editor = 1 AND active = 1 AND photo_url IS NOT NULL ORDER BY id LIMIT 1'
+  ).get();
+}
+
+app.get('/api/public/hero', asyncRoute((req, res) => {
+  const row = heroProfile();
+  const ready = !!row && existsSync(join(uploadsDir, row.photo_url));
+  res.json({ has_photo: ready, name: ready ? row.full_name : null });
+}));
+
+app.get('/api/public/hero-photo', asyncRoute((req, res) => {
+  const row = heroProfile();
+  if (!row) throw fail('אין תמונה', 404);
+  const path = join(uploadsDir, row.photo_url);
+  if (!existsSync(path)) throw fail('אין תמונה', 404);
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.sendFile(path);
+}));
+
 // ---------- Articles ----------
 /** Open to visitors: the articles are the part of the app that needs no account. */
 app.get('/api/posts', asyncRoute((req, res) => {
   res.json(db.prepare(
-    'SELECT id, slug, title, category, excerpt, read_minutes, published_at FROM posts ORDER BY published_at DESC, id'
+    'SELECT id, slug, title, category, excerpt, author, image_url, read_minutes, published_at FROM posts ORDER BY published_at DESC, id'
   ).all());
 }));
 
@@ -523,26 +549,59 @@ function readPost(body) {
   const readMinutes = body.read_minutes
     ? intInRange(body.read_minutes, { min: 1, max: 90, label: 'זמן הקריאה' })
     : Math.max(1, Math.round(content.split(/\s+/).length / 200));
-  return { title, content, read_minutes: readMinutes, category: str(body.category) || 'כללי', excerpt: str(body.excerpt) };
+  return {
+    title, content, read_minutes: readMinutes,
+    category: str(body.category) || 'כללי',
+    excerpt: str(body.excerpt),
+    author: str(body.author) || 'מאור דוידוביץ',
+  };
 }
 
 app.post('/api/posts', requireEditor, asyncRoute((req, res) => {
   const post = readPost(req.body);
   const info = db.prepare(`
-    INSERT INTO posts (slug, title, category, excerpt, content, read_minutes)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(uniqueSlug(), post.title, post.category, post.excerpt, post.content, post.read_minutes);
+    INSERT INTO posts (slug, title, category, excerpt, content, author, read_minutes)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(uniqueSlug(), post.title, post.category, post.excerpt, post.content, post.author, post.read_minutes);
   res.json(db.prepare('SELECT * FROM posts WHERE id = ?').get(info.lastInsertRowid));
 }));
 
 app.put('/api/posts/:id', requireEditor, asyncRoute((req, res) => {
   const post = readPost(req.body);
   const info = db.prepare(`
-    UPDATE posts SET title = ?, category = ?, excerpt = ?, content = ?, read_minutes = ?
+    UPDATE posts SET title = ?, category = ?, excerpt = ?, content = ?, author = ?, read_minutes = ?
     WHERE id = ?
-  `).run(post.title, post.category, post.excerpt, post.content, post.read_minutes, req.params.id);
+  `).run(post.title, post.category, post.excerpt, post.content, post.author, post.read_minutes, req.params.id);
   if (!info.changes) throw fail('המאמר לא נמצא', 404);
   res.json(db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id));
+}));
+
+/** The illustration at the head of an article. Replacing one deletes the old file. */
+app.post('/api/posts/:id/image', requireEditor, asyncRoute((req, res) => {
+  const post = db.prepare('SELECT id, image_url FROM posts WHERE id = ?').get(req.params.id);
+  if (!post) throw fail('המאמר לא נמצא', 404);
+  const name = savePhoto(req.body.image);
+  db.prepare('UPDATE posts SET image_url = ? WHERE id = ?').run(name, post.id);
+  if (post.image_url && existsSync(join(uploadsDir, post.image_url))) unlinkSync(join(uploadsDir, post.image_url));
+  res.json({ ok: true, image_url: name });
+}));
+
+app.delete('/api/posts/:id/image', requireEditor, asyncRoute((req, res) => {
+  const post = db.prepare('SELECT id, image_url FROM posts WHERE id = ?').get(req.params.id);
+  if (!post) throw fail('המאמר לא נמצא', 404);
+  if (post.image_url && existsSync(join(uploadsDir, post.image_url))) unlinkSync(join(uploadsDir, post.image_url));
+  db.prepare('UPDATE posts SET image_url = NULL WHERE id = ?').run(post.id);
+  res.json({ ok: true });
+}));
+
+/** Open to visitors, like the articles themselves. */
+app.get('/api/posts/:id/image', asyncRoute((req, res) => {
+  const post = db.prepare('SELECT image_url FROM posts WHERE id = ?').get(req.params.id);
+  if (!post || !post.image_url) throw fail('אין תמונה', 404);
+  const path = join(uploadsDir, post.image_url);
+  if (!existsSync(path)) throw fail('אין תמונה', 404);
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.sendFile(path);
 }));
 
 app.delete('/api/posts/:id', requireEditor, asyncRoute((req, res) => {

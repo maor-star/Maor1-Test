@@ -729,12 +729,13 @@ async function viewArticles(el) {
     ${posts.length ? `
       <div class="articles">
         ${posts.map((p) => `
-          <a class="article bp" href="#/articles/${encodeURIComponent(p.slug)}">
+          <a class="article bp ${p.image_url ? 'has-figure' : ''}" href="#/articles/${encodeURIComponent(p.slug)}">
             ${corners()}
+            ${p.image_url ? `<span class="card-figure"><img src="/api/posts/${p.id}/image" alt="" loading="lazy" /></span>` : ''}
             <span class="tag tag-accent">${esc(p.category)}</span>
             <h3>${esc(p.title)}</h3>
             <p>${esc(p.excerpt)}</p>
-            <span class="meta">${p.read_minutes} דקות קריאה</span>
+            <span class="meta">${esc(p.author || '')} · ${p.read_minutes} דקות קריאה</span>
           </a>`).join('')}
       </div>` : '<div class="empty">עוד לא פורסמו מאמרים</div>'}`;
 }
@@ -751,12 +752,18 @@ async function viewArticle(el, slug) {
     <div>
       <a class="btn btn-ghost" href="#/articles">→ כל המאמרים</a>
     </div>
+    ${post.image_url ? `
+      <figure class="article-figure">
+        <img src="/api/posts/${post.id}/image" alt="" />
+      </figure>` : ''}
     <div class="sec">
       <span class="tag tag-accent" style="justify-self:start">${esc(post.category)}</span>
       <h2>${esc(post.title)}</h2>
-      <p>${esc(post.excerpt)} · ${post.read_minutes} דקות קריאה</p>
+      <p>${esc(post.excerpt)}</p>
+      <p class="byline">מאת ${esc(post.author || 'מאור דוידוביץ')} · ${post.read_minutes} דקות קריאה</p>
     </div>
-    <article class="article-body">${blocks}</article>`;
+    <article class="article-body">${blocks}</article>
+    <p class="byline byline-end">נכתב על ידי ${esc(post.author || 'מאור דוידוביץ')}</p>`;
 }
 
 // ---------------- Settings ----------------
@@ -853,6 +860,17 @@ async function viewSettings(el) {
  * chart in the app; members are separated by dash pattern rather than by colour,
  * because the system carries a single accent.
  */
+/**
+ * A member's face, or their initial when they have not uploaded one. Both render at
+ * the same size, so a group of mixed members still lines up.
+ */
+function avatar(member, size = 'md') {
+  const initial = (member.full_name || '?').trim().charAt(0);
+  return member.has_photo
+    ? `<img class="avatar avatar-${size}" src="/api/members/${member.id}/photo" alt="" loading="lazy" />`
+    : `<span class="avatar avatar-${size} avatar-blank" aria-hidden="true">${esc(initial)}</span>`;
+}
+
 function groupChart(data) {
   const { dates, series, total } = data;
   if (!series.length || dates.length < 2) {
@@ -901,10 +919,10 @@ function groupChart(data) {
 
 async function viewHome(el) {
   const signedIn = !!state.me;
-  const [summary, posts, goal, progress, group, slogans] = await Promise.all([
+  const [summary, posts, goal, progress, group, slogans, hero] = await Promise.all([
     api('/public/summary'), api('/posts'), api('/public/goal'), api('/public/progress'),
     signedIn ? api('/group') : Promise.resolve(null),
-    loadTips('slogan'),
+    loadTips('slogan'), api('/public/hero'),
   ]);
 
   let selected = group?.members?.[0] ?? null;
@@ -943,25 +961,39 @@ async function viewHome(el) {
           </div>
           <p class="hero-note">הקריאה פתוחה לכולם. חשבון נדרש רק כדי להצטרף לקבוצה ולרשום משקלים.</p>`}
       </div>
-      ${statBlock(cells, { framed: false })}
+      <div class="hero-side">
+        ${hero.has_photo ? `
+          <figure class="portrait">
+            <img src="/api/public/hero-photo" alt="${esc(hero.name || '')}" width="640" height="480" />
+            <figcaption>${esc(hero.name || '')} · מי שמוביל את הקבוצה</figcaption>
+          </figure>` : ''}
+        ${statBlock(cells, { framed: false })}
+      </div>
     </section>
 
     ${slogans.length ? `
       <section class="slogans">
-        <div class="label">סיסמאות הקבוצה</div>
+        <div class="label">אני מאמין שלי</div>
         ${tipRotator(slogans, 0, '')}
       </section>` : ''}
 
-    ${group ? `
+    ${group ? (() => {
+      // Everyone's contribution against the one shared target, largest first.
+      const share = group.members
+        .map((m) => ({ id: m.id, name: m.full_name, has_photo: m.has_photo, kg: m.weight_change < 0 ? -m.weight_change : 0 }))
+        .sort((a, b) => b.kg - a.kg);
+      const best = Math.max(...share.map((m) => m.kg), 0.1);
+      return `
       <div class="sec">
-        <div class="kicker">איפה הקבוצה עומדת</div>
+        <div class="kicker">היעד המשותף</div>
         <h2>בדרך ל-${nf(group.goal_kg)} ק״ג</h2>
+        <p>יעד אחד לכל הקבוצה. כל קילו שמישהו מוריד נספר לכולם.</p>
       </div>
       <section class="panel bp">
         ${corners()}
         <div class="goal">
           <div class="goal-top">
-            <span class="goal-name">ירידה מצטברת</span>
+            <span class="goal-name">ירידה מצטברת · ${nf(group.member_count)} חברים</span>
             <span class="goal-val">${ltr(`${nf(group.total_kg_lost, 1)} / ${nf(group.goal_kg)}`)} · ${group.goal_progress_pct}%</span>
           </div>
           <div class="bar ${group.goal_progress_pct >= 100 ? 'met' : ''}">
@@ -973,7 +1005,18 @@ async function viewHome(el) {
               : `נותרו ${nf(group.goal_remaining_kg, 1)} ק״ג ליעד.`}
           </p>
         </div>
-      </section>` : ''}
+
+        <div class="share">
+          <div class="label">מי תרם כמה</div>
+          ${share.map((m) => `
+            <div class="share-row">
+              <span class="share-name">${avatar({ id: m.id, full_name: m.name, has_photo: m.has_photo }, 'sm')}${esc(m.name)}</span>
+              <span class="share-bar"><i style="width:${Math.round((m.kg / best) * 100)}%"></i></span>
+              <span class="share-kg">${ltr(`${nf(m.kg, 1)} ק״ג`)}</span>
+            </div>`).join('')}
+        </div>
+      </section>`;
+    })() : ''}
 
     ${progress.visible ? `
       <div class="sec">
@@ -996,6 +1039,7 @@ async function viewHome(el) {
         <div class="members" id="members">
           ${group.members.map((m) => `
             <button class="member ${m.id === selected?.id ? 'active' : ''}" data-id="${m.id}" type="button">
+              ${avatar(m)}
               <span>
                 <span class="who">${esc(m.full_name)}</span>
                 <span class="facts">
@@ -1037,12 +1081,13 @@ async function viewHome(el) {
     </div>
     <div class="articles">
       ${posts.slice(0, 3).map((p) => `
-        <a class="article bp" href="#/articles/${encodeURIComponent(p.slug)}">
+        <a class="article bp ${p.image_url ? 'has-figure' : ''}" href="#/articles/${encodeURIComponent(p.slug)}">
           ${corners()}
+          ${p.image_url ? `<span class="card-figure"><img src="/api/posts/${p.id}/image" alt="" loading="lazy" /></span>` : ''}
           <span class="tag tag-accent">${esc(p.category)}</span>
           <h3>${esc(p.title)}</h3>
           <p>${esc(p.excerpt)}</p>
-          <span class="meta">${p.read_minutes} דקות קריאה</span>
+          <span class="meta">${esc(p.author || '')} · ${p.read_minutes} דקות קריאה</span>
         </a>`).join('')}
     </div>
 
@@ -1185,6 +1230,11 @@ async function viewEditor(el) {
                 <td>${fmtDate(p.published_at)}</td>
                 <td>
                   <span class="row-actions">
+                    <label class="btn btn-secondary btn-sm" title="תמונת אילוסטרציה">
+                      ${p.image_url ? 'החלפת תמונה' : 'תמונה'}
+                      <input type="file" data-post-image accept="image/png,image/jpeg,image/webp" hidden />
+                    </label>
+                    ${p.image_url ? '<button class="btn btn-secondary btn-sm" data-del-image type="button">הסרה</button>' : ''}
                     <button class="btn btn-secondary btn-sm" data-edit-post type="button">עריכה</button>
                     <button class="btn btn-secondary btn-sm" data-del-post type="button">מחיקה</button>
                   </span>
@@ -1445,6 +1495,8 @@ async function viewEditor(el) {
       </select></div>
     <div class="field" style="margin-top:10px"><label>תקציר — השורה שמופיעה בכרטיס</label>
       <input class="input" name="excerpt" value="${esc(post.excerpt || '')}" /></div>
+    <div class="field" style="margin-top:10px"><label>כותב</label>
+      <input class="input" name="author" value="${esc(post.author || 'מאור דוידוביץ')}" /></div>
     <div class="field" style="margin-top:10px"><label>זמן קריאה בדקות — ריק לחישוב אוטומטי</label>
       <input class="input" type="number" name="read_minutes" min="1" max="90" value="${post.read_minutes || ''}" /></div>
     <div class="field" style="margin-top:10px"><label>תוכן — שורה ריקה מפרידה פסקאות, ו-**כותרת** יוצרת כותרת משנה</label>
@@ -1464,6 +1516,31 @@ async function viewEditor(el) {
       openModal('עריכת מאמר', postFields(post), async (form) => {
         await api('/posts/' + post.id, { method: 'PUT', body: form });
         toast('המאמר עודכן');
+        render();
+      });
+    });
+  });
+
+  el.querySelectorAll('[data-post-image]').forEach((input) => {
+    input.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const id = input.closest('[data-post]').dataset.post;
+      try {
+        // 1200px wide is plenty for a full-width illustration and keeps the upload small.
+        await api(`/posts/${id}/image`, { method: 'POST', body: { image: await readImageAsDataURL(file, 1200) } });
+        toast('התמונה הועלתה');
+        render();
+      } catch (err) { toast(err.message, true); }
+    });
+  });
+
+  el.querySelectorAll('[data-del-image]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.closest('[data-post]').dataset.post;
+      confirmAction('להסיר את תמונת האילוסטרציה?', async () => {
+        await api(`/posts/${id}/image`, { method: 'DELETE' });
+        toast('הוסרה');
         render();
       });
     });
