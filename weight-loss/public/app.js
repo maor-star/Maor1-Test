@@ -967,7 +967,7 @@ async function viewHome(el) {
         ${hero.has_photo ? `
           <figure class="portrait">
             <img src="/api/public/hero-photo" alt="${esc(hero.name || '')}" width="440" height="440" />
-            <figcaption>${esc(hero.name || '')} · מי שמוביל את הקבוצה</figcaption>
+            <figcaption>${esc(hero.name || '')}</figcaption>
           </figure>` : ''}
         ${statBlock(cells, { framed: false })}
       </div>
