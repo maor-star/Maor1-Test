@@ -742,6 +742,64 @@ async function viewArticles(el) {
       </div>` : '<div class="empty">עוד לא פורסמו מאמרים</div>'}`;
 }
 
+/**
+ * Some articles carry a drawn illustration rather than a photograph. It is rendered
+ * inline rather than as an <img>, so it inherits the page's fonts and colour tokens
+ * and stays sharp at any size. Keyed by slug; an uploaded photo takes precedence.
+ */
+const ARTICLE_FIGURES = {
+  'choosing-meat': () => barFigure({
+    kicker: 'גרם חלבון לכל 100 קלוריות',
+    title: 'חזה עוף נותן פי שלושה מאנטרקוט',
+    note: 'ערכים משוערים למאה גרם במצב חי. ככל שהעמודה ארוכה יותר, כך מקבלים יותר חלבון תמורת אותה קלוריה.',
+    rows: [
+      { label: 'טונה במים', value: 23 },
+      { label: 'חזה הודו', value: 22 },
+      { label: 'חזה עוף', value: 20, highlight: true },
+      { label: 'טחון 5%', value: 15 },
+      { label: 'סינטה נקייה', value: 12, highlight: true },
+      { label: 'סלמון', value: 10 },
+      { label: 'אנטרקוט', value: 6, warn: true },
+      { label: 'נקניקייה', value: 4, warn: true },
+    ],
+  }),
+};
+
+/** A horizontal bar chart drawn in the same hairline language as the rest of the site. */
+function barFigure({ kicker, title, note, rows }) {
+  // The SVG scales as a whole, so a wide canvas on a narrow screen shrinks the type
+  // to the point of being unreadable. A phone gets its own geometry instead.
+  const narrow = window.innerWidth <= 720;
+  const W = narrow ? 460 : 900;
+  const rowH = narrow ? 30 : 34;
+  const top = narrow ? 66 : 76;
+  const padX = narrow ? 112 : 150;
+  const right = narrow ? 34 : 60;
+  const H = top + rows.length * rowH + 8;
+  const max = Math.max(...rows.map((r) => r.value));
+  const len = (v) => ((W - padX - right) * v) / max;
+
+  return `
+    <figure class="article-figure drawn">
+      <svg class="chart figure-chart ${narrow ? 'compact' : ''}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet"
+           role="img" aria-label="${esc(title)}. ${rows.map((r) => `${r.label} ${r.value}`).join(', ')}">
+        <text class="fig-kicker" x="${W - 24}" y="30" text-anchor="end">${esc(kicker)}</text>
+        <text class="fig-title" x="${W - 24}" y="58" text-anchor="end">${esc(title)}</text>
+        <line class="grid-line" x1="24" y1="${top - 16}" x2="${W - 24}" y2="${top - 16}"/>
+        ${rows.map((r, i) => {
+          const y = top + i * rowH;
+          const cls = r.highlight ? 'good' : r.warn ? 'warn' : '';
+          return `
+            <text class="fig-label" x="${W - 24}" y="${y + 15}" text-anchor="end">${esc(r.label)}</text>
+            <rect class="fig-bar ${cls}" x="${W - padX - len(r.value)}" y="${y + (narrow ? 3 : 4)}"
+                  width="${len(r.value).toFixed(1)}" height="${narrow ? 13 : 14}"/>
+            <text class="fig-value" x="${W - padX - len(r.value) - 10}" y="${y + 15}" text-anchor="end">${r.value}</text>`;
+        }).join('')}
+      </svg>
+      <figcaption>${esc(note)}</figcaption>
+    </figure>`;
+}
+
 /** Renders the seeded article body: blank lines split paragraphs, **bold** lines are sub-headings. */
 async function viewArticle(el, slug) {
   const post = await api('/posts/' + encodeURIComponent(slug));
@@ -757,7 +815,7 @@ async function viewArticle(el, slug) {
     ${post.image_url ? `
       <figure class="article-figure">
         <img src="/api/posts/${post.id}/image" alt="" />
-      </figure>` : ''}
+      </figure>` : (ARTICLE_FIGURES[post.slug] ? ARTICLE_FIGURES[post.slug]() : '')}
     <div class="sec">
       <span class="tag tag-accent" style="justify-self:start">${esc(post.category)}</span>
       <h2>${esc(post.title)}</h2>

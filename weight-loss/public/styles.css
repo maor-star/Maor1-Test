@@ -370,6 +370,48 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
   filter: saturate(0.92) contrast(1.04);
 }
 
+/* A drawn figure rather than a photograph: no crop, no filter, and the page's own
+   type and colour tokens, because it is inline SVG and not an <img>. */
+.article-figure.drawn { border: 1px solid var(--color-divider); padding: var(--space-6); }
+.article-figure.drawn figcaption {
+  margin-top: var(--space-4); padding-top: var(--space-3);
+  border-top: 1px solid var(--color-divider);
+  font-size: 12px; color: var(--color-neutral-600); max-width: 70ch;
+}
+/* SVG text-anchor is logical, not geometric: under direction:rtl "end" flips to the
+   left and the labels run off the canvas. The chart is positioned by coordinates, so
+   it opts out of the page's direction, and each label gets plaintext bidi so the
+   Hebrew inside it still reads right to left. */
+.figure-chart { direction: ltr; }
+.figure-chart text { unicode-bidi: plaintext; }
+.figure-chart .fig-kicker {
+  font-family: var(--font-body); font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; fill: var(--color-accent-700);
+}
+.figure-chart .fig-title {
+  font-family: var(--font-heading); font-weight: 700; font-size: 26px; fill: var(--color-text);
+}
+.figure-chart .fig-label {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 15px; fill: var(--color-text);
+}
+.figure-chart .fig-value {
+  font-family: var(--font-heading); font-weight: 700; font-size: 14px;
+  fill: var(--color-neutral-700); font-variant-numeric: tabular-nums;
+}
+.figure-chart .fig-bar { fill: var(--color-neutral-400); }
+.figure-chart .fig-bar.good { fill: var(--color-accent); }
+.figure-chart .fig-bar.warn { fill: var(--color-neutral-300); }
+/* The compact canvas is roughly half the width, so its type is sized in its own
+   user units rather than inheriting the wide chart's. */
+.figure-chart.compact .fig-title { font-size: 19px; }
+.figure-chart.compact .fig-kicker { font-size: 9px; letter-spacing: 0.08em; }
+.figure-chart.compact .fig-label { font-size: 13px; }
+.figure-chart.compact .fig-value { font-size: 12px; }
+@media (max-width: 720px) {
+  .article-figure.drawn { padding: var(--space-4); }
+}
+
 /* ── Science ───────────────────────────────────────────────────────────── */
 .mechanisms { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-8); }
 .mechanism {
