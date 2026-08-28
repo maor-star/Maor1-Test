@@ -75,9 +75,10 @@ body.modal-open { overflow: hidden; }
 .topbar-inner {
   max-width: 1180px; margin: 0 auto;
   display: flex; align-items: center; gap: var(--space-6); padding: var(--space-3) var(--space-6);
+  min-width: 0;
 }
 .brand {
-  display: flex; align-items: baseline; gap: var(--space-2); margin-inline-end: auto;
+  display: flex; align-items: baseline; gap: var(--space-2); margin-inline-end: auto; flex: none;
   font-family: var(--font-heading); font-weight: 700; font-size: 19px;
 }
 .brand span { white-space: nowrap; }
@@ -85,7 +86,12 @@ body.modal-open { overflow: hidden; }
   font-family: var(--font-body); font-weight: 500; font-size: 11px;
   letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-700);
 }
-.tabs { display: flex; gap: 2px; }
+.tabs {
+  display: flex; gap: 2px;
+  min-width: 0; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tabs a { white-space: nowrap; }
 .tabs a {
   padding: 7px 14px; text-decoration: none; border: 1px solid transparent;
   font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 14px;
@@ -94,7 +100,7 @@ body.modal-open { overflow: hidden; }
 .tabs a:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
 .tabs a.active { background: var(--color-accent-700); color: var(--color-bg); }
 .readout {
-  display: flex; align-items: center; gap: var(--space-4);
+  display: flex; align-items: center; gap: var(--space-4); flex: none;
   border-inline-start: 1px solid var(--color-divider); padding-inline-start: var(--space-4);
 }
 .readout-member, .readout-guest { display: flex; align-items: center; gap: var(--space-4); }
@@ -158,7 +164,7 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .portrait { position: relative; margin: 0; display: grid; justify-items: center; gap: var(--space-3); }
 .portrait img {
   display: block;
-  width: clamp(150px, 15vw, 216px); height: auto;
+  width: clamp(112px, 10.5vw, 152px); height: auto;
   aspect-ratio: 1; object-fit: cover; object-position: center 25%;
   border-radius: 50%;
   /* A hairline ring, offset by the page ground — the same two-line language the
@@ -432,7 +438,7 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
   .hero { grid-template-columns: 1fr; gap: var(--space-8); padding: var(--space-6); }
   .share-row { grid-template-columns: minmax(96px, 1.2fr) minmax(0, 1.4fr) auto; gap: var(--space-3); }
   .avatar-md { width: 38px; height: 38px; }
-  .portrait img { width: clamp(132px, 38vw, 168px); }
+  .portrait img { width: clamp(104px, 28vw, 128px); }
   .split, .split-wide { grid-template-columns: 1fr; gap: var(--space-8); }
 }
 @media (max-width: 700px) {
@@ -446,6 +452,7 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
   .member { grid-template-columns: 1fr; gap: var(--space-2); }
   .readout { gap: var(--space-3); padding-inline-start: var(--space-3); }
   .readout-guest .btn { padding-inline: var(--space-3); font-size: 13px; }
+  .tabs a { padding: 11px 14px; }
 }
 
 /* ── Dialog ────────────────────────────────────────────────────────────── */
@@ -664,3 +671,14 @@ main { flex: 1; }
 .rowlist .facts { font-size: 13px; color: var(--color-neutral-600); }
 .rowlist .row-text .tag { display: inline-flex; margin-inline-start: var(--space-2); }
 .dialog .thread { max-height: 300px; }
+
+/* ── Touch targets ─────────────────────────────────────────────────────────
+   Anything tapped with a thumb gets a real target. Keyed to the pointer rather
+   than the viewport, so tablets are covered too and a mouse is left alone. */
+@media (pointer: coarse) {
+  .btn { min-height: 44px; }
+  .btn-sm { min-height: 38px; padding-block: 6px; }
+  .tabs a { padding-block: 11px; }
+  .member { min-height: 56px; }
+  .rule-ticks i { height: 3px; padding-block: 10px; background-clip: content-box; }
+}
