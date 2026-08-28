@@ -335,6 +335,10 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .avatar-sm.avatar-blank { font-size: 12px; }
 .share-name { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 
+/* A removed member stays in the editor's list so the decision can be undone. */
+.row.is-off { opacity: 0.55; }
+.row .row-text { display: inline-flex; align-items: center; gap: var(--space-3); }
+
 /* Who wrote it, under the standfirst, and again at the end of the piece. */
 .byline {
   margin: var(--space-2) 0 0;

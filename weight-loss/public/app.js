@@ -1357,14 +1357,18 @@ async function viewEditor(el) {
       </div>
       <div class="rowlist">
         ${members.map((m) => `
-          <div class="row" data-account="${m.id}">
+          <div class="row ${m.active ? '' : 'is-off'}" data-account="${m.id}">
             <span>
-              <span class="row-text">${esc(m.full_name)}${m.is_editor ? ' <span class="tag tag-accent">עורך</span>' : ''}</span>
+              <span class="row-text">${avatar(m, 'sm')}${esc(m.full_name)}${m.is_editor ? ' <span class="tag tag-accent">עורך</span>' : ''}${m.active ? '' : ' <span class="tag">מוסר</span>'}</span>
               <span class="facts">${esc(m.email)}</span>
             </span>
             <span class="row-actions">
-              <button class="btn btn-secondary btn-sm" data-toggle-editor data-grant="${m.is_editor ? 0 : 1}" type="button">
-                ${m.is_editor ? 'הסרת הרשאה' : 'הפיכה לעורך'}
+              ${m.active ? `
+                <button class="btn btn-secondary btn-sm" data-toggle-editor data-grant="${m.is_editor ? 0 : 1}" type="button">
+                  ${m.is_editor ? 'הסרת הרשאה' : 'הפיכה לעורך'}
+                </button>` : ''}
+              <button class="btn btn-secondary btn-sm" data-toggle-active data-on="${m.active ? 0 : 1}" type="button">
+                ${m.active ? 'הסרה מהקבוצה' : 'החזרה לקבוצה'}
               </button>
             </span>
           </div>`).join('')}
@@ -1515,6 +1519,23 @@ async function viewEditor(el) {
           toast(grant ? 'ההרשאה ניתנה' : 'ההרשאה הוסרה');
           // Revoking your own rights closes this screen, so re-resolve the route.
           if (id === state.me.id) return boot();
+          render();
+        });
+    });
+  });
+
+  el.querySelectorAll('[data-toggle-active]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = Number(button.closest('[data-account]').dataset.account);
+      const member = members.find((m) => m.id === id);
+      const activate = button.dataset.on === '1';
+      confirmAction(
+        activate
+          ? `להחזיר את ${member.full_name} לקבוצה?`
+          : `להסיר את ${member.full_name} מהקבוצה? החשבון לא נמחק, והוא ייעלם מהרשימות ולא יוכל להתחבר.`,
+        async () => {
+          await api(`/editor/members/${id}/active`, { method: 'PUT', body: { active: activate ? 1 : 0 } });
+          toast(activate ? 'הוחזר לקבוצה' : 'הוסר מהקבוצה');
           render();
         });
     });

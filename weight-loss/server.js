@@ -716,8 +716,8 @@ app.put('/api/editor/members/:id/note', requireEditor, asyncRoute((req, res) => 
 /** Everyone with an account, editors included, the inbox deliberately leaves editors out. */
 app.get('/api/editor/members', requireEditor, asyncRoute((req, res) => {
   res.json(db.prepare(`
-    SELECT id, full_name, email, is_editor FROM profiles
-    WHERE active = 1 ORDER BY is_editor DESC, full_name
+    SELECT id, full_name, email, is_editor, active, photo_url IS NOT NULL AS has_photo
+    FROM profiles ORDER BY active DESC, is_editor DESC, full_name
   `).all());
 }));
 
@@ -737,6 +737,27 @@ app.put('/api/editor/members/:id/editor', requireEditor, asyncRoute((req, res) =
 
   db.prepare('UPDATE profiles SET is_editor = ? WHERE id = ?').run(wanted, id);
   res.json({ ok: true, id, is_editor: wanted });
+}));
+
+/**
+ * Removing a member deactivates the account rather than deleting it: their weigh-ins
+ * and messages stay intact and the decision is reversible. They drop out of the group
+ * list, the totals and the editor's inbox, and can no longer sign in.
+ */
+app.put('/api/editor/members/:id/active', requireEditor, asyncRoute((req, res) => {
+  const id = Number(req.params.id);
+  const wanted = req.body.active ? 1 : 0;
+  const target = db.prepare('SELECT id, full_name, is_editor FROM profiles WHERE id = ?').get(id);
+  if (!target) throw fail('החבר לא נמצא', 404);
+
+  if (!wanted) {
+    if (id === req.user.id) throw fail('אי אפשר להסיר את החשבון שאתה מחובר איתו');
+    const editors = db.prepare('SELECT COUNT(*) AS n FROM profiles WHERE is_editor = 1 AND active = 1').get().n;
+    if (target.is_editor && editors <= 1) throw fail('זה העורך האחרון, צריך להשאיר לפחות אחד');
+  }
+
+  db.prepare('UPDATE profiles SET active = ? WHERE id = ?').run(wanted, id);
+  res.json({ ok: true, id, active: wanted });
 }));
 
 // ---------- Recipes ----------
