@@ -441,7 +441,7 @@ async function viewDashboard(el) {
     const file = e.target.files[0];
     if (!file) return;
     try {
-      await api('/me/photo', { method: 'POST', body: { photo: await readImageAsDataURL(file, 600) } });
+      await api('/me/photo', { method: 'POST', body: { photo: await readImageAsDataURL(file, 1000, 0.92) } });
       toast('התמונה עודכנה');
       render();
     } catch (err) {
@@ -511,7 +511,7 @@ function badgeCard(badge) {
 }
 
 // ---------------- Progress ----------------
-function readImageAsDataURL(file, maxSide = 1200) {
+function readImageAsDataURL(file, maxSide = 1200, quality = 0.85) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('לא הצלחנו לקרוא את הקובץ'));
@@ -523,8 +523,10 @@ function readImageAsDataURL(file, maxSide = 1200) {
         const canvas = document.createElement('canvas');
         canvas.width = Math.round(img.width * scale);
         canvas.height = Math.round(img.height * scale);
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
       };
       img.src = reader.result;
     };
@@ -964,7 +966,7 @@ async function viewHome(el) {
       <div class="hero-side">
         ${hero.has_photo ? `
           <figure class="portrait">
-            <img src="/api/public/hero-photo" alt="${esc(hero.name || '')}" width="640" height="480" />
+            <img src="/api/public/hero-photo" alt="${esc(hero.name || '')}" width="440" height="440" />
             <figcaption>${esc(hero.name || '')} · מי שמוביל את הקבוצה</figcaption>
           </figure>` : ''}
         ${statBlock(cells, { framed: false })}
