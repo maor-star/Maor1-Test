@@ -44,6 +44,15 @@ function fail(message, status = 400) {
   return err;
 }
 
+/**
+ * The programme runs for thirteen weeks from the opening Tuesday, one weigh-in a week.
+ * The dates are fixed for everybody, so the group is always comparing the same weeks.
+ */
+const PROGRAM_START = '2026-09-01';
+const PROGRAM_WEEKS = 13;
+const programDates = () =>
+  Array.from({ length: PROGRAM_WEEKS }, (_, i) => shiftDate(PROGRAM_START, i * 7));
+
 /** Content authoring is the one elevated capability; there is no coach area. */
 function requireEditor(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'נדרשת התחברות' });
@@ -63,15 +72,6 @@ function intInRange(value, { min, max, label }) {
   }
   return n;
 }
-
-/**
- * The programme runs for thirteen weeks from the opening Tuesday, one weigh-in a week.
- * The dates are fixed for everybody, so the group is always comparing the same weeks.
- */
-const PROGRAM_START = '2026-09-01';
-const PROGRAM_WEEKS = 13;
-const programDates = () =>
-  Array.from({ length: PROGRAM_WEEKS }, (_, i) => shiftDate(PROGRAM_START, i * 7));
 
 /** The profile plus everything the header and dashboard need. */
 function profileState(userId) {
@@ -232,7 +232,9 @@ function savePhoto(dataUrl) {
 /** One weigh-in per calendar week; sending another for the same week replaces it. */
 app.post('/api/weigh-ins', requireAuth, asyncRoute((req, res) => {
   const date = isValidDate(req.body.date) ? req.body.date : todayISO();
-  if (date > todayISO()) throw fail('לא ניתן לדווח על תאריך עתידי');
+  if (date > todayISO() && !programDates().includes(date)) {
+    throw fail('לא ניתן לדווח על תאריך עתידי');
+  }
   const weight = num(req.body.weight);
   if (!(weight > 20 && weight < 400)) throw fail('יש להזין משקל בין 20 ל-400 ק"ג');
 
@@ -362,9 +364,7 @@ function personalStats(userId) {
         logged_date: row ? row.date : null,
         is_current: weekKey(date) === weekKey(today),
         is_past: date < today,
-        // A weigh-in cannot be recorded before its week arrives, so the row is shown
-        // but stays closed until then.
-        is_open: weekKey(date) <= weekKey(today),
+        is_open: true,
       };
     }),
     weight_start: first ? first.weight : null,
