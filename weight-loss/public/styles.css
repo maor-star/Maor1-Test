@@ -337,6 +337,23 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 
 /* A removed member stays in the editor's list so the decision can be undone. */
 .row.is-off { opacity: 0.55; }
+
+/* The thirteen-week plan. Each row is a date that is already decided and a number
+   waiting to be typed, so the states have to read at a glance. */
+.plan-table td { vertical-align: middle; }
+.plan-table .plan-n {
+  font-family: var(--font-heading); font-weight: 700; color: var(--color-neutral-500);
+  font-variant-numeric: tabular-nums; width: 1%;
+}
+.plan-table .plan-diff { font-variant-numeric: tabular-nums; color: var(--color-neutral-700); white-space: nowrap; }
+.plan-table .input-sm { padding: 5px var(--space-3); font-size: 14px; max-width: 110px; }
+.plan-table tr.is-done td { background: color-mix(in srgb, var(--color-accent) 5%, transparent); }
+.plan-table tr.is-now td { background: var(--color-accent-100); }
+.plan-table tr.is-missed .plan-n,
+.plan-table tr.is-missed td { color: var(--color-neutral-500); }
+.plan-table tr.is-ahead td { color: var(--color-neutral-500); }
+.plan-table .plan-soon { font-size: 12px; color: var(--color-neutral-500); white-space: nowrap; }
+@media (pointer: coarse) { .plan-table .input-sm { min-height: 38px; } }
 .row .row-text { display: inline-flex; align-items: center; gap: var(--space-3); }
 
 /* Who wrote it, under the standfirst, and again at the end of the piece. */

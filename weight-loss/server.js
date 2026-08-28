@@ -64,6 +64,15 @@ function intInRange(value, { min, max, label }) {
   return n;
 }
 
+/**
+ * The programme runs for thirteen weeks from the opening Tuesday, one weigh-in a week.
+ * The dates are fixed for everybody, so the group is always comparing the same weeks.
+ */
+const PROGRAM_START = '2026-09-01';
+const PROGRAM_WEEKS = 13;
+const programDates = () =>
+  Array.from({ length: PROGRAM_WEEKS }, (_, i) => shiftDate(PROGRAM_START, i * 7));
+
 /** The profile plus everything the header and dashboard need. */
 function profileState(userId) {
   const profile = db.prepare('SELECT * FROM profiles WHERE id = ?').get(userId);
@@ -340,6 +349,24 @@ function personalStats(userId) {
       ? Number((last.weight - profile.target_weight).toFixed(1)) : null,
     coach_note: profile.coach_note,
     has_photo: !!profile.photo_url,
+    program_start: PROGRAM_START,
+    program_weeks: PROGRAM_WEEKS,
+    // A slot is filled by any weigh-in from that week, not only one dated on the
+    // Tuesday itself, so weighing on Wednesday still counts for that week.
+    schedule: programDates().map((date, i) => {
+      const row = weighIns.find((w) => w.week === weekKey(date));
+      return {
+        n: i + 1,
+        date,
+        weight: row ? row.weight : null,
+        logged_date: row ? row.date : null,
+        is_current: weekKey(date) === weekKey(today),
+        is_past: date < today,
+        // A weigh-in cannot be recorded before its week arrives, so the row is shown
+        // but stays closed until then.
+        is_open: weekKey(date) <= weekKey(today),
+      };
+    }),
     weight_start: first ? first.weight : null,
     weight_latest: last ? last.weight : null,
     weight_change: first && last ? Number((last.weight - first.weight).toFixed(1)) : null,

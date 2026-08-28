@@ -311,6 +311,8 @@ async function viewDashboard(el) {
       </section>
     </div>
 
+    ${weighInPlan(stats)}
+
     <div class="sec">
       <div class="kicker">היעדים של היום</div>
       <h2>שלוש שורות. זה כל מה שנמדד.</h2>
@@ -437,6 +439,30 @@ async function viewDashboard(el) {
     }
   });
 
+  el.querySelectorAll('[data-plan-save]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const row = button.closest('[data-slot]');
+      const input = row.querySelector('[data-plan-weight]');
+      const weight = input.value.trim();
+      if (!weight) return toast('יש להזין משקל', true);
+      button.disabled = true;
+      try {
+        await api('/weigh-ins', { method: 'POST', body: { date: row.dataset.slot, weight } });
+        toast('נשמר');
+        render();
+      } catch (err) {
+        toast(err.message, true);
+        button.disabled = false;
+      }
+    });
+  });
+  // Enter in the field saves that row, so the whole plan can be filled from the keyboard.
+  el.querySelectorAll('[data-plan-weight]').forEach((input) => {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); input.closest('[data-slot]').querySelector('[data-plan-save]').click(); }
+    });
+  });
+
   el.querySelector('#photo-input')?.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -448,6 +474,72 @@ async function viewDashboard(el) {
       toast(err.message, true);
     }
   });
+}
+
+/**
+ * The thirteen weeks of the programme, dates already filled in. Every Tuesday morning
+ * gets a row and the member only ever types a number into it.
+ */
+function weighInPlan(stats) {
+  const rows = stats.schedule || [];
+  if (!rows.length) return '';
+  const done = rows.filter((r) => r.weight !== null).length;
+  const first = rows[0];
+  const next = rows.find((r) => r.weight === null && r.is_open) || rows.find((r) => r.weight === null);
+  const startW = stats.weight_start;
+
+  return `
+    <div class="sec">
+      <div class="kicker">לוח השקילות</div>
+      <h2>כל יום שלישי בבוקר, ${rows.length} שבועות</h2>
+      <p>השקילה הראשונה ב-${fmtDate(first.date)}. שוקלים בבוקר, לפני האוכל ואחרי השירותים,
+         ורושמים כאן. ${next ? `הבאה בתור: ${fmtDate(next.date)}.` : 'כל השקילות מולאו.'}</p>
+    </div>
+
+    ${statBlock([
+      { value: startW ? nf(startW, 1) : '-', cap: 'משקל התחלתי · ק״ג' },
+      { value: stats.weight_latest ? nf(stats.weight_latest, 1) : '-', cap: 'משקל נוכחי · ק״ג', accent: true },
+      { value: stats.weight_change === null ? '-' : ltr(signed(stats.weight_change)), cap: 'שינוי · ק״ג' },
+      { value: `${done}/${rows.length}`, cap: 'שקילות שמולאו' },
+    ])}
+
+    <section class="panel bp">
+      ${corners()}
+      <div class="table-wrap">
+        <table class="table plan-table">
+          <thead><tr><th>שבוע</th><th>תאריך</th><th>משקל · ק״ג</th><th>שינוי</th><th></th></tr></thead>
+          <tbody>
+            ${rows.map((r, i) => {
+              const prev = [...rows.slice(0, i)].reverse().find((x) => x.weight !== null);
+              const diff = r.weight !== null && prev ? Number((r.weight - prev.weight).toFixed(1)) : null;
+              const state = r.weight !== null ? 'is-done'
+                : r.is_current ? 'is-now'
+                : !r.is_open ? 'is-ahead'
+                : 'is-missed';
+              return `
+                <tr class="${state}" data-slot="${r.date}">
+                  <td class="plan-n">${r.n}</td>
+                  <td>${fmtDate(r.date)}${r.is_current ? ' <span class="tag tag-accent">השבוע</span>' : ''}</td>
+                  <td>
+                    <input class="input input-sm" type="number" min="20" max="400" step="0.1"
+                           value="${r.weight ?? ''}" placeholder="${r.is_open ? '-' : ''}"
+                           aria-label="משקל ל-${fmtDate(r.date)}" data-plan-weight
+                           ${r.is_open ? '' : 'disabled'} />
+                  </td>
+                  <td class="plan-diff">${diff === null ? '' : ltr(signed(diff))}</td>
+                  <td>${r.is_open
+                    ? '<button class="btn btn-secondary btn-sm" data-plan-save type="button">שמירה</button>'
+                    : '<span class="plan-soon">עוד לא נפתח</span>'}</td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <p class="note-line" style="margin-top:var(--space-4)">
+        שבוע נפתח למילוי כשהוא מגיע, ואפשר למלא גם שקילה שפוספסה.
+        שקילה שנרשמה ביום אחר באותו שבוע נכנסת לשורה של אותו שבוע.
+      </p>
+    </section>`;
 }
 
 /** The member's own picture, or the frame waiting for one. */
