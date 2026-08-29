@@ -356,6 +356,9 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
   font-variant-numeric: tabular-nums; width: 1%;
 }
 .plan-table .plan-diff { font-variant-numeric: tabular-nums; color: var(--color-neutral-700); white-space: nowrap; }
+.plan-table .plan-date { white-space: nowrap; }
+.plan-table .plan-date .input-sm { max-width: 150px; }
+.plan-table .plan-date .tag { margin-inline-start: var(--space-2); }
 .plan-table .input-sm { padding: 5px var(--space-3); font-size: 14px; max-width: 110px; }
 .plan-table tr.is-done td { background: color-mix(in srgb, var(--color-accent) 5%, transparent); }
 .plan-table tr.is-now td { background: var(--color-accent-100); }
@@ -364,6 +367,21 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .plan-table tr.is-ahead td { color: var(--color-neutral-500); }
 .plan-table .plan-soon { font-size: 12px; color: var(--color-neutral-500); white-space: nowrap; }
 @media (pointer: coarse) { .plan-table .input-sm { min-height: 38px; } }
+/* With a date picker in every row the save button falls off the side of a phone. The
+   change column is the one thing here that can be read on the chart instead, so it goes
+   and the inputs tighten until the whole row fits without a sideways scroll. */
+@media (max-width: 560px) {
+  .table-wrap .table.plan-table { min-width: 0; }
+  .plan-table th:nth-child(4), .plan-table td:nth-child(4) { display: none; }
+  .plan-table th, .plan-table td { padding-inline: 6px; }
+  /* Widths, not caps: under auto table layout a max-width lets the browser squeeze the
+     weight field down to a couple of digits. */
+  .plan-table .plan-date .input-sm { width: 112px; max-width: 112px; padding-inline: 4px; }
+  .plan-table td:nth-child(3) .input-sm { width: 76px; max-width: 76px; }
+  .plan-table th, .plan-table td { padding-inline: 4px; }
+  .plan-table .btn-sm { padding-inline: var(--space-2); }
+  .plan-table .btn-sm { padding-inline: var(--space-3); }
+}
 
 /* The week as one form. The day column carries the name, the date and, on Tuesday, the
    weigh-in mark, so the rhythm of the week is readable before anything is filled in. */

@@ -59,8 +59,10 @@ function fail(message, status = 400) {
  * The programme runs for thirteen weeks from the opening Tuesday, one weigh-in a week.
  * The dates are fixed for everybody, so the group is always comparing the same weeks.
  */
+// The first weigh-in, and every following Tuesday for three months. 1.9 and 1.12 are
+// both Tuesdays, so fourteen slots cover the window exactly, end included.
 const PROGRAM_START = '2026-09-01';
-const PROGRAM_WEEKS = 13;
+const PROGRAM_WEEKS = 14;
 const programDates = () =>
   Array.from({ length: PROGRAM_WEEKS }, (_, i) => shiftDate(PROGRAM_START, i * 7));
 
@@ -253,8 +255,10 @@ function saveImageBuffer(buffer, mimeType) {
 /** One weigh-in per calendar week; sending another for the same week replaces it. */
 app.post('/api/weigh-ins', requireAuth, asyncRoute((req, res) => {
   const date = isValidDate(req.body.date) ? req.body.date : todayISO();
-  if (date > todayISO() && !programDates().includes(date)) {
-    throw fail('לא ניתן לדווח על תאריך עתידי');
+  const dates = programDates();
+  const lastSlot = dates[dates.length - 1];
+  if (date > todayISO() && date > shiftDate(lastSlot, 5)) {
+    throw fail('לא ניתן לדווח על תאריך שמחוץ לתוכנית');
   }
   const weight = num(req.body.weight);
   if (!(weight > 20 && weight < 400)) throw fail('יש להזין משקל בין 20 ל-400 ק"ג');
@@ -378,9 +382,14 @@ function personalStats(userId) {
     // Tuesday itself, so weighing on Wednesday still counts for that week.
     schedule: programDates().map((date, i) => {
       const row = weighIns.find((w) => w.week === weekKey(date));
+      const monday = weekStart(date);
       return {
         n: i + 1,
         date,
+        // The week runs Monday to Sunday. A weigh-in moved inside these bounds still
+        // lands in this row; one moved outside would silently fill a different week.
+        week_from: monday,
+        week_to: shiftDate(monday, 6),
         weight: row ? row.weight : null,
         logged_date: row ? row.date : null,
         is_current: weekKey(date) === weekKey(today),

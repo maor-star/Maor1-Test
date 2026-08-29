@@ -534,9 +534,16 @@ async function viewDashboard(el) {
       const input = row.querySelector('[data-plan-weight]');
       const weight = input.value.trim();
       if (!weight) return toast('יש להזין משקל', true);
+      // The date defaults to this row's Tuesday and may be moved, but only inside the
+      // week: outside it the weigh-in would be filed against a different row.
+      const picker = row.querySelector('[data-plan-date]');
+      const date = picker.value || row.dataset.slot;
+      if (date < picker.min || date > picker.max) {
+        return toast('התאריך חייב להיות בתוך אותו שבוע', true);
+      }
       button.disabled = true;
       try {
-        await api('/weigh-ins', { method: 'POST', body: { date: row.dataset.slot, weight } });
+        await api('/weigh-ins', { method: 'POST', body: { date, weight } });
         toast('נשמר');
         render();
       } catch (err) {
@@ -581,9 +588,10 @@ function weighInPlan(stats) {
     <div class="sec">
       <div class="kicker">לוח השקילות</div>
       <h2>כל יום שלישי בבוקר, ${rows.length} שבועות</h2>
-      <p>השקילה הראשונה ב-${fmtDate(first.date)}. שוקלים בבוקר, לפני האוכל ואחרי השירותים,
-         ורושמים כאן. ${next ? `הבאה בתור: ${fmtDate(next.date)}.` : 'כל השקילות מולאו.'}
-         כל השורות פתוחות למילוי, גם קדימה וגם אחורה.</p>
+      <p>השקילה הראשונה ב-${fmtDate(first.date)}, ומשם כל יום שלישי עוקב.
+         שוקלים בבוקר, לפני האוכל ואחרי השירותים, ורושמים כאן.
+         ${next ? `הבאה בתור: ${fmtDate(next.date)}.` : 'כל השקילות מולאו.'}
+         התאריך של כל שורה מוכן מראש, ואפשר לשנות אותו לכל יום באותו שבוע.</p>
     </div>
 
     ${statBlock([
@@ -597,7 +605,7 @@ function weighInPlan(stats) {
       ${corners()}
       <div class="table-wrap">
         <table class="table plan-table">
-          <thead><tr><th>שבוע</th><th>תאריך</th><th>משקל · ק״ג</th><th>שינוי</th><th></th></tr></thead>
+          <thead><tr><th>שבוע</th><th>תאריך השקילה</th><th>משקל · ק״ג</th><th>שינוי</th><th></th></tr></thead>
           <tbody>
             ${rows.map((r, i) => {
               const prev = [...rows.slice(0, i)].reverse().find((x) => x.weight !== null);
@@ -609,7 +617,12 @@ function weighInPlan(stats) {
               return `
                 <tr class="${state}" data-slot="${r.date}">
                   <td class="plan-n">${r.n}</td>
-                  <td>${fmtDate(r.date)}${r.is_current ? ' <span class="tag tag-accent">השבוע</span>' : ''}</td>
+                  <td class="plan-date">
+                    <input class="input input-sm" type="date" value="${r.logged_date || r.date}"
+                           min="${r.week_from}" max="${r.week_to}" data-plan-date
+                           aria-label="תאריך השקילה לשבוע ${r.n}" ${r.is_open ? '' : 'disabled'} />
+                    ${r.is_current ? '<span class="tag tag-accent">השבוע</span>' : ''}
+                  </td>
                   <td>
                     <input class="input input-sm" type="number" min="20" max="400" step="0.1"
                            value="${r.weight ?? ''}" placeholder="${r.is_open ? '-' : ''}"
