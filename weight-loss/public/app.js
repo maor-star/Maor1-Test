@@ -54,32 +54,43 @@ function toast(message, isError = false) {
 
 // ---------------- Charts ----------------
 /** Weight over time: a thin steel line on a hairline grid, per the design system. */
-function lineChart(points, { unit = '', digits = 1 } = {}) {
-  if (points.length < 2) {
+function lineChart(points, { unit = '', digits = 1, goal = null, compact = false } = {}) {
+  if (!points.length) {
+    return '<div class="empty">אחרי השקילה הראשונה יופיע כאן גרף הירידה</div>';
+  }
+  // A single weigh-in still says something when there is a target to read it against:
+  // where you started and how far there is to go.
+  if (points.length < 2 && !goal) {
     return '<div class="empty">צריך לפחות שתי שקילות כדי להציג מגמה</div>';
   }
   const W = 660, H = 260, padX = 46, padY = 30;
   const values = points.map((p) => p.value);
-  const min = Math.min(...values), max = Math.max(...values);
+  // The target joins the scale so the line is always read against it, not in isolation.
+  const scale = goal ? [...values, goal] : values;
+  const min = Math.min(...scale), max = Math.max(...scale);
   const span = max - min || 1;
-  const lo = min - span * 0.2, hi = max + span * 0.2;
-  const x = (i) => padX + (i * (W - padX * 2)) / (points.length - 1);
+  const lo = min - span * 0.15, hi = max + span * 0.15;
+  const x = (i) => (points.length === 1 ? W / 2 : padX + (i * (W - padX * 2)) / (points.length - 1));
   const y = (v) => H - padY - ((v - lo) / (hi - lo)) * (H - padY * 2);
   const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
   const every = Math.ceil(points.length / 7);
 
   return `
-    <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img"
+    <svg class="chart ${compact ? 'chart-compact' : ''}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img"
          aria-label="מגמת משקל לאורך ${points.length} שקילות">
       ${[lo, (lo + hi) / 2, hi].map((t) => `
         <line class="grid-line" x1="${padX}" y1="${y(t).toFixed(1)}" x2="${W - padX}" y2="${y(t).toFixed(1)}"/>
         <text class="lbl" x="${W - padX + 7}" y="${(y(t) + 3).toFixed(1)}">${nf(t, digits)}</text>`).join('')}
+      ${goal ? `
+        <line class="goal-line" x1="${padX}" y1="${y(goal).toFixed(1)}" x2="${W - padX}" y2="${y(goal).toFixed(1)}"/>
+        <text class="goal-lbl" x="${padX}" y="${(y(goal) - 8).toFixed(1)}">יעד ${nf(goal, digits)}${unit}</text>` : ''}
       <path class="line" d="${path}"/>
       ${points.map((p, i) => `<circle class="dot" cx="${x(i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="3.5"><title>${esc(p.label)}: ${nf(p.value, digits)}${unit}</title></circle>`).join('')}
       ${points.map((p, i) => (i % every === 0 || i === points.length - 1)
         ? `<text class="lbl" x="${x(i).toFixed(1)}" y="${H - 8}" text-anchor="middle">${esc(p.short)}</text>` : '').join('')}
     </svg>`;
 }
+
 
 function barChart(items, { goal = 0, unit = '', goodWhen = 'above' } = {}) {
   if (!items.length) return '<div class="empty">אין עדיין דיווחים להצגה</div>';
@@ -112,51 +123,36 @@ function barChart(items, { goal = 0, unit = '', goodWhen = 'above' } = {}) {
  * words rather than hiding it in a corner label. It writes into the slot it names, so
  * there is no second step and no wondering which week the number landed in.
  */
-function nextWeighInCard(stats) {
-  // Weighed for this week already: the card turns into confirmation, and the form still
-  // points at that week so an edit corrects it instead of filling the next one.
+function weighInStrip(stats) {
+  // Weighed for this week already: the strip confirms it and still points at that week,
+  // so an edit corrects the number instead of filling the next slot.
   const done = stats.current_slot_weight !== null;
   const slot = done ? stats.current_slot : stats.open_slot;
-  const days = slot ? Math.round((Date.parse(slot) - Date.parse(stats.today)) / 86400000) : null;
-  const upcoming = stats.next_weigh_in;
+  if (!slot) return { html: '<p class="note-line">כל שקילות התוכנית מולאו.</p>', slot: null };
 
-  const when = days === null ? ''
-    : days === 0 ? 'היום'
-    : days === 1 ? 'מחר'
-    : days > 1 ? `בעוד ${nf(days)} ימים`
-    : 'התאריך עבר, אפשר עדיין למלא';
+  const days = Math.round((Date.parse(slot) - Date.parse(stats.today)) / 86400000);
+  const when = days === 0 ? 'היום' : days === 1 ? 'מחר'
+    : days > 1 ? `בעוד ${nf(days)} ימים` : 'התאריך עבר, אפשר עדיין למלא';
 
-  const headline = done
-    ? `נשקלת השבוע: ${ltr(nf(stats.current_slot_weight, 1))} ק״ג`
-    : slot ? `יום שלישי, ${fmtDate(slot)}` : 'כל השקילות מולאו';
-
-  const note = done
-    ? `${upcoming ? `הבאה: יום שלישי, ${fmtDate(upcoming)}.` : 'זו הייתה האחרונה בתוכנית.'} אפשר לתקן את המספר של השבוע כאן.`
-    : slot ? `${when}. שוקלים בבוקר, לפני האוכל ואחרי השירותים.`
-    : 'סיימת את כל שקילות התוכנית.';
-
-  return `
-    <section class="panel bp weighin-card ${done ? 'is-done' : ''}">
-      ${corners()}
-      <div class="weighin-head">
-        <div>
+  return {
+    slot,
+    html: `
+      <div class="weighin-strip ${done ? 'is-done' : ''}">
+        <div class="weighin-when">
           <div class="kicker">${done ? 'השקילה של השבוע' : 'השקילה הבאה'}</div>
-          <h3>${headline}</h3>
-          <p class="note-line">${note}</p>
+          <div class="weighin-date">יום שלישי, ${fmtDate(slot)}</div>
+          <div class="note-line">${done ? 'נשמרה. אפשר לתקן את המספר כאן.' : `${when}. שוקלים בבוקר, לפני האוכל.`}</div>
         </div>
-        ${!done && days !== null && days >= 0
+        ${!done && days >= 0
           ? `<div class="weighin-count"><div class="val">${nf(days)}</div><div class="cap">${days === 1 ? 'יום' : 'ימים'}</div></div>`
           : ''}
-      </div>
-      ${slot ? `
-        <form id="weigh-form" class="weighin-form">
-          <input class="input" id="wg" type="number" name="weight" min="20" max="400" step="0.1"
-                 value="${done ? stats.current_slot_weight : ''}" placeholder="${stats.weight_latest ?? 'משקל בק״ג'}"
-                 aria-label="משקל לשקילה של ${fmtDate(slot)}" required />
-          <input type="hidden" name="date" value="${slot}" />
-          <button type="submit" class="btn btn-primary">${done ? 'עדכון' : `שמירה · ${ltr('+100 XP')}`}</button>
-        </form>` : ''}
-    </section>`;
+        <div class="weighin-input">
+          <label for="wg">משקל · ק״ג</label>
+          <input class="input" id="wg" type="number" min="20" max="400" step="0.1" data-weighin
+                 value="${done ? stats.current_slot_weight : ''}" placeholder="${stats.weight_latest ?? '—'}" />
+        </div>
+      </div>`,
+  };
 }
 
 /**
@@ -165,12 +161,15 @@ function nextWeighInCard(stats) {
  * and one button saves them all. Tuesday is marked because that is weigh-in morning.
  */
 function weekModel(stats) {
+  // A Tuesday only carries the weigh-in mark if it is one of the programme's own, so a
+  // Tuesday before the start is not labelled as a weigh-in day nobody is expected on.
+  const slots = new Set((stats.schedule || []).map((r) => r.date));
   const dates = Array.from({ length: 7 }, (_, i) => shiftISO(stats.today, -i));
   const days = dates.map((date) => ({
     date,
     log: stats.logs.find((l) => l.date === date) || null,
     isToday: date === stats.today,
-    isWeighIn: dayOf(date) === 2,
+    isWeighIn: slots.has(date),
   }));
   const reported = days.filter((d) => d.log);
   const mean = (pick) => (reported.length
@@ -185,17 +184,20 @@ function weekModel(stats) {
   };
 }
 
-function weekReport(week, me) {
+function weekReport(week, me, stats) {
   const from = week.days[week.days.length - 1].date;
   const goal = me.weekly_workouts_goal;
+  const weighIn = weighInStrip(stats);
 
   return `
-    <section class="panel bp">
+    <section class="panel bp week-panel">
       ${corners()}
       <header>
         <h3>הדיווח השבועי</h3>
         <span class="when">${ltr(`${shortDate(from)} - ${shortDate(week.days[0].date)}`)}</span>
       </header>
+      ${weighIn.html}
+      ${weighIn.slot ? `<input type="hidden" id="weighin-date" value="${weighIn.slot}" />` : ''}
       <div class="week-summary">
         <div><div class="val accent">${ltr(`${nf(week.workouts)}/${nf(goal)}`)}</div><div class="cap">אימוני כוח · 7 ימים</div></div>
         <div><div class="val">${nf(week.avgProtein)}</div><div class="cap">ממוצע חלבון ליום · ג׳</div></div>
@@ -234,9 +236,10 @@ function weekReport(week, me) {
           </tbody>
         </table>
       </div>
-      <button type="button" id="week-save" class="btn btn-primary btn-block">שמירת הדיווח</button>
+      <button type="button" id="week-save" class="btn btn-primary btn-block">שמירת הדיווח השבועי</button>
       <p class="note-line" style="margin-top:var(--space-3)">
-        יעד אימוני הכוח הוא מינימום ${goal} בשבעה ימים. השקילה היא אחת לשבוע, כל יום שלישי בבוקר.
+        כפתור אחד שומר את הכול: השקילה של השבוע והימים שמילאת.
+        יעד אימוני הכוח הוא מינימום ${goal} בשבעה ימים.
       </p>
     </section>`;
 }
@@ -382,7 +385,7 @@ async function viewDashboard(el) {
         { value: stats.weight_latest ? nf(stats.weight_latest, 1) : '-', cap: 'משקל נוכחי · ק״ג', accent: true },
         { value: stats.target_weight ? nf(stats.target_weight, 1) : '-', cap: 'יעד המשקל · ק״ג' },
         { value: stats.to_target === null ? '-' : nf(Math.max(0, stats.to_target), 1), cap: 'נותרו ליעד · ק״ג' },
-        { value: nf(me.current_streak), cap: 'ימי רצף' },
+        { value: stats.weight_change === null ? '-' : ltr(signed(stats.weight_change)), cap: 'ירדת עד כה · ק״ג' },
       ], { framed: false })}
       <p class="note-line">היעד אחיד לכל הקבוצה: ירידה של ${nf(stats.target_share * 100)}% ממשקל הפתיחה.
         ${stats.target_loss
@@ -397,29 +400,30 @@ async function viewDashboard(el) {
         <p class="coach-note">${esc(stats.coach_note)}</p>
       </section>` : ''}
 
-    ${nextWeighInCard(stats)}
-
-    ${weekReport(week, me)}
+    ${weekReport(week, me, stats)}
 
     <div class="sec">
       <div class="kicker">איפה אתה עומד</div>
-      <h2>המדדים והמגמה</h2>
+      <h2>הירידה במשקל</h2>
     </div>
 
     <div class="split">
-      <div class="goals">
-        ${goalRow('ממוצע קלוריות ליום', week.avgCalories, me.daily_calories_goal, { goodWhen: 'below' })}
-        ${goalRow('ממוצע חלבון ליום', week.avgProtein, me.daily_protein_goal, { unit: ' ג׳' })}
-        ${goalRow('אימוני כוח · 7 ימים', week.workouts, me.weekly_workouts_goal)}
-        <div class="label" style="margin-top:var(--space-4)">כלל האצבע</div>
-        ${tipRotator(tips, goal.goal_kg)}
-      </div>
+      <section class="panel bp">
+        ${corners()}
+        <header>
+          <h3>מגמת המשקל</h3>
+          <span class="when">${stats.weight_change === null ? '' : ltr(`${signed(stats.weight_change)} ק״ג`)}</span>
+        </header>
+        ${lineChart(weightPoints, { unit: ' ק״ג', goal: stats.target_weight, compact: true })}
+      </section>
       <div>
-        <div class="label">מגמת המשקל · ק״ג</div>
-        <section class="panel bp">
-          ${corners()}
-          ${lineChart(weightPoints, { unit: ' ק״ג' })}
-        </section>
+        <div class="goals">
+          ${goalRow('ממוצע קלוריות ליום', week.avgCalories, me.daily_calories_goal, { goodWhen: 'below' })}
+          ${goalRow('ממוצע חלבון ליום', week.avgProtein, me.daily_protein_goal, { unit: ' ג׳' })}
+          ${goalRow('אימוני כוח · 7 ימים', week.workouts, me.weekly_workouts_goal)}
+        </div>
+        <div class="label" style="margin-top:var(--space-6)">כלל האצבע</div>
+        ${tipRotator(tips, goal.goal_kg)}
       </div>
     </div>
 
@@ -491,7 +495,14 @@ async function viewDashboard(el) {
       };
     }).filter(Boolean);
 
-    if (!changed.length) {
+    // The weigh-in rides on the same button: one submission a week covers the number on
+    // the scale and the days behind it.
+    const weighInput = el.querySelector('[data-weighin]');
+    const weighDate = el.querySelector('#weighin-date')?.value;
+    const weight = weighInput?.value.trim();
+    const weighChanged = !!(weight && weighDate && Number(weight) !== stats.current_slot_weight);
+
+    if (!changed.length && !weighChanged) {
       toast('אין שינוי לשמור');
       button.disabled = false;
       return;
@@ -500,15 +511,25 @@ async function viewDashboard(el) {
     try {
       let gained = 0;
       let last = null;
+      const badges = [];
+
+      if (weighChanged) {
+        last = await api('/weigh-ins', { method: 'POST', body: { date: weighDate, weight } });
+        gained += last.points_gained || 0;
+        badges.push(...(last.new_badges || []));
+      }
       for (const body of changed) {
         last = await api('/logs', { method: 'PUT', body });
         gained += last.points_gained || 0;
+        badges.push(...(last.new_badges || []));
       }
+
       state.me = last.profile;
-      toast(gained > 0
-        ? `נשמרו ${nf(changed.length)} ימים · ${nf(gained)} נקודות`
-        : `נשמרו ${nf(changed.length)} ימים`);
-      (last.new_badges || []).forEach((badge, i) => {
+      const parts = [];
+      if (weighChanged) parts.push('השקילה');
+      if (changed.length) parts.push(`${nf(changed.length)} ימים`);
+      toast(`נשמר: ${parts.join(' ו-')}${gained > 0 ? ` · ${nf(gained)} נקודות` : ''}`);
+      badges.forEach((badge, i) => {
         setTimeout(() => toast(`תג חדש: ${badge.name}`), 1600 * (i + 1));
       });
       renderChrome();
@@ -519,25 +540,6 @@ async function viewDashboard(el) {
     }
   });
 
-  el.querySelector('#weigh-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const button = e.target.querySelector('button[type=submit]');
-    button.disabled = true;
-    const form = new FormData(e.target);
-    try {
-      const result = await api('/weigh-ins', {
-        method: 'POST',
-        body: { date: form.get('date'), weight: form.get('weight') },
-      });
-      state.me = result.profile;
-      announce(result);
-      renderChrome();
-      render();
-    } catch (err) {
-      toast(err.message, true);
-      button.disabled = false;
-    }
-  });
 
   el.querySelector('#msg-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1221,7 +1223,7 @@ async function viewHome(el) {
         { value: nf(summary.total_kg_lost, 1), cap: 'ק״ג ירדו יחד', accent: true },
         { value: nf(summary.member_count), cap: 'חברים פעילים' },
         { value: nf(summary.workouts_this_week), cap: 'אימוני כוח השבוע' },
-        { value: nf(summary.longest_streak), cap: 'הרצף הארוך בקבוצה' },
+        { value: nf(summary.post_count), cap: 'מאמרים פתוחים' },
       ]
     : [
         { value: '3', cap: 'יעדים יומיים', accent: true },
@@ -1364,7 +1366,6 @@ async function viewHome(el) {
                 <span class="who">${esc(m.full_name)}</span>
                 <span class="facts">
                   <span>${ltr(`${m.weeks_in_program} שב׳`)}</span>
-                  <span>${ltr(`${m.current_streak} רצף`)}</span>
                   <span>${ltr(`${nf(m.total_points)} XP`)}</span>
                 </span>
               </span>
@@ -1385,7 +1386,7 @@ async function viewHome(el) {
       ${[
         { t: 'מדווחים שלושה מספרים', b: 'קלוריות, חלבון והאם היה אימון כוח. דיווח אחד ביום, פחות מחצי דקה.' },
         { t: 'נשקלים פעם בשבוע', b: 'משקל יומי מושפע ממלח, מים ושינה. שקילה שבועית מסננת את הרעש ומשאירה מגמה.' },
-        { t: 'רואים את הקבוצה', b: 'החברים רואים זה את זה. זה מה שמחזיק את הרצף כשהמוטיבציה נגמרת.' },
+        { t: 'רואים את הקבוצה', b: 'החברים רואים זה את זה. זה מה שמחזיק כשהמוטיבציה נגמרת.' },
       ].map((m, i) => `
         <div class="mechanism">
           <div class="num">${String(i + 1).padStart(2, '0')}</div>
@@ -1500,7 +1501,6 @@ function memberPanel(member) {
       <h3 style="margin:0; font-size:26px">${esc(member.full_name)}</h3>
       ${statBlock([
         { value: member.weight_change === null ? '-' : signed(member.weight_change), cap: 'ק״ג מאז ההתחלה', accent: true },
-        { value: nf(member.current_streak), cap: 'ימי רצף' },
         { value: nf(member.total_points), cap: 'נקודות' },
         { value: nf(member.weeks_in_program), cap: 'שבועות בתוכנית' },
       ], { framed: false })}
@@ -2046,7 +2046,6 @@ function renderChrome() {
   document.getElementById('readout-guest').classList.toggle('hidden', signedIn);
   if (signedIn) {
     document.getElementById('xp-readout').textContent = nf(state.me.total_points);
-    document.getElementById('streak-readout').textContent = nf(state.me.current_streak);
   }
 }
 

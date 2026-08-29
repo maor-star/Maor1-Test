@@ -148,7 +148,11 @@ export function evaluateBadges(userId) {
     iron_champion:
       profile.weekly_workouts_goal > 0 && workoutsThisWeek(userId, today) >= profile.weekly_workouts_goal,
     protein_master: proteinStreak(userId, profile.daily_protein_goal) >= 7,
-    iron_consistency: computeStreak(userId) >= 14,
+    // Counted over the last thirty days rather than as an unbroken run: one missed
+    // evening should not wipe out a month of reporting.
+    iron_consistency: db.prepare(
+      'SELECT COUNT(*) AS n FROM daily_logs WHERE user_id = ? AND date BETWEEN ? AND ?'
+    ).get(userId, shiftDate(today, -29), today).n >= 14,
   };
 
   const grant = db.prepare('INSERT OR IGNORE INTO user_badges (user_id, badge_id) VALUES (?, ?)');

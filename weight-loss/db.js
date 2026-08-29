@@ -171,7 +171,7 @@ export const BADGE_SEED = [
   {
     key: 'iron_consistency',
     name: 'התמדה של ברזל',
-    description: 'רצף דיווח יומי של 14 יום',
+    description: '14 ימי דיווח בחודש האחרון',
     icon_name: 'flame',
     points_reward: 300,
   },

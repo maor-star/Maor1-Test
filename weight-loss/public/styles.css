@@ -303,6 +303,22 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .chart .bar-rect { fill: var(--color-neutral-400); }
 .chart .bar-rect.met { fill: var(--color-accent); }
 .chart .goal-line { stroke: var(--color-accent-700); stroke-width: 1; stroke-dasharray: 4 3; }
+/* Numbers inside an SVG under direction: rtl flip their anchor, so the chart's own text
+   is laid out left to right and the label is pinned to the start of the target line. */
+.chart .goal-lbl {
+  font-size: 12px; fill: var(--color-accent-700); font-family: var(--font-body);
+  direction: ltr; unicode-bidi: plaintext; text-anchor: start;
+}
+/* The SVG scales as a whole, so its text shrinks with it: a 660-unit canvas drawn at
+   330px renders 10-unit labels at 5px. The sizes are stated in user units per
+   breakpoint, chosen so the rendered result lands near 10px at every width. */
+.chart-compact .lbl { font-size: 14px; }
+.chart-compact .goal-lbl { font-size: 15px; }
+@media (max-width: 700px) {
+  .chart .lbl, .chart-compact .lbl { font-size: 18px; }
+  .chart .goal-lbl, .chart-compact .goal-lbl { font-size: 20px; }
+  .chart .dot { r: 5; }
+}
 
 /* ── Articles ──────────────────────────────────────────────────────────── */
 .articles { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-6); }
@@ -385,27 +401,35 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 
 /* The week as one form. The day column carries the name, the date and, on Tuesday, the
    weigh-in mark, so the rhythm of the week is readable before anything is filled in. */
-/* The one dated thing on the page. It is loud on purpose: the complaint was that nobody
-   could tell when the next weigh-in was or where to type the number. */
-.weighin-card { display: grid; gap: var(--space-4); }
-.weighin-card.is-done { background: color-mix(in srgb, var(--color-accent) 4%, transparent); }
-.weighin-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
-.weighin-head h3 { margin: 4px 0 6px; font-size: 26px; }
-.weighin-count { text-align: center; flex: none; padding-inline-start: var(--space-4); border-inline-start: 1px solid var(--color-divider); }
+/* The weigh-in leads the weekly report rather than living in its own panel: one form,
+   one button, one submission a week covering the scale and the days behind it. */
+.weighin-strip {
+  display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;
+  padding: var(--space-4); margin-bottom: var(--space-4);
+  border: 1px solid var(--color-accent-300); background: var(--color-accent-100);
+}
+.weighin-strip.is-done { border-color: var(--color-divider); background: transparent; }
+.weighin-when { flex: 1 1 200px; min-width: 0; }
+.weighin-date {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 24px; line-height: 1.15; margin: 4px 0 4px;
+}
+.weighin-count { text-align: center; flex: none; padding-inline: var(--space-4); border-inline: 1px solid var(--color-divider); }
 .weighin-count .val {
   font-family: var(--font-heading); font-weight: var(--font-heading-weight);
-  font-size: 40px; line-height: 1; color: var(--color-accent); font-variant-numeric: tabular-nums;
+  font-size: 34px; line-height: 1; color: var(--color-accent); font-variant-numeric: tabular-nums;
 }
 .weighin-count .cap { margin-top: 4px; font-size: 11px; letter-spacing: 0.06em; color: var(--color-neutral-600); }
-/* The button hugs its label instead of stretching across the panel: a save button as
-   wide as the card reads as the card's purpose rather than as one small action in it. */
-.weighin-form { display: flex; gap: var(--space-3); flex-wrap: wrap; }
-.weighin-form .input { flex: 0 1 180px; }
-.weighin-form .btn { flex: none; }
+.weighin-input { flex: none; display: grid; gap: 4px; }
+.weighin-input label { font-size: 11px; letter-spacing: 0.06em; color: var(--color-neutral-600); }
+.weighin-input .input { width: 120px; }
 @media (max-width: 560px) {
-  .weighin-head h3 { font-size: 21px; }
-  .weighin-count .val { font-size: 32px; }
-  .weighin-form .input { flex: 1 1 120px; }
+  .weighin-strip { gap: var(--space-3); padding: var(--space-3); }
+  .weighin-date { font-size: 20px; }
+  .weighin-count { padding-inline: var(--space-3); }
+  .weighin-count .val { font-size: 28px; }
+  .weighin-input { flex: 1 1 100%; }
+  .weighin-input .input { width: 100%; }
 }
 
 /* The week's three numbers, inside the report they describe. */
