@@ -896,9 +896,11 @@ function barFigure({ kicker, title, note, rows }) {
 /** Renders the seeded article body: blank lines split paragraphs, **bold** lines are sub-headings. */
 async function viewArticle(el, slug) {
   const post = await api('/posts/' + encodeURIComponent(slug));
+  // Escaping happens first, so the markup below can never be used to inject HTML.
+  const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   const blocks = post.content.split('\n\n').map((block) => {
     const heading = /^\*\*(.+)\*\*$/.exec(block.trim());
-    return heading ? `<h4>${esc(heading[1])}</h4>` : `<p>${esc(block.trim())}</p>`;
+    return heading ? `<h4>${esc(heading[1])}</h4>` : `<p>${inline(block.trim())}</p>`;
   }).join('');
 
   el.innerHTML = `
@@ -910,14 +912,14 @@ async function viewArticle(el, slug) {
         <img src="/api/posts/${post.id}/image" alt="" />
         <span class="watermark">מאור · הדרך הקלה לרדת במשקל</span>
       </figure>` : (ARTICLE_FIGURES[post.slug] ? ARTICLE_FIGURES[post.slug]() : '')}
-    <div class="sec">
+    <div class="sec measure">
       <span class="tag tag-accent" style="justify-self:start">${esc(post.category)}</span>
       <h2>${esc(post.title)}</h2>
       <p>${esc(post.excerpt)}</p>
       <p class="byline">מאת ${esc(post.author || 'מאור דוידוביץ')} · ${post.read_minutes} דקות קריאה</p>
     </div>
-    <article class="article-body">${blocks}</article>
-    <p class="byline byline-end">נכתב על ידי ${esc(post.author || 'מאור דוידוביץ')}</p>`;
+    <article class="article-body measure">${blocks}</article>
+    <p class="byline byline-end measure">נכתב על ידי ${esc(post.author || 'מאור דוידוביץ')}</p>`;
 }
 
 // ---------------- Settings ----------------
