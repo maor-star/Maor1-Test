@@ -1075,10 +1075,10 @@ function groupChart(data) {
 
 async function viewHome(el) {
   const signedIn = !!state.me;
-  const [summary, posts, goal, progress, group, slogans, hero] = await Promise.all([
+  const [summary, posts, goal, progress, group, slogans, hero, bot] = await Promise.all([
     api('/public/summary'), api('/posts'), api('/public/goal'), api('/public/progress'),
     signedIn ? api('/group') : Promise.resolve(null),
-    loadTips('slogan'), api('/public/hero'),
+    loadTips('slogan'), api('/public/hero'), api('/public/bot'),
   ]);
 
   let selected = group?.members?.[0] ?? null;
@@ -1132,6 +1132,33 @@ async function viewHome(el) {
         <div class="label">אני מאמין שלי</div>
         ${tipRotator(slogans, 0, '')}
       </section>` : ''}
+
+    ${bot.url ? `
+      <section class="bot bp">
+        ${corners()}
+        <div class="bot-copy">
+          <div class="kicker">שאלו אותו הכל</div>
+          <h2>הבוט של מאור ופיטר אטיה שיודע לענות לכם על כל השאלות</h2>
+          <p>הוא קרא את כל המאמרים באתר ועונה מתוכם, בקו של מאור ובגישה של פיטר אטיה.
+             תזונה, אימוני כוח, בריאות מטבולית. זמין מתי שבא לכם.</p>
+        </div>
+        <div class="bot-go">
+          <a class="btn btn-primary btn-lg" href="${esc(bot.url)}" target="_blank" rel="noopener">
+            לשאול את הבוט
+          </a>
+          <span class="note-line">נפתח בחלון חדש</span>
+        </div>
+      </section>` : (state.me?.is_editor ? `
+      <section class="bot bp is-empty">
+        ${corners()}
+        <div class="bot-copy">
+          <div class="kicker">שאלו אותו הכל</div>
+          <h2>הבוט של מאור ופיטר אטיה שיודע לענות לכם על כל השאלות</h2>
+          <p>רק אתה רואה את ההודעה הזו. הדבק את כתובת הבוט בעמוד העריכה והקטע הזה
+             ייפתח לכל הקבוצה.</p>
+        </div>
+        <div class="bot-go"><a class="btn btn-secondary" href="#/editor">להוספת הכתובת</a></div>
+      </section>` : '')}
 
     ${group ? (() => {
       // Everyone's contribution against the one shared target, largest first.
@@ -1311,10 +1338,11 @@ function renderGate(el, route) {
 const CATEGORIES = ['תזונה', 'אימונים', 'מנטלי', 'מטבוליזם', 'כללי'];
 
 async function viewEditor(el) {
-  const [posts, tips, slogans, inbox, recipes, members] = await Promise.all([
+  const [posts, tips, slogans, inbox, recipes, members, bot] = await Promise.all([
     api('/editor/posts'), api('/tips'), api('/tips?kind=slogan'),
-    api('/editor/inbox'), api('/editor/recipes'), api('/editor/members'),
+    api('/editor/inbox'), api('/editor/recipes'), api('/editor/members'), api('/public/bot'),
   ]);
+  const botUrl = bot.url || '';
   const totalUnread = inbox.reduce((n, m) => n + m.unread, 0);
 
   el.innerHTML = `
@@ -1448,6 +1476,18 @@ async function viewEditor(el) {
 
     <div>
       <div class="sec" style="margin-bottom:var(--space-6)">
+        <div class="kicker">הבוט</div>
+        <h2>כתובת הבוט</h2>
+        <p>הקישור שאליו נשלחים החברים מדף הבית. ריק מסתיר את הקטע מכולם חוץ ממך.</p>
+      </div>
+      <form id="bot-form" class="add-row">
+        <input class="input" name="url" type="url" placeholder="https://..." value="${esc(botUrl)}" />
+        <button type="submit" class="btn btn-primary">שמירה</button>
+      </form>
+    </div>
+
+    <div>
+      <div class="sec" style="margin-bottom:var(--space-6)">
         <div class="kicker">הרשאות</div>
         <h2>מי יכול לערוך</h2>
         <p>לעורך יש גישה לעמוד הזה: מאמרים, סיסמאות, מתכונים ותיבת המסרים.</p>
@@ -1566,6 +1606,15 @@ async function viewEditor(el) {
       await api('/tips', { method: 'POST', body: Object.fromEntries(new FormData(e.target).entries()) });
       toast('הטיפ נוסף');
       reload();
+    } catch (err) { toast(err.message, true); }
+  });
+
+  el.querySelector('#bot-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await api('/settings/bot-url', { method: 'PUT', body: { url: e.target.url.value.trim() } });
+      toast('נשמר');
+      render();
     } catch (err) { toast(err.message, true); }
   });
 

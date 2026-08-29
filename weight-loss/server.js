@@ -547,6 +547,11 @@ app.get('/api/public/goal', asyncRoute((req, res) => {
   res.json({ goal_kg: Number(setting('group_goal_kg', '200')) });
 }));
 
+/** Where the group's assistant lives. Empty until the editor pastes its address. */
+app.get('/api/public/bot', asyncRoute((req, res) => {
+  res.json({ url: setting('bot_url', '') });
+}));
+
 // ---------- Tips (the rules of thumb on the dashboard) ----------
 app.get('/api/tips', asyncRoute((req, res) => {
   const kind = req.query.kind === 'slogan' ? 'slogan' : 'rule';
@@ -733,6 +738,19 @@ app.put('/api/settings/group-goal', requireEditor, asyncRoute((req, res) => {
   db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value')
     .run('group_goal_kg', String(kg));
   res.json(groupAggregate());
+}));
+
+/**
+ * The assistant is hosted elsewhere, so the site only needs to know where to send
+ * people. Kept as a setting rather than in the code, so pointing at a new deployment
+ * is a paste in the editor and not a release.
+ */
+app.put('/api/settings/bot-url', requireEditor, asyncRoute((req, res) => {
+  const url = str(req.body.url);
+  if (url && !/^https:\/\/[^\s]+$/i.test(url)) throw fail('הכתובת חייבת להתחיל ב-https://');
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value')
+    .run('bot_url', url);
+  res.json({ ok: true, url });
 }));
 
 // ---------- The personal target and photo ----------
