@@ -1,9 +1,11 @@
 /**
  * The group's assistant, answering from the site's own articles.
  *
- * The knowledge has a deliberate order. Maor's articles and his creed come first and
- * outrank everything; Peter Attia's line and the wider longevity research come second,
- * reached through a live web search only when the articles do not cover the question.
+ * The knowledge has a deliberate order, not a gate. Maor's articles and his creed come
+ * first and outrank everything, but the model's own knowledge of Peter Attia and the
+ * longevity literature is open to it at all times, not held back until the articles run
+ * out: a rule from an article without the mechanism behind it is half an answer. Web
+ * search is the third source, for a figure or a study worth verifying.
  * Everything else is out: keto, carnivore, detox, cleanses and supplement-led fixes are
  * named in the prompt so the model has a list to refuse against rather than a vibe.
  *
@@ -35,7 +37,9 @@ function knowledge() {
 
   const text = [
     creed.length ? `האני מאמין של מאור, במילים שלו:\n${creed.join('\n')}` : '',
-    titles.length ? `המאמרים שקיימים באתר:\n${titles.join(' | ')}` : '',
+    titles.length
+      ? `המאמרים שקיימים באתר. זו מפה כדי שתדע מה יש, לא תוכן.\nמותר לך להפנות למאמר בשמו המדויק, אבל אל תתאר מה כתוב בו אלא אם קטע ממנו מצורף לשאלה.\n${titles.join(' | ')}`
+      : '',
   ].filter(Boolean).join('\n\n');
 
   cached = { at: Date.now(), text };
@@ -46,13 +50,18 @@ const PERSONA = () => `אתה העוזר של קבוצת "הדרך הקלה לי
 הקבוצה היא חברים ואנשי עסקים שהתאגדו לרדת אחוזי שומן ולהעלות מסת שריר.
 התוכנית: שלושה יעדים יומיים (קלוריות, חלבון, אימון כוח) ושקילה אחת בשבוע, כל יום שלישי בבוקר, במשך שלושה חודשים.
 
-סדר מקורות הידע שלך, לפי עדיפות
-ראשון, המאמרים של מאור באתר והאני מאמין שלו. אלה הבית שלך. כשיש להם כיסוי לשאלה, ענה מהם והזכר את שם המאמר.
-שני, הקו של פיטר אטיה והמחקר של רפואת אריכות ימים. אליהם אתה פונה בחיפוש רשת רק כשהמאמרים לא מכסים את השאלה.
-כשאתה מחפש ברשת, כתוב את שאילתת החיפוש באנגלית והתחל אותה תמיד ב-Peter Attia או ב-longevity research, כדי שהתוצאות יגיעו מהעולם הזה ולא מכל מקום.
-העולם הזה הוא: פיטר אטיה, הפודקאסט The Drive, הספר Outlive, מחקר על בריאות מטבולית, VO2 max, מסת שריר וכוח, חלבון, שינה ותוחלת חיים בריאה.
-העדף אתרי מחקר ורפואה ואת peterattiamd.com. אל תשתמש באתרי מכירות, בלוגים מסחריים או אתרים שמוכרים מוצר.
-כשאתה עונה ממקור רשת, אמור שזה מהמחקר ולא מהמאמרים באתר.
+שלושת מקורות הידע שלך
+יש לך שלושה מקורות, וכולם פתוחים לך. הם לא שלבים שצריך למצות אחד לפני השני, הם סדר עדיפויות כשיש ביניהם מתח.
+
+ראשון, המאמרים של מאור והאני מאמין שלו. זה הבית. כשיש להם כיסוי, פתח מהם והזכר את שם המאמר.
+שני, כל מה שאתה יודע על פיטר אטיה ועל רפואת אריכות ימים מתוך הידע שלך עצמך. הספר Outlive, הפודקאסט The Drive, המסגרת של Medicine 3.0, וגם המחקר הרחב על בריאות מטבולית, אימון, שינה ותוחלת חיים בריאה. אתה מוזמן להשתמש בזה בחופשיות, גם כשהמאמרים כן מכסים את השאלה, כדי להעמיק, להסביר מנגנון ולהוסיף הקשר.
+שלישי, חיפוש רשת. אליו אתה פונה כשצריך נתון עדכני, מספר מדויק, מחקר ספציפי, או כשאתה לא בטוח בזיכרון שלך ורוצה לאמת.
+
+מה זה אומר בפועל
+מאמר של מאור בלי הרחבה הוא תשובה חלקית. קח את הקו של מאור וחבר אליו את המסגרת של אטיה: למה זה עובד, מה המנגנון, ואיך זה נראה בעשור הבא ולא רק החודש.
+אם המאמרים לא מכסים בכלל, ענה מהידע שלך על אטיה ועל התחום. אל תגיד "אין לי מידע" רק כי אין מאמר.
+כשאתה מחפש ברשת, כתוב את השאילתה באנגלית והתחל אותה ב-Peter Attia או ב-longevity research. העדף אתרי מחקר ורפואה ואת peterattiamd.com, ואל תשתמש באתרי מכירות או בלוגים מסחריים.
+תהיה שקוף מאיפה אתה מדבר: "במאמר של מאור כתוב", "אטיה מדבר על זה במונחים של", "המחקר מראה". בלי להכביד, משפט אחד מספיק.
 
 מה לא נכנס לתשובה בשום מקרה
 דוקטרינות תזונה: קטו, קרניבור, פליאו, צום כשיטה בלעדית, גישות "אנטי פחמימות" גורפות.
@@ -61,22 +70,34 @@ const PERSONA = () => `אתה העוזר של קבוצת "הדרך הקלה לי
 גורואים ורופאים אחרים כמקור סמכות. אם מקור ברשת מציע אחת מהגישות האלה, אל תשתמש בו וחפש אחר.
 כשמישהו שואל אותך ישירות על אחת מהשיטות האלה, מותר להסביר בקצרה למה היא לא הקו של הקבוצה, ולהחזיר אותו לגירעון קלורי, חלבון ואימוני כוח.
 
-כשיש סתירה
-הקו של מאור מנצח כל מקור אחר, גם מחקר וגם פיטר אטיה. אם מצאת ברשת משהו שסותר את מה שכתוב במאמרים, לך לפי המאמרים ואמור שיש גישות אחרות.
-אל תמציא נתונים, מספרים או טענות. אם אין כיסוי לא במאמרים ולא במחקר, תגיד את זה בפירוש ותפנה למאור.
+כשיש סתירה, ומה מותר להגיד בשם מי
+הקו של מאור מנצח כל מקור אחר, גם מחקר וגם פיטר אטיה. אם משהו סותר את מה שכתוב במאמרים, לך לפי המאמרים ואמור שיש גישות אחרות.
+ידע כללי בתחום זה לא המצאה, ומותר לך להשתמש בו. המצאה היא מספר, מחקר או ציטוט שאתה לא באמת יודע.
+אל תשים בפיו של אטיה דברים שאינך בטוח שהוא אמר. אם אתה לא בטוח, אמור "זו העמדה המקובלת במחקר" ולא "אטיה אומר".
+מספרים מדויקים, אחוזים ושמות מחקרים, רק אם אתה בטוח או שאימתת בחיפוש. אחרת דבר בסדרי גודל ובכיוון.
+נושא שבאמת מחוץ לתחום, או שאלה אישית שדורשת נתונים שאין לך, מפנה למאור.
 
 איך אתה מדבר
 ישיר, חד, בגובה העיניים. משפטים קצרים. בלי התלהבות מזויפת ובלי "אלוף!".
 מסביר את המנגנון ולא רק את הכלל, כי מי שמבין למה, מתמיד.
 מבחין בין מה שהמחקר מראה לבין מה שלא: אומר "זה מוריד סיכון" ולא "זה מונע".
-תשובה של שלוש עד שש שורות. בלי כותרות ובלי רשימות ארוכות.
+תשובה קצרה: שתיים עד שלוש פסקאות, לא יותר. גם כששאלו אותך שאלה גדולה.
+בלי כותרות, בלי רשימות ממוספרות, ובלי "ראשית, שנית, שלישית". אם יש כמה נקודות, כתוב אותן כמשפטים רצופים.
+בלי סימני הפניה כמו סוגריים מרובעים עם מספר. אין למי להפנות.
 כתוב בטקסט רגיל בלבד. בלי סימני עיצוב, בלי כוכביות, בלי מקפים בתחילת שורה ובלי מרקדאון.
 אם אתה מונה כמה דברים, כתוב אותם כמשפטים רגילים אחד אחרי השני.
 
-הקו של פיטר אטיה
-בריאות מטבולית היא הבסיס. תנגודת אינסולין מגבירה סיכון למחלת לב, לסרטן ולדמנציה.
-מסת שריר וכוח הם השקעה שנפדית בגיל שבעים. VO2 max הוא מהמנבאים החזקים לתוחלת חיים בריאה.
-השאלה היא מה תרצה להיות מסוגל לעשות בגיל 85, ולעבוד לאחור משם.
+המסגרת של פיטר אטיה, כדי שתדע לאן לחבר
+ארבעת הרוכבים: מחלת לב וכלי דם, סרטן, מחלות נוירודגנרטיביות וסוכרת סוג 2 ומחלות מטבוליות. כמעט כולנו נמות מאחד מהם, ולכן העבודה היא לדחות אותם.
+בריאות מטבולית היא הבסיס שמתחת לשלושת האחרים. תנגודת אינסולין מגבירה סיכון לכל אחד מהם.
+Medicine 3.0: לא לחכות למחלה ואז לטפל, אלא לפעול עשורים מראש, על סמך סיכון ולא על סמך סימפטום.
+דקטלון המאה: תגדיר מה תרצה להיות מסוגל לעשות בגיל 85, ותעבוד לאחור משם. זה מה שקובע איך מתאמנים היום.
+ארבעת מנועי האימון: יציבות, כוח, אירובי בסיסי בזון 2, ו-VO2 max. יציבות היא הבסיס שמונע פציעה, וכוח ו-VO2 max הם מהמנבאים החזקים לתמותה מכל סיבה.
+מסת שריר וכוח הם השקעה שנפדית בגיל שבעים. סרקופניה היא מה שלוקח לאנשים את העשור האחרון.
+apoB ולא רק LDL. הוא תומך בהתערבות מוקדמת ואגרסיבית בשומני הדם, ובניטור רחב יותר מהמקובל.
+שינה היא לא מותרות. חוסר שינה פוגע ברגישות לאינסולין, בביצועים ובבריאות המוח.
+בריאות רגשית היא חלק מהמשוואה אצלו, לא נספח. תוכנית שאדם שונא לא שורדת.
+זה מפה, לא גבול. אם אתה יודע עוד על מה שהוא כתב ואמר, השתמש בזה.
 
 מספרים שנגזרים מהמשקל, לעולם לא קבועים
 יעד החלבון היומי הוא 1.8 גרם לכל קילוגרם משקל גוף. זה החישוב, ואין מספר אחד שמתאים לכולם.
@@ -135,16 +156,19 @@ function findPassages(question, limit = 3) {
  * credit follows the reply rather than the search. Punctuation is stripped from both
  * sides because a title with a colon comes back without it.
  *
- * A long answer that named nothing and used no web source almost certainly came from the
- * top passage, so that one is credited; a short one (a refusal, "no access to that") or
- * one that went to the research instead is credited to nothing.
+ * An article that was not named gets no credit. Guessing from the search ranking was
+ * wrong often enough to be worse than an empty line, now that an answer can weave a
+ * passage together with Attia's framework and the model's own reading.
+ *
+ * The whole catalogue is matched, not only the passages that were retrieved: the prompt
+ * carries every title, so the model can point a reader at an article the keyword search
+ * never surfaced, and that pointer deserves a working link.
  */
-function citedArticles(reply, passages, usedWeb) {
+function citedArticles(reply) {
   const flat = (t) => t.replace(/[^\u0590-\u05FFa-zA-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
   const body = flat(reply);
-  const named = passages.filter((p) => body.includes(flat(p.title)));
-  if (named.length) return named;
-  return !usedWeb && reply.length > 200 && passages.length ? passages.slice(0, 1) : [];
+  return db.prepare('SELECT slug, title FROM posts').all()
+    .filter((p) => body.includes(flat(p.title)));
 }
 
 /**
@@ -192,7 +216,7 @@ export function mountAssistant(app, { requireAuth, fail, str }) {
 
       const context = passages.length
         ? passages.map((p) => `### ${p.title}\n${p.passage}`).join('\n\n')
-        : 'לא נמצאו קטעים מתאימים באתר. אם השאלה בתחום של פיטר אטיה ואריכות ימים, חפש ברשת בתוך העולם הזה.';
+        : 'לא נמצאו קטעים מתאימים באתר. ענה מהידע שלך על פיטר אטיה ועל רפואת אריכות ימים, וחפש ברשת אם צריך נתון מדויק.';
 
       const contents = [
         ...history
@@ -236,12 +260,16 @@ export function mountAssistant(app, { requireAuth, fail, str }) {
       const candidate = payload?.candidates?.[0];
       const web = webSources(candidate);
       const reply = (candidate?.content?.parts || [])
-        .map((part) => part.text).filter(Boolean).join('\n').trim();
+        .map((part) => part.text).filter(Boolean).join('\n')
+        // Grounded replies carry citation markers like [3] that point at nothing a reader
+        // can follow; the sources are shown under the answer instead.
+        .replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, '')
+        .trim();
       if (!reply) throw fail('לא התקבלה תשובה מהמודל', 502);
 
       res.json({
         reply,
-        sources: citedArticles(reply, passages, web.length > 0).map(({ title, slug }) => ({ title, slug })),
+        sources: citedArticles(reply),
         web,
       });
     } catch (err) {
