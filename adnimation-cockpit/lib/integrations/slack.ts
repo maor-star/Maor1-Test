@@ -1,6 +1,18 @@
-import type { SlackAdapter, SlackMessage, SlackPostResult } from './types';
+import type { FoundReply, SlackAdapter, SlackMessage, SlackPostResult } from './types';
 
 const SLACK_API = 'https://slack.com/api/chat.postMessage';
+const SLACK_REPLIES = 'https://slack.com/api/conversations.replies';
+
+/**
+ * Slack permalinks carry the two things the API needs — the channel and the
+ * message timestamp — so the delegation does not have to store them twice.
+ * `…/archives/C123/p1712345678000100` is channel C123 at ts 1712345678.000100.
+ */
+export function parsePermalink(permalink: string): { channel: string; ts: string } | null {
+  const m = /\/archives\/([A-Z0-9]+)\/p(\d{10})(\d{6})/.exec(permalink);
+  if (!m?.[1] || !m[2] || !m[3]) return null;
+  return { channel: m[1], ts: `${m[2]}.${m[3]}` };
+}
 
 function buildBlocks(message: SlackMessage) {
   const blocks: unknown[] = [
@@ -49,6 +61,36 @@ class RealSlackAdapter implements SlackAdapter {
         : null;
     return { ok: true, messageUrl: permalink };
   }
+
+  async findThreadReply(permalink: string, notFrom?: string): Promise<FoundReply | null> {
+    const ref = parsePermalink(permalink);
+    if (!ref) return null;
+
+    const url = `${SLACK_REPLIES}?channel=${ref.channel}&ts=${ref.ts}&limit=50`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${this.token}` } });
+    const body = (await res.json().catch(() => null)) as {
+      ok?: boolean;
+      messages?: { user?: string; bot_id?: string; text?: string; ts?: string }[];
+    } | null;
+    if (!body?.ok || !body.messages) return null;
+
+    for (const m of body.messages) {
+      // The parent message is the cockpit's own post, and so is anything from
+      // the bot. A reply is somebody else answering.
+      if (m.ts === ref.ts || m.bot_id) continue;
+      if (notFrom && m.user === notFrom) continue;
+      if (!m.text?.trim() || !m.ts) continue;
+
+      return {
+        channel: 'slack',
+        author: m.user ?? 'unknown',
+        excerpt: m.text.trim().slice(0, 500),
+        at: new Date(Number(m.ts.split('.')[0]) * 1000),
+        url: `https://slack.com/archives/${ref.channel}/p${m.ts.replace('.', '')}`,
+      };
+    }
+    return null;
+  }
 }
 
 /** In-memory Slack. Tests assert against `sent`. */
@@ -67,6 +109,15 @@ export class FakeSlackAdapter implements SlackAdapter {
       ok: true,
       messageUrl: `https://slack.test/archives/${message.target}/p${this.sent.length}`,
     };
+  }
+
+  /** Tests set this to the reply the next probe should find. */
+  nextReply: FoundReply | null = null;
+
+  async findThreadReply(): Promise<FoundReply | null> {
+    const reply = this.nextReply;
+    this.nextReply = null;
+    return reply;
   }
 }
 

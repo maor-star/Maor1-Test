@@ -1,49 +1,51 @@
-import { eq } from 'drizzle-orm';
-import { and, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, isNull, lte, ne, sql } from 'drizzle-orm';
 import { db, delegations, integrationHealth, tasks } from '@/lib/db';
-import { loadRevenueView } from '@/lib/revenue/service';
+import { headline } from '@/lib/revenue/company';
 import { fmtMoney, fmtTime, todayInTz } from '@/lib/utils';
 import { isStale } from '@/lib/integrations/staleness';
 import { Num } from '@/components/num';
 
 /**
- * The full-width telemetry band from the design handoff: six equal cells of
- * live operating figures. Every value here is real — a HUD that shows invented
- * numbers is worse than one that shows none.
+ * The full-width telemetry band: six equal cells of live operating figures.
+ *
+ * These read from the same reconciled company model the revenue page uses, so
+ * the ticker and the page can never disagree — the previous version derived its
+ * own "net" from a second data path and showed a figure that appeared nowhere
+ * else in the app.
  */
 export async function TelemetryStrip() {
   const today = todayInTz();
 
-  const [revenue, counts, health] = await Promise.all([
-    loadRevenueView(today, 'net').catch(() => null),
-    loadCounts(),
+  const [money, counts, health] = await Promise.all([
+    headline().catch(() => null),
+    loadCounts(today),
     db.select().from(integrationHealth).then((rows) => rows),
   ]);
 
-  const summary = revenue?.summary ?? null;
   const clickup = health.find((h) => h.system === 'clickup');
   const lastSync = clickup?.lastSuccessAt ?? null;
 
-  const cells: { label: string; value: string; ltr?: boolean; muted?: boolean }[] = [
+  const cells: { label: string; value: string; muted?: boolean }[] = [
     {
-      label: 'NET / LAST FULL DAY',
-      value: summary ? fmtMoney(summary.totalNetCents) : '—',
+      label: money ? `PROFIT / ${money.day}` : 'PROFIT / LAST FULL DAY',
+      value: money ? fmtMoney(money.profitCents) : '—',
     },
     {
-      label: 'TAKE RATE',
-      value: summary?.takeRate != null ? `${(summary.takeRate * 100).toFixed(1)}%` : '—',
+      label: 'GROSS',
+      value: money ? fmtMoney(money.grossCents) : '—',
     },
     {
-      label: 'ECPM',
-      value: summary?.ecpmCents != null ? fmtMoney(summary.ecpmCents) : '—',
+      label: 'MARGIN',
+      value: money?.marginPct != null ? `${(money.marginPct * 100).toFixed(1)}%` : '—',
     },
     {
-      label: 'OPEN SIGNALS',
-      value: String(summary?.anomalies.length ?? 0),
+      label: 'PROFIT MTD',
+      value: money ? fmtMoney(money.mtdProfitCents) : '—',
     },
     {
-      label: 'BURNING TASKS',
-      value: String(counts.burning),
+      label: 'OPEN TASKS',
+      value: String(counts.open),
+      muted: counts.overdue > 0,
     },
     {
       label: 'LAST SYNC',
@@ -78,16 +80,21 @@ export async function TelemetryStrip() {
   );
 }
 
-async function loadCounts() {
-  const [burning] = await db
+async function loadCounts(today: string) {
+  const [open] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(tasks)
-    .where(and(isNull(tasks.archivedAt), ne(tasks.status, 'done'), eq(tasks.priority, 'P0')));
+    .where(and(isNull(tasks.archivedAt), ne(tasks.status, 'done')));
+
+  const [overdue] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(tasks)
+    .where(and(isNull(tasks.archivedAt), ne(tasks.status, 'done'), lte(tasks.dueDate, today)));
 
   const [stuck] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(delegations)
     .where(eq(delegations.status, 'stale'));
 
-  return { burning: burning?.n ?? 0, stuckDelegations: stuck?.n ?? 0 };
+  return { open: open?.n ?? 0, overdue: overdue?.n ?? 0, stuckDelegations: stuck?.n ?? 0 };
 }

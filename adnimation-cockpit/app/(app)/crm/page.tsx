@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import {
-  PAGE_SIZE, contactsForCompanies, crmSummary, listCompanies, listContacts, stageLabel,
+  PAGE_SIZE, STAGE_ORDER, contactsForCompanies, crmFilterOptions, crmSummary, listCompanies,
+  listContacts, stageLabel, type CrmFilter,
 } from '@/lib/crm/queries';
 import { contactName } from '@/lib/integrations/hubspot';
 import { fmtDateTime, fmtNumber } from '@/lib/utils';
@@ -18,7 +19,19 @@ interface SearchParams {
   view?: string;
   q?: string;
   stage?: string;
+  owner?: string;
+  country?: string;
+  industry?: string;
+  people?: string;
   page?: string;
+}
+
+/** Every filter except the page, so a link can keep them and reset the paging. */
+function keep(sp: SearchParams, view: View, patch: Partial<SearchParams> = {}): string {
+  const merged: SearchParams = { ...sp, view, page: undefined, ...patch };
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(merged)) if (v) qs.set(k, String(v));
+  return `/crm?${qs.toString()}`;
 }
 
 /**
@@ -37,9 +50,19 @@ export default async function CrmPage({
   const sp = await searchParams;
   const view: View = VIEWS.includes(sp.view as View) ? (sp.view as View) : 'companies';
   const page = Number.parseInt(sp.page ?? '0', 10) || 0;
-  const filter = { q: sp.q, stage: sp.stage, page };
+  const filter: CrmFilter = {
+    q: sp.q,
+    stage: sp.stage,
+    owner: sp.owner,
+    country: sp.country,
+    industry: sp.industry,
+    withContacts: sp.people === '1',
+    page,
+  };
 
-  const summary = await crmSummary();
+  const [summary, options] = await Promise.all([crmSummary(), crmFilterOptions()]);
+  const filtered =
+    Boolean(sp.q || sp.stage || sp.owner || sp.country || sp.industry || sp.people);
 
   return (
     <div className="space-y-5">
@@ -85,7 +108,7 @@ export default async function CrmPage({
             {summary.byStage.map((s) => (
               <Link
                 key={s.stage}
-                href={`/crm?view=companies&stage=${encodeURIComponent(s.stage)}`}
+                href={keep(sp, 'companies', { stage: s.stage })}
                 className="group"
               >
                 <span className="hud-label block text-[9px] group-hover:text-accent">{s.label}</span>
@@ -103,7 +126,7 @@ export default async function CrmPage({
           {VIEWS.map((v) => (
             <Link
               key={v}
-              href={`/crm?view=${v}${sp.q ? `&q=${encodeURIComponent(sp.q)}` : ''}`}
+              href={keep(sp, v)}
               className={`px-3 py-1 font-semi text-[11px] uppercase tracking-[0.16em] ${
                 v === view ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
               }`}
@@ -115,6 +138,11 @@ export default async function CrmPage({
 
         <form action="/crm" className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="view" value={view} />
+          {sp.stage ? <input type="hidden" name="stage" value={sp.stage} /> : null}
+          {sp.owner ? <input type="hidden" name="owner" value={sp.owner} /> : null}
+          {sp.country ? <input type="hidden" name="country" value={sp.country} /> : null}
+          {sp.industry ? <input type="hidden" name="industry" value={sp.industry} /> : null}
+          {sp.people ? <input type="hidden" name="people" value={sp.people} /> : null}
           <label className="sr-only" htmlFor="crm-search">
             Search the CRM
           </label>
@@ -131,7 +159,7 @@ export default async function CrmPage({
           >
             Search
           </button>
-          {sp.q || sp.stage ? (
+          {filtered ? (
             <Link
               href={`/crm?view=${view}`}
               className="font-semi text-[10px] uppercase tracking-[0.16em] text-accent-700 hover:text-accent"
@@ -141,23 +169,20 @@ export default async function CrmPage({
           ) : null}
         </form>
 
-        {sp.stage ? <Tag tone="accent">{stageLabel(sp.stage)}</Tag> : null}
       </div>
 
+      <CrmFilters sp={sp} view={view} options={options} />
+
       {view === 'companies' ? (
-        <Companies filter={filter} />
+        <Companies filter={filter} sp={sp} />
       ) : (
-        <Contacts filter={filter} />
+        <Contacts filter={filter} sp={sp} />
       )}
     </div>
   );
 }
 
-async function Companies({
-  filter,
-}: {
-  filter: { q?: string; stage?: string; page: number };
-}) {
+async function Companies({ filter, sp }: { filter: CrmFilter; sp: SearchParams }) {
   const { rows, total, page } = await listCompanies(filter);
   const contacts = await contactsForCompanies(rows.map((r) => r.hubspotId));
 
@@ -226,16 +251,12 @@ async function Companies({
         </ul>
       )}
 
-      <Pager total={total} page={page} view="companies" q={filter.q} stage={filter.stage} />
+      <Pager total={total} page={page} view="companies" sp={sp} />
     </HudCard>
   );
 }
 
-async function Contacts({
-  filter,
-}: {
-  filter: { q?: string; stage?: string; page: number };
-}) {
+async function Contacts({ filter, sp }: { filter: CrmFilter; sp: SearchParams }) {
   const { rows, total, page } = await listContacts(filter);
 
   return (
@@ -311,7 +332,7 @@ async function Contacts({
         </p>
       ) : null}
 
-      <Pager total={total} page={page} view="contacts" q={filter.q} stage={filter.stage} />
+      <Pager total={total} page={page} view="contacts" sp={sp} />
     </HudCard>
   );
 }
@@ -320,22 +341,17 @@ function Pager({
   total,
   page,
   view,
-  q,
-  stage,
+  sp,
 }: {
   total: number;
   page: number;
   view: View;
-  q?: string;
-  stage?: string;
+  sp: SearchParams;
 }) {
   const pages = Math.ceil(total / PAGE_SIZE);
   if (pages <= 1) return null;
 
-  const href = (p: number) =>
-    `/crm?view=${view}&page=${p}${q ? `&q=${encodeURIComponent(q)}` : ''}${
-      stage ? `&stage=${encodeURIComponent(stage)}` : ''
-    }`;
+  const href = (p: number) => `${keep(sp, view)}&page=${p}`;
 
   return (
     <div className="flex items-center justify-between gap-3 border-t border-divider px-[18px] py-2 font-semi text-[10px] tracking-[0.14em] text-neutral-500">
@@ -371,6 +387,108 @@ function Figure({ label, value, big }: { label: string; value: string; big?: boo
       >
         <Num>{value}</Num>
       </p>
+    </div>
+  );
+}
+
+/**
+ * The filter bar. Everything here narrows the same book, and every control
+ * keeps the others — narrowing a list is done in passes, not in one shot.
+ */
+function CrmFilters({
+  sp,
+  view,
+  options,
+}: {
+  sp: SearchParams;
+  view: View;
+  options: {
+    owners: { value: string; n: number }[];
+    countries: { value: string; n: number }[];
+    industries: { value: string; n: number }[];
+  };
+}) {
+  const stages = [...STAGE_ORDER];
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border border-divider p-2">
+      <FilterChips
+        label="TYPE"
+        options={stages.map((s) => ({ value: s, label: stageLabel(s) }))}
+        active={sp.stage}
+        hrefFor={(v) => keep(sp, view, { stage: v })}
+      />
+
+      {options.owners.length > 0 ? (
+        <FilterChips
+          label="OWNER"
+          options={options.owners.slice(0, 8).map((o) => ({ value: o.value, label: o.value }))}
+          active={sp.owner}
+          hrefFor={(v) => keep(sp, view, { owner: v })}
+        />
+      ) : null}
+
+      {view === 'companies' && options.countries.length > 0 ? (
+        <FilterChips
+          label="COUNTRY"
+          options={options.countries.slice(0, 8).map((o) => ({ value: o.value, label: o.value }))}
+          active={sp.country}
+          hrefFor={(v) => keep(sp, view, { country: v })}
+        />
+      ) : null}
+
+      {view === 'companies' && options.industries.length > 0 ? (
+        <FilterChips
+          label="INDUSTRY"
+          options={options.industries.slice(0, 8).map((o) => ({ value: o.value, label: o.value }))}
+          active={sp.industry}
+          hrefFor={(v) => keep(sp, view, { industry: v })}
+        />
+      ) : null}
+
+      {view === 'companies' ? (
+        <Link
+          href={keep(sp, view, { people: sp.people === '1' ? undefined : '1' })}
+          className={`px-2 py-1 font-semi text-[10px] uppercase tracking-[0.14em] ${
+            sp.people === '1'
+              ? 'bg-accent text-ground'
+              : 'border border-divider text-neutral-500 hover:text-accent'
+          }`}
+        >
+          Has a contact
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+function FilterChips({
+  label,
+  options,
+  active,
+  hrefFor,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  active?: string;
+  hrefFor: (value: string | undefined) => string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1">
+      <span className="hud-label me-1 text-[9px]">{label}</span>
+      {options.map((o) => (
+        <Link
+          key={o.value}
+          href={hrefFor(active === o.value ? undefined : o.value)}
+          className={`px-2 py-0.5 font-semi text-[10px] uppercase tracking-[0.1em] ${
+            active === o.value
+              ? 'bg-accent text-ground'
+              : 'border border-divider text-neutral-500 hover:text-accent'
+          }`}
+        >
+          {o.label}
+        </Link>
+      ))}
     </div>
   );
 }

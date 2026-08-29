@@ -7,6 +7,7 @@ import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { HeatBar, OverdueChip, PriorityBadge, StatusBadge, TaskTitleLink } from '@/components/task-bits';
 import { QuickTaskActions } from '@/components/quick-task-actions';
+import { ClickUpStatus } from '@/components/tasks/clickup-status';
 import { DelegateButton } from '@/components/tasks/delegate-button';
 
 /** Spec 6.4 — the list view, sorted by heat. Every row carries its actions. */
@@ -78,7 +79,11 @@ export function TaskListView({
                 </td>
                 <td><HeatBar score={t.heatScore} /></td>
                 <td className="text-left">
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="flex flex-wrap items-center justify-end gap-1">
+                    {/* A mirrored task is closed in ClickUp, not here — see
+                        app/actions/clickup-tasks.ts for why the write goes
+                        there first. */}
+                    {t.clickupUrl ? <ClickUpStatus taskId={t.id} status={t.status} compact /> : null}
                     <QuickTaskActions taskId={t.id} isMine={t.layer === 'mine'} />
                     {t.layer === 'mine' ? (
                       <DelegateButton

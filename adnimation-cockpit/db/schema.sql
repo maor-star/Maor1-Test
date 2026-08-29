@@ -132,9 +132,18 @@ CREATE TABLE delegations (
   due_date           DATE,
   status             delegation_status NOT NULL DEFAULT 'sent',
   delegated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-  last_movement_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+  last_movement_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- The reply radar: where the answer came back, and enough of it to tell an
+  -- answer from an "on it". Filled by the Slack and Gmail probes.
+  reply_channel      TEXT,
+  reply_at           TIMESTAMPTZ,
+  reply_author       TEXT,
+  reply_excerpt      TEXT,
+  reply_url          TEXT,
+  replies_checked_at TIMESTAMPTZ
 );
 CREATE INDEX idx_deleg_open ON delegations(status, last_movement_at);
+CREATE INDEX idx_deleg_unanswered ON delegations(replies_checked_at) WHERE reply_at IS NULL;
 
 -- ============================================================
 -- REVENUE
@@ -691,3 +700,47 @@ CREATE TABLE crm_contacts (
 CREATE INDEX idx_crm_contacts_company ON crm_contacts (company_id);
 CREATE INDEX idx_crm_contacts_email ON crm_contacts (lower(email));
 CREATE INDEX idx_crm_contacts_updated ON crm_contacts (hs_updated_at DESC);
+
+-- The sales pipeline the CEO works: every client he is in touch with, with the
+-- classifications he tracks them by. Separate from crm_companies, which is a
+-- read-only mirror of HubSpot — this table is his own working state, so an
+-- edit here is never overwritten by the next CRM sync.
+CREATE TABLE pipeline_clients (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name           TEXT NOT NULL,
+  domain         TEXT,
+  /* demand | supply | publisher | seat_lease | vendor | other */
+  client_type    TEXT NOT NULL DEFAULT 'other',
+  /* lead | intro | qualified | negotiation | proposal_sent | contract_out | integration | live | dormant | lost */
+  stage          TEXT NOT NULL DEFAULT 'lead',
+  /* hot | warm | cold */
+  temperature    TEXT NOT NULL DEFAULT 'warm',
+  owner_person_id UUID REFERENCES people(id),
+  /* Spec 3: saving without a next step and a date is rejected server-side. */
+  next_step      TEXT,
+  next_step_date DATE,
+  value_cents    BIGINT,
+  probability    SMALLINT,
+  source         TEXT,
+  /* Free-text the CEO keeps himself. */
+  notes          TEXT,
+  last_contact_at TIMESTAMPTZ,
+  hubspot_company_id TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  archived_at    TIMESTAMPTZ
+);
+CREATE INDEX idx_pipeline_stage ON pipeline_clients (stage) WHERE archived_at IS NULL;
+CREATE INDEX idx_pipeline_next_step ON pipeline_clients (next_step_date) WHERE archived_at IS NULL;
+CREATE UNIQUE INDEX idx_pipeline_name ON pipeline_clients (lower(name)) WHERE archived_at IS NULL;
+
+-- Every touch, so "when did we last speak" is a fact rather than a memory.
+CREATE TABLE pipeline_touches (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id   UUID NOT NULL REFERENCES pipeline_clients(id) ON DELETE CASCADE,
+  kind        TEXT NOT NULL,           -- call | meeting | email | slack | note
+  summary     TEXT NOT NULL,
+  happened_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by  TEXT NOT NULL DEFAULT 'ceo'
+);
+CREATE INDEX idx_pipeline_touches ON pipeline_touches (client_id, happened_at DESC);

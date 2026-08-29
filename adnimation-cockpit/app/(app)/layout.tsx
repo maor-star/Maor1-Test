@@ -4,6 +4,11 @@ import { Rail } from '@/components/hud/rail';
 import { MobileNav } from '@/components/hud/mobile-nav';
 import { TelemetryStrip } from '@/components/hud/telemetry-strip';
 
+// The telemetry strip is live operating data; nothing in this shell may be
+// cached between requests or the ticker silently shows yesterday.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 /**
  * The console shell from the design handoff: a 248px sticky rail beside the
  * blueprint ground, a top bar, and the full-width telemetry strip.

@@ -20,7 +20,8 @@
     "purge-demo": "tsx scripts/purge-demo.ts",
     "sync:clickup": "tsx scripts/sync-clickup.ts",
     "sync:hubspot": "tsx scripts/sync-hubspot.ts",
-    "deploy": "node deploy/redeploy.mjs"
+    "deploy": "node deploy/redeploy.mjs",
+    "check:replies": "tsx scripts/check-replies.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.6",

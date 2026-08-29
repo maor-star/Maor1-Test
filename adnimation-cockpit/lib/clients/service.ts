@@ -1,187 +1,152 @@
-import { departmentFor, departmentLabel } from '@/lib/revenue/departments';
-import { ecpmCents, takeRate } from '@/lib/revenue/normalize';
+import { PERIOD_LABEL, type Period } from '@/lib/revenue/periods';
 
 /**
- * Clients, grouped by the department they actually earn in.
+ * Clients — every account that pays us, in the window you pick.
  *
- * Departments here are the ones the source itself uses — its demand categories
- * (see lib/revenue/departments.ts). A client belongs to every department its
- * money arrives through, which also means the list is ordered by what each
- * client is worth, not alphabetically.
+ * Figures use the source's own publisher formula, so a client's numbers add up
+ * to the revenue page rather than to a second, private arithmetic. `profit` is
+ * Adnimation's own money on that account: what is left after the source fee and
+ * the publisher's rev share.
  *
- * Sorted on net, never gross. A trading account can be the largest by gross and
- * mid-table by net, because most of its gross goes straight back out in fees.
+ * Sorted on profit, not gross. A trading account can be the largest by gross
+ * and mid-table by profit, because most of its gross goes straight back out.
  */
 
-export interface ClientDeptLine {
-  deptCode: string;
-  label: string;
-  netCents: number;
-  grossCents: number;
-  impressions: number;
-  categories: string[];
-}
+/** The windows the account pull covers. */
+export const CLIENT_PERIODS = ['YESTERDAY', '7D', '30D'] as const;
+export type ClientPeriod = (typeof CLIENT_PERIODS)[number];
+
+export const isClientPeriod = (v: string | undefined): v is ClientPeriod =>
+  CLIENT_PERIODS.includes(v as ClientPeriod);
+
+const WINDOW_DAYS: Record<ClientPeriod, number> = { YESTERDAY: 1, '7D': 7, '30D': 30 };
 
 export interface Client {
   name: string;
   isTrading: boolean;
-  netCents: number;
   grossCents: number;
+  netAfterFeeCents: number;
+  payoutCents: number;
+  profitCents: number;
   impressions: number;
   ecpmCents: number | null;
+  /** Adnimation's cut as a share of gross. */
   takeRate: number | null;
-  /** Where this client's money comes from, largest first. */
-  byDept: ClientDeptLine[];
-  /** The department that carries most of its net. */
-  primaryDept: string;
+  profitPerDayCents: number;
+  /**
+   * Change in daily profit against the 30-day run rate, or null when there is
+   * nothing to compare against. Negative means the client is shrinking.
+   */
+  trendPct: number | null;
 }
 
-export interface DeptClients {
-  deptCode: string;
+export interface ClientBook {
+  period: ClientPeriod;
   label: string;
-  netCents: number;
-  clientCount: number;
   clients: Client[];
+  windowDays: number;
+  totals: {
+    grossCents: number;
+    profitCents: number;
+    impressions: number;
+    clientCount: number;
+    tradingCount: number;
+  };
+  lastCompleteDay: string;
+  pulledAt: string;
 }
 
 interface Row {
+  window: string;
   account: string;
   isTrading: boolean;
-  category: string;
   grossCents: number;
-  feeCents: number;
+  netAfterFeeCents: number;
+  payoutCents: number;
+  profitCents: number;
   impressions: number;
 }
 
-let cache: Row[] | null = null;
-let windowCache: { from: string; to: string } | null = null;
+let cache: { rows: Row[]; lastCompleteDay: string; pulledAt: string } | null = null;
 
-async function load(): Promise<{ rows: Row[]; window: { from: string; to: string } }> {
-  if (cache && windowCache) return { rows: cache, window: windowCache };
-  const snap = (await import('@/fixtures/ars-accounts-30d.json')).default;
-  cache = snap.rows.map((r) => ({
-    account: r[0] as string,
-    isTrading: r[1] === 1,
-    category: r[2] as string,
-    grossCents: r[3] as number,
-    feeCents: r[4] as number,
-    impressions: r[5] as number,
-  }));
-  windowCache = snap.window as { from: string; to: string };
-  return { rows: cache, window: windowCache };
+async function load() {
+  if (cache) return cache;
+  const snap = (await import('@/fixtures/ars-accounts.json')).default;
+  cache = {
+    rows: snap.rows.map((r) => ({
+      window: r[0] as string,
+      account: r[1] as string,
+      isTrading: r[2] === 1,
+      grossCents: r[3] as number,
+      netAfterFeeCents: r[4] as number,
+      payoutCents: r[5] as number,
+      profitCents: r[6] as number,
+      impressions: r[7] as number,
+    })),
+    lastCompleteDay: snap.lastCompleteDay,
+    pulledAt: snap.pulledAt,
+  };
+  return cache;
 }
 
-export async function loadClients(): Promise<{
-  clients: Client[];
-  byDept: DeptClients[];
-  window: { from: string; to: string };
-  totals: { netCents: number; grossCents: number; clientCount: number };
-}> {
-  const { rows, window } = await load();
+const ecpm = (profitCents: number, impressions: number) =>
+  impressions > 0 ? Math.round((profitCents / impressions) * 1000) : null;
 
-  const byName = new Map<string, Client>();
+export async function loadClients(period: ClientPeriod = '30D'): Promise<ClientBook> {
+  const snap = await load();
+  const days = WINDOW_DAYS[period];
 
-  for (const r of rows) {
-    const dept = departmentFor(r.category);
-    const net = r.grossCents - r.feeCents;
-
-    const client = byName.get(r.account) ?? {
-      name: r.account,
-      isTrading: r.isTrading,
-      netCents: 0,
-      grossCents: 0,
-      impressions: 0,
-      ecpmCents: null,
-      takeRate: null,
-      byDept: [],
-      primaryDept: dept,
-    };
-
-    client.netCents += net;
-    client.grossCents += r.grossCents;
-    client.impressions += r.impressions;
-
-    const line = client.byDept.find((d) => d.deptCode === dept);
-    if (line) {
-      line.netCents += net;
-      line.grossCents += r.grossCents;
-      line.impressions += r.impressions;
-      if (!line.categories.includes(r.category)) line.categories.push(r.category);
-    } else {
-      client.byDept.push({
-        deptCode: dept,
-        label: departmentLabel(dept),
-        netCents: net,
-        grossCents: r.grossCents,
-        impressions: r.impressions,
-        categories: [r.category],
-      });
-    }
-
-    byName.set(r.account, client);
+  // The 30-day book is the baseline every shorter window is judged against.
+  const baseline = new Map<string, number>();
+  for (const r of snap.rows) {
+    if (r.window === '30D') baseline.set(r.account, Math.round(r.profitCents / 30));
   }
 
-  const clients = [...byName.values()]
-    .map((c) => {
-      c.byDept.sort((a, b) => b.netCents - a.netCents);
+  const clients: Client[] = snap.rows
+    .filter((r) => r.window === period)
+    .map((r) => {
+      const profitPerDayCents = Math.round(r.profitCents / days);
+      const base = baseline.get(r.account) ?? 0;
       return {
-        ...c,
-        ecpmCents: ecpmCents(c.netCents, c.impressions),
-        takeRate: takeRate(c.grossCents, c.netCents),
-        primaryDept: c.byDept[0]?.deptCode ?? 'unknown',
+        name: r.account,
+        isTrading: r.isTrading,
+        grossCents: r.grossCents,
+        netAfterFeeCents: r.netAfterFeeCents,
+        payoutCents: r.payoutCents,
+        profitCents: r.profitCents,
+        impressions: r.impressions,
+        ecpmCents: ecpm(r.profitCents, r.impressions),
+        takeRate: r.grossCents > 0 ? r.profitCents / r.grossCents : null,
+        profitPerDayCents,
+        // A 30-day window compared against itself is not a trend, it is zero.
+        trendPct: period === '30D' || base <= 0 ? null : (profitPerDayCents - base) / base,
       };
     })
-    .sort((a, b) => b.netCents - a.netCents);
-
-  // A client appears under every department it earns in, not just its largest:
-  // the point of the department view is to see that department's whole book.
-  const deptMap = new Map<string, DeptClients>();
-  for (const c of clients) {
-    for (const line of c.byDept) {
-      const entry = deptMap.get(line.deptCode) ?? {
-        deptCode: line.deptCode,
-        label: line.label,
-        netCents: 0,
-        clientCount: 0,
-        clients: [],
-      };
-      entry.netCents += line.netCents;
-      entry.clientCount += 1;
-      entry.clients.push(c);
-      deptMap.set(line.deptCode, entry);
-    }
-  }
-
-  const byDept = [...deptMap.values()]
-    .map((d) => ({
-      ...d,
-      clients: d.clients.sort((a, b) => {
-        const an = a.byDept.find((x) => x.deptCode === d.deptCode)?.netCents ?? 0;
-        const bn = b.byDept.find((x) => x.deptCode === d.deptCode)?.netCents ?? 0;
-        return bn - an;
-      }),
-    }))
-    .sort((a, b) => b.netCents - a.netCents);
+    .sort((a, b) => b.profitCents - a.profitCents);
 
   return {
+    period,
+    label: PERIOD_LABEL[period as Period],
     clients,
-    byDept,
-    window,
+    windowDays: days,
     totals: {
-      netCents: clients.reduce((a, c) => a + c.netCents, 0),
       grossCents: clients.reduce((a, c) => a + c.grossCents, 0),
+      profitCents: clients.reduce((a, c) => a + c.profitCents, 0),
+      impressions: clients.reduce((a, c) => a + c.impressions, 0),
       clientCount: clients.length,
+      tradingCount: clients.filter((c) => c.isTrading).length,
     },
+    lastCompleteDay: snap.lastCompleteDay,
+    pulledAt: snap.pulledAt,
   };
 }
 
 /**
- * Concentration risk (spec 7.3) — how much of net comes from the top N.
+ * Concentration risk (spec 7.3) — how much of profit comes from the top N.
  * The spec calls this an existential risk measure and asks for it always on.
  */
 export function concentration(clients: Client[], topN = 5): number | null {
-  const total = clients.reduce((a, c) => a + c.netCents, 0);
+  const total = clients.reduce((a, c) => a + c.profitCents, 0);
   if (total <= 0) return null;
-  const top = clients.slice(0, topN).reduce((a, c) => a + c.netCents, 0);
-  return top / total;
+  return clients.slice(0, topN).reduce((a, c) => a + c.profitCents, 0) / total;
 }

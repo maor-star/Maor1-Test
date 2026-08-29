@@ -19,9 +19,39 @@ export interface SlackPostResult {
   error?: string;
 }
 
+/** A reply found somewhere else, matched back to the thing it answers. */
+export interface FoundReply {
+  channel: 'slack' | 'email';
+  author: string;
+  /** Enough of it to tell an answer from an "on it". */
+  excerpt: string;
+  at: Date;
+  url: string | null;
+}
+
 export interface SlackAdapter {
   readonly name: 'slack';
   postMessage(message: SlackMessage): Promise<SlackPostResult>;
+  /**
+   * The first reply in a thread that is not the cockpit's own message. Given a
+   * permalink because that is what the delegation stored when it posted.
+   */
+  findThreadReply(permalink: string, notFrom?: string): Promise<FoundReply | null>;
+}
+
+export interface GmailAdapter {
+  readonly name: 'gmail';
+  /** Whether the adapter has what it needs to talk to Gmail at all. */
+  readonly configured: boolean;
+  /**
+   * The first message from `fromEmail` after `since` whose subject or body
+   * mentions any of `terms`. Terms are how a reply is matched to its ask.
+   */
+  findReply(input: {
+    fromEmail: string;
+    since: Date;
+    terms: string[];
+  }): Promise<FoundReply | null>;
 }
 
 export interface ClickUpTaskInput {
@@ -63,8 +93,19 @@ export interface ClickUpTask {
   dateClosedMs: number | null;
 }
 
+export interface ClickUpStatusResult {
+  ok: boolean;
+  /** The status ClickUp reports after the change, so the mirror stores its word. */
+  status: string | null;
+  error?: string;
+}
+
 export interface ClickUpAdapter {
   readonly name: 'clickup';
+  /** The statuses a task's list allows — ClickUp rejects anything else. */
+  listStatuses(taskId: string): Promise<string[]>;
+  /** Moves a task to a status, or closes it. The one write the cockpit makes. */
+  setTaskStatus(taskId: string, status: string): Promise<ClickUpStatusResult>;
   createTask(input: ClickUpTaskInput): Promise<ClickUpTaskResult>;
   /** Delta poll: everything changed since `sinceMs` (spec 6.1.2 — every 5 minutes). */
   listTasksUpdatedSince(sinceMs: number): Promise<ClickUpTask[]>;

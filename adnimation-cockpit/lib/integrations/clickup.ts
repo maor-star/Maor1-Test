@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type {
-  ClickUpAdapter, ClickUpTask, ClickUpTaskInput, ClickUpTaskResult,
+  ClickUpAdapter, ClickUpStatusResult, ClickUpTask, ClickUpTaskInput, ClickUpTaskResult,
 } from './types';
 
 const API = 'https://api.clickup.com/api/v2';
@@ -133,6 +133,43 @@ class RealClickUpAdapter implements ClickUpAdapter {
     if (!res.ok) return null;
     return normaliseClickUpTask(await res.json().catch(() => null));
   }
+
+  /**
+   * The statuses this task's list allows. ClickUp rejects a status the list
+   * does not define, so the UI offers the list's own words rather than a
+   * hardcoded set that would fail on half the workspace.
+   */
+  async listStatuses(taskId: string): Promise<string[]> {
+    const task = await fetch(`${API}/task/${taskId}`, { headers: this.headers() });
+    if (!task.ok) return [];
+    const body = await task.json().catch(() => null);
+    const listId = z
+      .object({ list: z.object({ id: z.union([z.string(), z.number()]).nullish() }).nullish() })
+      .safeParse(body);
+    const id = listId.success ? listId.data.list?.id : null;
+    if (id === null || id === undefined) return [];
+
+    const res = await fetch(`${API}/list/${id}`, { headers: this.headers() });
+    if (!res.ok) return [];
+    const parsed = z
+      .object({ statuses: z.array(z.object({ status: z.string() })).default([]) })
+      .safeParse(await res.json().catch(() => null));
+    return parsed.success ? parsed.data.statuses.map((s) => s.status) : [];
+  }
+
+  async setTaskStatus(taskId: string, status: string): Promise<ClickUpStatusResult> {
+    const res = await fetch(`${API}/task/${taskId}`, {
+      method: 'PUT',
+      headers: this.headers(),
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      return { ok: false, status: null, error: `http_${res.status}${detail ? `: ${detail.slice(0, 200)}` : ''}` };
+    }
+    const task = normaliseClickUpTask(await res.json().catch(() => null));
+    return { ok: true, status: task?.status ?? status };
+  }
 }
 
 /** In-memory ClickUp. Seed it with `seed()`, assert against `created`. */
@@ -180,6 +217,21 @@ export class FakeClickUpAdapter implements ClickUpAdapter {
 
   async getTask(taskId: string): Promise<ClickUpTask | null> {
     return this.tasks.get(taskId) ?? null;
+  }
+
+  async listStatuses(): Promise<string[]> {
+    return ['to do', 'in progress', 'stuck', 'make it happened', 'complete'];
+  }
+
+  async setTaskStatus(taskId: string, status: string): Promise<ClickUpStatusResult> {
+    if (this.failNext) {
+      this.failNext = false;
+      return { ok: false, status: null, error: 'fake_failure' };
+    }
+    const task = this.tasks.get(taskId);
+    if (!task) return { ok: false, status: null, error: 'not_found' };
+    this.tasks.set(taskId, { ...task, status, dateClosedMs: status === 'complete' ? Date.now() : null });
+    return { ok: true, status };
   }
 }
 

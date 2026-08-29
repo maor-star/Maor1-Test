@@ -33,7 +33,7 @@ function band(seat: Seat): { bg: string; text: string; label: string } {
  */
 function span(seat: Seat, largest: number): number {
   if (largest <= 0) return 1;
-  const share = seat.rev30dCents / largest;
+  const share = seat.revenueCents / largest;
   if (share >= 0.6) return 6;
   if (share >= 0.3) return 4;
   if (share >= 0.12) return 3;
@@ -50,7 +50,7 @@ export function SeatMap({ seats, side }: { seats: Seat[]; side: 'demand' | 'supp
     );
   }
 
-  const largest = seats[0]?.rev30dCents ?? 0;
+  const largest = seats[0]?.revenueCents ?? 0;
 
   return (
     <div className="space-y-3">

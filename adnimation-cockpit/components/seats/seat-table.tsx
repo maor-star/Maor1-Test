@@ -124,9 +124,9 @@ export function SeatTable({
                   </span>
                 </td>
                 <td className="text-neutral-500">
-                  <Num>{s.activeDays30d}</Num>
+                  <Num>{s.activeDays}</Num>
                 </td>
-                <td className="text-neutral-500"><Num>{fmtNumber(s.impressions30d)}</Num></td>
+                <td className="text-neutral-500"><Num>{fmtNumber(s.impressions)}</Num></td>
                 <td className="text-end">
                   <span className="inline-flex items-center gap-2">
                     <Tag tone={STATUS_TONE[s.status]}>{STATUS_LABEL[s.status]}</Tag>

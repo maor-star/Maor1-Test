@@ -112,6 +112,14 @@ export const delegations = pgTable(
     status: delegationStatus('status').notNull().default('sent'),
     delegatedAt: timestamptz('delegated_at').notNull().defaultNow(),
     lastMovementAt: timestamptz('last_movement_at').notNull().defaultNow(),
+    // Where the answer came back, when the cockpit found it, and enough of it
+    // to know whether it is an answer or an "on it".
+    replyChannel: text('reply_channel'),
+    replyAt: timestamptz('reply_at'),
+    replyAuthor: text('reply_author'),
+    replyExcerpt: text('reply_excerpt'),
+    replyUrl: text('reply_url'),
+    repliesCheckedAt: timestamptz('replies_checked_at'),
   },
   (t) => [index('idx_deleg_open').on(t.status, t.lastMovementAt)],
 );
@@ -276,6 +284,47 @@ export const crmContacts = pgTable(
   (t) => [index('idx_crm_contacts_company').on(t.companyId)],
 );
 
+/**
+ * The sales pipeline the CEO works himself. Deliberately separate from
+ * `crmCompanies`, which mirrors HubSpot read-only: an edit here is his own
+ * working state and must never be overwritten by the next CRM sync.
+ */
+export const pipelineClients = pgTable(
+  'pipeline_clients',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    name: text('name').notNull(),
+    domain: text('domain'),
+    clientType: text('client_type').notNull().default('other'),
+    stage: text('stage').notNull().default('lead'),
+    temperature: text('temperature').notNull().default('warm'),
+    ownerPersonId: uuid('owner_person_id').references(() => people.id),
+    nextStep: text('next_step'),
+    nextStepDate: date('next_step_date'),
+    valueCents: moneyCents('value_cents'),
+    probability: smallint('probability'),
+    source: text('source'),
+    notes: text('notes'),
+    lastContactAt: timestamptz('last_contact_at'),
+    hubspotCompanyId: text('hubspot_company_id'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+    archivedAt: timestamptz('archived_at'),
+  },
+  (t) => [index('idx_pipeline_stage_drz').on(t.stage)],
+);
+
+export const pipelineTouches = pgTable('pipeline_touches', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  clientId: uuid('client_id')
+    .notNull()
+    .references(() => pipelineClients.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(),
+  summary: text('summary').notNull(),
+  happenedAt: timestamptz('happened_at').notNull().defaultNow(),
+  createdBy: text('created_by').notNull().default('ceo'),
+});
+
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type TaskComment = typeof taskComments.$inferSelect;
@@ -290,4 +339,7 @@ export type Partner = typeof partners.$inferSelect;
 export type CrmCompany = typeof crmCompanies.$inferSelect;
 export type NewCrmCompany = typeof crmCompanies.$inferInsert;
 export type CrmContact = typeof crmContacts.$inferSelect;
+export type PipelineClient = typeof pipelineClients.$inferSelect;
+export type NewPipelineClient = typeof pipelineClients.$inferInsert;
+export type PipelineTouch = typeof pipelineTouches.$inferSelect;
 export type NewCrmContact = typeof crmContacts.$inferInsert;

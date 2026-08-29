@@ -5,6 +5,7 @@ import { HudCard } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
+import { CheckReplies } from '@/components/delegations/check-replies';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,8 @@ export default async function DelegationsPage() {
   const rows = await listOpenDelegations();
   const now = new Date();
   const stuck = rows.filter((r) => r.status === 'stale').length;
+  const answered = rows.filter((r) => r.replyAt !== null).length;
+  const waiting = rows.length - answered;
 
   return (
     <div className="space-y-5">
@@ -36,6 +39,14 @@ export default async function DelegationsPage() {
           </span>
         }
       />
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="font-semi text-[11px] tracking-[0.12em] text-neutral-500">
+          <Num>{answered}</Num> ANSWERED · <Num>{waiting}</Num> STILL WAITING · SLACK THREADS AND
+          EMAIL ARE READ FOR THE ANSWER
+        </p>
+        <CheckReplies />
+      </div>
 
       {stuck > 0 ? (
         <div className="border border-sev-warning/40 bg-sev-warning/10 px-4 py-2 font-semi text-[12px] tracking-[0.08em] text-sev-warning">
@@ -59,6 +70,7 @@ export default async function DelegationsPage() {
                 <th>Days quiet</th>
                 <th>Due</th>
                 <th>Delegated</th>
+                <th className="w-[22%]">Answer</th>
                 <th className="text-end">Links</th>
               </tr>
             </thead>
@@ -81,6 +93,44 @@ export default async function DelegationsPage() {
                     </td>
                     <td><Num className="text-neutral-500">{d.dueDate ?? '—'}</Num></td>
                     <td><Num className="text-neutral-500">{fmtDateTime(d.delegatedAt)}</Num></td>
+                    <td className="whitespace-normal">
+                      {d.replyAt ? (
+                        <>
+                          <span className="flex flex-wrap items-center gap-2">
+                            <Tag tone="ok">{d.replyChannel === 'email' ? 'EMAIL' : 'SLACK'}</Tag>
+                            <Num className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+                              {fmtDateTime(d.replyAt)}
+                            </Num>
+                          </span>
+                          <span className="mt-1 block text-[12px] text-neutral-600">
+                            {d.replyExcerpt ? (
+                              d.replyUrl ? (
+                                <a
+                                  href={d.replyUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="hover:text-accent"
+                                >
+                                  {d.replyExcerpt.slice(0, 140)}
+                                </a>
+                              ) : (
+                                d.replyExcerpt.slice(0, 140)
+                              )
+                            ) : null}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                          {d.repliesCheckedAt ? (
+                            <>
+                              NO ANSWER · CHECKED <Num>{fmtDateTime(d.repliesCheckedAt)}</Num>
+                            </>
+                          ) : (
+                            'NOT CHECKED YET'
+                          )}
+                        </span>
+                      )}
+                    </td>
                     <td className="text-end">
                       <span className="flex justify-end gap-3 font-semi text-[11px] tracking-[0.12em]">
                         {d.slackMessageUrl ? (

@@ -1,185 +1,187 @@
-import { concentration, loadClients, type Client } from '@/lib/clients/service';
+import Link from 'next/link';
+import {
+  CLIENT_PERIODS, concentration, isClientPeriod, loadClients, type Client, type ClientPeriod,
+} from '@/lib/clients/service';
+import { PERIOD_LABEL, PERIOD_TAB, type Period } from '@/lib/revenue/periods';
 import { fmtMoney, fmtNumber } from '@/lib/utils';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
+import { DeltaPct } from '@/components/revenue/delta';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Sales — every client, grouped by the department its money arrives through.
+ * Clients — every account that pays us, in the window you pick.
  *
- * The grouping is derived from revenue rather than from a CRM field, because
- * there is no CRM field: what a client is worth to a department is what it paid
- * that department. Net, never gross — see lib/clients/service.ts.
+ * Profit is Adnimation's own money on the account, computed with the source's
+ * own formula, so this page reconciles with the revenue page rather than
+ * telling a second story.
  */
-export default async function ClientsPage() {
-  const { clients, byDept, totals, window } = await loadClients();
-  const top5 = concentration(clients, 5);
-  const top10 = concentration(clients, 10);
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
+  const sp = await searchParams;
+  const period: ClientPeriod = isClientPeriod(sp.period) ? sp.period : '30D';
+  const book = await loadClients(period);
+
+  const top5 = concentration(book.clients, 5);
+  const top10 = concentration(book.clients, 10);
+  const falling = book.clients.filter((c) => c.trendPct !== null && c.trendPct < -0.3);
 
   return (
     <div className="space-y-5">
       <PageHeader
-        kicker="SALES / 10"
+        kicker="CLIENTS / 06"
         title="Clients"
         action={
-          <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
-            <Num>{window.from}</Num> — <Num>{window.to}</Num> · SOURCE: AD OPS ARCHITECT
-            (READ-ONLY)
-          </span>
+          <nav className="flex flex-wrap border border-divider">
+            {CLIENT_PERIODS.map((p) => (
+              <Link
+                key={p}
+                href={`/clients?period=${p}`}
+                className={`px-[9px] py-1 font-semi text-[11px] tracking-[0.12em] ${
+                  p === period ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
+                }`}
+              >
+                {PERIOD_TAB[p as Period]}
+              </Link>
+            ))}
+          </nav>
         }
       />
 
       <HudCard>
         <HudCardHeader
-          title="The book"
+          title={`The book · ${PERIOD_LABEL[period as Period]}`}
           index="S01"
           action={
             <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-              DEPARTMENTS AS THE SOURCE GROUPS THEM
+              <Num>{book.windowDays}</Num> DAYS TO <Num>{book.lastCompleteDay}</Num>
             </span>
           }
         />
-        <div className="flex flex-wrap items-end gap-x-10 gap-y-4">
-          <Figure label="NET / 30 DAYS" value={fmtMoney(totals.netCents)} big />
-          <Figure label="GROSS" value={fmtMoney(totals.grossCents)} />
-          <Figure label="CLIENTS" value={fmtNumber(totals.clientCount)} />
+
+        <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-3 xl:flex xl:flex-wrap xl:items-end xl:gap-x-10">
+          <Figure label="PROFIT" value={fmtMoney(book.totals.profitCents)} big />
+          <Figure label="GROSS" value={fmtMoney(book.totals.grossCents)} />
+          <Figure label="CLIENTS" value={fmtNumber(book.totals.clientCount)} />
           <Figure
             label="TOP 5 SHARE"
             value={top5 === null ? '—' : `${(top5 * 100).toFixed(1)}%`}
             tone={top5 !== null && top5 > 0.5 ? 'warning' : undefined}
           />
           <Figure label="TOP 10 SHARE" value={top10 === null ? '—' : `${(top10 * 100).toFixed(1)}%`} />
+          {period !== '30D' ? (
+            <Figure label="FALLING HARD" value={String(falling.length)} tone={falling.length > 0 ? 'warning' : undefined} />
+          ) : null}
         </div>
+
         <p className="font-semi text-[11px] leading-relaxed text-neutral-500">
-          Concentration is spec 7.3&rsquo;s standing risk measure: the share of net revenue sitting
-          in the largest handful of clients. A client appears under every department it earns in, so
-          the department totals sum to the book, not to a per-client split.
+          Profit is what Adnimation keeps on the account — after the source fee and the
+          publisher&rsquo;s rev share. Sorted on profit, never gross: a trading account can lead on
+          gross and sit mid-table on profit, because most of its gross goes straight back out.
+          {period !== '30D'
+            ? ' The trend column compares this window’s daily profit against the client’s own 30-day run rate.'
+            : ' Pick a shorter window to see which clients are moving against their own run rate.'}
         </p>
       </HudCard>
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        {byDept.map((d, i) => (
-          <HudCard key={d.deptCode} className="gap-0 p-0">
-            <div className="flex items-baseline justify-between gap-3 p-[18px] pb-3">
-              <HudCardHeader
-                title={d.label}
-                index={`S${String(i + 2).padStart(2, '0')}`}
-                action={
-                  <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                    <Num>{d.clientCount}</Num> CLIENTS ·{' '}
-                    <Num>
-                      {totals.netCents > 0
-                        ? `${((d.netCents / totals.netCents) * 100).toFixed(0)}%`
-                        : '—'}
-                    </Num>{' '}
-                    OF NET
-                  </span>
-                }
-              />
-            </div>
+      {falling.length > 0 ? (
+        <HudCard className="gap-0 p-0">
+          <div className="flex items-baseline justify-between gap-3 p-[18px] pb-3">
+            <HudCardHeader
+              title="Falling against their own run rate"
+              index="S02"
+              action={<Tag tone="warning"><Num>{falling.length}</Num></Tag>}
+            />
+          </div>
+          <ClientRows clients={falling.slice(0, 10)} period={period} />
+        </HudCard>
+      ) : null}
 
-            <div className="border-t border-divider px-[18px] py-2">
-              <span className="hud-label text-[9px]">NET / 30 DAYS</span>
-              <p className="font-cond text-[26px] leading-none text-neutral-900">
-                <Num>{fmtMoney(d.netCents)}</Num>
-              </p>
-            </div>
+      <HudCard className="gap-0 p-0">
+        <div className="flex flex-wrap items-baseline justify-between gap-3 p-[18px] pb-3">
+          <HudCardHeader
+            title="Every client, by profit"
+            index="S03"
+            action={
+              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                <Num>{book.clients.length}</Num> ACCOUNTS ·{' '}
+                <Num>{book.totals.tradingCount}</Num> TRADING
+              </span>
+            }
+          />
+        </div>
+        <ClientRows clients={book.clients} period={period} cumulative />
+      </HudCard>
 
-            <div className="min-w-0 overflow-x-auto">
-              <table className="cockpit-table">
-                <thead>
-                  <tr>
-                    <th className="w-[38%]">Client</th>
-                    <th>Net</th>
-                    <th>Gross</th>
-                    <th>Take</th>
-                    <th>eCPM</th>
-                    <th className="text-end">Impressions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {d.clients.map((c) => {
-                    const line = c.byDept.find((x) => x.deptCode === d.deptCode);
-                    return (
-                      <tr key={`${d.deptCode}:${c.name}`}>
-                        <td className="whitespace-normal">
-                          <span className="font-cond text-[15px] text-neutral-900">{c.name}</span>
-                          <p className="hud-label mt-0.5 text-[9px]">
-                            {c.isTrading ? 'TRADING DESK' : 'MANAGED PUBLISHER'}
-                          </p>
-                        </td>
-                        <td><Num>{fmtMoney(line?.netCents ?? 0)}</Num></td>
-                        <td className="text-neutral-500"><Num>{fmtMoney(line?.grossCents ?? 0)}</Num></td>
-                        <td className="text-neutral-500">
-                          <Num>
-                            {line && line.grossCents > 0
-                              ? `${((line.netCents / line.grossCents) * 100).toFixed(0)}%`
-                              : '—'}
-                          </Num>
-                        </td>
-                        <td className="text-neutral-500">
-                          <Num>
-                            {line && line.impressions > 0
-                              ? fmtMoney(Math.round((line.netCents / line.impressions) * 1000))
-                              : '—'}
-                          </Num>
-                        </td>
-                        <td className="text-end text-neutral-500">
-                          <Num>{fmtNumber(line?.impressions ?? 0)}</Num>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </HudCard>
-        ))}
-      </div>
-
-      <TopClients clients={clients} totalNetCents={totals.netCents} />
+      <p className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+        SOURCE: AD OPS ARCHITECT (LOVABLE) · READ-ONLY · PULLED <Num>{book.pulledAt}</Num>
+      </p>
     </div>
   );
 }
 
-/** The whole book on one axis — who pays us most, regardless of department. */
-function TopClients({ clients, totalNetCents }: { clients: Client[]; totalNetCents: number }) {
+function ClientRows({
+  clients,
+  period,
+  cumulative = false,
+}: {
+  clients: Client[];
+  period: ClientPeriod;
+  cumulative?: boolean;
+}) {
+  const total = clients.reduce((a, c) => a + c.profitCents, 0);
   let running = 0;
 
   return (
-    <HudCard className="gap-0 p-0">
-      <div className="flex items-baseline justify-between gap-3 p-[18px] pb-3">
-        <HudCardHeader
-          title="Every client, by net"
-          index="S00"
-          action={
-            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-              <Num>{clients.length}</Num> ACCOUNTS
-            </span>
-          }
-        />
-      </div>
+    <>
+      {/* Phone: a card per client. */}
+      <ul className="lg:hidden">
+        {clients.map((c) => (
+          <li key={`m:${c.name}`} className="border-t border-divider px-[18px] py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate font-cond text-[16px] text-neutral-900">{c.name}</p>
+                <p className="hud-label mt-0.5 text-[9px]">
+                  {c.isTrading ? 'TRADING DESK' : 'MANAGED PUBLISHER'}
+                </p>
+              </div>
+              {c.trendPct !== null ? <DeltaPct delta={{ pct: c.trendPct, absCents: null }} /> : null}
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <Cell label="PROFIT" value={fmtMoney(c.profitCents)} />
+              <Cell label="GROSS" value={fmtMoney(c.grossCents)} />
+              <Cell label="TAKE" value={c.takeRate === null ? '—' : `${(c.takeRate * 100).toFixed(0)}%`} />
+            </div>
+          </li>
+        ))}
+      </ul>
 
-      <div className="min-w-0 overflow-x-auto">
+      {/* Desktop: the full table. */}
+      <div className="hidden min-w-0 overflow-x-auto lg:block">
         <table className="cockpit-table">
           <thead>
             <tr>
               <th>#</th>
-              <th className="w-[30%]">Client</th>
-              <th>Departments</th>
-              <th>Net</th>
+              <th className="w-[24%]">Client</th>
+              <th>Profit</th>
+              <th>Profit / day</th>
               <th>Gross</th>
               <th>Take</th>
-              <th className="text-end">Cumulative</th>
+              <th>eCPM</th>
+              <th>Impressions</th>
+              {period !== '30D' ? <th className="text-end">vs 30-day rate</th> : null}
+              {cumulative ? <th className="text-end">Cumulative</th> : null}
             </tr>
           </thead>
           <tbody>
             {clients.map((c, i) => {
-              running += c.netCents;
-              const cumulative = totalNetCents > 0 ? running / totalNetCents : 0;
+              running += c.profitCents;
               return (
                 <tr key={c.name}>
                   <td className="text-neutral-500"><Num>{i + 1}</Num></td>
@@ -187,24 +189,37 @@ function TopClients({ clients, totalNetCents }: { clients: Client[]; totalNetCen
                     <span className="font-cond text-[15px] text-neutral-900">{c.name}</span>
                     {c.isTrading ? <Tag tone="outline" className="ms-2">TRADING</Tag> : null}
                   </td>
-                  <td className="text-[11px] text-neutral-500">
-                    {c.byDept.map((d) => d.label).join(' · ')}
+                  <td className="font-cond text-[16px] text-neutral-900">
+                    <Num>{fmtMoney(c.profitCents)}</Num>
                   </td>
-                  <td><Num>{fmtMoney(c.netCents)}</Num></td>
+                  <td className="text-neutral-500"><Num>{fmtMoney(c.profitPerDayCents)}</Num></td>
                   <td className="text-neutral-500"><Num>{fmtMoney(c.grossCents)}</Num></td>
                   <td className="text-neutral-500">
                     <Num>{c.takeRate === null ? '—' : `${(c.takeRate * 100).toFixed(0)}%`}</Num>
                   </td>
-                  <td className="text-end text-neutral-500">
-                    <Num>{`${(cumulative * 100).toFixed(1)}%`}</Num>
-                  </td>
+                  <td className="text-neutral-500"><Num>{fmtMoney(c.ecpmCents)}</Num></td>
+                  <td className="text-neutral-500"><Num>{fmtNumber(c.impressions)}</Num></td>
+                  {period !== '30D' ? (
+                    <td className="text-end">
+                      {c.trendPct === null ? (
+                        <span className="text-neutral-500">—</span>
+                      ) : (
+                        <DeltaPct delta={{ pct: c.trendPct, absCents: null }} />
+                      )}
+                    </td>
+                  ) : null}
+                  {cumulative ? (
+                    <td className="text-end text-neutral-500">
+                      <Num>{total > 0 ? `${((running / total) * 100).toFixed(1)}%` : '—'}</Num>
+                    </td>
+                  ) : null}
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-    </HudCard>
+    </>
   );
 }
 
@@ -220,13 +235,26 @@ function Figure({
   tone?: 'warning';
 }) {
   return (
+    <div className="min-w-0">
+      <p className="hud-label text-[9px]">{label}</p>
+      <p
+        className={`${
+          big
+            ? 'hud-numeral mt-1 text-[32px] sm:text-[38px]'
+            : 'mt-1 font-cond text-[20px] font-medium leading-none sm:text-[22px]'
+        } ${tone === 'warning' ? 'text-sev-warning' : 'text-neutral-800'}`}
+      >
+        <Num>{value}</Num>
+      </p>
+    </div>
+  );
+}
+
+function Cell({ label, value }: { label: string; value: string }) {
+  return (
     <div>
       <span className="hud-label text-[9px]">{label}</span>
-      <p
-        className={`font-cond leading-none text-neutral-900 ${big ? 'text-[42px]' : 'text-[26px]'} ${
-          tone === 'warning' ? 'text-sev-warning' : ''
-        }`}
-      >
+      <p className="font-cond text-[16px] leading-none text-neutral-900">
         <Num>{value}</Num>
       </p>
     </div>

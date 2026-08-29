@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, ilike, inArray, isNotNull, or, sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { crmCompanies, crmContacts, db } from '@/lib/db';
 
 /**
@@ -40,11 +41,19 @@ export const stageLabel = (stage: string | null): string =>
 export interface CrmFilter {
   q?: string;
   stage?: string;
+  owner?: string;
+  country?: string;
+  industry?: string;
+  /** Only companies we actually have a person at. */
+  withContacts?: boolean;
   page?: number;
 }
 
-export async function listCompanies(filter: CrmFilter = {}) {
-  const page = Math.max(0, filter.page ?? 0);
+/**
+ * The filters shared by both views. Kept in one place so the companies list and
+ * the contacts list can never disagree about what a filter means.
+ */
+function companyWhere(filter: CrmFilter) {
   const where = [];
 
   if (filter.q?.trim()) {
@@ -52,6 +61,17 @@ export async function listCompanies(filter: CrmFilter = {}) {
     where.push(or(ilike(crmCompanies.name, q), ilike(crmCompanies.domain, q))!);
   }
   if (filter.stage) where.push(eq(crmCompanies.lifecycleStage, filter.stage));
+  if (filter.owner) where.push(eq(crmCompanies.ownerName, filter.owner));
+  if (filter.country) where.push(eq(crmCompanies.country, filter.country));
+  if (filter.industry) where.push(eq(crmCompanies.industry, filter.industry));
+  if (filter.withContacts) where.push(sql`${crmCompanies.contactCount} > 0`);
+
+  return where;
+}
+
+export async function listCompanies(filter: CrmFilter = {}) {
+  const page = Math.max(0, filter.page ?? 0);
+  const where = companyWhere(filter);
 
   const clause = where.length > 0 ? and(...where) : undefined;
 
@@ -85,6 +105,7 @@ export async function listContacts(filter: CrmFilter = {}) {
     );
   }
   if (filter.stage) where.push(eq(crmContacts.lifecycleStage, filter.stage));
+  if (filter.owner) where.push(eq(crmContacts.ownerName, filter.owner));
 
   const clause = where.length > 0 ? and(...where) : undefined;
 
@@ -173,4 +194,37 @@ export async function crmSummary(): Promise<CrmSummary> {
       }),
     owners: owners.map((o) => ({ owner: o.owner ?? 'Unassigned', companies: o.n })),
   };
+}
+
+export interface CrmFilterOptions {
+  owners: { value: string; n: number }[];
+  countries: { value: string; n: number }[];
+  industries: { value: string; n: number }[];
+}
+
+/**
+ * What there is to filter by, counted from the book itself. Offering a fixed
+ * list would show stages and industries the portal does not actually use, and
+ * hide the ones it does.
+ */
+export async function crmFilterOptions(): Promise<CrmFilterOptions> {
+  const facet = async (column: AnyPgColumn) =>
+    db
+      .select({ value: column, n: sql<number>`count(*)::int` })
+      .from(crmCompanies)
+      .where(isNotNull(column))
+      .groupBy(column)
+      .orderBy(desc(sql`count(*)`))
+      .limit(30);
+
+  const [owners, countries, industries] = await Promise.all([
+    facet(crmCompanies.ownerName),
+    facet(crmCompanies.country),
+    facet(crmCompanies.industry),
+  ]);
+
+  const clean = (rows: { value: string | null; n: number }[]) =>
+    rows.filter((r): r is { value: string; n: number } => Boolean(r.value?.trim()));
+
+  return { owners: clean(owners), countries: clean(countries), industries: clean(industries) };
 }
