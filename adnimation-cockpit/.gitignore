@@ -1,0 +1,13 @@
+.env*
+# ...but the template carries no secrets and the README tells you to copy it.
+!.env.example
+node_modules/
+.next/
+.DS_Store
+data/
+
+# test + build output
+test-results/
+playwright-report/
+tsconfig.tsbuildinfo
+next-env.d.ts
