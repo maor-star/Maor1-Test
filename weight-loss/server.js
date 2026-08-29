@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { writeFileSync, existsSync, unlinkSync } from 'fs';
 import db from './db.js';
+import { mountMcp } from './mcp.js';
 import {
   hashPassword, verifyPassword, startSession, endSession,
   attachUser, requireAuth, publicProfile,
@@ -21,6 +22,9 @@ const PORT = process.env.PORT || 3100;
 app.use(express.json({ limit: '12mb' }));
 app.use(express.static(join(__dirname, 'public')));
 app.use(attachUser);
+
+// Read-only MCP endpoint, so a bot can answer from the site's own articles.
+mountMcp(app);
 
 // ---------- Helpers ----------
 const num = (v) => (v === undefined || v === null || v === '' ? 0 : Number(v));

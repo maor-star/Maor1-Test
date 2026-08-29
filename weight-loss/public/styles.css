@@ -2,6 +2,10 @@
    Every value comes from the Industry tokens in design-system.css, no raw hexes,
    no ad-hoc spacing. Load design-system.css first. */
 
+/* Amatic SC is the one hand-drawn face on Google Fonts that actually ships Hebrew
+   glyphs; Caveat and Gveret Levin do not. Used only for the picture signature. */
+@import url('https://fonts.googleapis.com/css2?family=Amatic+SC:wght@700&display=swap');
+
 :root {
   /* The ink the blueprint registration marks are drawn in, the same value
      design-system.css uses for .corner, lifted into a token so the section
@@ -371,7 +375,12 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
    Both declare an aspect ratio so the page holds its height before the image loads. */
 /* 16:9 is what the image model returns, so matching it here means the picture is
    shown whole instead of being cropped through the middle by a wider frame. */
-.article-figure { position: relative; margin: 0 auto; width: 100%; }
+.article-figure {
+  position: relative; margin: 0 auto; width: 100%;
+  /* The signature is sized against the picture, not the viewport, so its proportion
+     to the image is identical on a phone and on a desktop. */
+  container-type: inline-size;
+}
 .article-figure img {
   display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; object-position: center;
   border: 1px solid var(--color-divider);
@@ -390,15 +399,16 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 }
 .article-figure .watermark {
   /* physically bottom-left: on an RTL page inline-start would resolve to the right */
-  position: absolute; left: 0; bottom: 0; z-index: 1;
-  padding: 0 0 12px var(--space-5);
-  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
-  font-size: 13px; letter-spacing: 0.07em; color: rgb(255 255 255 / 92%);
-  text-shadow: 0 1px 4px rgb(0 0 0 / 45%);
-  pointer-events: none;
-}
-@media (max-width: 720px) {
-  .article-figure .watermark { font-size: 11px; padding: 0 0 9px var(--space-4); }
+  position: absolute; left: 2.6cqw; bottom: 2.2cqw; z-index: 1;
+  font-family: 'Amatic SC', var(--font-heading), cursive;
+  /* Amatic runs small and light for its point size, hence the generous multiplier.
+     The clamp keeps it legible on a very narrow phone and stops it growing without
+     limit on a wide screen. */
+  font-weight: 700; font-size: clamp(11px, 3.2cqw, 32px);
+  line-height: 1; letter-spacing: 0.02em;
+  color: rgb(255 255 255 / 95%);
+  text-shadow: 0 1px 5px rgb(0 0 0 / 50%);
+  pointer-events: none; white-space: nowrap;
 }
 .article-figure::before, .article-figure::after {
   content: ""; position: absolute; top: -6px; width: 11px; height: 11px; pointer-events: none;
