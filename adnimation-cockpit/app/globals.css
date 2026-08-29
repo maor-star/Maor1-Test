@@ -188,6 +188,18 @@
     font-family: var(--font-barlow-semi), var(--font-barlow), sans-serif;
     font-size: 14px;
   }
+  /* On a narrow screen a table scrolls inside its own container rather than
+     pushing the page sideways — so the columns stay readable at full size and
+     the body never scrolls horizontally. */
+  @media (max-width: 640px) {
+    .cockpit-table {
+      font-size: 13px;
+    }
+    .cockpit-table th,
+    .cockpit-table td {
+      padding: 8px;
+    }
+  }
   .cockpit-table th {
     padding: 8px 10px;
     font-size: 11px;

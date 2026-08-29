@@ -1,20 +1,6 @@
 import Link from 'next/link';
 import { Led } from './card';
-
-/** Spec §4 — the module list. Numbered as the design does. */
-const NAV = [
-  { href: '/', label: 'CADENCE', num: '01', ready: true },
-  { href: '/revenue', label: 'REVENUE', num: '02', ready: true },
-  { href: '/tasks', label: 'TASKS', num: '03', ready: true },
-  { href: '/delegations', label: 'DELEGATIONS', num: '04', ready: true },
-  { href: '/contracts', label: 'CONTRACTS', num: '05', ready: true },
-  { href: '/clients', label: 'CLIENTS', num: '06', ready: true },
-  { href: '/seats/demand', label: 'DEMAND', num: '07', ready: true },
-  { href: '/seats/supply', label: 'SUPPLY', num: '08', ready: true },
-  { href: '/inbox', label: 'SIGNALS', num: '09', ready: false },
-  { href: '/pipeline', label: 'PIPELINE', num: '10', ready: false },
-  { href: '/agents', label: 'AGENTS', num: '11', ready: false },
-] as const;
+import { NAV } from './nav-items';
 
 /** 22 decorative telemetry bars, deterministic so server and client agree. */
 const BARS = Array.from({ length: 22 }, (_, i) => ({

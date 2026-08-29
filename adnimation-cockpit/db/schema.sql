@@ -647,3 +647,47 @@ INSERT INTO stage_thresholds (stage, stale_days, default_probability) VALUES
   ('lead', 7, 5), ('intro', 7, 10), ('qualified', 14, 20),
   ('negotiation', 21, 40), ('proposal_sent', 14, 60),
   ('contract_out', 14, 80), ('integration', 30, 95), ('live', 9999, 100);
+
+-- HubSpot mirror. The CRM stays the system of record; these tables are the
+-- cockpit's own copy, so sales works without leaving the app and keeps working
+-- when HubSpot is unreachable.
+CREATE TABLE crm_companies (
+  hubspot_id        TEXT PRIMARY KEY,
+  name              TEXT NOT NULL,
+  domain            TEXT,
+  lifecycle_stage   TEXT,
+  owner_id          TEXT,
+  owner_name        TEXT,
+  industry          TEXT,
+  country           TEXT,
+  city              TEXT,
+  phone             TEXT,
+  contact_count     INTEGER NOT NULL DEFAULT 0,
+  hs_created_at     TIMESTAMPTZ,
+  hs_updated_at     TIMESTAMPTZ,
+  synced_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_crm_companies_name ON crm_companies (lower(name));
+CREATE INDEX idx_crm_companies_stage ON crm_companies (lifecycle_stage);
+CREATE INDEX idx_crm_companies_updated ON crm_companies (hs_updated_at DESC);
+
+CREATE TABLE crm_contacts (
+  hubspot_id        TEXT PRIMARY KEY,
+  first_name        TEXT,
+  last_name         TEXT,
+  email             TEXT,
+  phone             TEXT,
+  job_title         TEXT,
+  company_name      TEXT,
+  company_id        TEXT,
+  lifecycle_stage   TEXT,
+  owner_id          TEXT,
+  owner_name        TEXT,
+  last_activity_at  TIMESTAMPTZ,
+  hs_created_at     TIMESTAMPTZ,
+  hs_updated_at     TIMESTAMPTZ,
+  synced_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_crm_contacts_company ON crm_contacts (company_id);
+CREATE INDEX idx_crm_contacts_email ON crm_contacts (lower(email));
+CREATE INDEX idx_crm_contacts_updated ON crm_contacts (hs_updated_at DESC);

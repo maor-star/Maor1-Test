@@ -229,6 +229,53 @@ export const contractVersions = pgTable('contract_versions', {
   isApprovedBaseline: boolean('is_approved_baseline').notNull().default(false),
 });
 
+/**
+ * The HubSpot mirror. Keyed on the HubSpot id, so a re-sync updates in place and
+ * the cockpit and the CRM never disagree about which record is which.
+ */
+export const crmCompanies = pgTable(
+  'crm_companies',
+  {
+    hubspotId: text('hubspot_id').primaryKey(),
+    name: text('name').notNull(),
+    domain: text('domain'),
+    lifecycleStage: text('lifecycle_stage'),
+    ownerId: text('owner_id'),
+    ownerName: text('owner_name'),
+    industry: text('industry'),
+    country: text('country'),
+    city: text('city'),
+    phone: text('phone'),
+    contactCount: integer('contact_count').notNull().default(0),
+    hsCreatedAt: timestamptz('hs_created_at'),
+    hsUpdatedAt: timestamptz('hs_updated_at'),
+    syncedAt: timestamptz('synced_at').notNull().defaultNow(),
+  },
+  (t) => [index('idx_crm_companies_stage').on(t.lifecycleStage)],
+);
+
+export const crmContacts = pgTable(
+  'crm_contacts',
+  {
+    hubspotId: text('hubspot_id').primaryKey(),
+    firstName: text('first_name'),
+    lastName: text('last_name'),
+    email: text('email'),
+    phone: text('phone'),
+    jobTitle: text('job_title'),
+    companyName: text('company_name'),
+    companyId: text('company_id'),
+    lifecycleStage: text('lifecycle_stage'),
+    ownerId: text('owner_id'),
+    ownerName: text('owner_name'),
+    lastActivityAt: timestamptz('last_activity_at'),
+    hsCreatedAt: timestamptz('hs_created_at'),
+    hsUpdatedAt: timestamptz('hs_updated_at'),
+    syncedAt: timestamptz('synced_at').notNull().defaultNow(),
+  },
+  (t) => [index('idx_crm_contacts_company').on(t.companyId)],
+);
+
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type TaskComment = typeof taskComments.$inferSelect;
@@ -240,3 +287,7 @@ export type AppUser = typeof users.$inferSelect;
 export type Contract = typeof contracts.$inferSelect;
 export type NewContract = typeof contracts.$inferInsert;
 export type Partner = typeof partners.$inferSelect;
+export type CrmCompany = typeof crmCompanies.$inferSelect;
+export type NewCrmCompany = typeof crmCompanies.$inferInsert;
+export type CrmContact = typeof crmContacts.$inferSelect;
+export type NewCrmContact = typeof crmContacts.$inferInsert;

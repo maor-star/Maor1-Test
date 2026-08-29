@@ -60,13 +60,13 @@ export async function TelemetryStrip() {
       {cells.map((c) => (
         <div
           key={c.label}
-          className="flex min-w-0 flex-col gap-1 border-e border-ground/[0.14] px-4 py-[11px] last:border-e-0"
+          className="flex min-w-0 flex-col gap-1 border-b border-e border-ground/[0.14] px-3 py-2 last:border-e-0 sm:border-b-0 sm:px-4 sm:py-[11px]"
         >
           <span className="truncate font-semi text-[9px] font-medium tracking-[0.14em] text-accent-300">
             {c.label}
           </span>
           <span
-            className={`truncate font-cond text-[20px] font-medium leading-none tracking-[0.01em] ${
+            className={`truncate font-cond text-[17px] font-medium leading-none tracking-[0.01em] sm:text-[20px] ${
               c.muted ? 'text-sev-warning' : ''
             }`}
           >
