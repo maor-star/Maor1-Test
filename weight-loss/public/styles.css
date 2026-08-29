@@ -364,6 +364,51 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .plan-table tr.is-ahead td { color: var(--color-neutral-500); }
 .plan-table .plan-soon { font-size: 12px; color: var(--color-neutral-500); white-space: nowrap; }
 @media (pointer: coarse) { .plan-table .input-sm { min-height: 38px; } }
+
+/* The week as one form. The day column carries the name, the date and, on Tuesday, the
+   weigh-in mark, so the rhythm of the week is readable before anything is filled in. */
+.week-table { min-width: 460px; }
+.week-table td { vertical-align: middle; }
+.week-table .input-sm { padding: 5px var(--space-3); font-size: 14px; max-width: 110px; }
+.week-table .week-day { display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; }
+.week-table .week-name { font-weight: 600; }
+.week-table .week-date { font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }
+.week-table .week-check { text-align: center; }
+.week-table .week-check input { width: 20px; height: 20px; accent-color: var(--color-accent); }
+.week-table tr.is-now td { background: var(--color-accent-100); }
+.week-table tr.is-weighin td { box-shadow: inset 0 -1px 0 var(--color-accent); }
+@media (pointer: coarse) {
+  .week-table .input-sm { min-height: 38px; }
+  .week-table .week-check input { width: 24px; height: 24px; }
+}
+/* Seven days will not fit across a phone, and a table that scrolls sideways hides the
+   column you came to fill. Each day becomes its own block, with the headers repeated
+   above the fields they belong to. */
+@media (max-width: 560px) {
+  .table-wrap:has(.week-table) { overflow-x: visible; }
+  /* The class is doubled to outrank the .table-wrap .table min-width set further down. */
+  .table-wrap .table.week-table { min-width: 0; width: 100%; }
+  .week-table, .week-table tbody, .week-table tr, .week-table td { display: block; }
+  .week-table thead { display: none; }
+  .week-table tr {
+    display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2) var(--space-3);
+    padding: var(--space-3) 0; border-bottom: 1px solid var(--color-divider);
+  }
+  .week-table tr.is-now { background: var(--color-accent-100); }
+  .week-table tr.is-weighin { box-shadow: inset 2px 0 0 var(--color-accent); padding-inline-start: var(--space-3); }
+  .week-table tr.is-weighin td, .week-table tr.is-now td { background: none; box-shadow: none; }
+  .week-table td { border: 0; padding: 0; }
+  .week-table .week-day { grid-column: 1 / -1; }
+  .week-table td[data-label]::before {
+    content: attr(data-label); display: block; margin-bottom: 4px;
+    font-size: 11px; letter-spacing: 0.06em; color: var(--color-neutral-600);
+  }
+  .week-table .input-sm { max-width: none; width: 100%; }
+  .week-table .week-check {
+    grid-column: 1 / -1; display: flex; align-items: center; gap: var(--space-2);
+  }
+  .week-table .week-check::before { margin: 0; }
+}
 .row .row-text { display: inline-flex; align-items: center; gap: var(--space-3); }
 
 /* Who wrote it, under the standfirst, and again at the end of the piece. */
