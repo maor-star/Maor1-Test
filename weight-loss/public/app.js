@@ -1136,8 +1136,8 @@ async function viewHome(el) {
     <div class="sec">
       <div class="kicker">שאלו אותו הכל</div>
       <h2>הבוט של מאור ופיטר אטיה שיודע לענות לכם על כל השאלות</h2>
-      <p>הוא קרא את כל המאמרים באתר ועונה מתוכם, בקו של מאור ובגישה של פיטר אטיה.
-         תזונה, אימוני כוח ובריאות מטבולית, כאן בעמוד.</p>
+      <p>הוא קרא את כל המאמרים באתר ואת האני מאמין של מאור, ועונה מתוכם.
+         כשאין כיסוי במאמרים הוא הולך למחקר של פיטר אטיה ורפואת אריכות ימים, ולא לשום מקום אחר.</p>
     </div>
     <section class="panel bp chat">
       ${corners()}
@@ -1145,7 +1145,7 @@ async function viewHome(el) {
         <div class="thread" id="chat-thread">
           <div class="msg from-coach">
             <div class="msg-who">הבוט</div>
-            <div class="msg-body">שאלו אותי כל דבר על תזונה, אימוני כוח או בריאות מטבולית. אני עונה מתוך המאמרים באתר.</div>
+            <div class="msg-body">שאלו אותי כל דבר על תזונה, אימוני כוח או בריאות מטבולית. אני עונה מתוך המאמרים של מאור, ומשלים מהמחקר של פיטר אטיה כשצריך.</div>
           </div>
         </div>
         <form id="chat-form" class="chat-form">
@@ -1316,17 +1316,25 @@ async function viewHome(el) {
       const pending = bubble('הבוט', 'חושב…', 'from-coach is-pending');
 
       try {
-        const { reply, sources } = await api('/chat', { method: 'POST', body: { message: question, history } });
+        const { reply, sources, web } = await api('/chat', { method: 'POST', body: { message: question, history } });
         pending.remove();
         const node = bubble('הבוט', reply, 'from-coach');
-        if (sources?.length) {
+        // Two lines, kept apart on purpose: the articles are the house line, the research
+        // is what the bot reached for when the articles fell short. Seeing which is which
+        // is how anyone can tell the answer stayed inside the world it was told to use.
+        const credit = (label, items) => {
+          if (!items?.length) return;
           const links = document.createElement('div');
           links.className = 'msg-sources';
-          links.innerHTML = 'מתוך: ' + sources
-            .map((x) => `<a href="#/articles/${encodeURIComponent(x.slug)}">${esc(x.title)}</a>`)
-            .join(' · ');
+          links.innerHTML = label + items.join(' · ');
           node.appendChild(links);
-        }
+        };
+        credit('מתוך המאמרים: ', (sources || [])
+          .map((x) => `<a href="#/articles/${encodeURIComponent(x.slug)}">${esc(x.title)}</a>`));
+        credit('מהמחקר: ', (web || [])
+          .map((x) => x.uri
+            ? `<a href="${esc(x.uri)}" target="_blank" rel="noopener noreferrer">${esc(x.title)}</a>`
+            : esc(x.title)));
         history.push({ role: 'user', text: question }, { role: 'bot', text: reply });
         thread.scrollTop = thread.scrollHeight;
       } catch (err) {
