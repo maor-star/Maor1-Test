@@ -926,6 +926,11 @@ async function viewArticle(el, slug) {
 async function viewSettings(el) {
   const me = await api('/me');
   state.me = me;
+  // The protein target is derived from body weight, not picked. The last weigh-in is
+  // what turns the rule into this member's own number, right where they set it.
+  const stats = await api('/stats').catch(() => null);
+  const weight = stats?.weight_latest || null;
+  const suggested = weight ? Math.round(weight * 1.8) : null;
 
   el.innerHTML = `
     <div class="sec">
@@ -956,6 +961,12 @@ async function viewSettings(el) {
                      value="${me.daily_protein_goal}" required />
             </div>
           </div>
+          <p class="note-line" style="margin-top:8px">
+            יעד החלבון הוא 1.8 גרם לכל קילו משקל גוף.
+            ${suggested
+              ? `לפי ${weight} ק״ג, זה <button type="button" class="linkish" id="use-protein">${suggested} גרם</button>.`
+              : 'אחרי השקילה הראשונה נחשב לך את המספר המדויק.'}
+          </p>
           <div class="field" style="margin-top:10px">
             <label for="g-work">אימוני כוח בשבוע</label>
             <input class="input" id="g-work" type="number" name="weekly_workouts_goal" min="0" max="14"
@@ -984,6 +995,10 @@ async function viewSettings(el) {
         </p>
       </div>
     </div>`;
+
+  el.querySelector('#use-protein')?.addEventListener('click', () => {
+    el.querySelector('#g-prot').value = suggested;
+  });
 
   el.querySelector('#goals-form').addEventListener('submit', async (e) => {
     e.preventDefault();
