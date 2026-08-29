@@ -357,10 +357,23 @@ function personalStats(userId) {
   const first = weighIns[0];
   const last = weighIns[weighIns.length - 1];
 
-  // One weigh-in per calendar week: if this week is done, the next one opens Monday.
+  // The next weigh-in is a date on the programme, not "next Monday": it was showing the
+  // start of the calendar week, which is never one of the Tuesdays anyone weighs on.
   const thisWeek = weekKey(today);
   const weighedThisWeek = weighIns.some((w) => w.week === thisWeek);
-  const nextWeighIn = weighedThisWeek ? shiftDate(start, 7) : today;
+  const slots = programDates();
+  const byWeek = new Map(weighIns.map((w) => [w.week, w]));
+  // Where today sits on the programme, and what is already recorded against it. This is
+  // a programme week, not a calendar week: a weigh-in logged before the start does not
+  // make the first slot look done.
+  const currentSlot = slots.find((d) => weekKey(d) === thisWeek) || null;
+  const currentSlotWeight = currentSlot ? byWeek.get(thisWeek)?.weight ?? null : null;
+  // The slot to fill: the first one still empty from today forward, and failing that the
+  // earliest one missed, so a skipped week is offered rather than silently passed over.
+  const openSlot = slots.find((d) => d >= today && !byWeek.has(weekKey(d)))
+    || slots.find((d) => !byWeek.has(weekKey(d)))
+    || null;
+  const nextWeighIn = slots.find((d) => d > today) || null;
 
   const targetWeight = targetFrom(first ? first.weight : null);
 
@@ -380,6 +393,9 @@ function personalStats(userId) {
     weeks_in_program: weighIns.length,
     weighed_this_week: weighedThisWeek,
     next_weigh_in: nextWeighIn,
+    open_slot: openSlot,
+    current_slot: currentSlot,
+    current_slot_weight: currentSlotWeight,
     target_share: TARGET_SHARE,
     target_weight: targetWeight,
     target_loss: first ? Number((first.weight * TARGET_SHARE).toFixed(1)) : null,

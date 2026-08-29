@@ -108,6 +108,58 @@ function barChart(items, { goal = 0, unit = '', goodWhen = 'above' } = {}) {
 
 // ---------------- Shared fragments ----------------
 /**
+ * The one time-sensitive thing on the page, so it sits at the top and says the date in
+ * words rather than hiding it in a corner label. It writes into the slot it names, so
+ * there is no second step and no wondering which week the number landed in.
+ */
+function nextWeighInCard(stats) {
+  // Weighed for this week already: the card turns into confirmation, and the form still
+  // points at that week so an edit corrects it instead of filling the next one.
+  const done = stats.current_slot_weight !== null;
+  const slot = done ? stats.current_slot : stats.open_slot;
+  const days = slot ? Math.round((Date.parse(slot) - Date.parse(stats.today)) / 86400000) : null;
+  const upcoming = stats.next_weigh_in;
+
+  const when = days === null ? ''
+    : days === 0 ? 'היום'
+    : days === 1 ? 'מחר'
+    : days > 1 ? `בעוד ${nf(days)} ימים`
+    : 'התאריך עבר, אפשר עדיין למלא';
+
+  const headline = done
+    ? `נשקלת השבוע: ${ltr(nf(stats.current_slot_weight, 1))} ק״ג`
+    : slot ? `יום שלישי, ${fmtDate(slot)}` : 'כל השקילות מולאו';
+
+  const note = done
+    ? `${upcoming ? `הבאה: יום שלישי, ${fmtDate(upcoming)}.` : 'זו הייתה האחרונה בתוכנית.'} אפשר לתקן את המספר של השבוע כאן.`
+    : slot ? `${when}. שוקלים בבוקר, לפני האוכל ואחרי השירותים.`
+    : 'סיימת את כל שקילות התוכנית.';
+
+  return `
+    <section class="panel bp weighin-card ${done ? 'is-done' : ''}">
+      ${corners()}
+      <div class="weighin-head">
+        <div>
+          <div class="kicker">${done ? 'השקילה של השבוע' : 'השקילה הבאה'}</div>
+          <h3>${headline}</h3>
+          <p class="note-line">${note}</p>
+        </div>
+        ${!done && days !== null && days >= 0
+          ? `<div class="weighin-count"><div class="val">${nf(days)}</div><div class="cap">${days === 1 ? 'יום' : 'ימים'}</div></div>`
+          : ''}
+      </div>
+      ${slot ? `
+        <form id="weigh-form" class="weighin-form">
+          <input class="input" id="wg" type="number" name="weight" min="20" max="400" step="0.1"
+                 value="${done ? stats.current_slot_weight : ''}" placeholder="${stats.weight_latest ?? 'משקל בק״ג'}"
+                 aria-label="משקל לשקילה של ${fmtDate(slot)}" required />
+          <input type="hidden" name="date" value="${slot}" />
+          <button type="submit" class="btn btn-primary">${done ? 'עדכון' : `שמירה · ${ltr('+100 XP')}`}</button>
+        </form>` : ''}
+    </section>`;
+}
+
+/**
  * The last seven days as one form. Reporting a day at a time meant a missed evening was
  * a hole nobody went back to fill; here the whole week is on screen, the gaps are visible
  * and one button saves them all. Tuesday is marked because that is weigh-in morning.
@@ -323,8 +375,7 @@ async function viewDashboard(el) {
         <div>
           <div class="label">מבוסס מדע · שינוי הרכב גוף</div>
           <h1>${esc(me.full_name)}</h1>
-          <p>לא נשקלים כל בוקר. עומדים בשלושה יעדים יומיים (קלוריות, חלבון ואימון כוח)
-             ומדווחים פעם בשבוע. הגוף עושה את השאר.</p>
+          <p>שלושה יעדים יומיים, שקילה אחת בשבוע. הגוף עושה את השאר.</p>
         </div>
       </div>
       ${statBlock([
@@ -346,55 +397,33 @@ async function viewDashboard(el) {
         <p class="coach-note">${esc(stats.coach_note)}</p>
       </section>` : ''}
 
+    ${nextWeighInCard(stats)}
+
+    ${weekReport(week, me)}
+
     <div class="sec">
-      <div class="kicker">שבעת הימים האחרונים</div>
-      <h2>שלוש שורות. זה כל מה שנמדד.</h2>
+      <div class="kicker">איפה אתה עומד</div>
+      <h2>המדדים והמגמה</h2>
     </div>
-
-    <div class="split">
-      ${weekReport(week, me)}
-
-      <section class="panel bp">
-        ${corners()}
-        <header>
-          <h3>שקילה שבועית</h3>
-          <span class="when">${stats.weighed_this_week ? `הבאה ${fmtDate(stats.next_weigh_in)}` : 'פתוחה השבוע'}</span>
-        </header>
-        <p class="note-line">שוקלים פעם בשבוע, כל יום שלישי בבוקר, לפני האוכל.
-          ${stats.weighed_this_week ? `נשקלת השבוע. הבאה ב-${fmtDate(stats.next_weigh_in)}.` : ''}</p>
-        <form id="weigh-form">
-          <div class="field">
-            <label for="wg">משקל נוכחי (ק״ג)</label>
-            <input class="input" id="wg" type="number" name="weight" min="20" max="400" step="0.1"
-                   value="${stats.weight_latest ?? ''}" required />
-          </div>
-          <button type="submit" class="btn btn-primary btn-block">${stats.weighed_this_week ? 'עדכון השקילה' : `שמור שקילה · ${ltr('+100 XP')}`}</button>
-        </form>
-      </section>
-    </div>
-
-    ${weighInPlan(stats)}
 
     <div class="split">
       <div class="goals">
         ${goalRow('ממוצע קלוריות ליום', week.avgCalories, me.daily_calories_goal, { goodWhen: 'below' })}
         ${goalRow('ממוצע חלבון ליום', week.avgProtein, me.daily_protein_goal, { unit: ' ג׳' })}
         ${goalRow('אימוני כוח · 7 ימים', week.workouts, me.weekly_workouts_goal)}
+        <div class="label" style="margin-top:var(--space-4)">כלל האצבע</div>
+        ${tipRotator(tips, goal.goal_kg)}
       </div>
       <div>
-        <div class="label">כלל האצבע</div>
-        ${tipRotator(tips, goal.goal_kg)}
+        <div class="label">מגמת המשקל · ק״ג</div>
+        <section class="panel bp">
+          ${corners()}
+          ${lineChart(weightPoints, { unit: ' ק״ג' })}
+        </section>
       </div>
     </div>
 
-    <div class="sec">
-      <div class="kicker">ההתקדמות שלך</div>
-      <h2>מגמת המשקל</h2>
-    </div>
-    <section class="panel bp">
-      ${corners()}
-      ${lineChart(weightPoints, { unit: ' ק״ג' })}
-    </section>
+    ${weighInPlan(stats)}
 
     <div class="sec">
       <div class="kicker">מסרים</div>
@@ -498,7 +527,7 @@ async function viewDashboard(el) {
     try {
       const result = await api('/weigh-ins', {
         method: 'POST',
-        body: { weight: form.get('weight') },
+        body: { date: form.get('date'), weight: form.get('weight') },
       });
       state.me = result.profile;
       announce(result);
@@ -592,9 +621,8 @@ function weighInPlan(stats) {
 
     ${statBlock([
       { value: startW ? nf(startW, 1) : '-', cap: 'משקל התחלתי · ק״ג' },
-      { value: stats.weight_latest ? nf(stats.weight_latest, 1) : '-', cap: 'משקל נוכחי · ק״ג', accent: true },
-      { value: stats.weight_change === null ? '-' : ltr(signed(stats.weight_change)), cap: 'שינוי · ק״ג' },
-      { value: `${done}/${rows.length}`, cap: 'שקילות שמולאו' },
+      { value: stats.weight_change === null ? '-' : ltr(signed(stats.weight_change)), cap: 'שינוי · ק״ג', accent: true },
+      { value: ltr(`${done}/${rows.length}`), cap: 'שקילות שמולאו' },
     ])}
 
     <section class="panel bp">

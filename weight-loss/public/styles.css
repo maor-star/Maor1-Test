@@ -385,6 +385,29 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 
 /* The week as one form. The day column carries the name, the date and, on Tuesday, the
    weigh-in mark, so the rhythm of the week is readable before anything is filled in. */
+/* The one dated thing on the page. It is loud on purpose: the complaint was that nobody
+   could tell when the next weigh-in was or where to type the number. */
+.weighin-card { display: grid; gap: var(--space-4); }
+.weighin-card.is-done { background: color-mix(in srgb, var(--color-accent) 4%, transparent); }
+.weighin-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.weighin-head h3 { margin: 4px 0 6px; font-size: 26px; }
+.weighin-count { text-align: center; flex: none; padding-inline-start: var(--space-4); border-inline-start: 1px solid var(--color-divider); }
+.weighin-count .val {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 40px; line-height: 1; color: var(--color-accent); font-variant-numeric: tabular-nums;
+}
+.weighin-count .cap { margin-top: 4px; font-size: 11px; letter-spacing: 0.06em; color: var(--color-neutral-600); }
+/* The button hugs its label instead of stretching across the panel: a save button as
+   wide as the card reads as the card's purpose rather than as one small action in it. */
+.weighin-form { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.weighin-form .input { flex: 0 1 180px; }
+.weighin-form .btn { flex: none; }
+@media (max-width: 560px) {
+  .weighin-head h3 { font-size: 21px; }
+  .weighin-count .val { font-size: 32px; }
+  .weighin-form .input { flex: 1 1 120px; }
+}
+
 /* The week's three numbers, inside the report they describe. */
 .week-summary {
   display: grid; grid-template-columns: repeat(3, 1fr);
@@ -871,8 +894,10 @@ main { flex: 1; }
 .msg.from-coach .msg-who { color: var(--color-accent-700); }
 
 @media (max-width: 700px) {
-  .hero-id { flex-direction: column; gap: var(--space-4); }
-  .photo-slot { width: 96px; height: 96px; }
+  /* Stacking put an empty photo frame above the name and pushed the weigh-in card, the
+     one thing this page is opened for, off the first screen. It sits beside the name. */
+  .hero-id { gap: var(--space-4); align-items: center; }
+  .photo-slot { width: 72px; height: 72px; flex: none; }
   .thread { max-height: 300px; }
   .msg { max-width: 100%; }
 }
