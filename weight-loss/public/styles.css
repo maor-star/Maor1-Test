@@ -185,7 +185,7 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 }
 
 /* Who contributed what to the one shared target. */
-.share { border-top: 1px solid var(--color-divider); margin-top: var(--space-6); padding-top: var(--space-5); }
+.share { border-top: 1px solid var(--color-divider); margin-top: var(--space-6); padding-top: var(--space-4); }
 .share .label { margin-bottom: var(--space-3); }
 .share-row {
   display: grid; grid-template-columns: minmax(90px, 1fr) minmax(0, 3fr) auto;
@@ -427,8 +427,10 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 /* The assistant lives inside the same framed box the rest of the site uses, with the
    registration marks, so it reads as part of the page and not as a widget dropped in.
    The thread's height is fixed so the page never jumps as answers arrive. */
-.chat { display: grid; gap: var(--space-4); }
-.chat .thread { height: clamp(300px, 42vh, 440px); overflow-y: auto; }
+.chat { display: grid; gap: var(--space-3); padding: var(--space-4); }
+/* The thread is a grid with a fixed height, so without this its rows stretch and a
+   single greeting fills the whole box. */
+.chat .thread { height: clamp(210px, 27vh, 300px); overflow-y: auto; align-content: start; }
 .chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); }
 .chat-note { margin: 0; font-size: 12px; }
 .msg-sources { margin-top: var(--space-2); font-size: 12px; color: var(--color-neutral-600); }
@@ -437,7 +439,8 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .msg.is-error .msg-body { color: #b3271e; }
 @media (max-width: 720px) {
   .chat-form { grid-template-columns: 1fr; }
-  .chat .thread { height: clamp(260px, 46vh, 380px); }
+  .chat { padding: var(--space-4); }
+  .chat .thread { height: clamp(200px, 34vh, 280px); }
 }
 
 /* One measure for the whole article: the picture, the headline and the body all sit
