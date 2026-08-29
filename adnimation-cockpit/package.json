@@ -19,7 +19,8 @@
     "db:migrate": "for f in db/migrations/*.sql; do psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f \"$f\"; done",
     "purge-demo": "tsx scripts/purge-demo.ts",
     "sync:clickup": "tsx scripts/sync-clickup.ts",
-    "sync:hubspot": "tsx scripts/sync-hubspot.ts"
+    "sync:hubspot": "tsx scripts/sync-hubspot.ts",
+    "deploy": "node deploy/redeploy.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.6",

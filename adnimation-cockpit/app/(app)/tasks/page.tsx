@@ -38,7 +38,11 @@ export default async function TasksPage({
 }) {
   const sp = await searchParams;
   const view: View = VIEWS.includes(sp.view as View) ? (sp.view as View) : 'list';
-  const layer = sp.layer === 'company' ? 'company' : sp.layer === 'all' ? undefined : 'mine';
+  // Default to every layer. Every real task now arrives through the ClickUp
+  // mirror as `company`, so defaulting to `mine` opened the page on an empty
+  // list while 200+ live tasks sat one click away.
+  const layer =
+    sp.layer === 'company' ? 'company' : sp.layer === 'mine' ? 'mine' : undefined;
 
   const priority = sp.priority && TASK_PRIORITIES.includes(sp.priority as TaskPriority)
     ? [sp.priority as TaskPriority]
@@ -93,7 +97,7 @@ export default async function TasksPage({
       <TaskFilters
         departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
         current={{
-          layer: sp.layer ?? 'mine',
+          layer: sp.layer ?? 'all',
           q: sp.q ?? '',
           priority: sp.priority ?? '',
           status: sp.status ?? '',
