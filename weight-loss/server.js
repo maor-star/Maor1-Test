@@ -5,6 +5,7 @@ import { dirname, join } from 'path';
 import { writeFileSync, existsSync, unlinkSync } from 'fs';
 import db from './db.js';
 import { mountMcp } from './mcp.js';
+import { mountAssistant } from './assistant.js';
 import {
   hashPassword, verifyPassword, startSession, endSession,
   attachUser, requireAuth, publicProfile,
@@ -937,5 +938,16 @@ app.delete('/api/recipes/:id', requireEditor, asyncRoute((req, res) => {
   db.prepare('DELETE FROM recipes WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 }));
+
+// The assistant members talk to on the home page. Mounted here rather than beside
+// the other routes because it needs helpers declared further down the file.
+mountAssistant(app, { requireAuth, fail, str });
+
+// This route is async and reports through next(err); Express only reaches an error
+// handler that is registered after the routes it should cover.
+app.use((err, req, res, _next) => {
+  console.error(err);
+  if (!res.headersSent) res.status(err.status || 500).json({ error: err.message });
+});
 
 app.listen(PORT, () => console.log(`הדרך הקלה לירידה במשקל, פועל על http://localhost:${PORT}`));

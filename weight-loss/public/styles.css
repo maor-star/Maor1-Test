@@ -424,24 +424,20 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .article-figure::after  { inset-inline-end: -6px; }
 
 .card-figure { display: block; margin-bottom: var(--space-4); }
-/* The assistant's panel. Framed like the hero so it reads as part of the site and
-   not as an advert dropped into it, and it carries the same registration marks. */
-.bot {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-8); align-items: center;
-  padding: var(--space-8) calc(var(--space-8) * 1.2);
-}
-.bot-copy { display: grid; gap: var(--space-3); }
-.bot-copy h2 { margin: 0; font-size: clamp(22px, 2.4vw, 30px); line-height: 1.15; }
-.bot-copy p { margin: 0; max-width: 60ch; color: var(--color-neutral-700); }
-.bot-go { display: grid; gap: var(--space-2); justify-items: center; }
-.bot-go .note-line { font-size: 12px; }
-.btn-lg { padding: var(--space-3) calc(var(--space-6) * 1.1); font-size: 16px; }
-.bot.is-empty { opacity: 0.85; }
+/* The assistant lives inside the same framed box the rest of the site uses, with the
+   registration marks, so it reads as part of the page and not as a widget dropped in.
+   The thread's height is fixed so the page never jumps as answers arrive. */
+.chat { display: grid; gap: var(--space-4); }
+.chat .thread { height: clamp(300px, 42vh, 440px); overflow-y: auto; }
+.chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); }
+.chat-note { margin: 0; font-size: 12px; }
+.msg-sources { margin-top: var(--space-2); font-size: 12px; color: var(--color-neutral-600); }
+.msg-sources a { color: var(--color-accent-700); }
+.msg.is-pending .msg-body { color: var(--color-neutral-500); }
+.msg.is-error .msg-body { color: #b3271e; }
 @media (max-width: 720px) {
-  .bot { grid-template-columns: 1fr; gap: var(--space-6); padding: var(--space-6); }
-  .bot-go { justify-items: stretch; }
-  .bot-go .btn { width: 100%; }
+  .chat-form { grid-template-columns: 1fr; }
+  .chat .thread { height: clamp(260px, 46vh, 380px); }
 }
 
 /* One measure for the whole article: the picture, the headline and the body all sit

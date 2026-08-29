@@ -1133,32 +1133,36 @@ async function viewHome(el) {
         ${tipRotator(slogans, 0, '')}
       </section>` : ''}
 
-    ${bot.url ? `
-      <section class="bot bp">
-        ${corners()}
-        <div class="bot-copy">
-          <div class="kicker">שאלו אותו הכל</div>
-          <h2>הבוט של מאור ופיטר אטיה שיודע לענות לכם על כל השאלות</h2>
-          <p>הוא קרא את כל המאמרים באתר ועונה מתוכם, בקו של מאור ובגישה של פיטר אטיה.
-             תזונה, אימוני כוח, בריאות מטבולית. זמין מתי שבא לכם.</p>
+    <div class="sec">
+      <div class="kicker">שאלו אותו הכל</div>
+      <h2>הבוט של מאור ופיטר אטיה שיודע לענות לכם על כל השאלות</h2>
+      <p>הוא קרא את כל המאמרים באתר ועונה מתוכם, בקו של מאור ובגישה של פיטר אטיה.
+         תזונה, אימוני כוח ובריאות מטבולית, כאן בעמוד.</p>
+    </div>
+    <section class="panel bp chat">
+      ${corners()}
+      ${signedIn ? `
+        <div class="thread" id="chat-thread">
+          <div class="msg from-coach">
+            <div class="msg-who">הבוט</div>
+            <div class="msg-body">שאלו אותי כל דבר על תזונה, אימוני כוח או בריאות מטבולית. אני עונה מתוך המאמרים באתר.</div>
+          </div>
         </div>
-        <div class="bot-go">
-          <a class="btn btn-primary btn-lg" href="${esc(bot.url)}" target="_blank" rel="noopener">
-            לשאול את הבוט
-          </a>
-          <span class="note-line">נפתח בחלון חדש</span>
-        </div>
-      </section>` : (state.me?.is_editor ? `
-      <section class="bot bp is-empty">
-        ${corners()}
-        <div class="bot-copy">
-          <div class="kicker">שאלו אותו הכל</div>
-          <h2>הבוט של מאור ופיטר אטיה שיודע לענות לכם על כל השאלות</h2>
-          <p>רק אתה רואה את ההודעה הזו. הדבק את כתובת הבוט בעמוד העריכה והקטע הזה
-             ייפתח לכל הקבוצה.</p>
-        </div>
-        <div class="bot-go"><a class="btn btn-secondary" href="#/editor">להוספת הכתובת</a></div>
-      </section>` : '')}
+        <form id="chat-form" class="chat-form">
+          <input class="input" id="chat-input" name="message" maxlength="800" autocomplete="off"
+                 placeholder="למשל: כמה חלבון אני צריך ביום?" required />
+          <button type="submit" class="btn btn-primary">שליחה</button>
+        </form>
+        <p class="note-line chat-note">המידע חינוכי ואינו ייעוץ רפואי. לבוט אין גישה לנתונים האישיים של אף חבר.</p>
+      ` : `
+        <div class="empty">
+          הבוט פתוח לחברי הקבוצה.
+          <div class="gate-actions" style="justify-content:center;margin-top:var(--space-4)">
+            <button class="btn btn-primary" data-auth="login" type="button">התחברות</button>
+            <button class="btn btn-secondary" data-auth="register" type="button">הצטרפות</button>
+          </div>
+        </div>`}
+    </section>
 
     ${group ? (() => {
       // Everyone's contribution against the one shared target, largest first.
@@ -1275,6 +1279,66 @@ async function viewHome(el) {
     </div>
 
     <p class="disclaimer">המידע כאן הוא חינוכי ואינו מחליף ייעוץ רפואי או תזונתי אישי.</p>`;
+
+  // --- the assistant ---
+  const chatForm = el.querySelector('#chat-form');
+  if (chatForm) {
+    const thread = el.querySelector('#chat-thread');
+    const input = el.querySelector('#chat-input');
+    const history = [];
+
+    // The model is told to answer in plain prose, but models drift, so any markdown
+    // that slips through is rendered rather than shown as raw asterisks. Escaping runs
+    // first, so nothing here can inject HTML.
+    const render = (text) => esc(text)
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .split('\n')
+      .map((line) => line.replace(/^\s*[*-]\s+/, '• '))
+      .join('<br />');
+
+    const bubble = (who, text, cls) => {
+      const node = document.createElement('div');
+      node.className = `msg ${cls}`;
+      node.innerHTML = `<div class="msg-who">${esc(who)}</div><div class="msg-body">${render(text)}</div>`;
+      thread.appendChild(node);
+      thread.scrollTop = thread.scrollHeight;
+      return node;
+    };
+
+    chatForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const question = input.value.trim();
+      if (!question) return;
+      input.value = '';
+      input.disabled = true;
+      chatForm.querySelector('button').disabled = true;
+      bubble('אתה', question, 'from-me');
+      const pending = bubble('הבוט', 'חושב…', 'from-coach is-pending');
+
+      try {
+        const { reply, sources } = await api('/chat', { method: 'POST', body: { message: question, history } });
+        pending.remove();
+        const node = bubble('הבוט', reply, 'from-coach');
+        if (sources?.length) {
+          const links = document.createElement('div');
+          links.className = 'msg-sources';
+          links.innerHTML = 'מתוך: ' + sources
+            .map((x) => `<a href="#/articles/${encodeURIComponent(x.slug)}">${esc(x.title)}</a>`)
+            .join(' · ');
+          node.appendChild(links);
+        }
+        history.push({ role: 'user', text: question }, { role: 'bot', text: reply });
+        thread.scrollTop = thread.scrollHeight;
+      } catch (err) {
+        pending.remove();
+        bubble('הבוט', err.message, 'from-coach is-error');
+      } finally {
+        input.disabled = false;
+        chatForm.querySelector('button').disabled = false;
+        input.focus();
+      }
+    });
+  }
 
   el.querySelectorAll('.member').forEach((button) => {
     button.addEventListener('click', () => {
