@@ -59,6 +59,16 @@ Per `CLAUDE.md` §8, each milestone ships working end-to-end before the next beg
 
 ---
 
+## Published read
+
+A static read of the 2026-08-28 revenue, in the same design system, is published at
+<https://claude.ai/code/artifact/22da96c3-861b-447c-9226-045bba6d02e5>. Source in
+`design/revenue-console.html`. It is a snapshot, not the live app.
+
+**Deploying the live app** needs three things this repo cannot supply on its own: a host
+(Vercel), a PostgreSQL instance, and a Google OAuth client with the two allowed addresses.
+With those, `.env.example` lists every variable required.
+
 ## Running it
 
 Requires Node 20+ and PostgreSQL 14+.

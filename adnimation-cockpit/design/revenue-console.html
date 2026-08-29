@@ -1,0 +1,384 @@
+<title>Adnimation Revenue Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600&display=swap">
+<style>
+/* Dark-HUD design system, taken from the Adnimation CEO Cockpit design handoff.
+   Deliberately single-theme: the console is a dark instrument, and every colour
+   is painted explicitly so the page holds on any host ground. */
+:root {
+  --paper: #eaf2fb;
+  --ground: #0f1a24;
+  --strip: #0b141c;
+  --rail-from: #142330;
+  --rail-to: #0c151d;
+  --ink: #e6eef7;
+  --divider: rgba(196, 218, 240, 0.2);
+  --n300: #33465a; --n400: #4a6076; --n500: #8ba4bd; --n600: #9db4ca;
+  --n700: #c2d3e4; --n800: #d7e4f1; --n900: #eaf2fb;
+  --accent: #7cabdd; --a100: #17293a; --a300: #9cc3e8; --a500: #6f9fcc;
+  --a700: #a8cbea; --a800: #c2dbf2; --a900: #dcecfb;
+  --critical: #e8919a; --warning: #e0b183; --watch: #d6cf8e;
+  --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --tech: 'Barlow Semi Condensed', 'Arial Narrow', sans-serif;
+  --body: 'Barlow', system-ui, sans-serif;
+}
+* { box-sizing: border-box; border-radius: 0; }
+body {
+  margin: 0; background: var(--ground); color: var(--ink);
+  font-family: var(--body); font-size: 14px;
+  font-variant-numeric: tabular-nums; text-wrap: pretty;
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    repeating-linear-gradient(to bottom, rgba(196,218,240,.035) 0 1px, transparent 1px 4px),
+    radial-gradient(120% 80% at 78% -10%, rgba(124,171,221,.14) 0%, transparent 60%),
+    linear-gradient(to right, rgba(230,238,247,.07) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(230,238,247,.07) 1px, transparent 1px);
+  background-size: 100% 4px, 100% 100%, 48px 48px, 48px 48px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px 72px; }
+
+/* --- masthead --- */
+.masthead {
+  background: linear-gradient(180deg, var(--rail-from), var(--rail-to));
+  border-bottom: 1px solid var(--divider);
+}
+.masthead-in {
+  max-width: 1180px; margin: 0 auto; padding: 22px 24px;
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px;
+}
+.wordmark { font-family: var(--display); font-weight: 600; font-size: 25px; letter-spacing: .2em; line-height: 1; color: var(--paper); }
+.sub { display: flex; align-items: center; gap: 8px; margin-top: 7px; font-family: var(--tech); font-size: 10px; font-weight: 500; letter-spacing: .3em; color: var(--a300); }
+.led { width: 5px; height: 5px; background: var(--a300); display: inline-block; animation: led 2.6s ease-in-out infinite; }
+@keyframes led { 0%,100% { opacity: 1 } 50% { opacity: .2 } }
+.status { display: flex; align-items: center; gap: 14px; font-family: var(--tech); font-size: 10px; letter-spacing: .16em; color: var(--n500); }
+.status .live { color: var(--a300); display: inline-flex; align-items: center; gap: 7px; }
+
+/* --- telemetry strip --- */
+.strip { background: var(--strip); border-bottom: 1px solid var(--divider); }
+.strip-in { max-width: 1180px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); }
+.cell { padding: 12px 16px 12px 0; border-right: 1px solid rgba(15,26,36,.5); min-width: 0; }
+.cell:last-child { border-right: 0; }
+.cell .k { display: block; font-family: var(--tech); font-size: 9px; font-weight: 500; letter-spacing: .14em; color: var(--a300); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell .v { display: block; margin-top: 4px; font-family: var(--display); font-size: 20px; font-weight: 500; line-height: 1; color: var(--paper); white-space: nowrap; }
+
+/* --- kicker + title --- */
+.kicker { display: flex; align-items: center; gap: 10px; margin-top: 30px; font-family: var(--tech); font-size: 10px; font-weight: 500; letter-spacing: .3em; color: var(--a700); text-transform: uppercase; }
+.kicker::before { content: ''; width: 22px; height: 1px; background: var(--accent); }
+h1 { font-family: var(--display); font-weight: 600; font-size: 44px; line-height: .92; letter-spacing: -.012em; margin: 10px 0 0; text-shadow: 0 0 28px rgba(124,171,221,.22); text-wrap: balance; }
+.dek { max-width: 66ch; margin: 12px 0 0; color: var(--n700); font-size: 15px; line-height: 1.55; }
+
+/* --- cards --- */
+.card {
+  position: relative; margin-top: 22px; padding: 19px;
+  border: 1px solid var(--divider);
+  background: color-mix(in srgb, var(--ground) 84%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(196,218,240,.055), 0 18px 40px rgba(4,9,13,.45);
+}
+/* four registration crosshairs */
+.card::before, .card::after, .card > .marks::before, .card > .marks::after {
+  content: ''; position: absolute; width: 11px; height: 11px;
+  color: rgba(230,238,247,.55);
+  background-image: linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor);
+  background-size: 100% 1px, 1px 100%; background-position: center; background-repeat: no-repeat;
+  pointer-events: none;
+}
+.card::before { top: -6px; left: -6px } .card::after { top: -6px; right: -6px }
+.card > .marks::before { bottom: -6px; left: -6px } .card > .marks::after { bottom: -6px; right: -6px }
+.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+h2 { font-family: var(--display); font-weight: 600; font-size: 24px; line-height: 1; margin: 0; color: var(--n900); }
+.idx { font-family: var(--display); font-size: 10px; letter-spacing: .16em; color: var(--a700); }
+.label { font-family: var(--tech); font-size: 9px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--n600); white-space: nowrap; }
+
+/* --- figures --- */
+.figs { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 38px; }
+.fig .v { margin-top: 5px; font-family: var(--display); font-weight: 600; font-size: 22px; line-height: .9; color: var(--n800); }
+.fig.big .v { font-size: 40px; color: var(--a900); text-shadow: 0 0 22px rgba(124,171,221,.35); }
+.delta { font-family: var(--display); font-size: 17px; line-height: 1; }
+.up { color: var(--a300) } .down { color: var(--critical) } .flat { color: var(--n500) }
+
+/* --- dept grid --- */
+.depts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 16px; }
+.dept { position: relative; overflow: hidden; border: 1px solid var(--divider); padding: 13px; }
+.dept .spark { position: absolute; left: 0; right: 0; bottom: 0; height: 42px; opacity: .3 }
+.dept .inner { position: relative }
+.dept .v { margin-top: 5px; font-family: var(--display); font-weight: 600; font-size: 27px; line-height: .9; color: var(--a900); }
+.dept .row { display: flex; gap: 12px; margin-top: 7px; font-family: var(--display); font-size: 14px; }
+.dept .meta { margin-top: 9px; font-family: var(--tech); font-size: 10px; letter-spacing: .1em; color: var(--n500); }
+
+/* --- tag --- */
+.tag { display: inline-flex; align-items: center; padding: 3px 7px; font-family: var(--tech); font-size: 10px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; line-height: 1; border: 1px solid transparent; }
+.tag.watch { border-color: rgba(214,207,142,.6); color: var(--watch) }
+.tag.warn { border-color: rgba(224,177,131,.6); color: var(--warning) }
+.tag.crit { border-color: rgba(232,145,154,.6); color: var(--critical) }
+.tag.ok { background: var(--a100); color: var(--a800) }
+.tag.out { border-color: var(--divider); color: var(--n600) }
+
+/* --- signals --- */
+.signal { display: grid; grid-template-columns: 3px 1fr; gap: 13px; padding: 12px 0; border-top: 1px solid rgba(230,238,247,.09); }
+.signal:first-of-type { border-top: 0 }
+.signal .bar { background: var(--warning) }
+.signal.crit .bar { background: var(--critical) }
+.signal .sev { font-family: var(--display); font-weight: 600; font-size: 12px; letter-spacing: .22em; color: var(--n800); }
+.signal p { margin: 5px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--n700); }
+.signal .act { margin-top: 5px; font-family: var(--tech); font-size: 11px; letter-spacing: .1em; color: var(--n500); }
+
+/* --- tables --- */
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-family: var(--tech); font-size: 14px; }
+th { padding: 8px 12px 8px 0; text-align: left; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--n600); border-bottom: 1px solid var(--divider); white-space: nowrap; }
+td { padding: 10px 12px 10px 0; border-top: 1px solid rgba(230,238,247,.09); vertical-align: top; }
+td.num { font-family: var(--display); font-size: 17px; color: var(--n900); white-space: nowrap; }
+td.dim { color: var(--n500) }
+tbody tr:hover { background: rgba(230,238,247,.04) }
+.name { font-family: var(--display); font-size: 17px; color: var(--n900); white-space: nowrap; }
+
+/* --- chart --- */
+.chart { margin-top: 8px; }
+.axis { display: flex; justify-content: space-between; margin-top: 8px; font-family: var(--tech); font-size: 10px; letter-spacing: .12em; color: var(--n500); }
+.legend { display: flex; gap: 18px; font-family: var(--tech); font-size: 10px; letter-spacing: .14em; color: var(--n500); }
+.legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+
+.note { margin: 14px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--n700); max-width: 78ch; }
+.note strong { color: var(--n900); font-weight: 600 }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; color: var(--a800); background: rgba(124,171,221,.1); padding: 1px 5px; }
+footer { margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--divider); font-family: var(--tech); font-size: 11px; letter-spacing: .1em; color: var(--n500); line-height: 1.9; }
+@media (prefers-reduced-motion: reduce) { .led { animation: none } }
+@media (max-width: 860px) {
+  .strip-in { grid-template-columns: repeat(2, 1fr) }
+  h1 { font-size: 34px }
+  .fig.big .v { font-size: 32px }
+}
+</style>
+<header class="masthead">
+  <div class="masthead-in">
+    <div>
+      <div class="wordmark">ADNIMATION</div>
+      <div class="sub"><span class="led"></span>CEO COCKPIT</div>
+    </div>
+    <div class="status">
+      <span class="live"><span class="led" style="width:6px;height:6px"></span>LIVE</span>
+      <span id="pulled"></span>
+      <span>SOURCE: AD OPS ARCHITECT · READ-ONLY</span>
+    </div>
+  </div>
+</header>
+
+<div class="strip"><div class="strip-in" id="strip"></div></div>
+
+<div class="wrap">
+  <div class="kicker">Revenue read / last full day</div>
+  <h1 id="title"></h1>
+  <p class="dek">
+    Yesterday&rsquo;s revenue for Adnimation, read straight from the Ad Ops Architect database and
+    put through the cockpit&rsquo;s own arithmetic. Net is derived here rather than taken from the
+    source &mdash; the reason is in <a href="#settlement" style="color:var(--a700)">Settlement lag</a>, and it is the
+    difference between a flat week and a fictional 170% jump.
+  </p>
+
+  <section class="card">
+    <span class="marks"></span>
+    <div class="card-head"><h2>Company total</h2><span class="idx">F01</span></div>
+    <div class="figs" id="totals"></div>
+    <div class="chart" style="margin-top:22px">
+      <div class="legend" style="margin-bottom:8px">
+        <span><i style="background:var(--accent)"></i>NET (DERIVED)</span>
+        <span><i style="background:var(--n400)"></i>GROSS</span>
+        <span><i style="background:rgba(224,177,131,.35)"></i>NOT YET SETTLED UPSTREAM</span>
+      </div>
+      <div id="chart"></div>
+      <div class="axis" id="axis"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <span class="marks"></span>
+    <div class="card-head"><h2>By department</h2><span class="idx">F02</span></div>
+    <div class="depts" id="depts"></div>
+  </section>
+
+  <section class="card">
+    <span class="marks"></span>
+    <div class="card-head"><h2>Signals</h2><span class="idx">S01</span></div>
+    <div id="signals"></div>
+  </section>
+
+  <section class="card" id="settlement">
+    <span class="marks"></span>
+    <div class="card-head"><h2>Settlement lag</h2><span class="tag warn">DATA QUALITY</span></div>
+    <p class="note">
+      The source computes <code>total_revenue</code> in a settlement pass that runs a day or two
+      behind the raw figures. Until it runs, that column is left equal to <code>publisher_revenue</code>
+      &mdash; fees are not deducted yet. Reading it directly would have reported a
+      <strong>~170% overnight jump in net revenue that never happened</strong>, and the anomaly
+      detector would have fired a spike alert on an artefact of a job schedule.
+    </p>
+    <p class="note">
+      <code>gross_revenue</code> and <code>source_fee</code> are both populated from the start, so the
+      cockpit derives <strong>net = gross &minus; fee</strong> and gets a consistent series on every
+      day, settled or not.
+    </p>
+    <div class="scroll" style="margin-top:14px">
+      <table>
+        <thead><tr><th>Date</th><th>Gross</th><th>Fee</th><th>Source total_revenue</th><th>Derived net</th><th>Status</th></tr></thead>
+        <tbody id="settle"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <span class="marks"></span>
+    <div class="card-head"><h2>Mapping awaiting sign-off</h2><span class="tag watch">NEEDS DECISION</span></div>
+    <p class="note">
+      The source distinguishes <strong>business line</strong> (Trading Desk vs. Managed Publishers)
+      and <strong>demand category</strong>. It does not carry the eight business units from the spec.
+      Nothing in the data says which unit owns which combination, and that is a business fact rather
+      than something to infer from revenue shapes &mdash; so the table below is a proposal, not a
+      reading. Revenue matching no rule shows as UNASSIGNED rather than being folded into a department.
+    </p>
+    <div class="scroll" style="margin-top:14px">
+      <table>
+        <thead><tr><th>Business line</th><th>Category</th><th>Proposed unit</th><th>Rationale</th><th>Status</th></tr></thead>
+        <tbody id="mapping"></tbody>
+      </table>
+    </div>
+    <p class="note" style="margin-top:14px"><strong>Units with no data source yet:</strong> <span id="unmapped"></span>. Nothing is being reported against them.</p>
+  </section>
+
+  <footer>
+    DATA PULLED 2026-08-29 FROM public.ars_site_daily_revenue JOINED TO ars_accounts · READ-ONLY SELECT · NOTHING WAS WRITTEN TO THE SOURCE<br>
+    THIS PAGE IS A STATIC READ OF A 35-DAY SNAPSHOT. THE LIVE APP IS A NEXT.JS CONSOLE ON BRANCH claude/adnimation-ceo-cockpit-q71glk.
+  </footer>
+</div>
+
+<script>
+const D = {"date": "2026-08-28", "totals": {"net": 870078, "gross": 2402119, "impressions": 26408753, "ecpm": 33, "takeRate": 0.36221269637349357}, "deltas": {"prevDay": -0.09479365746525412, "lastWeek": -0.0422737684689752, "sevenDay": -0.10743013189358648}, "depts": [{"code": "CORE", "label": "CORE PUBLISHERS", "net": 660852, "gross": 1676953, "impressions": 23809354, "ecpm": 28, "takeRate": 0.394079023085322, "prevDay": -0.11126830645920467, "lastWeek": -0.010309463620352954, "confirmed": false, "spark": [558403, 526424, 477741, 479788, 482085, 462354, 456415, 493015, 508487, 500942, 507756, 525521, 529280, 535196, 532992, 585930, 578666, 580345, 613976, 599916, 620305, 673177, 667736, 670860, 720494, 790189, 853909, 745214, 743590, 660852], "categories": [{"category": "header_bidding", "line": "publisher", "net": 375773, "gross": 525329}, {"category": "google", "line": "publisher", "net": 252866, "gross": 1100694}, {"category": "content_recommendations", "line": "publisher", "net": 28061, "gross": 45748}, {"category": "ebda", "line": "publisher", "net": 4152, "gross": 5182}]}, {"code": "VID", "label": "VIDEO", "net": 183006, "gross": 674127, "impressions": 2449682, "ecpm": 75, "takeRate": 0.27147110262606305, "prevDay": -0.003859238494407098, "lastWeek": -0.048874798607141, "confirmed": false, "spark": [195799, 220420, 148712, 153893, 175251, 180069, 150486, 95849, 97364, 96488, 90522, 93129, 106419, 115883, 162990, 123311, 116040, 112226, 115395, 115403, 125233, 150206, 192410, 211544, 193408, 200553, 224546, 178389, 183715, 183006], "categories": [{"category": "video", "line": "trading", "net": 106592, "gross": 537703}, {"category": "video", "line": "publisher", "net": 76414, "gross": 136424}]}, {"code": "BID", "label": "BIDDER", "net": 26220, "gross": 51039, "impressions": 149717, "ecpm": 175, "takeRate": 0.5137247986833597, "prevDay": -0.22627478753541078, "lastWeek": -0.45755839212197696, "confirmed": false, "spark": [39424, 39297, 29736, 19713, 31292, 43279, 21197, 26071, 20286, 25669, 17340, 18681, 18876, 31371, 26172, 28195, 20132, 20830, 34511, 42839, 69047, 47262, 48337, 37875, 31507, 36461, 27283, 31696, 33888, 26220], "categories": [{"category": "header_bidding", "line": "trading", "net": 26220, "gross": 51039}]}], "anomalies": [{"label": "BID", "severity": "warning", "kind": "drop", "deltaPct": -0.22301902447697505, "impact": 7526, "what": "BID: down 22% against baseline.", "action": "Watch today; if it holds tomorrow, open an investigation with the department."}], "series": [{"date": "2026-07-25", "gross": 2742018, "net": 942308}, {"date": "2026-07-26", "gross": 2541087, "net": 855815}, {"date": "2026-07-27", "gross": 2515325, "net": 762307}, {"date": "2026-07-28", "gross": 2422660, "net": 811657}, {"date": "2026-07-29", "gross": 2384334, "net": 758610}, {"date": "2026-07-30", "gross": 2512415, "net": 793626}, {"date": "2026-07-31", "gross": 2585309, "net": 786141}, {"date": "2026-08-01", "gross": 2092348, "net": 656189}, {"date": "2026-08-02", "gross": 2173577, "net": 653394}, {"date": "2026-08-03", "gross": 2338061, "net": 688628}, {"date": "2026-08-04", "gross": 2224581, "net": 685702}, {"date": "2026-08-05", "gross": 2073998, "net": 628098}, {"date": "2026-08-06", "gross": 1848013, "net": 614935}, {"date": "2026-08-07", "gross": 1731549, "net": 626137}, {"date": "2026-08-08", "gross": 1713073, "net": 623099}, {"date": "2026-08-09", "gross": 1790452, "net": 615618}, {"date": "2026-08-10", "gross": 1795540, "net": 637331}, {"date": "2026-08-11", "gross": 1786950, "net": 654575}, {"date": "2026-08-12", "gross": 1940620, "net": 682450}, {"date": "2026-08-13", "gross": 2079270, "net": 722154}, {"date": "2026-08-14", "gross": 1933704, "net": 737436}, {"date": "2026-08-15", "gross": 1872800, "net": 714838}, {"date": "2026-08-16", "gross": 1901774, "net": 713401}, {"date": "2026-08-17", "gross": 2017243, "net": 763882}, {"date": "2026-08-18", "gross": 2039744, "net": 758158}, {"date": "2026-08-19", "gross": 2155075, "net": 814585}, {"date": "2026-08-20", "gross": 2342676, "net": 870645}, {"date": "2026-08-21", "gross": 2302067, "net": 908483}, {"date": "2026-08-22", "gross": 2294185, "net": 920279}, {"date": "2026-08-23", "gross": 2560363, "net": 945409}, {"date": "2026-08-24", "gross": 2821317, "net": 1027203}, {"date": "2026-08-25", "gross": 2778501, "net": 1105738}, {"date": "2026-08-26", "gross": 2536250, "net": 955299}, {"date": "2026-08-27", "gross": 2628131, "net": 961193}, {"date": "2026-08-28", "gross": 2402119, "net": 870078}], "mapping": [{"line": "publisher", "category": "google", "dept": "CORE PUBLISHERS", "why": "GAM revenue on managed publisher accounts.", "confirmed": false}, {"line": "publisher", "category": "header_bidding", "dept": "CORE PUBLISHERS", "why": "Header bidding on managed publisher accounts.", "confirmed": false}, {"line": "publisher", "category": "content_recommendations", "dept": "CORE PUBLISHERS", "why": "Content recommendation widgets on managed publisher sites.", "confirmed": false}, {"line": "publisher", "category": "ebda", "dept": "CORE PUBLISHERS", "why": "Exchange Bidding on managed publisher accounts.", "confirmed": false}, {"line": "publisher", "category": "video", "dept": "VIDEO", "why": "Video demand on managed publisher accounts.", "confirmed": false}, {"line": "trading", "category": "video", "dept": "VIDEO", "why": "Video demand bought through the trading desk.", "confirmed": false}, {"line": "trading", "category": "header_bidding", "dept": "BIDDER", "why": "Header bidding through the trading desk \u2014 the bidder business.", "confirmed": false}], "unmapped": ["SEAT LEASE", "RTB IN-APP", "RTB DISPLAY", "CTV", "ASIA EXPANSION"]};
+
+const usd = (c, max) => '$' + (c/100).toLocaleString('en-US', {maximumFractionDigits: max ?? (Math.abs(c) >= 100000 ? 0 : 2)});
+const num = n => n.toLocaleString('en-US');
+const pct = p => p === null || p === undefined ? '—' : (p >= 0 ? '+' : '') + (p*100).toFixed(1) + '%';
+const cls = p => p === null || p === undefined ? 'flat' : Math.abs(p) < 0.02 ? 'flat' : p > 0 ? 'up' : 'down';
+const el = (t, c, h) => { const n = document.createElement(t); if (c) n.className = c; if (h !== undefined) n.innerHTML = h; return n; };
+
+document.getElementById('title').textContent = D.date;
+document.getElementById('pulled').textContent = 'PULLED 2026-08-29';
+
+// --- telemetry strip ---
+const stripCells = [
+  ['NET / LAST FULL DAY', usd(D.totals.net, 0)],
+  ['GROSS', usd(D.totals.gross, 0)],
+  ['TAKE RATE', (D.totals.takeRate*100).toFixed(1) + '%'],
+  ['ECPM', usd(D.totals.ecpm)],
+  ['IMPRESSIONS', num(D.totals.impressions)],
+  ['OPEN SIGNALS', String(D.anomalies.length)],
+];
+const strip = document.getElementById('strip');
+for (const [k, v] of stripCells) {
+  strip.appendChild(el('div', 'cell', `<span class="k">${k}</span><span class="v">${v}</span>`));
+}
+
+// --- totals ---
+const totals = document.getElementById('totals');
+totals.appendChild(el('div', 'fig big', `<span class="label">NET</span><div class="v">${usd(D.totals.net, 0)}</div>`));
+totals.appendChild(el('div', 'fig', `<span class="label">GROSS</span><div class="v">${usd(D.totals.gross, 0)}</div>`));
+totals.appendChild(el('div', 'fig', `<span class="label">TAKE RATE</span><div class="v">${(D.totals.takeRate*100).toFixed(1)}%</div>`));
+totals.appendChild(el('div', 'fig', `<span class="label">IMPRESSIONS</span><div class="v">${num(D.totals.impressions)}</div>`));
+for (const [k, key] of [['VS PREV DAY','prevDay'], ['VS SAME DAY LAST WEEK','lastWeek'], ['VS 7-DAY AVG','sevenDay']]) {
+  const p = D.deltas[key];
+  totals.appendChild(el('div', 'fig', `<span class="label">${k}</span><div class="v"><span class="delta ${cls(p)}">${pct(p)}</span></div>`));
+}
+
+// --- main chart: gross and net over the window ---
+(function chart() {
+  const W = 1100, H = 190, pad = 4;
+  const s = D.series;
+  const max = Math.max(...s.map(d => d.gross)) * 1.06;
+  const x = i => (i / (s.length - 1)) * W;
+  const y = v => H - pad - (v / max) * (H - pad*2);
+  const line = key => s.map((d, i) => `${x(i).toFixed(1)},${y(d[key]).toFixed(1)}`).join(' ');
+  // The last three days had not settled upstream when this snapshot was taken.
+  const unsettledFrom = x(s.length - 3);
+  const svg = `
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:190px;display:block" role="img" aria-label="Gross and derived net revenue over 35 days">
+      <rect x="${unsettledFrom}" y="0" width="${W - unsettledFrom}" height="${H}" fill="rgba(224,177,131,.12)"></rect>
+      ${[0.25,0.5,0.75].map(f => `<line x1="0" y1="${H*f}" x2="${W}" y2="${H*f}" stroke="rgba(230,238,247,.07)" stroke-width="1" vector-effect="non-scaling-stroke"></line>`).join('')}
+      <polyline points="${line('gross')}" fill="none" stroke="var(--n400)" stroke-width="1.5" vector-effect="non-scaling-stroke"></polyline>
+      <polyline points="${line('net')}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>
+      <circle cx="${x(s.length-1)}" cy="${y(s[s.length-1].net)}" r="3.5" fill="var(--a900)"></circle>
+    </svg>`;
+  document.getElementById('chart').innerHTML = svg;
+  const ax = document.getElementById('axis');
+  [0, Math.floor(s.length/3), Math.floor(2*s.length/3), s.length-1].forEach(i => {
+    ax.appendChild(el('span', null, s[i].date.slice(5)));
+  });
+})();
+
+// --- departments ---
+const depts = document.getElementById('depts');
+for (const d of D.depts) {
+  const max = Math.max(...d.spark), min = Math.min(...d.spark), range = (max - min) || 1;
+  const pts = d.spark.map((v, i) => `${(i/(d.spark.length-1)*100).toFixed(1)},${(30 - ((v-min)/range)*28).toFixed(1)}`).join(' ');
+  const node = el('div', 'dept', `
+    <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">
+      <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.4" vector-effect="non-scaling-stroke"></polyline>
+    </svg>
+    <div class="inner">
+      <span class="label">${d.label}</span>
+      ${d.confirmed ? '' : ' <span class="tag watch" style="margin-left:6px">UNCONFIRMED</span>'}
+      <div class="v">${usd(d.net, 0)}</div>
+      <div class="row">
+        <span class="${cls(d.prevDay)}">D ${pct(d.prevDay)}</span>
+        <span class="${cls(d.lastWeek)}">W ${pct(d.lastWeek)}</span>
+      </div>
+      <div class="meta">GROSS ${usd(d.gross,0)} · TAKE ${(d.takeRate*100).toFixed(1)}% · ECPM ${usd(d.ecpm)}</div>
+      <div class="meta">${d.categories.map(c => c.category.replace(/_/g,' ').toUpperCase()).join(' · ')}</div>
+    </div>`);
+  depts.appendChild(node);
+}
+
+// --- signals ---
+const sig = document.getElementById('signals');
+if (D.anomalies.length === 0) {
+  sig.appendChild(el('p', 'note', 'No anomalies above threshold. An empty list here is a healthy state.'));
+} else {
+  for (const a of D.anomalies) {
+    sig.appendChild(el('div', 'signal' + (a.severity === 'critical' ? ' crit' : ''), `
+      <span class="bar"></span>
+      <div>
+        <div class="sev">${a.severity.toUpperCase()}</div>
+        <p>${a.what}</p>
+        <div class="act">IMPACT ${usd(a.impact)} · ${a.action}</div>
+      </div>`));
+  }
+}
+
+// --- settlement comparison (figures read from the source on 2026-08-29) ---
+const settle = [
+  ['2026-08-25', 2778500, 1672800, 1105700, true],
+  ['2026-08-26', 2536300, 1581000, 2439000, false],
+  ['2026-08-27', 2628100, 1666900, 2539800, false],
+  ['2026-08-28', 2402100, 1532000, 2317200, false],
+];
+const sBody = document.getElementById('settle');
+for (const [d, gross, fee, total, ok] of settle) {
+  sBody.appendChild(el('tr', null, `
+    <td class="dim">${d}</td>
+    <td class="num">${usd(gross,0)}</td>
+    <td class="num dim">${usd(fee,0)}</td>
+    <td class="num" style="color:${ok ? 'var(--n900)' : 'var(--warning)'}">${usd(total,0)}</td>
+    <td class="num">${usd(gross-fee,0)}</td>
+    <td><span class="tag ${ok ? 'ok' : 'warn'}">${ok ? 'SETTLED' : 'NOT SETTLED'}</span></td>`));
+}
+
+// --- mapping ---
+const mBody = document.getElementById('mapping');
+for (const r of D.mapping) {
+  mBody.appendChild(el('tr', null, `
+    <td class="dim">${r.line === 'trading' ? 'Trading Desk' : 'Managed Publishers'}</td>
+    <td class="dim">${r.category.replace(/_/g,' ')}</td>
+    <td><span class="name">${r.dept}</span></td>
+    <td class="dim" style="white-space:normal">${r.why}</td>
+    <td><span class="tag ${r.confirmed ? 'ok' : 'watch'}">${r.confirmed ? 'CONFIRMED' : 'PROPOSED'}</span></td>`));
+}
+document.getElementById('unmapped').textContent = D.unmapped.join(' · ');
+</script>
