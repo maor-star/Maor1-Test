@@ -166,11 +166,20 @@ function handle(message) {
 export function mountMcp(app) {
   const token = process.env.MCP_TOKEN;
 
+  /**
+   * The token normally rides in an Authorization header. Some bot builders only let
+   * you paste a URL with no way to add headers, so it is also accepted as ?key=.
+   * That does put the secret in a URL, and URLs turn up in logs, which is the reason
+   * it is the fallback and not the first choice.
+   */
+  const authorised = (req) => {
+    if (!token) return true;
+    const header = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    return header === token || req.query.key === token;
+  };
+
   app.post('/mcp', (req, res) => {
-    if (token) {
-      const given = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-      if (given !== token) return res.status(401).json({ error: 'unauthorized' });
-    }
+    if (!authorised(req)) return res.status(401).json({ error: 'unauthorized' });
     const body = req.body;
     // A client may batch several messages into one array.
     if (Array.isArray(body)) {
@@ -185,10 +194,7 @@ export function mountMcp(app) {
   // Some clients open a stream first. There is nothing to push, so this stays open
   // and idle rather than failing the connection.
   app.get('/mcp', (req, res) => {
-    if (token) {
-      const given = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-      if (given !== token) return res.status(401).json({ error: 'unauthorized' });
-    }
+    if (!authorised(req)) return res.status(401).json({ error: 'unauthorized' });
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
