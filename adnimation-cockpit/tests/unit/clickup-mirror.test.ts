@@ -5,8 +5,8 @@ import type { ClickUpTask } from '@/lib/integrations/types';
 
 const task = (over: Partial<ClickUpTask> = {}): ClickUpTask => ({
   id: 'abc123',
-  name: 'לבדוק את ה-sellers.json',
-  description: 'תיאור',
+  name: 'Check the sellers.json',
+  description: 'Some description',
   status: 'in progress',
   priority: 2,
   dueDateMs: Date.parse('2026-09-10T00:00:00Z'),
@@ -48,7 +48,7 @@ describe('toMirrorRow', () => {
     const row = toMirrorRow(task());
     expect(row).toMatchObject({
       clickupId: 'abc123',
-      title: 'לבדוק את ה-sellers.json',
+      title: 'Check the sellers.json',
       status: 'in_progress',
       priority: 'P1',
       dueDate: '2026-09-10',

@@ -20,17 +20,17 @@ async function main() {
   await db
     .insert(users)
     .values([
-      { email: ownerEmail, name: 'מאור דוידוביץ׳', role: 'owner' },
-      { email: operatorEmail, name: 'מור', role: 'operator' },
+      { email: ownerEmail, name: 'Maor Davidovich', role: 'owner' },
+      { email: operatorEmail, name: 'Mor', role: 'operator' },
     ])
     .onConflictDoNothing();
 
   const team = [
-    { name: 'מור', email: operatorEmail, slackId: 'U_MOR', role: 'Chief of Staff' },
-    { name: 'רוית', email: 'ravit@adnimation.com', slackId: 'U_RAVIT', role: 'Legal & Contracts' },
-    { name: 'אמיר', email: 'amir@adnimation.com', slackId: 'U_AMIR', role: 'Finance' },
-    { name: 'תומר', email: 'tomer@adnimation.com', slackId: 'U_TOMER', role: 'Supply' },
-    { name: 'מאור דוידוביץ׳', email: ownerEmail, slackId: process.env.SLACK_CEO_USER_ID ?? 'U_CEO', role: 'CEO' },
+    { name: 'Mor', email: operatorEmail, slackId: 'U_MOR', role: 'Chief of Staff' },
+    { name: 'Ravit', email: 'ravit@adnimation.com', slackId: 'U_RAVIT', role: 'Legal & Contracts' },
+    { name: 'Amir', email: 'amir@adnimation.com', slackId: 'U_AMIR', role: 'Finance' },
+    { name: 'Tomer', email: 'tomer@adnimation.com', slackId: 'U_TOMER', role: 'Supply' },
+    { name: 'Maor Davidovich', email: ownerEmail, slackId: process.env.SLACK_CEO_USER_ID ?? 'U_CEO', role: 'CEO' },
   ];
   await db.insert(people).values(team).onConflictDoNothing();
 
@@ -41,8 +41,8 @@ async function main() {
 
   const seedTasks = [
     {
-      title: 'לסגור את חידוש ה-IO מול PubMatic',
-      description: 'החוזה פג בסוף החודש. רוית מחכה לאישור התנאים המסחריים.',
+      title: 'Close the IO renewal with PubMatic',
+      description: 'The contract expires at month end. Ravit is waiting on commercial terms approval.',
       priority: 'P0' as const,
       dueDate: iso(subDays(now, 4)),
       deptId: deptBy('DISP'),
@@ -51,8 +51,8 @@ async function main() {
       tags: ['contract', 'demand'],
     },
     {
-      title: 'ירידה ב-Fill Rate ב-RTB In-App',
-      description: 'ה-Fill Rate ירד ב-18% מול השבוע שעבר. לבדוק מול הבידר.',
+      title: 'Fill Rate drop in RTB In-App',
+      description: 'Fill Rate is down 18% week over week. Check with the bidder.',
       priority: 'P0' as const,
       dueDate: iso(subDays(now, 1)),
       deptId: deptBy('APP'),
@@ -61,8 +61,8 @@ async function main() {
       tags: ['revenue', 'supply'],
     },
     {
-      title: 'לאשר את sellers.json החדש למותג אסיה',
-      description: 'מותג נפרד לחלוטין — לוודא שאין חפיפה עם ה-sellers.json הראשי.',
+      title: 'Approve the new sellers.json for the Asia brand',
+      description: 'A fully separate brand — confirm no overlap with the main sellers.json.',
       priority: 'P1' as const,
       dueDate: iso(subDays(now, 2)),
       deptId: deptBy('ASIA'),
@@ -71,7 +71,7 @@ async function main() {
       tags: ['asia'],
     },
     {
-      title: 'סבב משוב רבעוני לראשי מחלקות',
+      title: 'Quarterly feedback round with department heads',
       priority: 'P2' as const,
       dueDate: iso(subDays(now, -10)),
       deptId: null,
@@ -80,7 +80,7 @@ async function main() {
       tags: ['people'],
     },
     {
-      title: 'לבדוק את הצעת ה-CTV מ-Yao',
+      title: 'Review the CTV proposal from Yao',
       priority: 'P1' as const,
       dueDate: null, // trips the "P0/P1 without a due date" hygiene rule
       deptId: deptBy('CTV'),
@@ -123,7 +123,7 @@ async function main() {
   const [contractTask] = await db
     .select()
     .from(tasks)
-    .where(eq(tasks.title, 'לסגור את חידוש ה-IO מול PubMatic'))
+    .where(eq(tasks.title, 'Close the IO renewal with PubMatic'))
     .limit(1);
   const ravit = personBy('ravit@adnimation.com');
   if (contractTask && ravit) {
@@ -138,7 +138,7 @@ async function main() {
         sourceEntityId: contractTask.id,
         taskId: contractTask.id,
         delegatedTo: ravit,
-        note: 'לוודא מול הצד השני שהתנאים המסחריים לא השתנו.',
+        note: 'Confirm with the counterparty that commercial terms have not changed.',
         dueDate: iso(subDays(now, 1)),
         status: 'sent',
         delegatedAt: subDays(now, 5),

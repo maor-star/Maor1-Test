@@ -3,7 +3,7 @@ import type { TaskRow } from '@/lib/tasks/queries';
 import { daysOverdue } from '@/lib/scoring/heat-score';
 import { isZombie } from '@/lib/tasks/mutations';
 import { fmtMoney } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
+import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { HeatBar, OverdueChip, PriorityBadge, StatusBadge, TaskTitleLink } from '@/components/task-bits';
 import { QuickTaskActions } from '@/components/quick-task-actions';
@@ -19,8 +19,8 @@ export function TaskListView({
 }) {
   if (rows.length === 0) {
     return (
-      <div className="rounded-lg border p-6 text-center text-sm text-muted-foreground">
-        אין משימות שתואמות את הסינון.
+      <div className="hud-card hud-marks p-6 text-center font-semi text-[12px] text-neutral-500">
+        No tasks match this filter.
       </div>
     );
   }
@@ -28,19 +28,19 @@ export function TaskListView({
   const now = new Date();
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className="hud-card hud-marks overflow-x-auto">
       <table className="cockpit-table">
         <thead>
           <tr>
-            <th className="w-[32%]">משימה</th>
-            <th>עדיפות</th>
-            <th>סטטוס</th>
-            <th>מחלקה</th>
-            <th>בעלים</th>
-            <th>יעד</th>
-            <th>השפעה</th>
+            <th className="w-[30%]">Task</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Department</th>
+            <th>Owner</th>
+            <th>Due</th>
+            <th>Impact</th>
             <th>Heat</th>
-            <th className="text-left">פעולות</th>
+            <th className="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -52,17 +52,17 @@ export function TaskListView({
                   <div className="flex flex-wrap items-center gap-1.5">
                     <TaskTitleLink id={t.id} title={t.title} clickupUrl={t.clickupUrl} />
                     {isZombie(t.snoozeCount) ? (
-                      <Badge variant="watch" title={`נדחתה ${t.snoozeCount} פעמים`}>Zombie</Badge>
+                      <Tag tone="watch" title={`Snoozed ${t.snoozeCount} times`}>Zombie</Tag>
                     ) : null}
                     {t.tags.map((tag) => (
-                      <Badge key={tag} variant="outline">{tag}</Badge>
+                      <Tag key={tag} tone="outline">{tag}</Tag>
                     ))}
                   </div>
                 </td>
                 <td><PriorityBadge priority={t.priority} /></td>
                 <td><StatusBadge status={t.status} /></td>
-                <td className="text-2xs text-muted-foreground">{t.deptNameHe ?? '—'}</td>
-                <td className="text-2xs text-muted-foreground">{t.ownerName ?? 'ללא בעלים'}</td>
+                <td className="text-neutral-500">{t.deptNameHe ?? '—'}</td>
+                <td className="text-neutral-500">{t.ownerName ?? 'Unowned'}</td>
                 <td>
                   {t.dueDate ? (
                     <span className="flex items-center gap-1">
@@ -70,11 +70,11 @@ export function TaskListView({
                       <OverdueChip days={late} />
                     </span>
                   ) : (
-                    <span className="text-2xs text-muted-foreground">—</span>
+                    <span className="text-neutral-500">—</span>
                   )}
                 </td>
                 <td>
-                  <Num className="text-2xs text-muted-foreground">{fmtMoney(t.moneyImpactCents)}</Num>
+                  <Num className="text-neutral-500">{fmtMoney(t.moneyImpactCents)}</Num>
                 </td>
                 <td><HeatBar score={t.heatScore} /></td>
                 <td className="text-left">
@@ -96,9 +96,9 @@ export function TaskListView({
           })}
         </tbody>
       </table>
-      <div className="border-t px-3 py-1.5 text-2xs text-muted-foreground">
-        <Num>{rows.length}</Num> משימות ·{' '}
-        <Link href="/delegations" className="hover:underline">Delegation Tracker</Link>
+      <div className="border-t border-divider px-3 py-2 font-semi text-[11px] tracking-[0.1em] text-neutral-500">
+        <Num>{rows.length}</Num> TASKS ·{' '}
+        <Link href="/delegations" className="text-accent-700 hover:text-accent">Delegation Tracker</Link>
       </div>
     </div>
   );

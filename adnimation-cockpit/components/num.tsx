@@ -1,8 +1,9 @@
 import { cn } from '@/lib/utils';
 
 /**
- * Numbers, currency, dates and ad-tech identifiers render LTR inside RTL
- * paragraphs (CLAUDE.md §7). Every figure in the app goes through this.
+ * Figures, currency, dates and ad-tech identifiers render LTR with tabular
+ * numerals so columns align. Kept as a component so the rule is applied in one
+ * place rather than remembered at every call site.
  */
 export function Num({ children, className }: { children: React.ReactNode; className?: string }) {
   return (

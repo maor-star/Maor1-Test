@@ -38,17 +38,17 @@ export async function createTask(input: TaskInput, actor: string) {
     })
     .returning();
 
-  if (!row) throw new Error('יצירת המשימה נכשלה');
+  if (!row) throw new Error('Failed to create the task');
   await writeAudit({ actor, action: 'task.create', entityType: 'task', entityId: row.id, after: row });
   return row;
 }
 
 export async function updateTask(patch: TaskPatch, actor: string) {
   const [before] = await db.select().from(tasks).where(eq(tasks.id, patch.id)).limit(1);
-  if (!before) throw new Error('המשימה לא נמצאה');
+  if (!before) throw new Error('Task not found');
   if (before.layer === 'company') {
     // Spec 6.1.2 — ClickUp is the source of truth for the company layer.
-    throw new Error('משימות מ-ClickUp הן לקריאה בלבד. יש לערוך אותן ב-ClickUp.');
+    throw new Error('ClickUp tasks are read-only here. Edit them in ClickUp.');
   }
 
   const merged = {
@@ -94,7 +94,7 @@ export async function completeTask(id: string, actor: string) {
     .set({ status: 'done', updatedAt: new Date() })
     .where(and(eq(tasks.id, id), eq(tasks.layer, 'mine')))
     .returning();
-  if (!row) throw new Error('המשימה לא נמצאה או שהיא בשכבת ClickUp');
+  if (!row) throw new Error('Task not found, or it belongs to the ClickUp layer');
   await writeAudit({ actor, action: 'task.complete', entityType: 'task', entityId: id });
   return row;
 }
@@ -113,7 +113,7 @@ export async function snoozeTask(id: string, until: Date, actor: string) {
     })
     .where(and(eq(tasks.id, id), eq(tasks.layer, 'mine')))
     .returning();
-  if (!row) throw new Error('המשימה לא נמצאה או שהיא בשכבת ClickUp');
+  if (!row) throw new Error('Task not found, or it belongs to the ClickUp layer');
   await writeAudit({
     actor, action: 'task.snooze', entityType: 'task', entityId: id,
     after: { until, snoozeCount: row.snoozeCount, zombie: isZombie(row.snoozeCount) },
@@ -132,7 +132,7 @@ export async function archiveTask(id: string, actor: string) {
     .set({ archivedAt: new Date(), updatedAt: new Date() })
     .where(and(eq(tasks.id, id), eq(tasks.layer, 'mine'), isNull(tasks.archivedAt)))
     .returning();
-  if (!row) throw new Error('המשימה לא נמצאה או כבר בארכיון');
+  if (!row) throw new Error('Task not found, or already archived');
   await writeAudit({ actor, action: 'task.archive', entityType: 'task', entityId: id });
   return row;
 }

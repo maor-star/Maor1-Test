@@ -3,22 +3,26 @@ import { INTEGRATION_STALE_HOURS, isStale } from '@/lib/integrations/staleness';
 import { Num } from '@/components/num';
 
 /**
- * §7 — stale data is labelled, never hidden. Every strip reading from a synced
+ * Stale data is labelled, never hidden. Every strip reading from a synced
  * source stamps when that data last landed, and says so plainly once the sync
  * has been failing longer than the threshold that raises INTEGRATION_FAILURE.
  */
-export function StaleStamp({ at, label = 'נתונים מ' }: { at: Date | null; label?: string }) {
+export function StaleStamp({ at }: { at: Date | null }) {
   if (!at) {
-    return <span className="text-2xs text-muted-foreground">אין נתונים עדיין</span>;
+    return (
+      <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">NO DATA YET</span>
+    );
   }
 
   const stale = isStale(at);
   return (
-    <span className={stale ? 'text-2xs text-sev-warning' : 'text-2xs text-muted-foreground'}>
-      {label}־<Num>{fmtTime(at)}</Num>
+    <span
+      className={`font-semi text-[10px] tracking-[0.14em] ${stale ? 'text-sev-warning' : 'text-neutral-500'}`}
+    >
+      SYNCED <Num>{fmtTime(at)}</Num>
       {stale ? (
         <span className="ms-1">
-          · הסנכרון תקוע מעל <Num>{INTEGRATION_STALE_HOURS}</Num> שעות
+          · STALE &gt;<Num>{INTEGRATION_STALE_HOURS}</Num>H
         </span>
       ) : null}
     </span>

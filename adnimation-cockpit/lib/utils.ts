@@ -29,9 +29,9 @@ export function fmtMoney(cents: number | null | undefined): string {
 
 export const fmtNumber = (n: number) => new Intl.NumberFormat('en-US').format(n);
 
-/** Hebrew plural-friendly day counter: "היום", "אתמול", "לפני 3 ימים". */
+/** Day counter for list rows: "today", "yesterday", "3 days ago". */
 export function relativeDays(days: number): string {
-  if (days <= 0) return 'היום';
-  if (days === 1) return 'אתמול';
-  return `לפני ${days} ימים`;
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return `${days} days ago`;
 }

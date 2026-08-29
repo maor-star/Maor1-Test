@@ -6,7 +6,7 @@ import type { Locator, Page } from '@playwright/test';
  * first match silently drives the filters instead.
  */
 export function newTaskForm(page: Page): Locator {
-  return page.locator('form', { has: page.getByPlaceholder('מה צריך לקרות?') });
+  return page.locator('form', { has: page.getByPlaceholder('What needs to happen?') });
 }
 
 export async function createTask(
@@ -15,9 +15,9 @@ export async function createTask(
   opts: { priority?: 'P0' | 'P1' | 'P2' | 'P3' } = {},
 ): Promise<void> {
   const form = newTaskForm(page);
-  await form.getByLabel('כותרת').fill(title);
-  if (opts.priority) await form.getByLabel('עדיפות').selectOption(opts.priority);
-  await form.getByRole('button', { name: 'הוספה' }).click();
+  await form.getByLabel('Title').fill(title);
+  if (opts.priority) await form.getByLabel('Priority').selectOption(opts.priority);
+  await form.getByRole('button', { name: 'ADD' }).click();
 }
 
 /** The table row holding a task with this title. */

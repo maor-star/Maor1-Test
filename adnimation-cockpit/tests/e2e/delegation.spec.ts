@@ -10,20 +10,20 @@ import { createTask, taskRow } from './helpers';
 test.describe('delegation', () => {
   test('delegating fires both side effects and is tracked', async ({ signedIn }) => {
     const page = await signedIn.newPage();
-    const title = `האצלה אוטומטית ${Date.now()}`;
+    const title = `Automated delegation ${Date.now()}`;
 
     await page.goto('/tasks');
     await createTask(page, title);
     await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();
 
-    await taskRow(page, title).getByRole('button', { name: 'האצל' }).click();
+    await taskRow(page, title).getByRole('button', { name: 'DELEGATE' }).click();
 
-    await page.getByLabel('למי').selectOption({ index: 1 });
-    await page.getByLabel('הקשר').fill('נוצר על ידי בדיקה אוטומטית');
-    await page.getByRole('button', { name: 'שליחה' }).click();
+    await page.getByLabel('Assign to').selectOption({ index: 1 });
+    await page.getByLabel('Context').fill('Created by an automated check');
+    await page.getByRole('button', { name: 'SEND' }).click();
 
     // The source task moves to "delegated, waiting" (spec 6.1.3 step 5).
-    await expect(taskRow(page, title).getByText('האצלתי — ממתין')).toBeVisible();
+    await expect(taskRow(page, title).getByText('DELEGATED')).toBeVisible();
 
     await page.goto('/delegations');
     const tracked = page.locator('tr', { hasText: title });

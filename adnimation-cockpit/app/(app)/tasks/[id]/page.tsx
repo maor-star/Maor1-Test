@@ -4,8 +4,8 @@ import { getSubtasks, getTask, listDepartments, listPeople } from '@/lib/tasks/q
 import { listComments, isZombie } from '@/lib/tasks/mutations';
 import { daysOverdue } from '@/lib/scoring/heat-score';
 import { fmtDateTime, fmtMoney } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { HudCard, HudCardHeader } from '@/components/hud/card';
+import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { HeatBar, OverdueChip, PriorityBadge, StatusBadge, TaskTitleLink } from '@/components/task-bits';
 import { CommentForm } from '@/components/tasks/comment-form';
@@ -35,15 +35,15 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <Link href="/tasks" className="text-2xs text-muted-foreground hover:underline">
-            ← כל המשימות
+            ← ALL TASKS
           </Link>
           <h1 className="mt-0.5 text-base font-semibold">{task.title}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <PriorityBadge priority={task.priority} />
             <StatusBadge status={task.status} />
-            {isMirror ? <Badge variant="outline">ClickUp — קריאה בלבד</Badge> : null}
+            {isMirror ? <Tag tone="outline">CLICKUP — READ ONLY</Tag> : null}
             {isZombie(task.snoozeCount) ? (
-              <Badge variant="watch" title={`נדחתה ${task.snoozeCount} פעמים`}>Zombie</Badge>
+              <Tag tone="watch" title={`Snoozed ${task.snoozeCount} times`}>Zombie</Tag>
             ) : null}
             <OverdueChip days={daysOverdue(task.dueDate, new Date())} />
           </div>
@@ -64,22 +64,22 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
 
       <div className="grid gap-3 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>{isMirror ? 'פרטים' : 'עריכה'}</CardTitle>
+          <HudCard>
+            <div className="flex items-baseline justify-between gap-3">
+              <HudCardHeader title={isMirror ? 'Details' : 'Edit'} index="T04" />
               {task.clickupUrl ? (
                 <a href={task.clickupUrl} target="_blank" rel="noreferrer" className="text-2xs hover:underline">
-                  פתיחה ב-ClickUp ↗
+                  OPEN IN CLICKUP ↗
                 </a>
               ) : null}
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div>
               {isMirror ? (
                 <dl className="grid grid-cols-2 gap-2 text-xs md:grid-cols-3">
-                  <Field label="תיאור" value={task.description ?? '—'} />
-                  <Field label="מחלקה" value={task.deptNameHe ?? '—'} />
-                  <Field label="בעלים" value={task.ownerName ?? '—'} />
-                  <Field label="תאריך יעד" value={task.dueDate ?? '—'} ltr />
+                  <Field label="Description" value={task.description ?? '—'} />
+                  <Field label="Department" value={task.deptNameHe ?? '—'} />
+                  <Field label="Owner" value={task.ownerName ?? '—'} />
+                  <Field label="Due date" value={task.dueDate ?? '—'} ltr />
                 </dl>
               ) : (
                 <EditTaskForm
@@ -99,17 +99,17 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                   people={peopleOptions}
                 />
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </HudCard>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>תת־משימות</CardTitle>
+          <HudCard>
+            <div className="flex items-baseline justify-between gap-3">
+              <HudCardHeader title="Subtasks" index="T05" />
               <Num className="text-2xs text-muted-foreground">{subtasks.length}</Num>
-            </CardHeader>
-            <CardContent className="space-y-2">
+            </div>
+            <div className="space-y-2">
               {subtasks.length === 0 ? (
-                <p className="text-2xs text-muted-foreground">אין תת־משימות.</p>
+                <p className="text-2xs text-muted-foreground">No subtasks.</p>
               ) : (
                 <ul className="space-y-1">
                   {subtasks.map((s) => (
@@ -129,35 +129,35 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                   />
                 </div>
               ) : null}
-            </CardContent>
-          </Card>
+            </div>
+          </HudCard>
         </div>
 
         <div className="space-y-3">
-          <Card>
-            <CardHeader>
-              <CardTitle>מטא</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <HudCard>
+            <div className="flex items-baseline justify-between gap-3">
+              <HudCardHeader title="Metadata" index="T06" />
+            </div>
+            <div>
               <dl className="space-y-1.5 text-xs">
-                <Field label="מחלקה" value={task.deptNameHe ?? '—'} />
-                <Field label="בעלים" value={task.ownerName ?? 'ללא בעלים'} />
-                <Field label="השפעה כספית" value={fmtMoney(task.moneyImpactCents)} ltr />
-                <Field label="מקור" value={task.source} ltr />
-                <Field label="נדחתה" value={`${task.snoozeCount} פעמים`} />
-                <Field label="נוצרה" value={fmtDateTime(task.createdAt)} ltr />
-                <Field label="עודכנה" value={fmtDateTime(task.updatedAt)} ltr />
+                <Field label="Department" value={task.deptNameHe ?? '—'} />
+                <Field label="Owner" value={task.ownerName ?? 'Unowned'} />
+                <Field label="Money impact" value={fmtMoney(task.moneyImpactCents)} ltr />
+                <Field label="Source" value={task.source} ltr />
+                <Field label="Snoozed" value={`${task.snoozeCount} times`} />
+                <Field label="Created" value={fmtDateTime(task.createdAt)} ltr />
+                <Field label="Updated" value={fmtDateTime(task.updatedAt)} ltr />
               </dl>
-            </CardContent>
-          </Card>
+            </div>
+          </HudCard>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>הערות</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
+          <HudCard>
+            <div className="flex items-baseline justify-between gap-3">
+              <HudCardHeader title="Comments" index="T07" />
+            </div>
+            <div className="space-y-2">
               {comments.length === 0 ? (
-                <p className="text-2xs text-muted-foreground">אין הערות.</p>
+                <p className="text-2xs text-muted-foreground">No comments.</p>
               ) : (
                 <ul className="space-y-2">
                   {comments.map((c) => (
@@ -171,8 +171,8 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                 </ul>
               )}
               <CommentForm taskId={task.id} />
-            </CardContent>
-          </Card>
+            </div>
+          </HudCard>
         </div>
       </div>
     </div>

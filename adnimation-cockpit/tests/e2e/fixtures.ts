@@ -7,7 +7,7 @@ export const test = base.extend<{ signedIn: BrowserContext }>({
     const context = await browser.newContext({ baseURL });
     const cookie = await mintSessionCookie({
       email: process.env.ALLOWED_EMAILS?.split(',')[0]?.trim() ?? 'maor@adnimation.com',
-      name: 'מאור דוידוביץ׳',
+      name: 'Maor Davidovich',
       role: 'owner',
     });
     const url = new URL(baseURL ?? 'http://127.0.0.1:3100');

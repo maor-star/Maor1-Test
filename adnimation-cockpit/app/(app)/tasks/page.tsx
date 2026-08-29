@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { listDepartments, listPeople, listTasks, type TaskRow } from '@/lib/tasks/queries';
 import { TASK_PRIORITIES, TASK_STATUSES, type TaskPriority, type TaskStatus } from '@/lib/tasks/types';
 import { todayInTz } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { HudCard, HudCardHeader } from '@/components/hud/card';
+import { PageHeader } from '@/components/hud/page-header';
 import { TaskListView } from '@/components/tasks/list-view';
 import { TaskBoardView } from '@/components/tasks/board-view';
 import { TaskCalendarView } from '@/components/tasks/calendar-view';
@@ -15,9 +16,9 @@ const VIEWS = ['list', 'board', 'calendar'] as const;
 type View = (typeof VIEWS)[number];
 
 const VIEW_LABEL: Record<View, string> = {
-  list: 'רשימה',
-  board: 'לוח',
-  calendar: 'לוח שנה',
+  list: 'LIST',
+  board: 'BOARD',
+  calendar: 'CALENDAR',
 };
 
 interface SearchParams {
@@ -69,24 +70,25 @@ export default async function TasksPage({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-base font-semibold">משימות</h1>
-        <nav className="flex gap-0.5 rounded-md border p-0.5">
-          {VIEWS.map((v) => (
-            <Link
-              key={v}
-              href={query({ view: v })}
-              className={
-                v === view
-                  ? 'rounded px-2 py-0.5 text-xs bg-primary text-primary-foreground'
-                  : 'rounded px-2 py-0.5 text-xs hover:bg-accent'
-              }
-            >
-              {VIEW_LABEL[v]}
-            </Link>
-          ))}
-        </nav>
-      </div>
+      <PageHeader
+        kicker="TASKS / 03"
+        title="Tasks"
+        action={
+          <nav className="flex border border-divider">
+            {VIEWS.map((v) => (
+              <Link
+                key={v}
+                href={query({ view: v })}
+                className={`px-3 py-1 font-semi text-[11px] tracking-[0.16em] ${
+                  v === view ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
+                }`}
+              >
+                {VIEW_LABEL[v]}
+              </Link>
+            ))}
+          </nav>
+        }
+      />
 
       <TaskFilters
         departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
@@ -100,17 +102,13 @@ export default async function TasksPage({
         }}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>משימה חדשה</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <NewTaskForm
-            departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
-            people={people.map((p) => ({ id: p.id, label: p.name }))}
-          />
-        </CardContent>
-      </Card>
+      <HudCard>
+        <HudCardHeader title="New task" index="T02" />
+        <NewTaskForm
+          departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
+          people={people.map((p) => ({ id: p.id, label: p.name }))}
+        />
+      </HudCard>
 
       <TaskViewSwitch view={view} rows={rows} people={people.map((p) => ({ id: p.id, label: p.name }))} />
     </div>

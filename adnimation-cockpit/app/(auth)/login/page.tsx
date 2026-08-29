@@ -18,32 +18,35 @@ export default async function LoginPage({
   const rejected = error === 'AccessDenied';
 
   return (
-    <main className="flex min-h-dvh items-center justify-center p-6">
-      <div className="w-full max-w-sm rounded-lg border bg-card p-6">
-        <h1 className="text-lg font-semibold">Adnimation CEO Cockpit</h1>
+    <main className="hud-ground flex min-h-dvh items-center justify-center p-6">
+      <div className="hud-card hud-marks w-full max-w-sm p-8">
+        <div className="font-cond text-[25px] font-semibold leading-none tracking-[0.2em] text-neutral-900">
+          ADNIMATION
+        </div>
+        <div className="mt-2 hud-kicker">CEO COCKPIT</div>
 
         {rejected ? (
           <>
-            <p className="mt-3 text-sm text-destructive">אין לך גישה למערכת הזו.</p>
-            <p className="mt-1 text-2xs text-muted-foreground">
-              המערכת פרטית ומשרתת שני חשבונות בלבד.
+            <p className="mt-6 text-[13px] text-sev-critical">You do not have access to this system.</p>
+            <p className="mt-1 font-semi text-[11px] tracking-[0.1em] text-neutral-500">
+              This console is private and serves two accounts.
             </p>
           </>
         ) : (
-          <p className="mt-1 text-sm text-muted-foreground">
-            כניסה עם חשבון Google Workspace של החברה.
+          <p className="mt-6 text-[13px] leading-[1.5] text-neutral-700">
+            Sign in with your company Google Workspace account.
           </p>
         )}
 
         <form
-          className="mt-5"
+          className="mt-6"
           action={async () => {
             'use server';
             await signIn('google', { redirectTo: '/' });
           }}
         >
           <Button type="submit" className="w-full">
-            כניסה עם Google
+            SIGN IN WITH GOOGLE
           </Button>
         </form>
       </div>

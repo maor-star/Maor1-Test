@@ -54,9 +54,9 @@ export function evaluateHygiene(task: HygieneSnapshot, now = new Date()): Hygien
       code: 'NO_OWNER',
       taskId: task.id,
       severity: 'warning',
-      title: `משימה ללא בעלים: ${task.title}`,
-      whatHappened: `המשימה נוצרה לפני יותר מ-${OWNERLESS_GRACE_HOURS} שעות ואין לה בעלים.`,
-      recommendedAction: 'לשייך בעלים או לסגור את המשימה.',
+      title: `Unowned task: ${task.title}`,
+      whatHappened: `Created more than ${OWNERLESS_GRACE_HOURS} hours ago and still has no owner.`,
+      recommendedAction: 'Assign an owner or close the task.',
     });
   }
 
@@ -65,9 +65,9 @@ export function evaluateHygiene(task: HygieneSnapshot, now = new Date()): Hygien
       code: 'NO_DUE_DATE_HIGH_PRIORITY',
       taskId: task.id,
       severity: 'warning',
-      title: `${task.priority} ללא תאריך יעד: ${task.title}`,
-      whatHappened: `משימה בעדיפות ${task.priority} ללא תאריך יעד.`,
-      recommendedAction: 'לקבוע תאריך יעד או להוריד עדיפות.',
+      title: `${task.priority} with no due date: ${task.title}`,
+      whatHappened: `A ${task.priority} task with no due date.`,
+      recommendedAction: 'Set a due date or lower the priority.',
     });
   }
 
@@ -79,9 +79,9 @@ export function evaluateHygiene(task: HygieneSnapshot, now = new Date()): Hygien
       code: 'P0_NOT_MOVING',
       taskId: task.id,
       severity: 'critical',
-      title: `P0 תקוע ${daysSinceMovement} ימים: ${task.title}`,
-      whatHappened: `משימה בעדיפות P0 לא זזה ${daysSinceMovement} ימים.`,
-      recommendedAction: 'לטפל היום, להאציל, או להוריד עדיפות במפורש.',
+      title: `P0 stalled ${daysSinceMovement} days: ${task.title}`,
+      whatHappened: `A P0 task has not moved in ${daysSinceMovement} days.`,
+      recommendedAction: 'Handle today, delegate it, or explicitly lower the priority.',
     });
   }
 
@@ -90,9 +90,9 @@ export function evaluateHygiene(task: HygieneSnapshot, now = new Date()): Hygien
       code: 'ZOMBIE',
       taskId: task.id,
       severity: 'watch',
-      title: `Zombie — נדחתה ${task.snoozeCount} פעמים: ${task.title}`,
-      whatHappened: `המשימה נדחתה ${task.snoozeCount} פעמים.`,
-      recommendedAction: 'להעלות לדיון בישיבת הנהלה: לסגור או להעלות עדיפות.',
+      title: `Zombie — snoozed ${task.snoozeCount} times: ${task.title}`,
+      whatHappened: `Snoozed ${task.snoozeCount} times.`,
+      recommendedAction: 'Raise at the management meeting: close it or raise its priority.',
     });
   }
 
@@ -102,9 +102,9 @@ export function evaluateHygiene(task: HygieneSnapshot, now = new Date()): Hygien
       code: 'CEO_HOLDING_TOO_LONG',
       taskId: task.id,
       severity: 'info',
-      title: `בבעלותי ${ageDays} ימים: ${task.title}`,
-      whatHappened: `המנכ"ל הוא הבעלים של המשימה כבר ${ageDays} ימים.`,
-      recommendedAction: 'לשקול להעביר בעלות.',
+      title: `Held by the CEO for ${ageDays} days: ${task.title}`,
+      whatHappened: `The CEO has owned this task for ${ageDays} days.`,
+      recommendedAction: 'Consider handing ownership over.',
     });
   }
 

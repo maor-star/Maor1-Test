@@ -638,9 +638,9 @@ CREATE TRIGGER trg_audit_no_update BEFORE UPDATE ON audit_log
 -- ============================================================
 
 INSERT INTO departments (code, name_he) VALUES
-  ('CORE','אתרי ליבה'), ('SEAT','Seat Lease'), ('APP','RTB In-App'),
+  ('CORE','Core Publishers'), ('SEAT','Seat Lease'), ('APP','RTB In-App'),
   ('DISP','RTB Display'), ('CTV','CTV'), ('BID','Bidder'),
-  ('VID','וידאו'), ('ASIA','הרחבה לאסיה');
+  ('VID','Video'), ('ASIA','Asia Expansion');
 
 INSERT INTO stage_thresholds (stage, stale_days, default_probability) VALUES
   ('lead', 7, 5), ('intro', 7, 10), ('qualified', 14, 20),

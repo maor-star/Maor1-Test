@@ -14,7 +14,9 @@ export function QuickTaskActions({ taskId, isMine }: { taskId: string; isMine: b
   const router = useRouter();
 
   if (!isMine) {
-    return <span className="text-2xs text-muted-foreground">ClickUp</span>;
+    return (
+      <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">CLICKUP</span>
+    );
   }
 
   const run = (action: (fd: FormData) => Promise<{ ok: boolean; error?: string }>, extra?: Record<string, string>) => {
@@ -35,18 +37,18 @@ export function QuickTaskActions({ taskId, isMine }: { taskId: string; isMine: b
         variant="outline"
         disabled={pending}
         onClick={() => run(completeTaskAction)}
-        title="סגירת המשימה"
+        title="Close this task"
       >
-        סגור
+        DONE
       </Button>
       <Button
         size="xs"
         variant="ghost"
         disabled={pending}
         onClick={() => run(snoozeTaskAction, { days: '7' })}
-        title="דחייה בשבוע — נספרת לכלל ה-Zombie"
+        title="Snooze a week — counts toward the Zombie rule"
       >
-        דחה
+        SNOOZE
       </Button>
     </span>
   );

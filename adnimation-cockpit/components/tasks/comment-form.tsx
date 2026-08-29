@@ -19,7 +19,7 @@ export function CommentForm({ taskId }: { taskId: string }) {
       action={(formData) => {
         startTransition(async () => {
           const result = await addCommentAction(formData);
-          setError(result.ok ? null : (result.error ?? 'הוספת ההערה נכשלה'));
+          setError(result.ok ? null : (result.error ?? 'Failed to add the comment'));
           if (result.ok) {
             formRef.current?.reset();
             router.refresh();
@@ -28,10 +28,10 @@ export function CommentForm({ taskId }: { taskId: string }) {
       }}
     >
       <input type="hidden" name="taskId" value={taskId} />
-      <Textarea name="body" rows={2} required placeholder="הוספת הערה" />
+      <Textarea name="body" rows={2} required placeholder="Add a comment" />
       {error ? <p className="text-2xs text-destructive">{error}</p> : null}
       <Button type="submit" size="sm" disabled={pending}>
-        {pending ? 'שומר…' : 'הוספה'}
+        {pending ? 'SAVING…' : 'ADD'}
       </Button>
     </form>
   );

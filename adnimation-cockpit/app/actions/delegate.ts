@@ -35,7 +35,7 @@ export async function delegateAction(formData: FormData): Promise<ActionResult> 
     const firstFieldError = Object.values(fieldErrors).flat()[0];
     return {
       ok: false,
-      error: flat.formErrors[0] ?? firstFieldError ?? 'לא ניתן להאציל — חסרים פרטים',
+      error: flat.formErrors[0] ?? firstFieldError ?? 'Cannot delegate — missing details',
       fieldErrors,
     };
   }
@@ -58,7 +58,7 @@ export async function delegateAction(formData: FormData): Promise<ActionResult> 
     return {
       ok: true,
       id: result.delegationId,
-      error: `ההאצלה נרשמה, אבל נכשלה השליחה ל: ${failed.join(', ')}`,
+      error: `Delegation recorded, but delivery failed for: ${failed.join(', ')}`,
     };
   }
 

@@ -42,7 +42,7 @@ export function EditTaskForm({
       action={(formData) => {
         startTransition(async () => {
           const result = await updateTaskAction(formData);
-          setMessage(result.ok ? null : (result.error ?? 'העדכון נכשל'));
+          setMessage(result.ok ? null : (result.error ?? 'Update failed'));
           setSaved(result.ok);
           if (result.ok) router.refresh();
         });
@@ -51,18 +51,18 @@ export function EditTaskForm({
       <input type="hidden" name="id" value={task.id} />
 
       <div>
-        <Label htmlFor="edit-title">כותרת</Label>
+        <Label htmlFor="edit-title">Title</Label>
         <Input id="edit-title" name="title" defaultValue={task.title} required />
       </div>
 
       <div>
-        <Label htmlFor="edit-description">תיאור</Label>
+        <Label htmlFor="edit-description">Description</Label>
         <Textarea id="edit-description" name="description" rows={4} defaultValue={task.description ?? ''} />
       </div>
 
       <div className="grid gap-2 md:grid-cols-3">
         <div>
-          <Label htmlFor="edit-priority">עדיפות</Label>
+          <Label htmlFor="edit-priority">Priority</Label>
           <Select id="edit-priority" name="priority" defaultValue={task.priority} className="w-full">
             {TASK_PRIORITIES.map((p) => (
               <option key={p} value={p}>{p} — {PRIORITY_META[p].label}</option>
@@ -70,7 +70,7 @@ export function EditTaskForm({
           </Select>
         </div>
         <div>
-          <Label htmlFor="edit-status">סטטוס</Label>
+          <Label htmlFor="edit-status">Status</Label>
           <Select id="edit-status" name="status" defaultValue={task.status} className="w-full">
             {TASK_STATUSES.map((s) => (
               <option key={s} value={s}>{STATUS_LABEL[s]}</option>
@@ -78,29 +78,29 @@ export function EditTaskForm({
           </Select>
         </div>
         <div>
-          <Label htmlFor="edit-due">תאריך יעד</Label>
+          <Label htmlFor="edit-due">Due date</Label>
           <Input id="edit-due" name="dueDate" type="date" defaultValue={task.dueDate ?? ''} />
         </div>
         <div>
-          <Label htmlFor="edit-dept">מחלקה</Label>
+          <Label htmlFor="edit-dept">Department</Label>
           <Select id="edit-dept" name="deptId" defaultValue={task.deptId ?? ''} className="w-full">
-            <option value="">ללא</option>
+            <option value="">None</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>{d.label}</option>
             ))}
           </Select>
         </div>
         <div>
-          <Label htmlFor="edit-owner">בעלים</Label>
+          <Label htmlFor="edit-owner">Owner</Label>
           <Select id="edit-owner" name="ownerPersonId" defaultValue={task.ownerPersonId ?? ''} className="w-full">
-            <option value="">אני</option>
+            <option value="">Me</option>
             {people.map((p) => (
               <option key={p.id} value={p.id}>{p.label}</option>
             ))}
           </Select>
         </div>
         <div>
-          <Label htmlFor="edit-money">השפעה כספית (USD)</Label>
+          <Label htmlFor="edit-money">Money impact (USD)</Label>
           <Input
             id="edit-money"
             name="moneyImpact"
@@ -114,15 +114,15 @@ export function EditTaskForm({
       </div>
 
       <div>
-        <Label htmlFor="edit-tags">תגיות (מופרדות בפסיק)</Label>
+        <Label htmlFor="edit-tags">Tags (comma separated)</Label>
         <Input id="edit-tags" name="tags" defaultValue={task.tags.join(', ')} />
       </div>
 
       {message ? <p className="text-2xs text-destructive">{message}</p> : null}
-      {saved && !message ? <p className="text-2xs text-sev-ok">נשמר.</p> : null}
+      {saved && !message ? <p className="text-2xs text-sev-ok">Saved.</p> : null}
 
       <div className="flex items-center gap-2 pt-1">
-        <Button type="submit" disabled={pending}>{pending ? 'שומר…' : 'שמירה'}</Button>
+        <Button type="submit" disabled={pending}>{pending ? 'SAVING…' : 'SAVE'}</Button>
         <Button
           type="button"
           variant="ghost"
@@ -130,17 +130,17 @@ export function EditTaskForm({
           disabled={pending}
           onClick={() => {
             // Nothing is ever deleted — archive only (CLAUDE.md §2).
-            if (!window.confirm('להעביר את המשימה לארכיון?')) return;
+            if (!window.confirm('Archive this task?')) return;
             const fd = new FormData();
             fd.set('id', task.id);
             startTransition(async () => {
               const result = await archiveTaskAction(fd);
               if (result.ok) router.push('/tasks');
-              else setMessage(result.error ?? 'הארכוב נכשל');
+              else setMessage(result.error ?? 'Archiving failed');
             });
           }}
         >
-          לארכיון
+          ARCHIVE
         </Button>
       </div>
     </form>

@@ -33,8 +33,8 @@ export function DelegateButton({
 
   if (!open) {
     return (
-      <Button size="xs" variant="ghost" onClick={() => setOpen(true)} title="האצלה לצוות">
-        האצל
+      <Button size="xs" variant="ghost" onClick={() => setOpen(true)} title="Delegate to the team">
+        DELEGATE
       </Button>
     );
   }
@@ -42,9 +42,9 @@ export function DelegateButton({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-lg border bg-card p-4 text-right">
-        <h2 className="text-sm font-semibold">האצלת משימה</h2>
+        <h2 className="hud-heading text-[21px] text-neutral-900">Delegate task</h2>
         <p className="mt-0.5 text-2xs text-muted-foreground">
-          תישלח הודעה בסלאק ותיווצר משימה ב-ClickUp עם קישור חזרה לכאן.
+          Sends a Slack message and creates a linked ClickUp task.
         </p>
 
         <form
@@ -57,7 +57,7 @@ export function DelegateButton({
                 setMessage(null);
                 router.refresh();
               } else {
-                setMessage(result.error ?? 'ההאצלה נכשלה');
+                setMessage(result.error ?? 'Delegation failed');
                 if (result.ok) router.refresh();
               }
             });
@@ -67,9 +67,9 @@ export function DelegateButton({
           <input type="hidden" name="sourceEntityId" value={sourceEntityId} />
 
           <div>
-            <Label htmlFor="delegatedTo">למי</Label>
+            <Label htmlFor="delegatedTo">Assign to</Label>
             <Select id="delegatedTo" name="delegatedTo" required className="w-full">
-              <option value="">בחירת אדם…</option>
+              <option value="">Choose a person…</option>
               {people.map((p) => (
                 <option key={p.id} value={p.id}>{p.label}</option>
               ))}
@@ -77,22 +77,22 @@ export function DelegateButton({
           </div>
 
           <div>
-            <Label htmlFor="delegate-title">מה צריך לעשות</Label>
+            <Label htmlFor="delegate-title">What needs to happen</Label>
             <Input id="delegate-title" name="title" defaultValue={defaultTitle} required />
           </div>
 
           <div>
-            <Label htmlFor="note">הקשר</Label>
-            <Textarea id="note" name="note" rows={3} placeholder="למה זה חשוב, מה כבר נעשה" />
+            <Label htmlFor="note">Context</Label>
+            <Textarea id="note" name="note" rows={3} placeholder="Why it matters, what has already been done" />
           </div>
 
           <div className="flex gap-2">
             <div className="flex-1">
-              <Label htmlFor="delegate-due">תאריך יעד</Label>
+              <Label htmlFor="delegate-due">Due date</Label>
               <Input id="delegate-due" name="dueDate" type="date" defaultValue={defaultDueDate ?? ''} />
             </div>
             <div>
-              <Label htmlFor="delegate-priority">עדיפות</Label>
+              <Label htmlFor="delegate-priority">Priority</Label>
               <Select id="delegate-priority" name="priority" defaultValue={defaultPriority}>
                 {TASK_PRIORITIES.map((p) => (
                   <option key={p} value={p}>{p} — {PRIORITY_META[p].label}</option>
@@ -105,10 +105,10 @@ export function DelegateButton({
 
           <div className="flex justify-start gap-2 pt-1">
             <Button type="submit" disabled={pending}>
-              {pending ? 'שולח…' : 'שליחה'}
+              {pending ? 'SENDING…' : 'SEND'}
             </Button>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              ביטול
+              CANCEL
             </Button>
           </div>
         </form>

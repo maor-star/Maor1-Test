@@ -1,17 +1,19 @@
 import { daysStuck, listOpenDelegations } from '@/lib/delegation/service';
 import { DELEGATION_STALE_DAYS } from '@/lib/tasks/types';
 import { fmtDateTime } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
+import { HudCard } from '@/components/hud/card';
+import { PageHeader } from '@/components/hud/page-header';
+import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 
 export const dynamic = 'force-dynamic';
 
 const STATUS_LABEL: Record<string, string> = {
-  sent: 'נשלח',
-  acknowledged: 'אושר',
-  in_progress: 'בעבודה',
-  stale: 'תקוע',
-  done: 'הושלם',
+  sent: 'SENT',
+  acknowledged: 'ACKNOWLEDGED',
+  in_progress: 'IN PROGRESS',
+  stale: 'STUCK',
+  done: 'DONE',
 };
 
 /**
@@ -24,36 +26,40 @@ export default async function DelegationsPage() {
   const stuck = rows.filter((r) => r.status === 'stale').length;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-base font-semibold">Delegation Tracker</h1>
-        <p className="text-2xs text-muted-foreground">
-          האצלה שלא זזה <Num>{DELEGATION_STALE_DAYS}</Num> ימים מסומנת כתקועה
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        kicker="DELEGATIONS / 04"
+        title="Delegation tracker"
+        action={
+          <span>
+            STUCK AFTER <Num>{DELEGATION_STALE_DAYS}</Num> QUIET DAYS
+          </span>
+        }
+      />
 
       {stuck > 0 ? (
-        <div className="rounded-lg border border-sev-warning/40 bg-sev-warning/10 px-3 py-2 text-xs">
-          <Num>{stuck}</Num> האצלות תקועות דורשות מעקב.
+        <div className="border border-sev-warning/40 bg-sev-warning/10 px-4 py-2 font-semi text-[12px] tracking-[0.08em] text-sev-warning">
+          <Num>{stuck}</Num> stuck delegations need follow-up.
         </div>
       ) : null}
 
       {rows.length === 0 ? (
-        <div className="rounded-lg border p-6 text-center text-sm text-muted-foreground">
-          אין האצלות פתוחות.
-        </div>
+        <HudCard>
+          <p className="font-semi text-[12px] text-neutral-500">No open delegations.</p>
+        </HudCard>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
+        <HudCard className="p-0">
+          <div className="min-w-0 overflow-x-auto">
           <table className="cockpit-table">
             <thead>
               <tr>
-                <th className="w-[30%]">מה</th>
-                <th>למי</th>
-                <th>סטטוס</th>
-                <th>ימים ללא תזוזה</th>
-                <th>יעד</th>
-                <th>הואצל</th>
-                <th className="text-left">קישורים</th>
+                <th className="w-[30%]">What</th>
+                <th>Who</th>
+                <th>Status</th>
+                <th>Days quiet</th>
+                <th>Due</th>
+                <th>Delegated</th>
+                <th className="text-end">Links</th>
               </tr>
             </thead>
             <tbody>
@@ -61,40 +67,40 @@ export default async function DelegationsPage() {
                 const stuckDays = daysStuck(d.lastMovementAt, now);
                 return (
                   <tr key={d.id}>
-                    <td className="font-medium">{d.taskTitle ?? d.note ?? '—'}</td>
-                    <td className="text-2xs text-muted-foreground">{d.personName}</td>
+                    <td className="whitespace-normal font-cond text-[17px] text-neutral-900">{d.taskTitle ?? d.note ?? '—'}</td>
+                    <td className="text-neutral-500">{d.personName}</td>
                     <td>
-                      <Badge variant={d.status === 'stale' ? 'warning' : 'outline'}>
+                      <Tag tone={d.status === 'stale' ? 'warning' : 'outline'}>
                         {STATUS_LABEL[d.status] ?? d.status}
-                      </Badge>
+                      </Tag>
                     </td>
                     <td>
-                      <Num className={stuckDays >= DELEGATION_STALE_DAYS ? 'text-sev-warning' : ''}>
+                      <Num className={`font-cond text-[17px] ${stuckDays >= DELEGATION_STALE_DAYS ? 'text-sev-warning' : 'text-neutral-900'}`}>
                         {stuckDays}
                       </Num>
                     </td>
-                    <td><Num className="text-2xs">{d.dueDate ?? '—'}</Num></td>
-                    <td><Num className="text-2xs text-muted-foreground">{fmtDateTime(d.delegatedAt)}</Num></td>
-                    <td className="text-left">
-                      <span className="flex justify-end gap-2 text-2xs">
+                    <td><Num className="text-neutral-500">{d.dueDate ?? '—'}</Num></td>
+                    <td><Num className="text-neutral-500">{fmtDateTime(d.delegatedAt)}</Num></td>
+                    <td className="text-end">
+                      <span className="flex justify-end gap-3 font-semi text-[11px] tracking-[0.12em]">
                         {d.slackMessageUrl ? (
-                          <a href={d.slackMessageUrl} target="_blank" rel="noreferrer" className="hover:underline">
+                          <a href={d.slackMessageUrl} target="_blank" rel="noreferrer" className="text-accent-700 hover:text-accent">
                             Slack ↗
                           </a>
                         ) : (
-                          <span className="text-destructive" title="ההודעה לא נשלחה">Slack ✕</span>
+                          <span className="text-destructive" title="Message was not delivered">Slack ✕</span>
                         )}
                         {d.clickupTaskId ? (
                           <a
                             href={`https://app.clickup.com/t/${d.clickupTaskId}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="hover:underline"
+                            className="text-accent-700 hover:text-accent"
                           >
                             ClickUp ↗
                           </a>
                         ) : (
-                          <span className="text-destructive" title="המשימה לא נוצרה">ClickUp ✕</span>
+                          <span className="text-destructive" title="Task was not created">ClickUp ✕</span>
                         )}
                       </span>
                     </td>
@@ -103,7 +109,8 @@ export default async function DelegationsPage() {
               })}
             </tbody>
           </table>
-        </div>
+          </div>
+        </HudCard>
       )}
     </div>
   );

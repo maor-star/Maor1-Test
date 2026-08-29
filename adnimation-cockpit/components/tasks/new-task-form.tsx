@@ -45,13 +45,13 @@ export function NewTaskForm({
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-56 flex-1">
-          <Label htmlFor="new-task-title">כותרת</Label>
-          <Input id="new-task-title" name="title" required placeholder="מה צריך לקרות?" />
+          <Label htmlFor="new-task-title">Title</Label>
+          <Input id="new-task-title" name="title" required placeholder="What needs to happen?" />
           {errors.title ? <p className="mt-0.5 text-2xs text-destructive">{errors.title[0]}</p> : null}
         </div>
 
         <div>
-          <Label htmlFor="new-task-priority">עדיפות</Label>
+          <Label htmlFor="new-task-priority">Priority</Label>
           <Select id="new-task-priority" name="priority" defaultValue="P2">
             {TASK_PRIORITIES.map((p) => (
               <option key={p} value={p}>{p} — {PRIORITY_META[p].label}</option>
@@ -60,52 +60,52 @@ export function NewTaskForm({
         </div>
 
         <div>
-          <Label htmlFor="new-task-due">תאריך יעד</Label>
+          <Label htmlFor="new-task-due">Due date</Label>
           <Input id="new-task-due" name="dueDate" type="date" />
         </div>
 
         <Button type="submit" disabled={pending}>
-          {pending ? 'שומר…' : 'הוספה'}
+          {pending ? 'SAVING…' : 'ADD'}
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={() => setExpanded((v) => !v)}>
-          {expanded ? 'פחות שדות' : 'עוד שדות'}
+          {expanded ? 'FEWER FIELDS' : 'MORE FIELDS'}
         </Button>
       </div>
 
       {expanded ? (
         <div className="grid gap-2 border-t pt-2 md:grid-cols-3">
           <div className="md:col-span-3">
-            <Label htmlFor="new-task-description">תיאור</Label>
+            <Label htmlFor="new-task-description">Description</Label>
             <Textarea id="new-task-description" name="description" rows={2} />
           </div>
           <div>
-            <Label htmlFor="new-task-dept">מחלקה</Label>
+            <Label htmlFor="new-task-dept">Department</Label>
             <Select id="new-task-dept" name="deptId" defaultValue="" className="w-full">
-              <option value="">ללא</option>
+              <option value="">None</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>{d.label}</option>
               ))}
             </Select>
           </div>
           <div>
-            <Label htmlFor="new-task-owner">בעלים</Label>
+            <Label htmlFor="new-task-owner">Owner</Label>
             <Select id="new-task-owner" name="ownerPersonId" defaultValue="" className="w-full">
-              <option value="">אני</option>
+              <option value="">Me</option>
               {people.map((p) => (
                 <option key={p.id} value={p.id}>{p.label}</option>
               ))}
             </Select>
           </div>
           <div>
-            <Label htmlFor="new-task-money">השפעה כספית (USD)</Label>
+            <Label htmlFor="new-task-money">Money impact (USD)</Label>
             <Input id="new-task-money" name="moneyImpact" type="number" min="0" step="1" dir="ltr" />
           </div>
           <div className="md:col-span-2">
-            <Label htmlFor="new-task-tags">תגיות (מופרדות בפסיק)</Label>
+            <Label htmlFor="new-task-tags">Tags (comma separated)</Label>
             <Input id="new-task-tags" name="tags" placeholder="supply, ctv" />
           </div>
           <div>
-            <Label htmlFor="new-task-recurrence">חזרתיות (RRULE)</Label>
+            <Label htmlFor="new-task-recurrence">Recurrence (RRULE)</Label>
             <Input id="new-task-recurrence" name="recurrenceRule" dir="ltr" placeholder="FREQ=WEEKLY;BYDAY=SU" />
           </div>
         </div>

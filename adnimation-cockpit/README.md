@@ -1,10 +1,14 @@
 # Adnimation CEO Cockpit
 
-מערכת ניהול פרטית למנכ"ל Adnimation. שני משתמשים בלבד: המנכ"ל (בעלים) וה-Chief of Staff (מפעילה).
-הצוות לא נכנס למערכת — הוא מקבל ממנה, בסלאק ובמייל.
+A private console for the CEO of Adnimation. Two users only: the CEO (owner) and the
+Chief of Staff (operator). The team never signs in — they receive from it, in Slack and email.
 
-האפיון המלא: [`adnimation-ceo-cockpit-spec.md`](adnimation-ceo-cockpit-spec.md).
-הנחיות הבנייה: [`CLAUDE.md`](CLAUDE.md). סכמת מסד הנתונים: [`db/schema.sql`](db/schema.sql).
+Full specification: [`adnimation-ceo-cockpit-spec.md`](adnimation-ceo-cockpit-spec.md).
+Build brief: [`CLAUDE.md`](CLAUDE.md). Database schema: [`db/schema.sql`](db/schema.sql).
+
+**Interface language is English (LTR)**, per the product owner's direction on 2026-08-29.
+This supersedes CLAUDE.md §7, which specified Hebrew RTL. The visual system follows the
+dark-HUD design handoff (`design/`).
 
 ---
 
@@ -15,11 +19,24 @@ Per `CLAUDE.md` §8, each milestone ships working end-to-end before the next beg
 | # | Milestone | Status |
 |---|---|---|
 | 1 | Foundation + Tasks + Cockpit shell | **shipped** |
-| 2 | Revenue + Action Inbox + daily reports | not started |
+| 2 | Revenue + Action Inbox + daily reports | **revenue shipped**; inbox + reports pending |
 | 3 | Pipeline + partner health | not started |
 | 4 | Contracts + Drive filing + agent engine | not started |
 | 5 | Counter-signature | blocked on legal preconditions (§11) |
 | 6 | Sites, calendar, communications | not started |
+
+### Revenue (milestone 2, first slice)
+
+- **Source**: the Ad Ops Architect project's PostgreSQL (`ars_*` tables) — spec question 21.1,
+  now answered. Access is **read-only**; the cockpit never writes to that system.
+- **Net is derived as `gross - fee`**, never read from the source's `total_revenue`. That column
+  is filled by a settlement pass running a day or two behind, and reading it directly showed a
+  ~170% overnight jump in net that never happened. See `lib/revenue/normalize.ts`.
+- **Department mapping is a proposal, not a fact.** The source distinguishes business line and
+  demand category but carries no business-unit split, so every assignment is marked unconfirmed
+  in the UI and unmatched revenue lands in an explicit UNASSIGNED bucket.
+- Anomaly detection per spec 7.4: 28-day day-of-week-adjusted baseline, drop/spike thresholds.
+- Cockpit strip 1 and a `/revenue` page with drill-down to demand category.
 
 ### What Milestone 1 delivers
 

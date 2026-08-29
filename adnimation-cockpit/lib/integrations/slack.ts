@@ -7,7 +7,7 @@ function buildBlocks(message: SlackMessage) {
     { type: 'section', text: { type: 'mrkdwn', text: message.text } },
   ];
   const context = [...(message.contextLines ?? [])];
-  if (message.backlinkUrl) context.push(`<${message.backlinkUrl}|פתיחה בקוקפיט>`);
+  if (message.backlinkUrl) context.push(`<${message.backlinkUrl}|Open in the cockpit>`);
   if (context.length > 0) {
     blocks.push({
       type: 'context',

@@ -2,66 +2,89 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Adnimation CEO Cockpit — dark HUD design system.
+ *
+ * Tokens taken verbatim from the design handoff (design_handoff_ceo_cockpit).
+ * The handoff's shell is LTR English; the product brief (CLAUDE.md §7) requires
+ * a Hebrew RTL interface, so the visual system is applied — palette, Barlow
+ * families, square corners, hairlines, registration marks, blueprint ground —
+ * while content stays Hebrew and the rail sits on the inline-start edge, which
+ * RTL renders on the right.
+ */
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222 40% 12%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 40% 12%;
-    --muted: 220 16% 96%;
-    --muted-foreground: 220 10% 42%;
-    --primary: 222 47% 22%;
-    --primary-foreground: 0 0% 100%;
-    --accent: 220 16% 94%;
-    --accent-foreground: 222 40% 12%;
-    --destructive: 0 72% 45%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 14% 88%;
-    --input: 220 14% 88%;
-    --ring: 222 47% 40%;
-    --radius: 0.375rem;
+    --paper: #eaf2fb;
+    --color-bg: #0f1a24;
+    --color-surface: #16232f;
+    --color-text: #e6eef7;
+    --color-divider: rgba(196, 218, 240, 0.2);
 
-    /* One severity ramp, shared by heat bands, risk cells and alerts. */
-    --sev-critical: 0 72% 45%;
-    --sev-warning: 25 90% 44%;
-    --sev-watch: 45 90% 40%;
-    --sev-ok: 152 45% 35%;
-  }
+    --color-neutral-100: #1a2734;
+    --color-neutral-200: #22303d;
+    --color-neutral-300: #33465a;
+    --color-neutral-400: #4a6076;
+    --color-neutral-500: #8ba4bd;
+    --color-neutral-600: #9db4ca;
+    --color-neutral-700: #c2d3e4;
+    --color-neutral-800: #d7e4f1;
+    --color-neutral-900: #eaf2fb;
 
-  .dark {
-    --background: 222 30% 9%;
-    --foreground: 220 14% 94%;
-    --card: 222 28% 12%;
-    --card-foreground: 220 14% 94%;
-    --muted: 222 22% 17%;
-    --muted-foreground: 220 10% 62%;
-    --primary: 220 14% 94%;
-    --primary-foreground: 222 40% 12%;
-    --accent: 222 22% 19%;
-    --accent-foreground: 220 14% 94%;
-    --destructive: 0 62% 52%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 222 20% 22%;
-    --input: 222 20% 22%;
-    --ring: 220 30% 60%;
+    --color-accent: #7cabdd;
+    --color-accent-100: #17293a;
+    --color-accent-200: #1f354a;
+    --color-accent-300: #9cc3e8;
+    --color-accent-400: #8ab6e2;
+    --color-accent-500: #6f9fcc;
+    --color-accent-600: #86b3dc;
+    --color-accent-700: #a8cbea;
+    --color-accent-800: #c2dbf2;
+    --color-accent-900: #dcecfb;
 
-    --sev-critical: 0 72% 58%;
-    --sev-warning: 25 90% 56%;
-    --sev-watch: 45 90% 52%;
-    --sev-ok: 152 45% 48%;
+    --rail-from: #142330;
+    --rail-to: #0c151d;
+    --strip-bg: #0b141c;
+
+    /* Severity, mapped onto the HUD palette rather than stock red/amber. */
+    --sev-critical: #e8919a;
+    --sev-warning: #e0b183;
+    --sev-watch: #d6cf8e;
+    --sev-ok: #9cc3e8;
   }
 
   * {
-    @apply border-border;
+    border-color: var(--color-divider);
+  }
+
+  html {
+    color-scheme: dark;
   }
 
   body {
-    @apply bg-background text-foreground;
-    font-feature-settings: 'kern';
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-barlow), system-ui, sans-serif;
+    font-size: 14px;
+    /* Tabular numerals everywhere: columns of figures must align. */
+    font-variant-numeric: tabular-nums;
+    text-wrap: pretty;
     -webkit-font-smoothing: antialiased;
   }
 
-  /* Numbers, currency, IDs and ad-tech terms read LTR inside RTL text (§7). */
+  /* Square corners are the system's rule — no radius anywhere. */
+  * {
+    border-radius: 0 !important;
+  }
+
+  /* Focus is always the accent ring, never the browser default. */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  /* Numbers, currency and ad-tech terms read LTR inside RTL text. */
   .ltr-num {
     direction: ltr;
     unicode-bidi: isolate;
@@ -71,17 +94,159 @@
 }
 
 @layer components {
-  /* Density over decoration: one compact table style used everywhere. */
+  /* The blueprint ground: scanlines, corner wash, 48px grid. */
+  .hud-ground {
+    background-color: var(--color-bg);
+    background-image:
+      repeating-linear-gradient(to bottom, rgba(196, 218, 240, 0.035) 0 1px, transparent 1px 4px),
+      radial-gradient(120% 80% at 78% -10%, rgba(124, 171, 221, 0.14) 0%, transparent 60%),
+      linear-gradient(to right, color-mix(in srgb, var(--color-text) 7%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in srgb, var(--color-text) 7%, transparent) 1px, transparent 1px);
+    background-size: 100% 4px, 100% 100%, 48px 48px, 48px 48px;
+  }
+
+  /* Card pattern: hairline, inset highlight, deep drop shadow. */
+  .hud-card {
+    position: relative;
+    border: 1px solid var(--color-divider);
+    background: color-mix(in srgb, var(--color-bg) 84%, transparent);
+    box-shadow:
+      inset 0 0 0 1px rgba(196, 218, 240, 0.055),
+      0 18px 40px rgba(4, 9, 13, 0.45);
+  }
+
+  /* Four registration crosshairs, one per corner. */
+  .hud-card::before,
+  .hud-card::after,
+  .hud-marks::before,
+  .hud-marks::after {
+    content: '';
+    position: absolute;
+    width: 11px;
+    height: 11px;
+    color: color-mix(in srgb, var(--color-text) 55%, transparent);
+    background-image:
+      linear-gradient(currentColor, currentColor),
+      linear-gradient(currentColor, currentColor);
+    background-size: 100% 1px, 1px 100%;
+    background-position: center center;
+    background-repeat: no-repeat;
+    pointer-events: none;
+  }
+  .hud-card::before { inset-block-start: -6px; inset-inline-start: -6px; }
+  .hud-card::after  { inset-block-start: -6px; inset-inline-end: -6px; }
+  .hud-marks::before { inset-block-end: -6px; inset-inline-start: -6px; }
+  .hud-marks::after  { inset-block-end: -6px; inset-inline-end: -6px; }
+
+  /* Technical label: uppercase, tracked, condensed. */
+  .hud-label {
+    font-family: var(--font-barlow-semi), var(--font-barlow), sans-serif;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--color-neutral-600);
+    white-space: nowrap;
+  }
+
+  .hud-kicker {
+    font-family: var(--font-barlow-semi), var(--font-barlow), sans-serif;
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--color-accent-700);
+  }
+
+  /* Display numerals — the big figures. */
+  .hud-numeral {
+    font-family: var(--font-barlow-condensed), var(--font-barlow), sans-serif;
+    font-weight: 600;
+    line-height: 0.9;
+    letter-spacing: -0.02em;
+    color: var(--color-accent-900);
+    text-shadow: 0 0 22px rgba(124, 171, 221, 0.35);
+  }
+
+  .hud-title {
+    font-family: var(--font-barlow-condensed), var(--font-barlow), sans-serif;
+    font-weight: 600;
+    line-height: 0.92;
+    letter-spacing: -0.012em;
+    text-shadow: 0 0 28px rgba(124, 171, 221, 0.22);
+  }
+
+  .hud-heading {
+    font-family: var(--font-barlow-condensed), var(--font-barlow), sans-serif;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  /* Dense data table. */
   .cockpit-table {
-    @apply w-full text-right text-sm;
+    width: 100%;
+    text-align: start;
+    font-family: var(--font-barlow-semi), var(--font-barlow), sans-serif;
+    font-size: 14px;
   }
   .cockpit-table th {
-    @apply px-2 py-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground;
+    padding: 8px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-neutral-600);
+    border-bottom: 1px solid var(--color-divider);
+    white-space: nowrap;
+    text-align: start;
   }
   .cockpit-table td {
-    @apply border-t border-border px-2 py-1.5 align-middle;
+    padding: 9px 10px;
+    border-top: 1px solid color-mix(in srgb, var(--color-text) 9%, transparent);
+    vertical-align: middle;
+    white-space: nowrap;
   }
   .cockpit-table tbody tr:hover {
-    @apply bg-muted/60;
+    background: color-mix(in srgb, var(--color-text) 4%, transparent);
+  }
+
+  /* Segmented gauge under a KPI. */
+  .hud-gauge {
+    height: 8px;
+    background-image: repeating-linear-gradient(
+      90deg,
+      rgba(196, 218, 240, 0.16) 0 2px,
+      transparent 2px 5px
+    );
+  }
+  .hud-gauge-fill {
+    height: 100%;
+    background-image: repeating-linear-gradient(
+      90deg,
+      var(--color-accent-300) 0 2px,
+      transparent 2px 5px
+    );
+  }
+}
+
+@layer utilities {
+  @keyframes ledPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+  .animate-led {
+    animation: ledPulse 2.6s ease-in-out infinite;
+  }
+
+  @keyframes barPulse {
+    0%, 100% { transform: scaleY(0.35); }
+    50% { transform: scaleY(1); }
+  }
+  .animate-bar {
+    transform-origin: bottom;
+    animation: barPulse 2.2s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-led, .animate-bar { animation: none; }
   }
 }

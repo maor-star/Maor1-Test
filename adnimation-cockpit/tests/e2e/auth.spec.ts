@@ -4,7 +4,7 @@ test.describe('access control', () => {
   test('an unauthenticated request is redirected to the login page', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveURL(/\/login/);
-    await expect(page.getByRole('button', { name: 'כניסה עם Google' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'SIGN IN WITH GOOGLE' })).toBeVisible();
   });
 
   test('every app route is gated, not just the home page', async ({ page }) => {
@@ -38,6 +38,6 @@ test.describe('access control', () => {
     const page = await signedIn.newPage();
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Cockpit' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'מה בוער היום' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Burning today' }).first()).toBeVisible();
   });
 });

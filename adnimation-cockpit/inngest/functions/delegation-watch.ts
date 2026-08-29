@@ -28,12 +28,12 @@ export const delegationWatch = inngest.createFunction(
           entityType: 'delegation',
           entityId: d.id,
           groupKey: `delegation-stale:${d.id}`,
-          title: `האצלה תקועה: ${person?.name ?? 'לא ידוע'}`,
+          title: `Delegation stalled: ${person?.name ?? 'unknown'}`,
           body: d.note ?? '',
-          whatHappened: `ההאצלה לא זזה ${DELEGATION_STALE_DAYS} ימים.`,
+          whatHappened: `No movement for ${DELEGATION_STALE_DAYS} days.`,
           occurredAt: new Date(),
           ownerPersonId: d.delegatedTo,
-          recommendedAction: 'לבדוק מול האחראי או למשוך את המשימה חזרה.',
+          recommendedAction: 'Check with the owner or pull the task back.',
           createdBy: 'agent:delegation-watch',
         });
       }

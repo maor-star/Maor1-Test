@@ -7,7 +7,7 @@ const daysAgo = (d: number) => new Date(NOW.getTime() - d * 86_400_000);
 
 const task = (over: Partial<HygieneSnapshot> = {}): HygieneSnapshot => ({
   id: '11111111-1111-1111-1111-111111111111',
-  title: 'בדיקה',
+  title: 'Check something',
   priority: 'P2',
   status: 'open',
   dueDate: '2026-09-30',

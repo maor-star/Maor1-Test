@@ -1,64 +1,59 @@
 import Link from 'next/link';
-import { Badge } from '@/components/ui/badge';
+import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { heatBand } from '@/lib/scoring/heat-score';
 import { PRIORITY_META, STATUS_LABEL, type TaskPriority, type TaskStatus } from '@/lib/tasks/types';
 import { cn } from '@/lib/utils';
 
-const PRIORITY_VARIANT: Record<TaskPriority, 'critical' | 'warning' | 'watch' | 'default'> = {
-  P0: 'critical',
-  P1: 'warning',
-  P2: 'watch',
-  P3: 'default',
-};
+const PRIORITY_TONE = {
+  P0: 'critical', P1: 'warning', P2: 'watch', P3: 'neutral',
+} as const;
 
 export function PriorityBadge({ priority }: { priority: TaskPriority }) {
   return (
-    <Badge variant={PRIORITY_VARIANT[priority]} title={PRIORITY_META[priority].sla}>
+    <Tag tone={PRIORITY_TONE[priority]} title={PRIORITY_META[priority].sla}>
       <Num>{priority}</Num>
       <span className="ms-1">{PRIORITY_META[priority].label}</span>
-    </Badge>
+    </Tag>
   );
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const label = STATUS_LABEL[status as TaskStatus] ?? status;
-  return <Badge variant={status === 'done' ? 'ok' : 'outline'}>{label}</Badge>;
+  const label = STATUS_LABEL[status as TaskStatus] ?? status.replace(/_/g, ' ');
+  return <Tag tone={status === 'done' ? 'accent' : 'outline'}>{label}</Tag>;
 }
 
 const BAND_CLASS = {
   burning: 'bg-sev-critical',
   hot: 'bg-sev-warning',
   warm: 'bg-sev-watch',
-  cool: 'bg-muted-foreground/40',
+  cool: 'bg-accent-500',
 } as const;
 
-/** Heat score as a compact bar — the number and its band in one glance. */
+/** Heat score as a segmented gauge — the design system's meter pattern. */
 export function HeatBar({ score }: { score: number }) {
-  const band = heatBand(score);
   return (
-    <div className="flex items-center gap-1.5" title={`Heat Score ${score}`}>
-      <div className="h-1.5 w-10 overflow-hidden rounded-full bg-muted">
-        <div className={cn('h-full rounded-full', BAND_CLASS[band])} style={{ width: `${score}%` }} />
+    <div className="flex items-center gap-2" title={`Heat Score ${score}`}>
+      <div className="hud-gauge w-14">
+        <div className={cn('h-full', BAND_CLASS[heatBand(score)])} style={{ width: `${score}%` }} />
       </div>
-      <Num className="text-2xs text-muted-foreground">{score}</Num>
+      <Num className="font-cond text-[13px] text-neutral-500">{score}</Num>
     </div>
   );
 }
 
-/** Days overdue, as the cockpit shows it: red once it is late. */
 export function OverdueChip({ days }: { days: number }) {
   if (days <= 0) return null;
   return (
-    <Badge variant={days > 7 ? 'critical' : 'warning'}>
+    <Tag tone={days > 7 ? 'critical' : 'warning'}>
       <Num>{days}</Num>
-      <span className="ms-1">ימים באיחור</span>
-    </Badge>
+      <span className="ms-1">D LATE</span>
+    </Tag>
   );
 }
 
 /**
- * A task title is always a link to its card — every data point drills down (§7).
+ * A task title is always a link to its card — every data point drills down.
  * Mirrored ClickUp tasks additionally expose a jump-out link.
  */
 export function TaskTitleLink({
@@ -71,8 +66,8 @@ export function TaskTitleLink({
   clickupUrl?: string | null;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <Link href={`/tasks/${id}`} className="font-medium hover:underline">
+    <span className="inline-flex items-baseline gap-2">
+      <Link href={`/tasks/${id}`} className="font-cond text-[17px] text-neutral-900 hover:text-accent">
         {title}
       </Link>
       {clickupUrl ? (
@@ -80,10 +75,10 @@ export function TaskTitleLink({
           href={clickupUrl}
           target="_blank"
           rel="noreferrer"
-          className="text-2xs text-muted-foreground hover:underline"
-          title="פתיחה ב-ClickUp"
+          className="font-semi text-[10px] tracking-[0.12em] text-neutral-500 hover:text-accent"
+          title="Open in ClickUp"
         >
-          ClickUp ↗
+          CLICKUP ↗
         </a>
       ) : null}
     </span>

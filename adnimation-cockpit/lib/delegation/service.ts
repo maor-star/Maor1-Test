@@ -12,11 +12,11 @@ export const delegateInputSchema = z.object({
   sourceEntityType: z.enum(['task', 'alert', 'contract', 'partner', 'deal']),
   sourceEntityId: z.string().uuid(),
   delegatedTo: z.string().uuid(),
-  title: z.string().trim().min(1, 'חובה למלא כותרת').max(300),
+  title: z.string().trim().min(1, 'Title is required').max(300),
   note: z.string().trim().max(5000).nullish(),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
   priority: z.enum(TASK_PRIORITIES).default('P2'),
-  clickupListId: z.string().min(1, 'חסר מזהה רשימה ב-ClickUp'),
+  clickupListId: z.string().min(1, 'CLICKUP_DEFAULT_LIST_ID is not configured'),
   backlinkUrl: z.string().url().optional(),
 });
 
@@ -45,7 +45,7 @@ export async function delegate(
   const parsed = delegateInputSchema.parse(input);
 
   const [person] = await db.select().from(people).where(eq(people.id, parsed.delegatedTo)).limit(1);
-  if (!person) throw new Error('לא נמצא אדם עם המזהה הזה');
+  if (!person) throw new Error('No person with that id');
 
   const dueDateMs = parsed.dueDate ? Date.parse(`${parsed.dueDate}T12:00:00Z`) : null;
 
@@ -53,7 +53,7 @@ export async function delegate(
     .createTask({
       listId: parsed.clickupListId,
       name: parsed.title,
-      description: [parsed.note ?? '', parsed.backlinkUrl ? `\n\nמקור: ${parsed.backlinkUrl}` : '']
+      description: [parsed.note ?? '', parsed.backlinkUrl ? `\n\nSource: ${parsed.backlinkUrl}` : '']
         .join('')
         .trim(),
       assigneeIds: [],
@@ -75,7 +75,7 @@ export async function delegate(
   const slackText = [
     `*${parsed.title}*`,
     parsed.note ? `\n${parsed.note}` : '',
-    parsed.dueDate ? `\n*תאריך יעד:* ${parsed.dueDate}` : '',
+    parsed.dueDate ? `\n*Due:* ${parsed.dueDate}` : '',
   ].join('');
 
   const slackResult = person.slackId
@@ -83,7 +83,7 @@ export async function delegate(
         .postMessage({
           target: person.slackId,
           text: slackText,
-          contextLines: [`הואצל על ידי ${deps.actor}`],
+          contextLines: [`Delegated by ${deps.actor}`],
           backlinkUrl: clickupTask.url ?? parsed.backlinkUrl,
         })
         .catch((e: unknown) => ({
@@ -112,7 +112,7 @@ export async function delegate(
     })
     .returning();
 
-  if (!row) throw new Error('שמירת ההאצלה נכשלה');
+  if (!row) throw new Error('Failed to record the delegation');
 
   // Spec 6.1.3 step 5 — the source task moves to "delegated, waiting".
   if (parsed.sourceEntityType === 'task') {

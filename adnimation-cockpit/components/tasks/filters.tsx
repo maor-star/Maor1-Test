@@ -44,23 +44,23 @@ export function TaskFilters({
       }}
     >
       <div>
-        <label className="block text-2xs text-muted-foreground" htmlFor="q">חיפוש</label>
-        <Input id="q" name="q" defaultValue={current.q} placeholder="כותרת או תיאור" className="w-56" />
+        <label className="block text-2xs text-muted-foreground" htmlFor="q">Search</label>
+        <Input id="q" name="q" defaultValue={current.q} placeholder="Title or description" className="w-56" />
       </div>
 
       <div>
-        <label className="block text-2xs text-muted-foreground" htmlFor="layer">שכבה</label>
+        <label className="block text-2xs text-muted-foreground" htmlFor="layer">Layer</label>
         <Select id="layer" value={current.layer} onChange={(e) => push({ layer: e.target.value })}>
-          <option value="mine">המשימות שלי</option>
-          <option value="company">משימות החברה (ClickUp)</option>
-          <option value="all">הכול</option>
+          <option value="mine">My tasks</option>
+          <option value="company">Company tasks (ClickUp)</option>
+          <option value="all">All</option>
         </Select>
       </div>
 
       <div>
-        <label className="block text-2xs text-muted-foreground" htmlFor="priority">עדיפות</label>
+        <label className="block text-2xs text-muted-foreground" htmlFor="priority">Priority</label>
         <Select id="priority" value={current.priority} onChange={(e) => push({ priority: e.target.value })}>
-          <option value="">הכול</option>
+          <option value="">All</option>
           {TASK_PRIORITIES.map((p) => (
             <option key={p} value={p}>{p} — {PRIORITY_META[p].label}</option>
           ))}
@@ -68,9 +68,9 @@ export function TaskFilters({
       </div>
 
       <div>
-        <label className="block text-2xs text-muted-foreground" htmlFor="status">סטטוס</label>
+        <label className="block text-2xs text-muted-foreground" htmlFor="status">Status</label>
         <Select id="status" value={current.status} onChange={(e) => push({ status: e.target.value })}>
-          <option value="">פתוחות</option>
+          <option value="">Open</option>
           {TASK_STATUSES.map((s) => (
             <option key={s} value={s}>{STATUS_LABEL[s]}</option>
           ))}
@@ -78,9 +78,9 @@ export function TaskFilters({
       </div>
 
       <div>
-        <label className="block text-2xs text-muted-foreground" htmlFor="dept">מחלקה</label>
+        <label className="block text-2xs text-muted-foreground" htmlFor="dept">Department</label>
         <Select id="dept" value={current.dept} onChange={(e) => push({ dept: e.target.value })}>
-          <option value="">הכול</option>
+          <option value="">All</option>
           {departments.map((d) => (
             <option key={d.id} value={d.id}>{d.label}</option>
           ))}

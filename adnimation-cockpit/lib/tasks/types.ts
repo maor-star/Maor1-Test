@@ -5,21 +5,21 @@ export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
 /** Spec 6.2 — priority names and SLAs, shown next to the selector. */
 export const PRIORITY_META: Record<TaskPriority, { label: string; sla: string }> = {
-  P0: { label: 'בוער', sla: 'תגובה תוך 4 שעות' },
-  P1: { label: 'קריטי', sla: 'סגירה תוך 3 ימי עסקים' },
-  P2: { label: 'חשוב', sla: 'סגירה תוך 14 יום' },
-  P3: { label: 'במעקב', sla: 'ללא SLA' },
+  P0: { label: 'BURNING', sla: 'Respond within 4 hours' },
+  P1: { label: 'CRITICAL', sla: 'Close within 3 business days' },
+  P2: { label: 'IMPORTANT', sla: 'Close within 14 days' },
+  P3: { label: 'TRACKING', sla: 'No SLA' },
 };
 
 export const TASK_STATUSES = ['open', 'in_progress', 'blocked', 'delegated', 'done'] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export const STATUS_LABEL: Record<TaskStatus, string> = {
-  open: 'פתוח',
-  in_progress: 'בעבודה',
-  blocked: 'חסום',
-  delegated: 'האצלתי — ממתין',
-  done: 'הושלם',
+  open: 'OPEN',
+  in_progress: 'IN PROGRESS',
+  blocked: 'BLOCKED',
+  delegated: 'DELEGATED',
+  done: 'DONE',
 };
 
 export const TASK_SOURCES = [
@@ -31,13 +31,13 @@ export type DeptCode = (typeof DEPT_CODES)[number];
 
 const isoDate = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'תאריך חייב להיות בפורמט YYYY-MM-DD');
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD');
 
 const emptyToNull = <T extends z.ZodTypeAny>(inner: T) =>
   z.preprocess((v) => (v === '' ? null : v), inner);
 
 export const taskInputSchema = z.object({
-  title: z.string().trim().min(1, 'חובה למלא כותרת').max(300),
+  title: z.string().trim().min(1, 'Title is required').max(300),
   description: emptyToNull(z.string().trim().max(20_000).nullable()).optional(),
   priority: z.enum(TASK_PRIORITIES).default('P2'),
   status: z.enum(TASK_STATUSES).default('open'),
@@ -63,7 +63,7 @@ export type TaskPatch = z.infer<typeof taskPatchSchema>;
 
 export const commentInputSchema = z.object({
   taskId: z.string().uuid(),
-  body: z.string().trim().min(1, 'הערה ריקה').max(10_000),
+  body: z.string().trim().min(1, 'Comment cannot be empty').max(10_000),
 });
 
 /** Spec 6.3 — a task snoozed three times is a Zombie. */

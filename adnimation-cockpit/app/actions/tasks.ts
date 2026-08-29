@@ -22,7 +22,7 @@ function fromZod(error: z.ZodError): ActionResult {
   const flat = error.flatten();
   return {
     ok: false,
-    error: flat.formErrors[0] ?? 'הנתונים שנשלחו אינם תקינים',
+    error: flat.formErrors[0] ?? 'The submitted data is not valid',
     fieldErrors: flat.fieldErrors as Record<string, string[]>,
   };
 }
@@ -83,7 +83,7 @@ export async function updateTaskAction(formData: FormData): Promise<ActionResult
   try {
     await updateTask(parsed.data, user.email);
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'העדכון נכשל' };
+    return { ok: false, error: e instanceof Error ? e.message : 'Update failed' };
   }
   revalidatePath('/tasks');
   revalidatePath(`/tasks/${parsed.data.id}`);
@@ -100,7 +100,7 @@ export async function completeTaskAction(formData: FormData): Promise<ActionResu
   try {
     await completeTask(parsed.data.id, user.email);
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'הסגירה נכשלה' };
+    return { ok: false, error: e instanceof Error ? e.message : 'Closing the task failed' };
   }
   revalidatePath('/tasks');
   revalidatePath('/');
@@ -116,7 +116,7 @@ export async function snoozeTaskAction(formData: FormData): Promise<ActionResult
   try {
     await snoozeTask(parsed.data.id, addDays(new Date(), parsed.data.days), user.email);
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'הדחייה נכשלה' };
+    return { ok: false, error: e instanceof Error ? e.message : 'Snoozing failed' };
   }
   revalidatePath('/tasks');
   revalidatePath('/');
@@ -130,7 +130,7 @@ export async function archiveTaskAction(formData: FormData): Promise<ActionResul
   try {
     await archiveTask(parsed.data.id, user.email);
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'הארכוב נכשל' };
+    return { ok: false, error: e instanceof Error ? e.message : 'Archiving failed' };
   }
   revalidatePath('/tasks');
   revalidatePath('/');
