@@ -144,7 +144,13 @@ function weekReport(week, me) {
         <h3>הדיווח השבועי</h3>
         <span class="when">${ltr(`${shortDate(from)} - ${shortDate(week.days[0].date)}`)}</span>
       </header>
-      <p class="note-line">שורה לכל יום בשבעת הימים האחרונים. אפשר להשלים ימים שפוספסו, ולשמור הכול בבת אחת.</p>
+      <div class="week-summary">
+        <div><div class="val accent">${ltr(`${nf(week.workouts)}/${nf(goal)}`)}</div><div class="cap">אימוני כוח · 7 ימים</div></div>
+        <div><div class="val">${nf(week.avgProtein)}</div><div class="cap">ממוצע חלבון ליום · ג׳</div></div>
+        <div><div class="val">${nf(week.avgCalories)}</div><div class="cap">ממוצע קלוריות ליום</div></div>
+      </div>
+      <p class="note-line">מחושב על ${nf(week.reported)} מתוך 7 הימים שדווחו.
+        שורה לכל יום, אפשר להשלים ימים שפוספסו ולשמור הכול בבת אחת.</p>
       <div class="table-wrap">
         <table class="table week-table">
           <thead>
@@ -327,6 +333,10 @@ async function viewDashboard(el) {
         { value: stats.to_target === null ? '-' : nf(Math.max(0, stats.to_target), 1), cap: 'נותרו ליעד · ק״ג' },
         { value: nf(me.current_streak), cap: 'ימי רצף' },
       ], { framed: false })}
+      <p class="note-line">היעד אחיד לכל הקבוצה: ירידה של ${nf(stats.target_share * 100)}% ממשקל הפתיחה.
+        ${stats.target_loss
+          ? `במקרה שלך ${ltr(nf(stats.target_loss, 1))} ק״ג, מ-${ltr(nf(stats.weight_start, 1))} ל-${ltr(nf(stats.target_weight, 1))}.`
+          : 'היעד שלך ייקבע מהשקילה הראשונה.'}</p>
     </section>
 
     ${stats.coach_note ? `
@@ -340,13 +350,6 @@ async function viewDashboard(el) {
       <div class="kicker">שבעת הימים האחרונים</div>
       <h2>שלוש שורות. זה כל מה שנמדד.</h2>
     </div>
-
-    ${statBlock([
-      { value: ltr(`${nf(week.workouts)}/${nf(me.weekly_workouts_goal)}`), cap: 'אימוני כוח · 7 ימים', accent: true },
-      { value: nf(week.avgProtein), cap: 'ממוצע חלבון ליום · ג׳' },
-      { value: nf(week.avgCalories), cap: 'ממוצע קלוריות ליום' },
-      { value: ltr(`${nf(week.reported)}/7`), cap: 'ימים שדווחו' },
-    ])}
 
     <div class="split">
       ${weekReport(week, me)}
@@ -364,11 +367,6 @@ async function viewDashboard(el) {
             <label for="wg">משקל נוכחי (ק״ג)</label>
             <input class="input" id="wg" type="number" name="weight" min="20" max="400" step="0.1"
                    value="${stats.weight_latest ?? ''}" required />
-          </div>
-          <div class="field" style="margin-top:10px">
-            <label for="wt">יעד המשקל שלך (ק״ג)</label>
-            <input class="input" id="wt" type="number" name="target_weight" min="20" max="400" step="0.1"
-                   value="${stats.target_weight ?? ''}" placeholder="לא נקבע" />
           </div>
           <button type="submit" class="btn btn-primary btn-block">${stats.weighed_this_week ? 'עדכון השקילה' : `שמור שקילה · ${ltr('+100 XP')}`}</button>
         </form>
@@ -498,8 +496,6 @@ async function viewDashboard(el) {
     button.disabled = true;
     const form = new FormData(e.target);
     try {
-      // The personal target rides on the same form; it is saved even when unchanged.
-      await api('/me/target-weight', { method: 'PUT', body: { target_weight: form.get('target_weight') } });
       const result = await api('/weigh-ins', {
         method: 'POST',
         body: { weight: form.get('weight') },

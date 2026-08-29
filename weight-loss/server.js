@@ -59,6 +59,13 @@ function fail(message, status = 400) {
  * The programme runs for thirteen weeks from the opening Tuesday, one weigh-in a week.
  * The dates are fixed for everybody, so the group is always comparing the same weeks.
  */
+// One target for the whole group: ten percent off the weight you started at. It is
+// derived from the first weigh-in rather than typed in, so nobody carries a different
+// bar and nobody has to set one.
+const TARGET_SHARE = 0.1;
+const targetFrom = (startWeight) =>
+  startWeight ? Number((startWeight * (1 - TARGET_SHARE)).toFixed(1)) : null;
+
 // The first weigh-in, and every following Tuesday for three months. 1.9 and 1.12 are
 // both Tuesdays, so fourteen slots cover the window exactly, end included.
 const PROGRAM_START = '2026-09-01';
@@ -355,6 +362,8 @@ function personalStats(userId) {
   const weighedThisWeek = weighIns.some((w) => w.week === thisWeek);
   const nextWeighIn = weighedThisWeek ? shiftDate(start, 7) : today;
 
+  const targetWeight = targetFrom(first ? first.weight : null);
+
   const firstWaist = weighIns.find((w) => w.waist != null);
   const lastWaist = [...weighIns].reverse().find((w) => w.waist != null);
 
@@ -371,9 +380,10 @@ function personalStats(userId) {
     weeks_in_program: weighIns.length,
     weighed_this_week: weighedThisWeek,
     next_weigh_in: nextWeighIn,
-    target_weight: profile.target_weight,
-    to_target: profile.target_weight && last
-      ? Number((last.weight - profile.target_weight).toFixed(1)) : null,
+    target_share: TARGET_SHARE,
+    target_weight: targetWeight,
+    target_loss: first ? Number((first.weight * TARGET_SHARE).toFixed(1)) : null,
+    to_target: targetWeight && last ? Number((last.weight - targetWeight).toFixed(1)) : null,
     coach_note: profile.coach_note,
     has_photo: !!profile.photo_url,
     program_start: PROGRAM_START,
@@ -763,15 +773,7 @@ app.put('/api/settings/bot-url', requireEditor, asyncRoute((req, res) => {
   res.json({ ok: true, url });
 }));
 
-// ---------- The personal target and photo ----------
-app.put('/api/me/target-weight', requireAuth, asyncRoute((req, res) => {
-  const raw = req.body.target_weight;
-  const target = raw === '' || raw === null || raw === undefined ? null : num(raw);
-  if (target !== null && !(target > 20 && target < 400)) throw fail('יעד המשקל חייב להיות בין 20 ל-400 ק"ג');
-  db.prepare('UPDATE profiles SET target_weight = ? WHERE id = ?').run(target, req.user.id);
-  res.json(profileState(req.user.id));
-}));
-
+// ---------- The profile photo ----------
 app.post('/api/me/photo', requireAuth, asyncRoute((req, res) => {
   const previous = req.user.photo_url;
   const name = savePhoto(req.body.photo);
@@ -829,7 +831,7 @@ app.get('/api/editor/inbox', requireEditor, asyncRoute((req, res) => {
 }));
 
 app.get('/api/editor/inbox/:id', requireEditor, asyncRoute((req, res) => {
-  const member = db.prepare('SELECT id, full_name, coach_note, target_weight FROM profiles WHERE id = ?').get(req.params.id);
+  const member = db.prepare('SELECT id, full_name, coach_note FROM profiles WHERE id = ?').get(req.params.id);
   if (!member) throw fail('החבר לא נמצא', 404);
   const messages = db.prepare('SELECT * FROM messages WHERE user_id = ? ORDER BY created_at, id').all(member.id);
   db.prepare("UPDATE messages SET read_at = datetime('now') WHERE user_id = ? AND from_coach = 0 AND read_at IS NULL")
