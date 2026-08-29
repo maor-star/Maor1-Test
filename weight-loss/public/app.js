@@ -1049,7 +1049,29 @@ async function viewArticle(el, slug) {
       <p class="byline">מאת ${esc(post.author || 'מאור דוידוביץ')} · ${post.read_minutes} דקות קריאה</p>
     </div>
     <article class="article-body measure">${blocks}</article>
-    <p class="byline byline-end measure">נכתב על ידי ${esc(post.author || 'מאור דוידוביץ')}</p>`;
+    <p class="byline byline-end measure">נכתב על ידי ${esc(post.author || 'מאור דוידוביץ')}</p>
+    <div class="measure share-row">
+      <button class="btn btn-secondary" id="share-post" type="button">שיתוף הכתבה</button>
+      <span class="note-line" id="share-note"></span>
+    </div>`;
+
+  // The link handed out is the path form, the one that carries a preview.
+  const shareUrl = `${location.origin}/a/${encodeURIComponent(post.slug)}`;
+  el.querySelector('#share-post').addEventListener('click', async () => {
+    const note = el.querySelector('#share-note');
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: post.title, text: post.excerpt, url: shareUrl });
+        return;
+      }
+      await navigator.clipboard.writeText(shareUrl);
+      note.textContent = 'הקישור הועתק';
+    } catch {
+      // A cancelled share dialog is not a failure; a blocked clipboard is, and then the
+      // link is shown so it can be copied by hand.
+      if (!navigator.share) note.textContent = shareUrl;
+    }
+  });
 }
 
 // ---------------- Settings ----------------
@@ -2178,6 +2200,14 @@ function showApp() {
 
 // ---------------- Boot ----------------
 async function boot() {
+  // A shared link arrives as /a/<slug>, the form the server can answer with that
+  // article's preview tags. The app itself routes on the hash, so it is swapped back
+  // here and the address bar is tidied without adding a history entry.
+  const shared = /^\/a\/([^/]+)\/?$/.exec(location.pathname);
+  if (shared) {
+    history.replaceState(null, '', `/#/articles/${shared[1]}`);
+  }
+
   try {
     state.me = await api('/me');
   } catch {

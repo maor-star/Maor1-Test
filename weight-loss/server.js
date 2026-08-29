@@ -2,7 +2,7 @@ import express from 'express';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { writeFileSync, existsSync, unlinkSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync, unlinkSync } from 'fs';
 import db from './db.js';
 import { mountMcp } from './mcp.js';
 import { mountAssistant } from './assistant.js';
@@ -20,12 +20,89 @@ const uploadsDir = join(dirname(process.env.DB_PATH || join(__dirname, 'data', '
 const app = express();
 const PORT = process.env.PORT || 3100;
 
+// Caddy terminates TLS in front of this, so without it every absolute URL built from a
+// request comes out as http and the crawlers reject the preview image.
+app.set('trust proxy', true);
+
 app.use(express.json({ limit: '12mb' }));
-app.use(express.static(join(__dirname, 'public')));
 app.use(attachUser);
 
 // Read-only MCP endpoint, so a bot can answer from the site's own articles.
 mountMcp(app);
+
+/**
+ * Share links, and the only reason they exist.
+ *
+ * The app routes on the hash, and a hash is never sent to the server: a crawler asking
+ * for /#/articles/x receives the same bare index.html as the home page, which is why a
+ * shared article showed the site's name and no picture. A path is sent, so an article is
+ * shared as /a/<slug> and answered here with that article's own preview tags baked in.
+ * The browser then hands it to the app, which puts the hash route back.
+ */
+const INDEX_PATH = join(__dirname, 'public', 'index.html');
+const escAttr = (v) => String(v ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function renderIndexWith(tags, title) {
+  const html = readFileSync(INDEX_PATH, 'utf8');
+  return html
+    .replace(/<!--og-->[\s\S]*?<!--\/og-->/, tags)
+    // Clients that ignore og:title fall back to this, and so does the browser tab.
+    .replace(/<title>[\s\S]*?<\/title>/, `<title>${escAttr(title)}</title>`);
+}
+
+/** Sharing the site itself should show a picture too, not just its name. */
+app.get('/', asyncRoute((req, res) => {
+  const origin = `${req.protocol}://${req.get('host')}`;
+  const post = db.prepare(
+    'SELECT id FROM posts WHERE image_url IS NOT NULL ORDER BY published_at DESC, id DESC LIMIT 1'
+  ).get();
+  const image = post ? `${origin}/api/posts/${post.id}/image` : null;
+  const description = 'קבוצה שיורדת אחוזי שומן ובונה מסת שריר. שלושה יעדים יומיים, שקילה אחת בשבוע, ומאמרים שמסבירים את המנגנון.';
+
+  res.type('html').send(renderIndexWith(`
+  <meta property="og:site_name" content="הדרך הקלה לירידה במשקל" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="he_IL" />
+  <meta property="og:url" content="${escAttr(origin)}/" />
+  <meta property="og:title" content="הדרך הקלה לירידה במשקל" />
+  <meta property="og:description" content="${escAttr(description)}" />
+  <meta name="description" content="${escAttr(description)}" />
+  ${image ? `<meta property="og:image" content="${escAttr(image)}" />
+  <meta property="og:image:secure_url" content="${escAttr(image)}" />` : ''}
+  <meta name="twitter:card" content="${image ? 'summary_large_image' : 'summary'}" />`,
+    'הדרך הקלה לירידה במשקל'));
+}));
+
+app.get('/a/:slug', asyncRoute((req, res) => {
+  const post = db.prepare(
+    'SELECT id, slug, title, excerpt, image_url FROM posts WHERE slug = ?'
+  ).get(req.params.slug);
+  if (!post) return res.redirect('/');
+
+  const origin = `${req.protocol}://${req.get('host')}`;
+  const url = `${origin}/a/${encodeURIComponent(post.slug)}`;
+  const image = post.image_url ? `${origin}/api/posts/${post.id}/image` : null;
+
+  res.type('html').send(renderIndexWith(`
+  <meta property="og:site_name" content="הדרך הקלה לירידה במשקל" />
+  <meta property="og:type" content="article" />
+  <meta property="og:locale" content="he_IL" />
+  <meta property="og:url" content="${escAttr(url)}" />
+  <meta property="og:title" content="${escAttr(post.title)}" />
+  <meta property="og:description" content="${escAttr(post.excerpt)}" />
+  <meta name="description" content="${escAttr(post.excerpt)}" />
+  ${image ? `<meta property="og:image" content="${escAttr(image)}" />
+  <meta property="og:image:secure_url" content="${escAttr(image)}" />
+  <meta property="og:image:alt" content="${escAttr(post.title)}" />` : ''}
+  <meta name="twitter:card" content="${image ? 'summary_large_image' : 'summary'}" />
+  <meta name="twitter:title" content="${escAttr(post.title)}" />
+  <meta name="twitter:description" content="${escAttr(post.excerpt)}" />
+  ${image ? `<meta name="twitter:image" content="${escAttr(image)}" />` : ''}`,
+    `${post.title} · הדרך הקלה לירידה במשקל`));
+}));
+
+app.use(express.static(join(__dirname, 'public')));
 
 // ---------- Helpers ----------
 const num = (v) => (v === undefined || v === null || v === '' ? 0 : Number(v));
