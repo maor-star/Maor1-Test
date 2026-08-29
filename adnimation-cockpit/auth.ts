@@ -11,21 +11,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   callbacks: {
     ...authConfig.callbacks,
-    async jwt({ token, profile }) {
-      const email = (profile?.email ?? token.email)?.toLowerCase();
+    async jwt({ token, profile, user }) {
+      const email = (profile?.email ?? user?.email ?? token.email)?.toLowerCase();
       if (!email) return token;
       token.email = email;
       token.role = roleForEmail(email, process.env.ALLOWED_EMAILS) ?? 'operator';
 
       // Reconcile the users row on first sign-in so audit rows and alert
       // acknowledgements have a real user id to point at.
-      if (profile) {
+      if (profile || user) {
         const { db, users } = await import('@/lib/db');
         const existing = await db.select().from(users).where(eq(users.email, email)).limit(1);
         if (existing.length === 0) {
           const [created] = await db
             .insert(users)
-            .values({ email, name: profile.name ?? email, role: token.role as string })
+            .values({ email, name: profile?.name ?? user?.name ?? email, role: token.role as string })
             .returning();
           token.uid = created?.id;
         } else {

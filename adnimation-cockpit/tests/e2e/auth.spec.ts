@@ -4,7 +4,9 @@ test.describe('access control', () => {
   test('an unauthenticated request is redirected to the login page', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveURL(/\/login/);
-    await expect(page.getByRole('button', { name: 'SIGN IN WITH GOOGLE' })).toBeVisible();
+    // Google only renders when an OAuth client is configured; the password
+    // form is the sign-in surface that is always present.
+    await expect(page.getByRole('button', { name: 'SIGN IN', exact: true })).toBeVisible();
   });
 
   test('every app route is gated, not just the home page', async ({ page }) => {

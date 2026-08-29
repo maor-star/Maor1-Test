@@ -46,6 +46,8 @@ export default defineConfig({
       AUTH_SECRET: process.env.AUTH_SECRET ?? '',
       ALLOWED_EMAILS: process.env.ALLOWED_EMAILS ?? '',
       CLICKUP_DEFAULT_LIST_ID: process.env.CLICKUP_DEFAULT_LIST_ID ?? 'e2e-list',
+      OWNER_EMAIL: process.env.OWNER_EMAIL ?? '',
+      OWNER_PASSWORD_HASH: process.env.OWNER_PASSWORD_HASH ?? '',
     },
   },
 });

@@ -132,6 +132,11 @@ async function main() {
     ALLOWED_EMAILS,
     USE_FAKE_INTEGRATIONS: '1',
     CLICKUP_DEFAULT_LIST_ID: 'preview-list',
+    // Owner password sign-in. Only the hash is transmitted or stored; the
+    // password itself is never written to disk, to git, or to a log.
+    ...(process.env.OWNER_EMAIL ? { OWNER_EMAIL: process.env.OWNER_EMAIL } : {}),
+    ...(process.env.OWNER_PASSWORD_HASH ? { OWNER_PASSWORD_HASH: process.env.OWNER_PASSWORD_HASH } : {}),
+    ...(process.env.OWNER_NAME ? { OWNER_NAME: process.env.OWNER_NAME } : {}),
   };
 
   const userData = `#!/bin/bash
