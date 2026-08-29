@@ -401,19 +401,44 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 
 /* The week as one form. The day column carries the name, the date and, on Tuesday, the
    weigh-in mark, so the rhythm of the week is readable before anything is filled in. */
-/* The number the whole programme is measured from, stated once above the schedule it
-   sets the target for. */
+/* Asked once, on the way in. Once it is answered the card is gone and the number moves
+   to settings, where the other fixed figures live. */
 .start-weight {
   display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;
-  margin-bottom: var(--space-4);
+  border-color: var(--color-accent-300); background: var(--color-accent-100);
 }
-.start-weight > div:first-child { flex: 1 1 260px; min-width: 0; }
+.start-weight > div:first-child { flex: 1 1 280px; min-width: 0; }
+.start-weight h3 { margin: 4px 0 6px; font-size: 24px; }
 .start-weight-form { display: flex; gap: var(--space-3); flex: none; margin-inline-start: auto; }
 .start-weight-form .input { width: 110px; }
-.start-weight-target { flex: 1 1 100%; color: var(--color-accent-700); }
+
+/* The week's targets, stated before the form that fills them in. Three across on a wide
+   screen: a single bar stretched over the full panel reads as a loading indicator. */
+.targets .goals { gap: var(--space-4); }
+@media (min-width: 720px) {
+  .targets .goals { grid-template-columns: repeat(3, 1fr); gap: var(--space-6); }
+}
+
+/* The weigh-in opens the weekly update: one row, one number, the week it belongs to. */
+.update-weight {
+  display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;
+  padding: var(--space-4); margin: var(--space-4) 0;
+  border: 1px solid var(--color-accent-300); background: var(--color-accent-100);
+}
+.update-weight.is-done { border-color: var(--color-divider); background: transparent; }
+.update-weight > div:first-child { flex: 1 1 200px; min-width: 0; }
+.update-when {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 20px; line-height: 1.2; margin-top: 4px;
+}
+.update-weight .input { width: 130px; margin-inline-start: auto; flex: none; }
 @media (max-width: 560px) {
   .start-weight-form { flex: 1 1 100%; margin-inline-start: 0; }
   .start-weight-form .input { flex: 1; width: auto; }
+  .start-weight h3 { font-size: 20px; }
+  .update-weight { padding: var(--space-3); gap: var(--space-3); }
+  .update-when { font-size: 17px; }
+  .update-weight .input { flex: 1 1 100%; width: auto; margin-inline-start: 0; }
 }
 
 /* The week's three numbers, inside the report they describe. */

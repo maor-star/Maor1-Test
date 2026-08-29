@@ -152,25 +152,36 @@ function weekModel(stats) {
   };
 }
 
-function weekReport(week, me) {
+function weekUpdate(week, me, stats) {
   const from = week.days[week.days.length - 1].date;
-  const goal = me.weekly_workouts_goal;
+  const done = stats.current_slot_weight !== null;
+  const slot = done ? stats.current_slot : stats.open_slot;
+  const days = slot ? Math.round((Date.parse(slot) - Date.parse(stats.today)) / 86400000) : null;
+  const when = days === null ? ''
+    : days === 0 ? 'היום' : days === 1 ? 'מחר'
+    : days > 1 ? `בעוד ${nf(days)} ימים` : 'התאריך עבר, אפשר עדיין למלא';
 
   return `
     <section class="panel bp week-panel">
       ${corners()}
       <header>
-        <h3>הדיווח השבועי</h3>
+        <h3>${slot ? `עדכון שבוע · ${fmtDate(slot)}` : 'עדכון שבוע'}</h3>
         <span class="when">${ltr(`${shortDate(from)} - ${shortDate(week.days[0].date)}`)}</span>
       </header>
+      <p class="note-line">שקילה אחת ומה שהיה השבוע. ממלאים ושומרים בבת אחת.</p>
 
-      <div class="week-summary">
-        <div><div class="val accent">${ltr(`${nf(week.workouts)}/${nf(goal)}`)}</div><div class="cap">אימוני כוח · 7 ימים</div></div>
-        <div><div class="val">${nf(week.avgProtein)}</div><div class="cap">ממוצע חלבון ליום · ג׳</div></div>
-        <div><div class="val">${nf(week.avgCalories)}</div><div class="cap">ממוצע קלוריות ליום</div></div>
-      </div>
-      <p class="note-line">מחושב על ${nf(week.reported)} מתוך 7 הימים שדווחו.
-        שורה לכל יום, אפשר להשלים ימים שפוספסו ולשמור הכול בבת אחת.</p>
+      ${slot ? `
+        <div class="update-weight ${done ? 'is-done' : ''}">
+          <div>
+            <div class="label">משקל בשקילה</div>
+            <div class="update-when">יום שלישי, ${fmtDate(slot)}${done ? ' · נשמר' : ` · ${when}`}</div>
+          </div>
+          <input class="input" id="wg" type="number" min="20" max="400" step="0.1" data-weighin
+                 value="${done ? stats.current_slot_weight : ''}" placeholder="${stats.weight_latest ?? 'ק״ג'}"
+                 aria-label="משקל לשקילה של ${fmtDate(slot)}" />
+          <input type="hidden" id="weighin-date" value="${slot}" />
+        </div>` : '<p class="note-line">כל שקילות התוכנית מולאו.</p>'}
+
       <div class="table-wrap">
         <table class="table week-table">
           <thead>
@@ -178,11 +189,10 @@ function weekReport(week, me) {
           </thead>
           <tbody>
             ${week.days.map((d) => `
-              <tr class="${d.isToday ? 'is-now' : ''} ${d.isWeighIn ? 'is-weighin' : ''}" data-day="${d.date}">
+              <tr class="${d.isToday ? 'is-now' : ''}" data-day="${d.date}">
                 <td class="week-day">
                   <span class="week-name">${DAY_NAMES[dayOf(d.date)]}</span>
                   <span class="week-date">${ltr(shortDate(d.date))}</span>
-                  ${d.isWeighIn ? '<span class="tag tag-accent">שקילה</span>' : ''}
                 </td>
                 <td data-label="קלוריות">
                   <input class="input input-sm" type="number" min="0" max="20000" data-cal
@@ -202,10 +212,24 @@ function weekReport(week, me) {
           </tbody>
         </table>
       </div>
-      <button type="button" id="week-save" class="btn btn-primary btn-block">שמירת הדיווח</button>
-      <p class="note-line" style="margin-top:var(--space-3)">
-        יעד אימוני הכוח הוא מינימום ${goal} בשבעה ימים.
-      </p>
+      <button type="button" id="week-save" class="btn btn-primary btn-block">שמירת העדכון</button>
+    </section>`;
+}
+
+/** What the week is measured against, stated before the form that fills it in. */
+function weekTargets(week, me) {
+  return `
+    <section class="panel bp targets">
+      ${corners()}
+      <header>
+        <h3>היעד השבוע</h3>
+        <span class="when">${ltr(`${nf(week.reported)}/7`)} ימים דווחו</span>
+      </header>
+      <div class="goals">
+        ${goalRow('קלוריות ליום · ממוצע', week.avgCalories, me.daily_calories_goal, { goodWhen: 'below' })}
+        ${goalRow('חלבון ליום · ממוצע', week.avgProtein, me.daily_protein_goal, { unit: ' ג׳' })}
+        ${goalRow('אימוני כוח · מינימום', week.workouts, me.weekly_workouts_goal)}
+      </div>
     </section>`;
 }
 
@@ -365,34 +389,41 @@ async function viewDashboard(el) {
         <p class="coach-note">${esc(stats.coach_note)}</p>
       </section>` : ''}
 
-    ${weighInPlan(stats)}
+    ${stats.start_weight_set ? '' : `
+      <section class="panel bp start-weight">
+        ${corners()}
+        <div>
+          <div class="kicker">שלב אחד לפני שמתחילים</div>
+          <h3>מה המשקל ההתחלתי שלך?</h3>
+          <p class="note-line">ממנו נגזר היעד של עשרה אחוזים ולפיו נספרת הירידה. ממלאים פעם אחת.</p>
+        </div>
+        <div class="start-weight-form">
+          <input class="input" id="start-weight" type="number" min="20" max="400" step="0.1"
+                 placeholder="ק״ג" aria-label="משקל התחלתי בקילוגרמים" />
+          <button type="button" id="start-weight-save" class="btn btn-primary">שמירה</button>
+        </div>
+      </section>`}
 
-    ${weekReport(week, me)}
+    ${weekTargets(week, me)}
 
-    <div class="sec">
-      <div class="kicker">איפה אתה עומד</div>
-      <h2>הירידה במשקל</h2>
-    </div>
+    ${weekUpdate(week, me, stats)}
 
     <div class="split">
       <section class="panel bp">
         ${corners()}
         <header>
-          <h3>מגמת המשקל</h3>
+          <h3>הירידה במשקל</h3>
           <span class="when">${stats.weight_change === null ? '' : ltr(`${signed(stats.weight_change)} ק״ג`)}</span>
         </header>
         ${lineChart(weightPoints, { unit: ' ק״ג', goal: stats.target_weight, compact: true })}
       </section>
       <div>
-        <div class="goals">
-          ${goalRow('ממוצע קלוריות ליום', week.avgCalories, me.daily_calories_goal, { goodWhen: 'below' })}
-          ${goalRow('ממוצע חלבון ליום', week.avgProtein, me.daily_protein_goal, { unit: ' ג׳' })}
-          ${goalRow('אימוני כוח · 7 ימים', week.workouts, me.weekly_workouts_goal)}
-        </div>
-        <div class="label" style="margin-top:var(--space-6)">כלל האצבע</div>
+        <div class="label">כלל האצבע</div>
         ${tipRotator(tips, goal.goal_kg)}
       </div>
     </div>
+
+    ${weighInPlan(stats)}
 
     <div class="sec">
       <div class="kicker">מסרים</div>
@@ -460,7 +491,13 @@ async function viewDashboard(el) {
       };
     }).filter(Boolean);
 
-    if (!changed.length) {
+    // The weigh-in is part of the same update: one button covers the number on the scale
+    // and the days it belongs to.
+    const weighDate = el.querySelector('#weighin-date')?.value;
+    const weight = el.querySelector('[data-weighin]')?.value.trim();
+    const weighChanged = !!(weight && weighDate && Number(weight) !== stats.current_slot_weight);
+
+    if (!changed.length && !weighChanged) {
       toast('אין שינוי לשמור');
       button.disabled = false;
       return;
@@ -471,6 +508,11 @@ async function viewDashboard(el) {
       let last = null;
       const badges = [];
 
+      if (weighChanged) {
+        last = await api('/weigh-ins', { method: 'POST', body: { date: weighDate, weight } });
+        gained += last.points_gained || 0;
+        badges.push(...(last.new_badges || []));
+      }
       for (const body of changed) {
         last = await api('/logs', { method: 'PUT', body });
         gained += last.points_gained || 0;
@@ -478,7 +520,10 @@ async function viewDashboard(el) {
       }
 
       state.me = last.profile;
-      toast(`נשמרו ${nf(changed.length)} ימים${gained > 0 ? ` · ${nf(gained)} נקודות` : ''}`);
+      const parts = [];
+      if (weighChanged) parts.push('השקילה');
+      if (changed.length) parts.push(`${nf(changed.length)} ימים`);
+      toast(`נשמר: ${parts.join(' ו-')}${gained > 0 ? ` · ${nf(gained)} נקודות` : ''}`);
       badges.forEach((badge, i) => {
         setTimeout(() => toast(`תג חדש: ${badge.name}`), 1600 * (i + 1));
       });
@@ -586,24 +631,6 @@ function weighInPlan(stats) {
          ${next ? `השורה המסומנת היא הבאה בתור: ${fmtDate(next.date)}.` : 'כל השקילות מולאו.'}
          אפשר להזיז את התאריך לכל יום באותו שבוע, ולהשלים שבוע שפוספס.</p>
     </div>
-
-    <section class="panel bp start-weight">
-      ${corners()}
-      <div>
-        <div class="label">משקל התחלתי</div>
-        <p class="note-line">${stats.start_weight_set
-          ? 'זה המשקל שממנו נמדד היעד שלך. אפשר לתקן אותו.'
-          : 'המשקל שממנו התחלת. ממנו נגזר היעד של עשרה אחוזים, ולפיו נספרת הירידה.'}</p>
-      </div>
-      <div class="start-weight-form">
-        <input class="input" id="start-weight" type="number" min="20" max="400" step="0.1"
-               value="${startW ?? ''}" placeholder="ק״ג" aria-label="משקל התחלתי בקילוגרמים" />
-        <button type="button" id="start-weight-save" class="btn btn-secondary">שמירה</button>
-      </div>
-      ${stats.target_weight ? `
-        <p class="note-line start-weight-target">היעד שלך: ${ltr(nf(stats.target_weight, 1))} ק״ג,
-          ירידה של ${ltr(nf(stats.target_loss, 1))} ק״ג.</p>` : ''}
-    </section>
 
     <section class="panel bp">
       ${corners()}
@@ -1064,6 +1091,14 @@ async function viewSettings(el) {
                      value="${me.daily_protein_goal}" required />
             </div>
           </div>
+          <div class="field" style="margin-top:10px">
+            <label for="g-start">משקל התחלתי (ק״ג)</label>
+            <input class="input" id="g-start" type="number" name="start_weight" min="20" max="400" step="0.1"
+                   value="${stats?.weight_start ?? ''}" placeholder="לא הוזן" />
+          </div>
+          <p class="note-line" style="margin-top:8px">
+            ממשקל ההתחלה נגזר היעד: ירידה של 10 אחוזים.
+          </p>
           <p class="note-line" style="margin-top:8px">
             יעד החלבון הוא 1.8 גרם לכל קילו משקל גוף.
             ${suggested
@@ -1105,8 +1140,11 @@ async function viewSettings(el) {
 
   el.querySelector('#goals-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const form = Object.fromEntries(new FormData(e.target).entries());
     try {
-      state.me = await api('/me/goals', { method: 'PUT', body: Object.fromEntries(new FormData(e.target).entries()) });
+      // The starting weight is stored on its own; it is not one of the three daily goals.
+      await api('/me/start-weight', { method: 'PUT', body: { start_weight: form.start_weight } });
+      state.me = await api('/me/goals', { method: 'PUT', body: form });
       renderChrome();
       toast('היעדים עודכנו');
     } catch (err) {
