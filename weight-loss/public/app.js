@@ -2098,6 +2098,16 @@ async function render() {
   const article = /^articles\/(.+)$/.exec(path);
   const route = ROUTES.find((r) => r.path === path);
 
+  // The address bar has to be shareable on its own: whatever anyone copies from it is
+  // what they paste into WhatsApp. On an article the path becomes /a/<slug>, the form
+  // the server answers with that article's own preview, and the hash stays so the app
+  // keeps routing. Off an article the path goes back to / so a stale slug does not
+  // hand someone else's picture to the next link copied from here.
+  const wantPath = article ? `/a/${article[1]}` : '/';
+  if (location.pathname !== wantPath) {
+    history.replaceState(null, '', `${wantPath}#/${path}`);
+  }
+
   renderChrome();
   el.className = 'screen';
   // Hold the previous height while the next screen loads, so nothing collapses
@@ -2200,12 +2210,12 @@ function showApp() {
 
 // ---------------- Boot ----------------
 async function boot() {
-  // A shared link arrives as /a/<slug>, the form the server can answer with that
-  // article's preview tags. The app itself routes on the hash, so it is swapped back
-  // here and the address bar is tidied without adding a history entry.
+  // A shared link arrives as /a/<slug> with no hash, since that is the form the server
+  // can answer with the article's preview tags. The hash the app routes on is filled in
+  // here; the path is left alone so the address stays shareable.
   const shared = /^\/a\/([^/]+)\/?$/.exec(location.pathname);
-  if (shared) {
-    history.replaceState(null, '', `/#/articles/${shared[1]}`);
+  if (shared && !location.hash) {
+    history.replaceState(null, '', `${location.pathname}#/articles/${shared[1]}`);
   }
 
   try {

@@ -40,6 +40,51 @@ mountMcp(app);
  * The browser then hands it to the app, which puts the hash route back.
  */
 const INDEX_PATH = join(__dirname, 'public', 'index.html');
+
+/**
+ * The picture a crawler is offered, not the one the page displays.
+ *
+ * The generated illustrations are 1.3MB PNGs. Facebook takes them; WhatsApp quietly
+ * shows no image at all above a few hundred kilobytes, which is most of why a shared
+ * article came back bare. Each one is resized once into a 1200x630 JPEG beside the
+ * original and served from there, so the crawler gets something it will actually render
+ * and the article page keeps the full-quality file.
+ */
+const OG_WIDTH = 1200;
+const OG_HEIGHT = 630;
+
+async function previewFor(imageUrl) {
+  if (!imageUrl) return null;
+  const source = join(uploadsDir, imageUrl);
+  if (!existsSync(source)) return null;
+
+  const name = `${imageUrl.replace(/\.[^.]+$/, '')}-og.jpg`;
+  const target = join(uploadsDir, name);
+  if (existsSync(target)) return target;
+
+  try {
+    const { default: sharp } = await import('sharp');
+    await sharp(source)
+      .resize(OG_WIDTH, OG_HEIGHT, { fit: 'cover', position: 'centre' })
+      .jpeg({ quality: 82, mozjpeg: true })
+      .toFile(target);
+    return target;
+  } catch (err) {
+    // Without the resizer the original still previews on Facebook, so the share is
+    // degraded rather than broken.
+    console.error('preview resize failed', err.message);
+    return null;
+  }
+}
+
+app.get('/api/posts/:id/preview', asyncRoute(async (req, res) => {
+  const post = db.prepare('SELECT image_url FROM posts WHERE id = ?').get(req.params.id);
+  const path = post ? await previewFor(post.image_url) : null;
+  if (!path) throw fail('אין תמונה', 404);
+  // The name carries the source filename, and a replacement image gets a new one.
+  res.setHeader('Cache-Control', 'public, max-age=604800');
+  res.type('jpg').sendFile(path);
+}));
 const escAttr = (v) => String(v ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -57,7 +102,7 @@ app.get('/', asyncRoute((req, res) => {
   const post = db.prepare(
     'SELECT id FROM posts WHERE image_url IS NOT NULL ORDER BY published_at DESC, id DESC LIMIT 1'
   ).get();
-  const image = post ? `${origin}/api/posts/${post.id}/image` : null;
+  const image = post ? `${origin}/api/posts/${post.id}/preview` : null;
   const description = 'קבוצה שיורדת אחוזי שומן ובונה מסת שריר. שלושה יעדים יומיים, שקילה אחת בשבוע, ומאמרים שמסבירים את המנגנון.';
 
   res.type('html').send(renderIndexWith(`
@@ -69,7 +114,10 @@ app.get('/', asyncRoute((req, res) => {
   <meta property="og:description" content="${escAttr(description)}" />
   <meta name="description" content="${escAttr(description)}" />
   ${image ? `<meta property="og:image" content="${escAttr(image)}" />
-  <meta property="og:image:secure_url" content="${escAttr(image)}" />` : ''}
+  <meta property="og:image:secure_url" content="${escAttr(image)}" />
+  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:width" content="${OG_WIDTH}" />
+  <meta property="og:image:height" content="${OG_HEIGHT}" />` : ''}
   <meta name="twitter:card" content="${image ? 'summary_large_image' : 'summary'}" />`,
     'הדרך הקלה לירידה במשקל'));
 }));
@@ -82,7 +130,7 @@ app.get('/a/:slug', asyncRoute((req, res) => {
 
   const origin = `${req.protocol}://${req.get('host')}`;
   const url = `${origin}/a/${encodeURIComponent(post.slug)}`;
-  const image = post.image_url ? `${origin}/api/posts/${post.id}/image` : null;
+  const image = post.image_url ? `${origin}/api/posts/${post.id}/preview` : null;
 
   res.type('html').send(renderIndexWith(`
   <meta property="og:site_name" content="הדרך הקלה לירידה במשקל" />
@@ -94,6 +142,9 @@ app.get('/a/:slug', asyncRoute((req, res) => {
   <meta name="description" content="${escAttr(post.excerpt)}" />
   ${image ? `<meta property="og:image" content="${escAttr(image)}" />
   <meta property="og:image:secure_url" content="${escAttr(image)}" />
+  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:width" content="${OG_WIDTH}" />
+  <meta property="og:image:height" content="${OG_HEIGHT}" />
   <meta property="og:image:alt" content="${escAttr(post.title)}" />` : ''}
   <meta name="twitter:card" content="${image ? 'summary_large_image' : 'summary'}" />
   <meta name="twitter:title" content="${escAttr(post.title)}" />
