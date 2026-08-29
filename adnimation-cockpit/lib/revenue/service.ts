@@ -1,5 +1,4 @@
 import { createRevenueAdapter } from '@/lib/integrations/revenue';
-import { DEFAULT_DEPT_MAPPING } from './mapping';
 import { toRevenueFacts } from './normalize';
 import { latestCompleteDate, summariseRevenue, type Basis, type RevenueSummary } from './summary';
 import type { RevenueFact } from './types';
@@ -15,9 +14,7 @@ const shift = (isoDate: string, days: number) =>
 export async function loadRevenueFacts(today: string): Promise<RevenueFact[]> {
   const adapter = await createRevenueAdapter();
   const rows = await adapter.fetchDailyRevenue(shift(today, -HISTORY_DAYS), today);
-  // DECISION: the mapping lives in code for now. It moves to a settings table
-  // the moment the CEO confirms it — see lib/revenue/mapping.ts.
-  return toRevenueFacts(rows, DEFAULT_DEPT_MAPPING);
+  return toRevenueFacts(rows);
 }
 
 export interface RevenueView {

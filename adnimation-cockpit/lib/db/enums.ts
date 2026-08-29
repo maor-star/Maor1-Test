@@ -3,6 +3,8 @@ import { pgEnum } from 'drizzle-orm/pg-core';
 // Mirrors the ENUM types in db/schema.sql. Keep the two in lockstep.
 export const deptCode = pgEnum('dept_code', [
   'CORE', 'SEAT', 'APP', 'DISP', 'CTV', 'BID', 'VID', 'ASIA',
+  // Added by db/migrations/0002 — the ClickUp lists the company actually works in.
+  'TRADING', 'GENERAL', 'HR', 'DEMAND', 'MKT', 'FIN', 'DEV',
 ]);
 export const taskPriority = pgEnum('task_priority', ['P0', 'P1', 'P2', 'P3']);
 export const taskSource = pgEnum('task_source', [

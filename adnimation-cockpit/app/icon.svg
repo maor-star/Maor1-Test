@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Dollar mark in the cockpit palette: accent on the dark HUD ground. -->
+  <rect width="32" height="32" fill="#0f1a24"/>
+  <rect x="1.5" y="1.5" width="29" height="29" fill="none" stroke="#7cabdd" stroke-opacity="0.45" stroke-width="1"/>
+  <text x="16" y="23.5" text-anchor="middle"
+        font-family="Barlow Semi Condensed, Barlow, Helvetica Neue, Arial, sans-serif"
+        font-size="23" font-weight="600" fill="#7cabdd">$</text>
+</svg>

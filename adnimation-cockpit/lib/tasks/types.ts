@@ -26,7 +26,16 @@ export const TASK_SOURCES = [
   'manual', 'alert', 'slack', 'email', 'meeting', 'contract', 'anomaly', 'agent',
 ] as const;
 
-export const DEPT_CODES = ['CORE', 'SEAT', 'APP', 'DISP', 'CTV', 'BID', 'VID', 'ASIA'] as const;
+/**
+ * Departments, as the company's ClickUp lists define them (see
+ * lib/sync/departments.ts). APP, DISP, CTV and ASIA are the four the spec
+ * sketched that the company has no list for; they are kept so existing rows
+ * stay valid but are marked inactive and hidden from pickers.
+ */
+export const DEPT_CODES = [
+  'CORE', 'VID', 'TRADING', 'SEAT', 'BID', 'GENERAL', 'HR', 'DEMAND', 'MKT', 'FIN', 'DEV',
+  'APP', 'DISP', 'CTV', 'ASIA',
+] as const;
 export type DeptCode = (typeof DEPT_CODES)[number];
 
 const isoDate = z

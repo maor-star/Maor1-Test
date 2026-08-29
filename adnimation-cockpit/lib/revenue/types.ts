@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import type { DeptCode } from '@/lib/tasks/types';
 
 /**
  * Revenue comes from the Ad Ops Architect system (spec question 21.1, answered:
@@ -37,13 +36,12 @@ export type ArsRow = z.infer<typeof arsRowSchema>;
 /** A row after fees are applied and a department is assigned. */
 export interface RevenueFact {
   date: string;
-  deptCode: DeptCode | null;
+  /** The source's own demand category — see lib/revenue/departments.ts. */
+  deptCode: string;
   category: string;
   businessLine: BusinessLine;
   grossCents: number;
   feeCents: number;
   netCents: number;
   impressions: number;
-  /** False when the department assignment came from an unconfirmed default. */
-  mappingConfirmed: boolean;
 }

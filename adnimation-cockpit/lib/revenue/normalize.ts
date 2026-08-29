@@ -1,5 +1,5 @@
 import type { ArsRow, BusinessLine, RevenueFact } from './types';
-import { resolveDept, type DeptMapping } from './mapping';
+import { departmentFor } from './departments';
 
 /**
  * Turning source rows into revenue facts.
@@ -24,24 +24,24 @@ import { resolveDept, type DeptMapping } from './mapping';
  * `gross` and `fee` are both populated from the start, so deriving net keeps
  * the series consistent on every day, settled or not.
  */
-export function toRevenueFact(row: ArsRow, mapping: DeptMapping): RevenueFact {
+export function toRevenueFact(row: ArsRow): RevenueFact {
   const businessLine: BusinessLine = row.trading ? 'trading' : 'publisher';
-  const assignment = resolveDept(businessLine, row.category, mapping);
   return {
     date: row.date,
-    deptCode: assignment.deptCode,
+    // The department is the source's own category — no translation, so nothing
+    // to confirm and nothing to get wrong. See lib/revenue/departments.ts.
+    deptCode: departmentFor(row.category),
     category: row.category,
     businessLine,
     grossCents: row.grossCents,
     feeCents: row.feeCents,
     netCents: row.grossCents - row.feeCents,
     impressions: row.impressions,
-    mappingConfirmed: assignment.confirmed,
   };
 }
 
-export function toRevenueFacts(rows: ArsRow[], mapping: DeptMapping): RevenueFact[] {
-  return rows.map((r) => toRevenueFact(r, mapping));
+export function toRevenueFacts(rows: ArsRow[]): RevenueFact[] {
+  return rows.map(toRevenueFact);
 }
 
 /**

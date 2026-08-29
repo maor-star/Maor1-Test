@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   ecpmCents, isPartialDay, looksSettled, takeRate, toRevenueFact, toRevenueFacts, totalsByDay,
 } from '@/lib/revenue/normalize';
-import { DEFAULT_DEPT_MAPPING } from '@/lib/revenue/mapping';
 import type { ArsRow } from '@/lib/revenue/types';
 
 const row = (over: Partial<ArsRow> = {}): ArsRow => ({
@@ -17,7 +16,7 @@ const row = (over: Partial<ArsRow> = {}): ArsRow => ({
 
 describe('toRevenueFact', () => {
   it('derives net as gross minus fee', () => {
-    expect(toRevenueFact(row(), DEFAULT_DEPT_MAPPING).netCents).toBe(1_100_694 - 847_828);
+    expect(toRevenueFact(row()).netCents).toBe(1_100_694 - 847_828);
   });
 
   /**
@@ -27,32 +26,34 @@ describe('toRevenueFact', () => {
    * fee gives the same answer on settled and unsettled days alike.
    */
   it('gives a consistent net on an unsettled day', () => {
-    const settled = toRevenueFact(row({ date: '2026-08-25', grossCents: 1_307_110, feeCents: 1_010_782 }), DEFAULT_DEPT_MAPPING);
-    const unsettled = toRevenueFact(row({ date: '2026-08-27', grossCents: 1_196_819, feeCents: 920_361 }), DEFAULT_DEPT_MAPPING);
+    const settled = toRevenueFact(row({ date: '2026-08-25', grossCents: 1_307_110, feeCents: 1_010_782 }));
+    const unsettled = toRevenueFact(row({ date: '2026-08-27', grossCents: 1_196_819, feeCents: 920_361 }));
     const ratio = (f: { netCents: number; grossCents: number }) => f.netCents / f.grossCents;
     // Both land in the same take-rate band; no overnight step change.
     expect(Math.abs(ratio(settled) - ratio(unsettled))).toBeLessThan(0.05);
   });
 
-  it('maps a publisher google row to CORE, flagged unconfirmed', () => {
-    const fact = toRevenueFact(row(), DEFAULT_DEPT_MAPPING);
-    expect(fact.deptCode).toBe('CORE');
-    expect(fact.mappingConfirmed).toBe(false);
+  it("uses the source's own category as the department", () => {
+    const fact = toRevenueFact(row());
+    expect(fact.deptCode).toBe('google');
+    expect(fact.category).toBe('google');
     expect(fact.businessLine).toBe('publisher');
   });
 
-  it('maps trading header bidding to BID', () => {
-    expect(toRevenueFact(row({ trading: true, category: 'header_bidding' }), DEFAULT_DEPT_MAPPING).deptCode).toBe('BID');
+  it('keeps the business line as a separate axis from the department', () => {
+    const fact = toRevenueFact(row({ trading: true, category: 'header_bidding' }));
+    expect(fact.deptCode).toBe('header_bidding');
+    expect(fact.businessLine).toBe('trading');
   });
 
-  it('leaves an unknown category unassigned rather than guessing', () => {
-    const fact = toRevenueFact(row({ category: 'brand_new_channel' }), DEFAULT_DEPT_MAPPING);
-    expect(fact.deptCode).toBeNull();
+  it('gives a category the source has just added its own department', () => {
+    const fact = toRevenueFact(row({ category: 'brand_new_channel' }));
+    expect(fact.deptCode).toBe('brand_new_channel');
     expect(fact.netCents).toBe(1_100_694 - 847_828); // still counted in totals
   });
 
   it('handles a zero-fee row without dividing by zero', () => {
-    const fact = toRevenueFact(row({ feeCents: 0 }), DEFAULT_DEPT_MAPPING);
+    const fact = toRevenueFact(row({ feeCents: 0 }));
     expect(fact.netCents).toBe(fact.grossCents);
   });
 });
@@ -65,7 +66,6 @@ describe('totalsByDay', () => {
         row({ date: '2026-08-27', grossCents: 200, feeCents: 50, impressions: 20 }),
         row({ date: '2026-08-28', category: 'video', grossCents: 300, feeCents: 100, impressions: 30 }),
       ],
-      DEFAULT_DEPT_MAPPING,
     );
     const totals = totalsByDay(facts);
     expect(totals.map((t) => t.date)).toEqual(['2026-08-27', '2026-08-28']);

@@ -22,6 +22,8 @@ const msToDate = (ms: number | null): string | null =>
 
 export interface MirrorRow {
   clickupId: string;
+  listId: string | null;
+  listName: string | null;
   clickupUrl: string;
   title: string;
   description: string | null;
@@ -31,11 +33,25 @@ export interface MirrorRow {
   startDate: string | null;
   tags: string[];
   ownerEmail: string | null;
+  /** True when ClickUp says the task is finished — the mirror drops these. */
+  finished: boolean;
+}
+
+/**
+ * A task is finished if ClickUp closed it, or if its status maps to done. Both
+ * are checked because a workspace can mark a task complete by moving it to a
+ * custom "done" status without ClickUp setting `date_closed`.
+ */
+export function isFinished(task: ClickUpTask): boolean {
+  return task.dateClosedMs !== null || mapClickUpStatus(task.status) === 'done';
 }
 
 export function toMirrorRow(task: ClickUpTask): MirrorRow {
   return {
     clickupId: task.id,
+    listId: task.listId,
+    listName: task.listName,
+    finished: isFinished(task),
     clickupUrl: task.url,
     title: task.name,
     description: task.description,

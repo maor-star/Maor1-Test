@@ -34,13 +34,6 @@ export async function RevenueStrip({ basis = 'net' }: { basis?: 'net' | 'gross' 
         index="R01"
         action={
           <div className="flex items-center gap-3">
-            {summary.mappingNeedsReview ? (
-              <Link href="/revenue#mapping">
-                <Tag tone="watch" title="Category-to-department mapping is not confirmed">
-                  MAPPING UNCONFIRMED
-                </Tag>
-              </Link>
-            ) : null}
             <Link
               href="/revenue"
               className="font-semi text-[11px] tracking-[0.16em] text-accent-700 hover:text-accent"

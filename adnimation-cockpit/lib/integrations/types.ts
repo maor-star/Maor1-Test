@@ -56,6 +56,11 @@ export interface ClickUpTask {
   tags: string[];
   url: string;
   updatedAtMs: number;
+  /** The ClickUp list the task sits in — the company's department (see lib/sync/departments.ts). */
+  listId: string | null;
+  listName: string | null;
+  /** Set by ClickUp when a task is closed. Present means finished. */
+  dateClosedMs: number | null;
 }
 
 export interface ClickUpAdapter {

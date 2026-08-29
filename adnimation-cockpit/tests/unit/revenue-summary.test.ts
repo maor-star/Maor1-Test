@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildHistory, latestCompleteDate, summariseRevenue } from '@/lib/revenue/summary';
 import { toRevenueFacts } from '@/lib/revenue/normalize';
-import { DEFAULT_DEPT_MAPPING } from '@/lib/revenue/mapping';
 import type { ArsRow } from '@/lib/revenue/types';
 
 const r = (date: string, category: string, trading: boolean, gross: number, fee: number, imps = 1000): ArsRow => ({
@@ -19,7 +18,7 @@ const flat = (): ArsRow[] => {
   return rows;
 };
 
-const facts = (rows: ArsRow[]) => toRevenueFacts(rows, DEFAULT_DEPT_MAPPING);
+const facts = (rows: ArsRow[]) => toRevenueFacts(rows);
 
 describe('summariseRevenue', () => {
   it('totals gross and net for the day', () => {
@@ -41,7 +40,7 @@ describe('summariseRevenue', () => {
       ]),
       '2026-08-28',
     );
-    expect(s.depts.map((d) => d.deptCode)).toEqual(['VID', 'CORE']);
+    expect(s.depts.map((d) => d.deptCode)).toEqual(['video', 'google']);
   });
 
   it('computes the three deltas the cockpit shows', () => {
@@ -49,8 +48,8 @@ describe('summariseRevenue', () => {
       facts([...flat(), r('2026-08-28', 'google', false, 100_000, 50_000)]),
       '2026-08-28',
     );
-    // Yesterday CORE was 200k gross / 100k net; today 100k / 50k → -50%.
-    const core = s.depts.find((d) => d.deptCode === 'CORE');
+    // Yesterday Google was 200k gross / 100k net; today 100k / 50k → -50%.
+    const core = s.depts.find((d) => d.deptCode === 'google');
     expect(core?.vsPrevDay.pct).toBeCloseTo(-0.5, 6);
     expect(core?.vsSameDayLastWeek.pct).toBeCloseTo(-0.5, 6);
     expect(core?.vsSevenDayAvg.pct).toBeCloseTo(-0.5, 6);
@@ -65,9 +64,9 @@ describe('summariseRevenue', () => {
   it('switches the basis between net and gross', () => {
     const rows = [...flat(), r('2026-08-28', 'google', false, 400_000, 300_000)];
     const coreOn = (basis: 'net' | 'gross') =>
-      summariseRevenue(facts(rows), '2026-08-28', basis).depts.find((d) => d.deptCode === 'CORE');
+      summariseRevenue(facts(rows), '2026-08-28', basis).depts.find((d) => d.deptCode === 'google');
 
-    // CORE yesterday: 200k gross / 100k net. Today: 400k gross / 100k net.
+    // Google yesterday: 200k gross / 100k net. Today: 400k gross / 100k net.
     // The same day is a doubling on gross and flat on net — which is exactly
     // why the spec insists the two are never conflated.
     expect(coreOn('gross')?.vsPrevDay.pct).toBeCloseTo(1, 6);
@@ -75,19 +74,22 @@ describe('summariseRevenue', () => {
     expect(summariseRevenue(facts(rows), '2026-08-28', 'net').basis).toBe('net');
   });
 
-  it('keeps unmapped revenue in its own bucket instead of hiding it', () => {
+  it('shows a category the source has just added as its own department', () => {
+    // Departments are the source's categories, so a new one needs no rule and
+    // cannot land in the wrong bucket — it appears under its own name.
     const s = summariseRevenue(
       facts([...flat(), r('2026-08-28', 'brand_new_channel', false, 500_000, 100_000)]),
       '2026-08-28',
     );
-    const unassigned = s.depts.find((d) => d.deptCode === null);
-    expect(unassigned?.netCents).toBe(400_000);
+    const added = s.depts.find((d) => d.deptCode === 'brand_new_channel');
+    expect(added?.netCents).toBe(400_000);
+    expect(added?.label).toBe('BRAND NEW CHANNEL');
     expect(s.totalNetCents).toBe(400_000);
   });
 
-  it('flags that the department mapping is still unconfirmed', () => {
+  it('labels each department the way the source names it', () => {
     const s = summariseRevenue(facts([...flat(), r('2026-08-28', 'google', false, 1, 0)]), '2026-08-28');
-    expect(s.mappingNeedsReview).toBe(true);
+    expect(s.depts.find((d) => d.deptCode === 'google')?.label).toBe('GOOGLE (GAM)');
   });
 
   it('produces a sparkline of the requested length', () => {
@@ -105,17 +107,20 @@ describe('summariseRevenue', () => {
     expect(s.anomalies[0]?.severity).toBe('critical');
   });
 
-  it('carries the category breakdown for drill-down', () => {
+  it('splits a department by business line for drill-down', () => {
+    // One category, both business lines: the trading desk and the managed
+    // publisher book are separate rows inside the same department.
     const s = summariseRevenue(
       facts([
         ...flat(),
-        r('2026-08-28', 'google', false, 300_000, 100_000),
-        r('2026-08-28', 'header_bidding', false, 100_000, 20_000),
+        r('2026-08-28', 'header_bidding', false, 300_000, 100_000),
+        r('2026-08-28', 'header_bidding', true, 100_000, 20_000),
       ]),
       '2026-08-28',
     );
-    const core = s.depts.find((d) => d.deptCode === 'CORE');
-    expect(core?.categories.map((c) => c.category)).toEqual(['google', 'header_bidding']);
+    const hb = s.depts.find((d) => d.deptCode === 'header_bidding');
+    expect(hb?.categories.map((c) => c.businessLine)).toEqual(['publisher', 'trading']);
+    expect(hb?.netCents).toBe(280_000);
   });
 });
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mapClickUpStatus, toMirrorRow } from '@/lib/sync/clickup-map';
+import { isFinished, mapClickUpStatus, toMirrorRow } from '@/lib/sync/clickup-map';
+import { CLICKUP_LIST_DEPTS, deptForList } from '@/lib/sync/departments';
 import { normaliseClickUpTask } from '@/lib/integrations/clickup';
 import type { ClickUpTask } from '@/lib/integrations/types';
 
@@ -16,6 +17,9 @@ const task = (over: Partial<ClickUpTask> = {}): ClickUpTask => ({
   tags: ['supply'],
   url: 'https://app.clickup.com/t/abc123',
   updatedAtMs: Date.parse('2026-08-29T08:00:00Z'),
+  listId: '901817617786',
+  listName: 'General',
+  dateClosedMs: null,
   ...over,
 });
 
@@ -122,5 +126,57 @@ describe('normaliseClickUpTask', () => {
 
   it('falls back to a constructed url when ClickUp omits one', () => {
     expect(normaliseClickUpTask({ id: 'zz', name: 'x' })?.url).toBe('https://app.clickup.com/t/zz');
+  });
+});
+
+describe('isFinished', () => {
+  it('treats a closed task as finished', () => {
+    expect(isFinished(task({ dateClosedMs: Date.parse('2026-08-20T00:00:00Z') }))).toBe(true);
+  });
+
+  it('treats a done status as finished even when ClickUp set no close date', () => {
+    // A workspace can complete work by moving it to a custom status; relying on
+    // date_closed alone would leave those tasks in the cockpit forever.
+    for (const s of ['Complete', 'closed', 'DONE']) {
+      expect(isFinished(task({ status: s, dateClosedMs: null }))).toBe(true);
+    }
+  });
+
+  it('leaves open work alone', () => {
+    for (const s of ['to do', 'in progress', 'stuck', 'make it happened']) {
+      expect(isFinished(task({ status: s }))).toBe(false);
+    }
+  });
+
+  it('marks the row so the mirror can drop it', () => {
+    expect(toMirrorRow(task({ status: 'closed' })).finished).toBe(true);
+    expect(toMirrorRow(task()).finished).toBe(false);
+  });
+});
+
+describe('deptForList', () => {
+  it('maps every ClickUp list the company works in', () => {
+    for (const l of CLICKUP_LIST_DEPTS) {
+      expect(deptForList(l.listId, null)).toBe(l.deptCode);
+      expect(deptForList(null, l.listName)).toBe(l.deptCode);
+    }
+  });
+
+  it('prefers the id, so a renamed list keeps its department', () => {
+    expect(deptForList('901817703208', 'Bidder (renamed)')).toBe('BID');
+  });
+
+  it('matches a name case-insensitively, for a list recreated under the same name', () => {
+    expect(deptForList('999', '  general  ')).toBe('GENERAL');
+  });
+
+  it('leaves a list nobody has mapped without a department rather than guessing', () => {
+    expect(deptForList('999', 'Something New')).toBeNull();
+    expect(deptForList(null, null)).toBeNull();
+  });
+
+  it('carries the list through to the mirror row', () => {
+    const row = toMirrorRow(task({ listId: '901819118774', listName: 'Finance' }));
+    expect(deptForList(row.listId, row.listName)).toBe('FIN');
   });
 });

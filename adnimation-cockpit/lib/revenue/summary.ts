@@ -1,7 +1,7 @@
-import type { DeptCode } from '@/lib/tasks/types';
 import type { RevenueFact } from './types';
 import { ecpmCents, takeRate } from './normalize';
 import { detectAnomalies, type Anomaly, type AnomalyInput } from './anomaly';
+import { departmentLabel } from './departments';
 
 /**
  * Cockpit strip 1 (spec §5) and the daily overview (7.3), computed from facts
@@ -17,7 +17,9 @@ export interface Delta {
 }
 
 export interface DeptSummary {
-  deptCode: DeptCode | null;
+  /** The source's own demand category — see lib/revenue/departments.ts. */
+  deptCode: string;
+  label: string;
   /** Categories folded into this department, for the drill-down. */
   categories: { category: string; businessLine: string; netCents: number; grossCents: number }[];
   grossCents: number;
@@ -28,7 +30,6 @@ export interface DeptSummary {
   vsPrevDay: Delta;
   vsSameDayLastWeek: Delta;
   vsSevenDayAvg: Delta;
-  mappingConfirmed: boolean;
   spark: number[];
 }
 
@@ -46,11 +47,9 @@ export interface RevenueSummary {
   depts: DeptSummary[];
   spark: number[];
   anomalies: Anomaly[];
-  /** True while any department figure rests on an unconfirmed mapping rule. */
-  mappingNeedsReview: boolean;
 }
 
-const key = (f: RevenueFact) => f.deptCode ?? '__unassigned__';
+const key = (f: RevenueFact) => f.deptCode;
 
 const amount = (f: RevenueFact, basis: Basis) => (basis === 'net' ? f.netCents : f.grossCents);
 
@@ -121,7 +120,7 @@ export function summariseRevenue(
 
   const depts: DeptSummary[] = [...byDept.entries()]
     .map(([k, rows]) => {
-      const deptCode = k === '__unassigned__' ? null : (k as DeptCode);
+      const deptCode = k;
       const scope = (f: RevenueFact) => key(f) === k;
       const grossCents = rows.reduce((a, f) => a + f.grossCents, 0);
       const netCents = rows.reduce((a, f) => a + f.netCents, 0);
@@ -130,6 +129,7 @@ export function summariseRevenue(
 
       return {
         deptCode,
+        label: departmentLabel(deptCode),
         categories: rows
           .map((f) => ({
             category: f.category,
@@ -146,7 +146,6 @@ export function summariseRevenue(
         vsPrevDay: delta(actual, sumOn(facts, shiftDays(date, -1), basis, scope)),
         vsSameDayLastWeek: delta(actual, sumOn(facts, shiftDays(date, -7), basis, scope)),
         vsSevenDayAvg: delta(actual, sevenDayAverage(facts, date, basis, scope)),
-        mappingConfirmed: rows.every((f) => f.mappingConfirmed),
         spark: sparkline(facts, date, basis, sparkDays, scope),
       };
     })
@@ -161,9 +160,9 @@ export function summariseRevenue(
   // Anomalies are always measured on net: gross moves with fees we do not keep.
   const anomalyInputs: AnomalyInput[] = depts.map((d) => ({
     scopeType: 'dept' as const,
-    scopeId: d.deptCode ?? 'unassigned',
-    scopeLabel: d.deptCode ?? 'Unassigned',
-    history: buildHistory(facts, date, (f) => key(f) === (d.deptCode ?? '__unassigned__')),
+    scopeId: d.deptCode,
+    scopeLabel: d.label,
+    history: buildHistory(facts, date, (f) => key(f) === d.deptCode),
     today: { date, netCents: d.netCents },
   }));
   anomalyInputs.push({
@@ -188,7 +187,6 @@ export function summariseRevenue(
     depts,
     spark: sparkline(facts, date, basis, sparkDays),
     anomalies: detectAnomalies(anomalyInputs),
-    mappingNeedsReview: depts.some((d) => !d.mappingConfirmed),
   };
 }
 

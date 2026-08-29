@@ -22,6 +22,8 @@ const clickUpTaskSchema = z.object({
   tags: z.array(z.object({ name: z.string() })).nullish(),
   url: z.string().nullish(),
   date_updated: z.union([z.string(), z.number()]).nullish(),
+  date_closed: z.union([z.string(), z.number()]).nullish(),
+  list: z.object({ id: z.string().nullish(), name: z.string().nullish() }).nullish(),
 });
 
 const listResponseSchema = z.object({
@@ -59,6 +61,9 @@ export function normaliseClickUpTask(raw: unknown): ClickUpTask | null {
     tags: (t.tags ?? []).map((tag) => tag.name),
     url: t.url ?? `https://app.clickup.com/t/${t.id}`,
     updatedAtMs: toMs(t.date_updated) ?? Date.now(),
+    listId: t.list?.id ?? null,
+    listName: t.list?.name ?? null,
+    dateClosedMs: toMs(t.date_closed),
   };
 }
 
@@ -106,6 +111,9 @@ class RealClickUpAdapter implements ClickUpAdapter {
       const url = new URL(`${API}/team/${this.teamId}/task`);
       url.searchParams.set('date_updated_gt', String(sinceMs));
       url.searchParams.set('subtasks', 'true');
+      // Closed tasks are still requested: the cockpit mirrors only open work,
+      // and seeing a task close is how the mirror knows to drop its row. Never
+      // asking for them would leave finished tasks in the cockpit forever.
       url.searchParams.set('include_closed', 'true');
       url.searchParams.set('page', String(page));
       const res = await fetch(url, { headers: this.headers() });
@@ -148,6 +156,9 @@ export class FakeClickUpAdapter implements ClickUpAdapter {
     this.created.push(input);
     this.tasks.set(id, {
       id,
+      listId: input.listId,
+      listName: null,
+      dateClosedMs: null,
       name: input.name,
       description: input.description,
       status: 'open',

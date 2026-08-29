@@ -1,10 +1,11 @@
 import { sql } from 'drizzle-orm';
 import {
   bigserial, boolean, date, index, integer, jsonb, pgTable, primaryKey,
-  moneyCents, text, timestamptz, uuid,
+  moneyCents, smallint, text, timestamptz, uuid,
 } from './pg';
 import {
-  alertType, delegationStatus, deptCode, severity, taskLayer, taskPriority, taskSource,
+  alertType, contractCategory, contractStatus, delegationStatus, deptCode, partnerType,
+  renewalType, severity, taskLayer, taskPriority, taskSource,
 } from './enums';
 
 // Drizzle mirror of db/schema.sql. Milestone 1 defines the tables it actually
@@ -171,6 +172,63 @@ export const auditLog = pgTable(
   (t) => [index('idx_audit').on(t.entityType, t.entityId, t.createdAt)],
 );
 
+export const partners = pgTable('partners', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  name: text('name').notNull(),
+  domain: text('domain'),
+  type: partnerType('type').notNull(),
+  ownerPersonId: uuid('owner_person_id').references(() => people.id),
+  riskScore: smallint('risk_score').notNull().default(0),
+  riskReason: text('risk_reason'),
+  status: text('status').notNull().default('active'),
+  wentLiveAt: date('went_live_at'),
+  lastInteractionAt: timestamptz('last_interaction_at'),
+  createdAt: timestamptz('created_at').notNull().defaultNow(),
+});
+
+export const contracts = pgTable(
+  'contracts',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    partnerId: uuid('partner_id').references(() => partners.id),
+    counterpartyName: text('counterparty_name').notNull(),
+    category: contractCategory('category').notNull(),
+    /** False while the category came from a rule and no person has confirmed it. */
+    categoryConfirmed: boolean('category_confirmed').notNull().default(false),
+    docType: text('doc_type').notNull(),
+    deptId: uuid('dept_id').references(() => departments.id),
+    status: contractStatus('status').notNull().default('draft'),
+    statusChangedAt: timestamptz('status_changed_at').notNull().defaultNow(),
+    startDate: date('start_date'),
+    endDate: date('end_date'),
+    renewal: renewalType('renewal'),
+    noticePeriodDays: integer('notice_period_days'),
+    valueCents: moneyCents('value_cents'),
+    commercialTerms: text('commercial_terms'),
+    paymentTerms: text('payment_terms'),
+    driveFolderId: text('drive_folder_id'),
+    legalOwner: text('legal_owner'),
+    bizOwnerPersonId: uuid('biz_owner_person_id').references(() => people.id),
+    nextAlertAt: date('next_alert_at'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('idx_contracts_status').on(t.status, t.statusChangedAt)],
+);
+
+export const contractVersions = pgTable('contract_versions', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  contractId: uuid('contract_id')
+    .notNull()
+    .references(() => contracts.id, { onDelete: 'cascade' }),
+  versionNo: integer('version_no').notNull(),
+  driveFileId: text('drive_file_id'),
+  fileName: text('file_name').notNull(),
+  fileHash: text('file_hash').notNull(),
+  source: text('source').notNull(),
+  receivedAt: timestamptz('received_at').notNull().defaultNow(),
+  isApprovedBaseline: boolean('is_approved_baseline').notNull().default(false),
+});
+
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type TaskComment = typeof taskComments.$inferSelect;
@@ -179,3 +237,6 @@ export type Person = typeof people.$inferSelect;
 export type Department = typeof departments.$inferSelect;
 export type Alert = typeof alerts.$inferSelect;
 export type AppUser = typeof users.$inferSelect;
+export type Contract = typeof contracts.$inferSelect;
+export type NewContract = typeof contracts.$inferInsert;
+export type Partner = typeof partners.$inferSelect;

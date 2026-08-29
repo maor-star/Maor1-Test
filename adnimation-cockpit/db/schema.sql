@@ -322,6 +322,7 @@ CREATE TABLE contracts (
   deal_id             UUID REFERENCES deals(id),
   counterparty_name   TEXT NOT NULL,
   category            contract_category NOT NULL,
+  category_confirmed  BOOLEAN NOT NULL DEFAULT false,  -- false = filed by rule, not yet reviewed
   doc_type            TEXT NOT NULL,                -- MSA | IO | NDA | Amendment | Renewal
   dept_id             UUID REFERENCES departments(id),
   status              contract_status NOT NULL DEFAULT 'draft',

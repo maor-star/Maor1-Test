@@ -15,7 +15,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "inngest": "npx inngest-cli@latest dev"
+    "inngest": "npx inngest-cli@latest dev",
+    "db:migrate": "for f in db/migrations/*.sql; do psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f \"$f\"; done",
+    "purge-demo": "tsx scripts/purge-demo.ts",
+    "sync:clickup": "tsx scripts/sync-clickup.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.6",
