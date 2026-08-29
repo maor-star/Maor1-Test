@@ -28,12 +28,18 @@ const str = (v) => (v === undefined || v === null ? '' : String(v).trim());
 const bool = (v) => v === true || v === 1 || v === '1' || v === 'true';
 
 function asyncRoute(fn) {
+  const send = (res, err) => {
+    console.error(err);
+    if (!res.headersSent) res.status(err.status || 400).json({ error: err.message });
+  };
   return (req, res) => {
     try {
-      fn(req, res);
+      // Most handlers are synchronous, but the ones that call out over the network are
+      // not: without catching the rejection too, a failure there would hang the request.
+      const result = fn(req, res);
+      if (result && typeof result.then === 'function') result.catch((err) => send(res, err));
     } catch (err) {
-      console.error(err);
-      res.status(err.status || 400).json({ error: err.message });
+      send(res, err);
     }
   };
 }
@@ -225,6 +231,16 @@ function savePhoto(dataUrl) {
   const buffer = Buffer.from(match[2], 'base64');
   if (buffer.length > 8 * 1024 * 1024) throw fail('התמונה גדולה מדי (עד 8MB)');
   const name = `${crypto.randomUUID()}.${match[1] === 'jpeg' ? 'jpg' : match[1]}`;
+  writeFileSync(join(uploadsDir, name), buffer);
+  return name;
+}
+
+/** Saves raw image bytes, for pictures that arrive from an API rather than a form. */
+function saveImageBuffer(buffer, mimeType) {
+  const ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[mimeType];
+  if (!ext) throw fail(`המודל החזיר פורמט שאינו נתמך (${mimeType})`);
+  if (buffer.length > 8 * 1024 * 1024) throw fail('התמונה שנוצרה גדולה מדי');
+  const name = `${crypto.randomUUID()}.${ext}`;
   writeFileSync(join(uploadsDir, name), buffer);
   return name;
 }
@@ -619,6 +635,66 @@ app.delete('/api/posts/:id/image', requireEditor, asyncRoute((req, res) => {
   if (post.image_url && existsSync(join(uploadsDir, post.image_url))) unlinkSync(join(uploadsDir, post.image_url));
   db.prepare('UPDATE posts SET image_url = NULL WHERE id = ?').run(post.id);
   res.json({ ok: true });
+}));
+
+/**
+ * Draws an illustration for an article with Google's image model. The house style is
+ * fixed here rather than left to the model, so fifteen articles do not come back in
+ * fifteen different looks. The editor can override the subject line.
+ */
+const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
+const IMAGE_STYLE = [
+  'Editorial photograph for a health and nutrition article.',
+  'Muted, desaturated palette with cool grey and steel blue tones on a pale neutral background.',
+  'Soft natural daylight from one side, shallow depth of field, calm and clinical composition.',
+  'No text, no lettering, no numbers, no logos, no watermarks. No people and no faces.',
+  'Wide 16:7 framing with generous empty space, suitable as a page header.',
+].join(' ');
+
+app.post('/api/posts/:id/generate-image', requireEditor, asyncRoute(async (req, res) => {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw fail('לא הוגדר מפתח ליצירת תמונות בשרת');
+
+  const post = db.prepare('SELECT id, title, excerpt, category, image_url FROM posts WHERE id = ?').get(req.params.id);
+  if (!post) throw fail('המאמר לא נמצא', 404);
+
+  const subject = str(req.body.prompt) || `${post.title}. ${post.excerpt || ''}`.trim();
+  const prompt = `${IMAGE_STYLE}\n\nSubject: ${subject}`;
+
+  let response;
+  try {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent`,
+      {
+        method: 'POST',
+        headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        signal: AbortSignal.timeout(90_000),
+      }
+    );
+  } catch (err) {
+    throw fail(`הפנייה למודל נכשלה: ${err.message}`, 502);
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    // Google's own message is far more useful than a generic failure, so it is passed
+    // through: a depleted balance and a bad key look identical otherwise.
+    throw fail(payload?.error?.message || `המודל החזיר שגיאה ${response.status}`, 502);
+  }
+
+  const parts = payload?.candidates?.[0]?.content?.parts || [];
+  const image = parts.find((part) => part.inlineData?.data || part.inline_data?.data);
+  if (!image) {
+    const text = parts.find((part) => part.text)?.text;
+    throw fail(text ? `המודל החזיר טקסט במקום תמונה: ${text.slice(0, 200)}` : 'המודל לא החזיר תמונה', 502);
+  }
+  const inline = image.inlineData || image.inline_data;
+  const name = saveImageBuffer(Buffer.from(inline.data, 'base64'), inline.mimeType || inline.mime_type);
+
+  db.prepare('UPDATE posts SET image_url = ? WHERE id = ?').run(name, post.id);
+  if (post.image_url && existsSync(join(uploadsDir, post.image_url))) unlinkSync(join(uploadsDir, post.image_url));
+  res.json({ ok: true, image_url: name });
 }));
 
 /** Open to visitors, like the articles themselves. */

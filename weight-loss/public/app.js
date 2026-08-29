@@ -1387,6 +1387,7 @@ async function viewEditor(el) {
                       ${p.image_url ? 'החלפת תמונה' : 'תמונה'}
                       <input type="file" data-post-image accept="image/png,image/jpeg,image/webp" hidden />
                     </label>
+                    <button class="btn btn-secondary btn-sm" data-gen-image type="button">יצירת תמונה</button>
                     ${p.image_url ? '<button class="btn btn-secondary btn-sm" data-del-image type="button">הסרה</button>' : ''}
                     <button class="btn btn-secondary btn-sm" data-edit-post type="button">עריכה</button>
                     <button class="btn btn-secondary btn-sm" data-del-post type="button">מחיקה</button>
@@ -1706,6 +1707,26 @@ async function viewEditor(el) {
         toast('התמונה הועלתה');
         render();
       } catch (err) { toast(err.message, true); }
+    });
+  });
+
+  el.querySelectorAll('[data-gen-image]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.closest('[data-post]').dataset.post;
+      const post = posts.find((p) => p.id === Number(id));
+      openModal('יצירת תמונה לכתבה', `
+        <p class="note-line" style="margin:0 0 12px">
+          הסגנון קבוע לכל האתר. כאן קובעים רק מה יופיע בתמונה.
+        </p>
+        <div class="field">
+          <label for="genp">מה לצייר</label>
+          <textarea class="input" id="genp" name="prompt" rows="3">${esc(`${post.title}. ${post.excerpt || ''}`.trim())}</textarea>
+        </div>`,
+        async (form) => {
+          await api(`/posts/${id}/generate-image`, { method: 'POST', body: form });
+          toast('התמונה נוצרה');
+          render();
+        }, 'יצירה');
     });
   });
 
