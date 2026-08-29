@@ -2,6 +2,8 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Self-contained server bundle for the EC2 deployment.
+  output: 'standalone',
   // This app lives in a subdirectory of a larger repo; pin tracing to itself so
   // Next does not walk up to the parent lockfile.
   outputFileTracingRoot: __dirname,

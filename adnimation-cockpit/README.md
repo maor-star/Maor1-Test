@@ -59,6 +59,45 @@ Per `CLAUDE.md` §8, each milestone ships working end-to-end before the next beg
 
 ---
 
+## Deployed
+
+Running at **https://cockpit.wonderfool.xyz** — EC2 in `us-east-1`, the same region and
+pattern as the account's other applications (a dedicated instance with a friendly
+subdomain, as `weight.wonderfool.xyz` does). The app lives in its own directory,
+`/opt/adnimation-cockpit`, and shares nothing with the other hosts.
+
+| | |
+|---|---|
+| Instance | `i-0966fc654697d30ec` (t3.small, us-east-1c) |
+| Address | `54.164.112.169` (Elastic IP, survives reboots) |
+| TLS | Let's Encrypt, auto-renewing |
+| Ports | 80 and 443 only — no SSH |
+| Database | PostgreSQL on the instance; schema from `db/schema.sql` |
+| Integrations | Running against the in-memory fakes (`USE_FAKE_INTEGRATIONS=1`) |
+
+**`adncdn.net` is never touched.** See the repository-root `CLAUDE.md`.
+
+### Enabling sign-in
+
+The app is built for Google Workspace SSO and needs an OAuth client, which only the
+account owner can create:
+
+1. Google Cloud Console → APIs & Services → Credentials → **Create OAuth client ID** → Web application.
+2. Authorised redirect URI: `https://cockpit.wonderfool.xyz/api/auth/callback/google`
+3. Authorised JavaScript origin: `https://cockpit.wonderfool.xyz`
+4. Apply the two values on the box: `set-google-oauth <CLIENT_ID> <CLIENT_SECRET>`
+
+Until that is done the login page renders but cannot complete a sign-in. The
+allowlist still applies afterwards: only the two addresses in `ALLOWED_EMAILS`
+can hold a session, whatever Google returns.
+
+### Redeploying
+
+```bash
+npm run build
+node deploy/aws-provision.mjs      # DEPLOY_HOST, EIP_ALLOCATION_ID, EIP_ADDRESS
+```
+
 ## Published read
 
 A static read of the 2026-08-28 revenue, in the same design system, is published at

@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/industry-8327a28b-0a53-4148-9fb8-5d6c1c7b7941/styles.css">
+<script src="_ds/industry-8327a28b-0a53-4148-9fb8-5d6c1c7b7941/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600&display=swap">
+<style>
+  body { margin: 0; background: var(--color-bg); }
+  a { color: var(--color-accent-700); text-decoration: none; }
+  a:hover { color: var(--color-accent); }
+  @keyframes ledPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+  @keyframes scanSweep { 0% { transform: translateX(0); opacity: 0; } 8% { opacity: 1; } 92% { opacity: 1; } 100% { transform: translateX(var(--sweep, 600px)); opacity: 0; } }
+  @keyframes barPulse { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+</style>
+</helmet>
+<div style="--paper: #eaf2fb; --color-bg: #0f1a24; --color-surface: #16232f; --color-text: #e6eef7; --color-divider: rgba(196, 218, 240, 0.2); --color-neutral-100: #1a2734; --color-neutral-200: #22303d; --color-neutral-300: #33465a; --color-neutral-400: #4a6076; --color-neutral-500: #8ba4bd; --color-neutral-600: #9db4ca; --color-neutral-700: #c2d3e4; --color-neutral-800: #d7e4f1; --color-neutral-900: #eaf2fb; --color-accent: #7cabdd; --color-accent-100: #17293a; --color-accent-200: #1f354a; --color-accent-300: #9cc3e8; --color-accent-400: #8ab6e2; --color-accent-500: #6f9fcc; --color-accent-600: #86b3dc; --color-accent-700: #a8cbea; --color-accent-800: #c2dbf2; --color-accent-900: #dcecfb; min-height: 100vh; display: grid; grid-template-columns: 248px 1fr; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); font-size: 14px; font-variant-numeric: tabular-nums; text-wrap: pretty;">
+
+  <aside style="background: linear-gradient(180deg, #142330 0%, #0c151d 100%); color: var(--paper); border-inline-end: 1px solid var(--color-divider); padding: 24px 0 18px; display: flex; flex-direction: column; gap: 26px; position: sticky; top: 0; height: 100vh; box-sizing: border-box; overflow: hidden;">
+    <div style="padding: 0 18px; display: flex; flex-direction: column; gap: 7px;">
+      <div style="font-family: var(--font-heading); font-weight: 600; font-size: 25px; letter-spacing: 0.2em; line-height: 1;">ADNIMATION</div>
+      <div style="display: flex; align-items: center; gap: 8px; font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 10px; font-weight: 500; letter-spacing: 0.3em; color: var(--color-accent-300);">
+        <span style="width: 5px; height: 5px; background: var(--color-accent-300); display: inline-block; animation: ledPulse 2.6s ease-in-out infinite;"></span>
+        CEO COCKPIT
+      </div>
+    </div>
+
+    <nav style="display: flex; flex-direction: column;">
+      <sc-for list="{{ nav }}" as="item" hint-placeholder-count="3">
+        <button type="button" onClick="{{ item.go }}" style="all: unset; cursor: pointer; display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 12px; padding: 14px 18px; font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 15px; letter-spacing: 0.06em; border-top: 1px solid color-mix(in srgb, var(--paper) 12%, transparent); border-inline-start: 2px solid {{ item.mark }}; background: {{ item.bg }}; color: {{ item.fg }};">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; opacity: 0.85;">
+            <path d="{{ item.icon }}"></path>
+          </svg>
+          <span>{{ item.label }}</span>
+          <span style="font-family: var(--font-heading); font-size: 11px; letter-spacing: 0.16em; opacity: 0.45;">{{ item.num }}</span>
+        </button>
+      </sc-for>
+      <span style="border-top: 1px solid color-mix(in srgb, var(--paper) 12%, transparent);"></span>
+    </nav>
+
+    <div style="padding: 0 18px; display: flex; flex-direction: column; gap: 7px;">
+      <div style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 9px; font-weight: 500; letter-spacing: 0.28em; color: var(--color-accent-300);">WATCHLIST</div>
+      <sc-for list="{{ watchlist }}" as="w" hint-placeholder-count="3">
+        <button type="button" onClick="{{ w.open }}" style="all: unset; cursor: pointer; display: grid; grid-template-columns: 5px 1fr auto; align-items: center; gap: 10px; padding: 7px 0; font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 13px; color: var(--paper); border-top: 1px solid color-mix(in srgb, var(--paper) 10%, transparent);">
+          <span style="width: 5px; height: 5px; background: {{ w.led }}; display: inline-block;"></span>
+          <span style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">{{ w.name }}</span>
+          <span style="font-family: var(--font-heading); font-size: 14px; color: {{ w.color }};">{{ w.chg }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="padding: 0 18px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 9px; font-weight: 500; letter-spacing: 0.28em; color: var(--color-accent-300);">TELEMETRY</div>
+      <div style="display: flex; align-items: flex-end; gap: 3px; height: 34px;">
+        <sc-for list="{{ telemetry }}" as="t" hint-placeholder-count="22">
+          <div style="flex: 1 1 0; height: {{ t.h }}; background: var(--color-accent-500); transform-origin: bottom; animation: barPulse {{ t.dur }} ease-in-out infinite; animation-delay: {{ t.delay }};"></div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="margin-top: auto; padding: 0 18px; display: flex; flex-direction: column; gap: 10px; font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 10px; letter-spacing: 0.16em; color: var(--color-accent-300);">
+      <div style="display: flex; justify-content: space-between; gap: 8px;"><span>LAST SYNC</span><span style="color: var(--paper);">{{ syncAgo }}</span></div>
+      <div style="display: flex; justify-content: space-between; gap: 8px;"><span>FEEDS</span><span style="color: var(--paper);">GAM · PREBID · DB</span></div>
+      <div style="height: 1px; background: color-mix(in srgb, var(--paper) 16%, transparent);"></div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="width: 30px; height: 30px; border: 1px solid color-mix(in srgb, var(--paper) 30%, transparent); display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-size: 11px; letter-spacing: 0.12em; color: var(--paper);">CEO</span>
+        <span style="color: var(--paper); font-size: 10px; letter-spacing: 0.18em;">CHIEF EXECUTIVE</span>
+      </div>
+    </div>
+  </aside>
+
+  <main style="min-width: 0; background-color: var(--color-bg); background-image: repeating-linear-gradient(to bottom, rgba(196, 218, 240, 0.035) 0 1px, transparent 1px 4px), radial-gradient(120% 80% at 78% -10%, rgba(124, 171, 221, 0.14) 0%, transparent 60%), linear-gradient(to right, color-mix(in srgb, var(--color-text) 7%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--color-text) 7%, transparent) 1px, transparent 1px); background-size: 100% 4px, 100% 100%, 48px 48px, 48px 48px;">
+
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding: 26px 30px 18px; border-bottom: 1px solid var(--color-divider);">
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <div style="display: flex; align-items: center; gap: 10px; font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 10px; font-weight: 500; letter-spacing: 0.3em; color: var(--color-accent-700);">
+          <span style="width: 22px; height: 1px; background: var(--color-accent); display: inline-block;"></span>
+          {{ screenKicker }}
+        </div>
+        <h1 style="margin: 0; font-size: 44px; font-weight: 600; line-height: 0.92; letter-spacing: -0.012em; text-shadow: 0 0 28px rgba(124, 171, 221, 0.22);">{{ screenTitle }}</h1>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="display: flex; align-items: center; gap: 14px; padding-inline-end: 14px; border-inline-end: 1px solid var(--color-divider); font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 10px; letter-spacing: 0.16em; white-space: nowrap; color: var(--color-neutral-500);">
+          <span style="display: inline-flex; align-items: center; gap: 7px; color: var(--color-accent-300);">
+            <span style="width: 6px; height: 6px; background: var(--color-accent-300); display: inline-block; animation: ledPulse 1.8s ease-in-out infinite;"></span>LIVE
+          </span>
+          <span>{{ clock }}</span>
+          <span>SYS NOMINAL</span>
+        </div>
+        <div class="seg">
+          <sc-for list="{{ periods }}" as="p" hint-placeholder-count="4">
+            <label class="seg-opt" style="font-family: 'Barlow Semi Condensed', var(--font-body); letter-spacing: 0.16em; font-size: 12px;">
+              <input type="radio" name="cockpit-period" checked="{{ p.checked }}" onChange="{{ p.pick }}" style="position: absolute; width: 1px; height: 1px; opacity: 0;" />
+              {{ p.label }}
+            </label>
+          </sc-for>
+        </div>
+        <button type="button" class="btn btn-secondary" style="font-family: 'Barlow Semi Condensed', var(--font-body); letter-spacing: 0.18em; font-size: 12px;">EXPORT</button>
+      </div>
+    </div>
+
+    <div style="background: #0b141c; color: var(--paper); border-block: 1px solid var(--color-divider); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));">
+      <sc-for list="{{ ticker }}" as="t" hint-placeholder-count="6">
+        <div style="padding: 11px 16px; border-inline-end: 1px solid color-mix(in srgb, var(--color-bg) 14%, transparent); display: flex; flex-direction: column; gap: 4px; min-width: 0;">
+          <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 9px; font-weight: 500; letter-spacing: 0.14em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-accent-300);">{{ t.label }}</span>
+          <span style="font-family: var(--font-heading); font-size: 20px; font-weight: 500; line-height: 1; letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ t.value }}</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="padding: 22px 30px 56px; display: flex; flex-direction: column; gap: 20px;">
+
+    <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+
+        <section style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px;">
+          <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+            <div class="card blueprint" style="gap: 13px; padding: 17px; background: color-mix(in srgb, var(--color-bg) 84%, transparent); box-shadow: inset 0 0 0 1px rgba(196, 218, 240, 0.055), 0 18px 40px rgba(4, 9, 13, 0.45);">
+              <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+              <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px;">
+                <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 10px; font-weight: 500; letter-spacing: 0.14em; white-space: nowrap; color: var(--color-neutral-600);">{{ k.label }}</span>
+                <span style="font-family: var(--font-heading); font-size: 10px; letter-spacing: 0.16em; white-space: nowrap; color: var(--color-accent-700);">{{ k.index }}</span>
+              </div>
+              <div style="min-width: 0; font-family: var(--font-heading); font-weight: 600; font-size: 38px; line-height: 0.9; letter-spacing: -0.02em; color: var(--color-accent-900); text-shadow: 0 0 22px rgba(124, 171, 221, 0.35);">{{ k.value }}</div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="flex: 1 1 auto; min-width: 0; height: 8px; background-image: repeating-linear-gradient(90deg, rgba(196, 218, 240, 0.16) 0 2px, transparent 2px 5px);">
+                  <div style="height: 100%; width: {{ k.gauge }}; background-image: repeating-linear-gradient(90deg, var(--color-accent-300) 0 2px, transparent 2px 5px);"></div>
+                </div>
+                <span style="font-family: var(--font-heading); font-size: 10px; letter-spacing: 0.14em; color: var(--color-neutral-500);">{{ k.gauge }}</span>
+              </div>
+              <svg viewBox="0 0 120 34" preserveAspectRatio="none" style="width: 100%; height: 42px; overflow: visible;">
+                <line x1="0" y1="33" x2="120" y2="33" stroke="var(--color-neutral-300)" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                <line x1="0" y1="17" x2="120" y2="17" stroke="var(--color-neutral-300)" stroke-width="1" stroke-dasharray="2 4" vector-effect="non-scaling-stroke"></line>
+                <polyline points="{{ k.spark }}" fill="none" stroke="var(--color-accent)" stroke-width="1.5" vector-effect="non-scaling-stroke"></polyline>
+              </svg>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--color-divider); padding-top: 10px;">
+                <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 13px; letter-spacing: 0.04em; color: {{ k.deltaColor }};">{{ k.delta }}</span>
+                <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 11px; letter-spacing: 0.1em; color: var(--color-neutral-500);">{{ k.deltaNote }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </section>
+
+        <section style="display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr); gap: 14px; align-items: start;">
+
+          <div class="card blueprint" style="padding: 19px; gap: 17px; background: color-mix(in srgb, var(--color-bg) 84%, transparent); box-shadow: inset 0 0 0 1px rgba(196, 218, 240, 0.055), 0 18px 40px rgba(4, 9, 13, 0.45);">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 10px; font-weight: 500; letter-spacing: 0.3em; color: var(--color-accent-700);">NET REVENUE / {{ periodCode }}</span>
+                <h2 style="margin: 0; font-size: 26px; font-weight: 600; line-height: 1; letter-spacing: -0.005em;">Actual against plan</h2>
+              </div>
+              <div style="display: flex; align-items: center; gap: 18px; font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 11px; letter-spacing: 0.14em; color: var(--color-neutral-600);">
+                <span style="display: inline-flex; align-items: center; gap: 7px;"><span style="width: 10px; height: 10px; background: var(--color-accent-500); display: inline-block;"></span>ACTUAL</span>
+                <span style="display: inline-flex; align-items: center; gap: 7px;"><span style="width: 18px; border-top: 1px dashed var(--color-accent-900); display: inline-block;"></span>PLAN {{ targetLabel }}</span>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 56px 1fr; gap: 10px;">
+              <div style="display: flex; flex-direction: column; justify-content: space-between; height: 212px; font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 10px; letter-spacing: 0.12em; color: var(--color-neutral-500); text-align: right;">
+                <sc-for list="{{ axis }}" as="a" hint-placeholder-count="5">
+                  <span>{{ a }}</span>
+                </sc-for>
+              </div>
+              <div style="position: relative; height: 212px; display: flex; align-items: flex-end; gap: 5px; border-bottom: 1px solid var(--color-neutral-400); border-inline-start: 1px solid var(--color-neutral-400); background-image: linear-gradient(to bottom, color-mix(in srgb, var(--color-text) 7%, transparent) 1px, transparent 1px); background-size: 100% 53px; padding-inline-start: 5px;">
+                <div style="position: absolute; inset-inline: 0; top: {{ targetTop }}; border-top: 1px dashed var(--color-accent-900); pointer-events: none;"></div>
+                <div style="position: absolute; inset-block: 0; left: 0; width: 100%; overflow: hidden; pointer-events: none;">
+                  <div style="--sweep: 100%; position: absolute; inset-block: 0; width: 90px; background: linear-gradient(90deg, transparent 0%, rgba(124, 171, 221, 0.16) 60%, rgba(196, 226, 255, 0.55) 100%); border-right: 1px solid rgba(210, 232, 255, 0.7); animation: scanSweep 7s linear infinite;"></div>
+                </div>
+                <sc-for list="{{ bars }}" as="b" hint-placeholder-count="12">
+                  <div title="{{ b.tip }}" style="flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: flex-end;">
+                    <div style="width: 100%; height: {{ b.h }}; background: linear-gradient(180deg, #8fbde8 0%, #4d7ba6 100%); border-top: 2px solid var(--color-accent-900); box-shadow: 0 0 14px rgba(124, 171, 221, 0.35);" style-hover="background: var(--color-accent-700);"></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 56px 1fr; gap: 10px;">
+              <span></span>
+              <div style="display: flex; justify-content: space-between; gap: 8px; font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 10px; letter-spacing: 0.14em; color: var(--color-neutral-600); padding-inline-start: 5px;">
+                <sc-for list="{{ ticks }}" as="t" hint-placeholder-count="5">
+                  <div style="white-space: nowrap;">{{ t }}</div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--color-divider); border-top: 1px solid var(--color-divider);">
+              <sc-for list="{{ subStats }}" as="s" hint-placeholder-count="3">
+                <div style="background: var(--color-bg); padding: 14px; display: flex; flex-direction: column; gap: 5px;">
+                  <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 9px; font-weight: 500; letter-spacing: 0.26em; color: var(--color-neutral-600);">{{ s.label }}</span>
+                  <span style="font-family: var(--font-heading); font-weight: 600; font-size: 28px; line-height: 1;">{{ s.value }}</span>
+                  <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 12px; letter-spacing: 0.04em; color: var(--color-neutral-600);">{{ s.note }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div class="card blueprint" style="padding: 19px; gap: 10px; background: color-mix(in srgb, var(--color-bg) 84%, transparent); box-shadow: inset 0 0 0 1px rgba(196, 218, 240, 0.055), 0 18px 40px rgba(4, 9, 13, 0.45);">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <div style="display: flex; align-items: baseline; justify-content: space-between;">
+              <h2 style="margin: 0; font-size: 24px; font-weight: 600; line-height: 1;">Signals</h2>
+              <span class="tag tag-accent" style="font-family: 'Barlow Semi Condensed', var(--font-body); letter-spacing: 0.16em;">{{ alertCount }}</span>
+            </div>
+            <sc-for list="{{ alerts }}" as="a" hint-placeholder-count="4">
+              <div style="display: grid; grid-template-columns: 3px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid color-mix(in srgb, var(--color-text) 9%, transparent);">
+                <span style="background: {{ a.sevColor }};"></span>
+                <div style="display: flex; flex-direction: column; gap: 6px; min-width: 0;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span style="font-family: var(--font-heading); font-weight: 600; font-size: 12px; letter-spacing: 0.22em; color: {{ a.sevColor }};">{{ a.sev }}</span>
+                    <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 11px; letter-spacing: 0.08em; color: var(--color-neutral-500);">{{ a.ago }}</span>
+                  </div>
+                  <div style="font-size: 13px; line-height: 1.45;">{{ a.text }}</div>
+                  <button type="button" class="btn btn-ghost" onClick="{{ a.act }}" style="align-self: flex-start; font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 11px; letter-spacing: 0.18em;">{{ a.cta }}</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <section style="display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr); gap: 14px; align-items: start;">
+          <div class="card blueprint" style="padding: 19px; gap: 13px; background: color-mix(in srgb, var(--color-bg) 84%, transparent); box-shadow: inset 0 0 0 1px rgba(196, 218, 240, 0.055), 0 18px 40px rgba(4, 9, 13, 0.45);">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <div style="display: flex; align-items: baseline; justify-content: space-between;">
+              <h2 style="margin: 0; font-size: 24px; font-weight: 600; line-height: 1;">Top accounts</h2>
+              <button type="button" class="btn btn-ghost" onClick="{{ goAccounts }}" style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 11px; letter-spacing: 0.18em;">ALL ACCOUNTS</button>
+            </div>
+            <table class="table" style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 14px; table-layout: fixed;">
+              <thead>
+                <tr>
+                  <th style="letter-spacing: 0.08em; width: 40%;">Account</th>
+                  <th style="letter-spacing: 0.08em; width: 19%;">Revenue</th>
+                  <th style="letter-spacing: 0.08em; width: 13%;">RPM</th>
+                  <th style="letter-spacing: 0.08em; width: 12%;">Δ</th>
+                  <th style="letter-spacing: 0.08em; width: 16%;">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ topAccounts }}" as="acc" hint-placeholder-count="6">
+                  <tr onClick="{{ acc.open }}" style="cursor: pointer;">
+                    <td style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ acc.name }}</td>
+                    <td style="white-space: nowrap;">{{ acc.rev }}</td>
+                    <td style="white-space: nowrap;">{{ acc.rpm }}</td>
+                    <td style="white-space: nowrap; color: {{ acc.chgColor }};">{{ acc.chg }}</td>
+                    <td><span class="{{ acc.tagClass }}" style="letter-spacing: 0.08em; white-space: nowrap;">{{ acc.status }}</span></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card blueprint" style="padding: 19px; gap: 12px; background: color-mix(in srgb, var(--color-bg) 84%, transparent); box-shadow: inset 0 0 0 1px rgba(196, 218, 240, 0.055), 0 18px 40px rgba(4, 9, 13, 0.45);">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <h2 style="margin: 0; font-size: 24px; font-weight: 600; line-height: 1;">Waiting on me</h2>
+            <sc-for list="{{ approvals }}" as="t" hint-placeholder-count="3">
+              <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid color-mix(in srgb, var(--color-text) 9%, transparent);">
+                <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px;">
+                  <span style="font-family: var(--font-heading); font-weight: 600; font-size: 18px;">{{ t.title }}</span>
+                  <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 11px; letter-spacing: 0.12em; color: var(--color-neutral-500);">{{ t.due }}</span>
+                </div>
+                <div style="font-size: 12.5px; color: var(--color-neutral-700); line-height: 1.5;">{{ t.detail }}</div>
+                <div style="display: flex; gap: 8px;">
+                  <button type="button" class="btn btn-primary" onClick="{{ t.approve }}" style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 11px; letter-spacing: 0.16em; padding: 8px 13px;">{{ t.primary }}</button>
+                  <button type="button" class="btn btn-secondary" onClick="{{ t.defer }}" style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 11px; letter-spacing: 0.16em; padding: 8px 13px;">DEFER</button>
+                </div>
+              </div>
+            </sc-for>
+            <div style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 12px; color: var(--color-neutral-600); border-top: 1px solid var(--color-divider); padding-top: 11px;">{{ approvalsNote }}</div>
+          </div>
+        </section>
+
+        <section class="card blueprint" style="padding: 19px; gap: 15px; background: color-mix(in srgb, var(--color-bg) 84%, transparent); box-shadow: inset 0 0 0 1px rgba(196, 218, 240, 0.055), 0 18px 40px rgba(4, 9, 13, 0.45);">
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+            <h2 style="margin: 0; font-size: 24px; font-weight: 600; line-height: 1;">Sales pipeline</h2>
+            <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 12px; letter-spacing: 0.12em; color: var(--color-neutral-600);">{{ pipelineNote }}</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--color-divider); border: 1px solid var(--color-divider);">
+            <sc-for list="{{ pipeline }}" as="s" hint-placeholder-count="5">
+              <div style="background: var(--color-bg); padding: 15px; display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 9px; font-weight: 500; letter-spacing: 0.18em; white-space: nowrap; color: var(--color-neutral-600);">{{ s.stage }}</span>
+                  <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 11px; letter-spacing: 0.08em; white-space: nowrap; color: var(--color-neutral-500);">{{ s.count }}</span>
+                </div>
+                <span style="font-family: var(--font-heading); font-weight: 600; font-size: 30px; line-height: 1; letter-spacing: -0.01em;">{{ s.value }}</span>
+                <svg viewBox="0 0 100 3" preserveAspectRatio="none" style="width: 100%; height: 6px;">
+                  <rect x="0" y="0" width="100" height="3" fill="var(--color-neutral-300)"></rect>
+                  <rect x="0" y="0" width="{{ s.pct }}" height="3" fill="var(--color-accent)"></rect>
+                </svg>
+                <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 12px; color: var(--color-neutral-600);">{{ s.note }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <section style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; align-items: start;">
+          <div class="card blueprint" style="padding: 19px; gap: 15px; background: color-mix(in srgb, var(--color-bg) 84%, transparent); box-shadow: inset 0 0 0 1px rgba(196, 218, 240, 0.055), 0 18px 40px rgba(4, 9, 13, 0.45);">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <h2 style="margin: 0; font-size: 24px; font-weight: 600; line-height: 1;">People & payroll</h2>
+            <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--color-divider); border: 1px solid var(--color-divider);">
+              <sc-for list="{{ people }}" as="m" hint-placeholder-count="4">
+                <div style="background: var(--color-bg); padding: 14px; display: flex; flex-direction: column; gap: 5px;">
+                  <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: var(--color-neutral-600);">{{ m.label }}</span>
+                  <span style="font-family: var(--font-heading); font-weight: 600; font-size: 28px; line-height: 1;">{{ m.value }}</span>
+                  <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 12px; color: var(--color-neutral-600);">{{ m.note }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div class="card blueprint" style="padding: 19px; gap: 10px; background: color-mix(in srgb, var(--color-bg) 84%, transparent); box-shadow: inset 0 0 0 1px rgba(196, 218, 240, 0.055), 0 18px 40px rgba(4, 9, 13, 0.45);">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <h2 style="margin: 0; font-size: 24px; font-weight: 600; line-height: 1;">Open roles</h2>
+            <sc-for list="{{ roles }}" as="r" hint-placeholder-count="4">
+              <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--color-text) 9%, transparent);">
+                <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 14px;">{{ r.title }}</span>
+                <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 11px; letter-spacing: 0.16em; color: var(--color-neutral-600);">{{ r.stage }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isFinance }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <section style="display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 14px; align-items: start;">
+          <div class="card blueprint" style="padding: 19px; gap: 17px; background: color-mix(in srgb, var(--color-bg) 84%, transparent); box-shadow: inset 0 0 0 1px rgba(196, 218, 240, 0.055), 0 18px 40px rgba(4, 9, 13, 0.45);">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+              <h2 style="margin: 0; font-size: 26px; font-weight: 600; line-height: 1;">Income against cost</h2>
+              <div style="display: flex; align-items: center; gap: 11px; font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 11px; letter-spacing: 0.04em; color: var(--color-neutral-600);">
+                <span style="display: inline-flex; align-items: center; gap: 7px;"><span style="width: 10px; height: 10px; background: var(--color-accent-500); display: inline-block;"></span>INCOME</span>
+                <span style="display: inline-flex; align-items: center; gap: 7px;"><span style="width: 10px; height: 10px; background: var(--color-accent-900); display: inline-block;"></span>EXPENSES</span>
+                <span style="display: inline-flex; align-items: center; gap: 7px;"><span style="width: 10px; height: 10px; background: var(--color-neutral-500); display: inline-block;"></span>LABOR</span>
+              </div>
+            </div>
+            <div style="height: 224px; display: flex; align-items: flex-end; gap: 20px; border-bottom: 1px solid var(--color-neutral-400); border-inline-start: 1px solid var(--color-neutral-400); background-image: linear-gradient(to bottom, color-mix(in srgb, var(--color-text) 7%, transparent) 1px, transparent 1px); background-size: 100% 56px; padding-inline-start: 7px;">
+              <sc-for list="{{ trend }}" as="t" hint-placeholder-count="6">
+                <div style="flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: flex-end; gap: 3px;">
+                  <div title="{{ t.tipIncome }}" style="flex: 1 1 0; height: {{ t.hIncome }}; background: var(--color-accent-500);"></div>
+                  <div title="{{ t.tipExpenses }}" style="flex: 1 1 0; height: {{ t.hExpenses }}; background: var(--color-accent-900);"></div>
+                  <div title="{{ t.tipLabor }}" style="flex: 1 1 0; height: {{ t.hLabor }}; background: var(--color-neutral-500);"></div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display: flex; gap: 20px; font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 11px; letter-spacing: 0.18em; color: var(--color-neutral-600); padding-inline-start: 7px;">
+              <sc-for list="{{ trend }}" as="t" hint-placeholder-count="6">
+                <div style="flex: 1 1 0; min-width: 0; text-align: center;">{{ t.label }}</div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div class="card blueprint" style="padding: 19px; gap: 10px; background: color-mix(in srgb, var(--color-bg) 84%, transparent); box-shadow: inset 0 0 0 1px rgba(196, 218, 240, 0.055), 0 18px 40px rgba(4, 9, 13, 0.45);">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <div style="display: flex; align-items: baseline; justify-content: space-between;">
+              <h2 style="margin: 0; font-size: 24px; font-weight: 600; line-height: 1;">P&amp;L</h2>
+              <span style="font-family: var(--font-heading); font-size: 11px; letter-spacing: 0.22em; color: var(--color-accent-700);">{{ periodCode }}</span>
+            </div>
+            <sc-for list="{{ pnl }}" as="r" hint-placeholder-count="4">
+              <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 13px 0; border-top: 1px solid color-mix(in srgb, var(--color-text) 9%, transparent);">
+                <div style="display: flex; flex-direction: column; gap: 3px;">
+                  <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 14px;">{{ r.label }}</span>
+                  <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 11px; letter-spacing: 0.06em; color: var(--color-neutral-500);">{{ r.note }}</span>
+                </div>
+                <span style="font-family: var(--font-heading); font-weight: 600; font-size: 26px; line-height: 1; white-space: nowrap; color: {{ r.color }};">{{ r.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <section style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start;">
+          <div class="card blueprint" style="padding: 19px; gap: 13px; background: color-mix(in srgb, var(--color-bg) 84%, transparent); box-shadow: inset 0 0 0 1px rgba(196, 218, 240, 0.055), 0 18px 40px rgba(4, 9, 13, 0.45);">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <h2 style="margin: 0; font-size: 24px; font-weight: 600; line-height: 1;">Expenses by category</h2>
+            <sc-for list="{{ categories }}" as="c" hint-placeholder-count="6">
+              <div style="display: flex; flex-direction: column; gap: 7px; padding-top: 9px;">
+                <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px;">
+                  <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 14px;">{{ c.name }}</span>
+                  <span style="font-family: var(--font-heading); font-weight: 600; font-size: 19px;">{{ c.amount }}</span>
+                </div>
+                <svg viewBox="0 0 100 3" preserveAspectRatio="none" style="width: 100%; height: 6px;">
+                  <rect x="0" y="0" width="100" height="3" fill="var(--color-neutral-300)"></rect>
+                  <rect x="0" y="0" width="{{ c.pct }}" height="3" fill="var(--color-accent)"></rect>
+                </svg>
+                <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 11px; letter-spacing: 0.06em; color: var(--color-neutral-600);">{{ c.note }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div class="card blueprint" style="padding: 19px; gap: 13px; background: color-mix(in srgb, var(--color-bg) 84%, transparent); box-shadow: inset 0 0 0 1px rgba(196, 218, 240, 0.055), 0 18px 40px rgba(4, 9, 13, 0.45);">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <h2 style="margin: 0; font-size: 24px; font-weight: 600; line-height: 1;">Cash &amp; collection</h2>
+            <table class="table" style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 14px; table-layout: fixed;">
+              <thead>
+                <tr>
+                  <th style="letter-spacing: 0.06em; width: 38%;">Client</th>
+                  <th style="letter-spacing: 0.06em; width: 20%;">Invoiced</th>
+                  <th style="letter-spacing: 0.06em; width: 15%;">Age</th>
+                  <th style="letter-spacing: 0.06em; width: 27%;">State</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ receivables }}" as="r" hint-placeholder-count="5">
+                  <tr>
+                    <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ r.client }}</td>
+                    <td style="white-space: nowrap;">{{ r.amount }}</td>
+                    <td style="white-space: nowrap;">{{ r.age }}</td>
+                    <td><span class="{{ r.tagClass }}" style="letter-spacing: 0.06em; white-space: nowrap;">{{ r.state }}</span></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--color-divider); border: 1px solid var(--color-divider);">
+              <sc-for list="{{ cashStats }}" as="s" hint-placeholder-count="3">
+                <div style="background: var(--color-bg); padding: 14px; display: flex; flex-direction: column; gap: 5px;">
+                  <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: var(--color-neutral-600);">{{ s.label }}</span>
+                  <span style="font-family: var(--font-heading); font-weight: 600; font-size: 26px; line-height: 1;">{{ s.value }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isAccounts }}" hint-placeholder-val="{{ false }}">
+      <div class="card blueprint" style="padding: 19px; gap: 15px; background: color-mix(in srgb, var(--color-bg) 84%, transparent); box-shadow: inset 0 0 0 1px rgba(196, 218, 240, 0.055), 0 18px 40px rgba(4, 9, 13, 0.45);">
+        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+          <h2 style="margin: 0; font-size: 24px; font-weight: 600; line-height: 1;">Publisher &amp; client portfolio</h2>
+          <div style="display: flex; align-items: center; gap: 10px; flex: 0 0 auto;">
+            <div class="seg" style="flex: 0 0 auto;">
+              <sc-for list="{{ typeFilters }}" as="f" hint-placeholder-count="3">
+                <label class="seg-opt" style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 12px; letter-spacing: 0.14em;">
+                  <input type="radio" name="cockpit-type" checked="{{ f.checked }}" onChange="{{ f.pick }}" style="position: absolute; width: 1px; height: 1px; opacity: 0;" />
+                  {{ f.label }}
+                </label>
+              </sc-for>
+            </div>
+            <input class="input" type="search" placeholder="Search account" value="{{ query }}" onChange="{{ setQuery }}" style="max-width: 220px; font-family: 'Barlow Semi Condensed', var(--font-body);" />
+          </div>
+        </div>
+        <table class="table" style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 14px;">
+          <thead>
+            <tr>
+              <th style="letter-spacing: 0.2em;">Account</th>
+              <th style="letter-spacing: 0.2em;">Type</th>
+              <th style="letter-spacing: 0.2em;">Tier</th>
+              <th style="letter-spacing: 0.2em;">Net revenue</th>
+              <th style="letter-spacing: 0.2em;">RPM</th>
+              <th style="letter-spacing: 0.2em;">Fill</th>
+              <th style="letter-spacing: 0.2em;">Δ</th>
+              <th style="letter-spacing: 0.2em;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{ allAccounts }}" as="acct" hint-placeholder-count="8">
+              <tr onClick="{{ acct.open }}" style="cursor: pointer;">
+                <td style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; white-space: nowrap;">{{ acct.name }}</td>
+                <td style="font-size: 12px; letter-spacing: 0.08em; white-space: nowrap; color: var(--color-neutral-600);">{{ acct.type }}</td>
+                <td style="font-size: 12px; letter-spacing: 0.08em; white-space: nowrap; color: var(--color-neutral-600);">{{ acct.tier }}</td>
+                <td style="white-space: nowrap;">{{ acct.rev }}</td>
+                <td style="white-space: nowrap;">{{ acct.rpm }}</td>
+                <td style="white-space: nowrap;">{{ acct.fill }}</td>
+                <td style="white-space: nowrap; color: {{ acct.chgColor }};">{{ acct.chg }}</td>
+                <td><span class="{{ acct.tagClass }}" style="letter-spacing: 0.08em; white-space: nowrap;">{{ acct.status }}</span></td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+        <div style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 12px; letter-spacing: 0.04em; color: var(--color-neutral-600);">{{ accountsNote }}</div>
+      </div>
+    </sc-if>
+
+    </div>
+
+    <sc-if value="{{ selected }}" hint-placeholder-val="{{ false }}">
+      <div style="position: fixed; inset: 0; background: rgba(5, 11, 16, 0.72); backdrop-filter: blur(2px); display: flex; justify-content: flex-end; z-index: 40;">
+        <div class="card blueprint" style="width: 548px; max-width: 92vw; height: 100%; background: var(--color-bg); padding: 26px; gap: 19px; overflow: auto; box-shadow: var(--shadow-lg);">
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+            <div style="display: flex; flex-direction: column; gap: 7px;">
+              <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 10px; font-weight: 500; letter-spacing: 0.28em; color: var(--color-accent-700);">{{ selected.crumb }}</span>
+              <h2 style="margin: 0; font-size: 32px; font-weight: 600; line-height: 0.95; letter-spacing: -0.01em;">{{ selected.name }}</h2>
+            </div>
+            <button type="button" class="btn btn-secondary btn-icon" onClick="{{ closePanel }}">✕</button>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--color-divider); border: 1px solid var(--color-divider);">
+            <sc-for list="{{ selected.stats }}" as="s" hint-placeholder-count="4">
+              <div style="background: var(--color-bg); padding: 14px; display: flex; flex-direction: column; gap: 5px;">
+                <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 9px; font-weight: 500; letter-spacing: 0.24em; color: var(--color-neutral-600);">{{ s.label }}</span>
+                <span style="font-family: var(--font-heading); font-weight: 600; font-size: 28px; line-height: 1;">{{ s.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 9px;">
+            <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 10px; font-weight: 500; letter-spacing: 0.28em; color: var(--color-accent-700);">LAST 30 DAYS</span>
+            <div style="height: 118px; display: flex; align-items: flex-end; gap: 3px; border-bottom: 1px solid var(--color-neutral-400); background-image: linear-gradient(to bottom, color-mix(in srgb, var(--color-text) 7%, transparent) 1px, transparent 1px); background-size: 100% 29px;">
+              <sc-for list="{{ selected.bars }}" as="b" hint-placeholder-count="30">
+                <div style="flex: 1 1 0; min-width: 0; height: {{ b.h }}; background: var(--color-accent-500);"></div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 9px;">
+            <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 10px; font-weight: 500; letter-spacing: 0.28em; color: var(--color-accent-700);">PLACEMENTS</span>
+            <table class="table" style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 14px;">
+              <thead>
+                <tr>
+                  <th style="letter-spacing: 0.2em;">Unit</th>
+                  <th style="letter-spacing: 0.2em;">Net revenue</th>
+                  <th style="letter-spacing: 0.2em;">RPM</th>
+                  <th style="letter-spacing: 0.2em;">Fill</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ selected.placements }}" as="pl" hint-placeholder-count="4">
+                  <tr>
+                    <td>{{ pl.unit }}</td>
+                    <td>{{ pl.rev }}</td>
+                    <td>{{ pl.rpm }}</td>
+                    <td>{{ pl.fill }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 7px; border-top: 1px solid var(--color-divider); padding-top: 13px;">
+            <span style="font-family: 'Barlow Semi Condensed', var(--font-body); font-size: 10px; font-weight: 500; letter-spacing: 0.28em; color: var(--color-accent-700);">OWNER NOTE</span>
+            <div style="font-size: 13px; line-height: 1.55; color: var(--color-neutral-700);">{{ selected.note }}</div>
+          </div>
+          <div style="margin-top: auto; display: flex; gap: 8px;">
+            <button type="button" class="btn btn-primary" style="font-family: 'Barlow Semi Condensed', var(--font-body); letter-spacing: 0.16em; font-size: 12px;">OPEN OPTIMIZATION THREAD</button>
+            <button type="button" class="btn btn-secondary" onClick="{{ closePanel }}" style="font-family: 'Barlow Semi Condensed', var(--font-body); letter-spacing: 0.16em; font-size: 12px;">CLOSE</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:980},&quot;defaultPeriod&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;7D&quot;,&quot;30D&quot;,&quot;QTD&quot;,&quot;YTD&quot;],&quot;default&quot;:&quot;30D&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Cockpit&quot;},&quot;showAlerts&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Cockpit&quot;}}">
+const ACCOUNTS = [
+  { name: 'Walla! Network', type: 'Publisher', tier: 'Tier 1', rev: 1520000, rpm: 18.9, fill: 94, chg: 8.4, status: 'Healthy', owner: 'Direct GAM + Prebid, 4 units live. Video inventory added in July.' },
+  { name: 'Sport5 Digital', type: 'Publisher', tier: 'Tier 1', rev: 1058000, rpm: 16.2, fill: 78, chg: -18.2, status: 'Anomaly', owner: 'RPM drop tracks a Prebid timeout change on Aug 24. AdOps investigating.' },
+  { name: 'Mako Video', type: 'Publisher', tier: 'Tier 1', rev: 901000, rpm: 22.3, fill: 91, chg: 3.1, status: 'Healthy', owner: 'Outstream carries the account. Renewal due in 12 days.' },
+  { name: 'Ynet Mobile', type: 'Publisher', tier: 'Tier 2', rev: 733000, rpm: 14.3, fill: 88, chg: 12.7, status: 'Growing', owner: 'Sticky mobile rollout finished, fill still climbing.' },
+  { name: 'Bezeq Brand Studio', type: 'Client', tier: 'Key', rev: 486000, rpm: 0, fill: 0, chg: 5.6, status: 'Healthy', owner: 'Retainer plus quarterly campaign work. Invoiced monthly.' },
+  { name: 'Geektime', type: 'Publisher', tier: 'Tier 2', rev: 355000, rpm: 15.2, fill: 93, chg: -2.4, status: 'Watch', owner: 'Traffic soft since the redesign; RPM holding.' },
+  { name: 'Israel Hayom', type: 'Publisher', tier: 'Tier 2', rev: 327000, rpm: 12.6, fill: 85, chg: 1.9, status: 'Healthy', owner: 'Stable. Header bidding partners refreshed in June.' },
+  { name: 'Zap Group', type: 'Publisher', tier: 'Tier 3', rev: 274000, rpm: 20.9, fill: 96, chg: 21.3, status: 'Growing', owner: 'Best RPM in Tier 3. Candidate for Tier 2 terms.' },
+  { name: 'Calcalist Feed', type: 'Publisher', tier: 'Tier 3', rev: 226000, rpm: 18.3, fill: 82, chg: -6.8, status: 'Watch', owner: 'Feed placement lost viewability after layout change.' },
+  { name: 'Fiverr Growth', type: 'Client', tier: 'Key', rev: 198000, rpm: 0, fill: 0, chg: -3.2, status: 'Watch', owner: 'Budget review pending on their side for Q4.' }
+];
+
+const PERIODS = {
+  '7D': {
+    code: '7D', target: 1600000, unit: 1000,
+    kpi: ['₪1.52M', '₪354K', '₪17.40', '92.4%'],
+    delta: [6.2, 4.4, 2.1, 0.8],
+    deltaNote: ['VS PRIOR WEEK', 'VS PRIOR WEEK', 'VS PRIOR WEEK', 'TARGET 92%'],
+    series: [201, 224, 236, 213, 248, 262, 209],
+    labels: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'],
+    sub: [['IMPRESSIONS', '87.4M', '+5.1% vs prior week'], ['VIEWABILITY', '68.2%', 'target 70%'], ['ACTIVE PUBLISHERS', '348', '+2 this week']]
+  },
+  '30D': {
+    code: '30D', target: 7000000, unit: 1000,
+    kpi: ['₪6.80M', '₪1.53M', '₪17.10', '91.4%'],
+    delta: [9.8, 7.1, -1.4, 1.2],
+    deltaNote: ['VS PRIOR MONTH', 'VS PRIOR MONTH', 'VS PRIOR MONTH', 'TARGET 92%'],
+    series: [198, 212, 228, 209, 242, 261, 231, 220, 249, 271, 253, 279, 264, 242, 260, 286, 268, 293, 275, 253, 282, 301, 286, 271, 297, 315, 290, 308, 322, 304],
+    labels: ['1', '', '', '', '5', '', '', '', '', '10', '', '', '', '', '15', '', '', '', '', '20', '', '', '', '', '25', '', '', '', '', '30'],
+    sub: [['IMPRESSIONS', '398M', '+8.4% vs prior month'], ['VIEWABILITY', '67.1%', 'target 70%'], ['ACTIVE PUBLISHERS', '348', '+11 this month']]
+  },
+  'QTD': {
+    code: 'QTD', target: 21000000, unit: 10000,
+    kpi: ['₪20.0M', '₪4.40M', '₪16.80', '90.8%'],
+    delta: [14.2, 11.6, -2.8, 2.4],
+    deltaNote: ['VS PRIOR QUARTER', 'VS PRIOR QUARTER', 'VS PRIOR QUARTER', 'TARGET 92%'],
+    series: [1210, 1274, 1382, 1318, 1466, 1548, 1487, 1632, 1591, 1716, 1798, 1757, 1901],
+    labels: ['W1', '', '', 'W4', '', '', 'W7', '', '', 'W10', '', '', 'W13'],
+    sub: [['IMPRESSIONS', '1.19B', '+12.7% vs prior quarter'], ['VIEWABILITY', '66.4%', 'target 70%'], ['ACTIVE PUBLISHERS', '348', '+31 this quarter']]
+  },
+  'YTD': {
+    code: 'YTD', target: 78000000, unit: 10000,
+    kpi: ['₪72.4M', '₪15.8M', '₪16.30', '89.6%'],
+    delta: [22.5, 18.9, 3.6, 4.1],
+    deltaNote: ['VS PRIOR YEAR', 'VS PRIOR YEAR', 'VS PRIOR YEAR', 'TARGET 92%'],
+    series: [4420, 4810, 5230, 5040, 5720, 6110, 5860, 6640, 7010, 6820, 7440, 7920],
+    labels: ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'],
+    sub: [['IMPRESSIONS', '4.44B', '+19.2% vs prior year'], ['VIEWABILITY', '65.8%', 'target 70%'], ['ACTIVE PUBLISHERS', '348', '+96 this year']]
+  }
+};
+
+const KPI_META = [
+  { label: 'NET REVENUE', unit: 'ILS', index: 'K01' },
+  { label: 'GROSS PROFIT', unit: 'ILS', index: 'K02' },
+  { label: 'AVG RPM', unit: 'ILS', index: 'K03' },
+  { label: 'FILL RATE', unit: 'PCT', index: 'K04' }
+];
+
+const SCREENS = {
+  overview: { kicker: 'DASHBOARD / 01', title: 'Company overview', icon: 'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z' },
+  finance: { kicker: 'FINANCE / 02', title: 'Revenue & finance', icon: 'M3 3v18h18M7 15l4-5 3 3 4-6' },
+  accounts: { kicker: 'PORTFOLIO / 03', title: 'Publishers & clients', icon: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM22 21v-2a4 4 0 0 0-3-3.87' }
+};
+
+const TREND = [
+  { label: 'MAR', income: 5230000, expenses: 2410000, labor: 1810000 },
+  { label: 'APR', income: 5040000, expenses: 2280000, labor: 1840000 },
+  { label: 'MAY', income: 5720000, expenses: 2520000, labor: 1870000 },
+  { label: 'JUN', income: 6110000, expenses: 2690000, labor: 1900000 },
+  { label: 'JUL', income: 5860000, expenses: 2610000, labor: 1920000 },
+  { label: 'AUG', income: 6800000, expenses: 2940000, labor: 1940000 }
+];
+
+const CATEGORIES = [
+  { name: 'Traffic acquisition', amount: 1120000, note: '38% OF DIRECT SPEND' },
+  { name: 'Cloud & ad serving', amount: 742000, note: 'GAM, CDN, PREBID SERVER' },
+  { name: 'Marketing', amount: 386000, note: 'EVENTS AND PAID DEMAND GEN' },
+  { name: 'Office & operations', amount: 268000, note: 'RENT, UTILITIES, SUPPLIES' },
+  { name: 'Legal & professional', amount: 241000, note: 'CONTRACTS AND AUDIT' },
+  { name: 'Other', amount: 183000, note: 'UNCATEGORIZED IN OFFICE DB' }
+];
+
+const UP = 'var(--color-accent-800)';
+const DOWN = 'var(--color-neutral-700)';
+
+class Component extends DCLogic {
+  state = {
+    screen: 'overview',
+    period: this.props.defaultPeriod || '30D',
+    typeFilter: 'All',
+    selected: null,
+    query: ''
+  };
+
+  money(n) {
+    if (n >= 1000000) return '₪' + (n / 1000000).toFixed(2) + 'M';
+    if (n >= 1000) return '₪' + Math.round(n / 1000) + 'K';
+    return '₪' + Math.round(n);
+  }
+
+  spark(series) {
+    const max = Math.max.apply(null, series);
+    const min = Math.min.apply(null, series);
+    const span = max - min || 1;
+    return series.map((v, i) => {
+      const x = (i / (series.length - 1)) * 120;
+      const y = 31 - ((v - min) / span) * 27;
+      return x.toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+  }
+
+  row(p) {
+    return {
+      name: p.name,
+      type: p.type.toUpperCase(),
+      tier: p.tier.toUpperCase(),
+      rev: this.money(p.rev),
+      rpm: p.rpm ? '₪' + p.rpm.toFixed(2) : '—',
+      fill: p.fill ? p.fill + '%' : '—',
+      chg: (p.chg > 0 ? '+' : '') + p.chg.toFixed(1) + '%',
+      chgColor: p.chg >= 0 ? UP : DOWN,
+      status: p.status.toUpperCase(),
+      tagClass: p.status === 'Anomaly' ? 'tag tag-outline' : p.status === 'Watch' ? 'tag tag-neutral' : 'tag tag-accent',
+      open: () => this.setState({ selected: p })
+    };
+  }
+
+  detail(p) {
+    let seed = p.name.length * 37 + Math.round(p.rev / 1000);
+    const bars = [];
+    for (let i = 0; i < 30; i++) {
+      seed = (seed * 1103515245 + 12345) % 2147483647;
+      const v = 56 + (seed % 42) + (p.chg < 0 && i > 21 ? -30 : 0);
+      bars.push({ h: Math.max(8, v) + '%' });
+    }
+    const units = p.type === 'Client'
+      ? ['Retainer', 'Campaign — Q3', 'Creative production', 'Media buying']
+      : ['Top leaderboard', 'In-article 1', 'Sticky mobile', 'Video outstream'];
+    const placements = units.map((u, i) => ({
+      unit: u,
+      rev: this.money(Math.round(p.rev * [0.34, 0.27, 0.22, 0.17][i])),
+      rpm: p.rpm ? '₪' + (p.rpm * [1.18, 0.96, 0.84, 1.42][i]).toFixed(2) : '—',
+      fill: p.fill ? Math.min(99, Math.round(p.fill * [1.02, 0.98, 0.94, 0.9][i])) + '%' : '—'
+    }));
+    return {
+      name: p.name,
+      crumb: p.type.toUpperCase() + ' / ' + p.tier.toUpperCase(),
+      stats: [
+        { label: 'NET REVENUE 30D', value: this.money(p.rev) },
+        { label: 'RPM', value: p.rpm ? '₪' + p.rpm.toFixed(2) : '—' },
+        { label: 'FILL RATE', value: p.fill ? p.fill + '%' : '—' },
+        { label: 'CHANGE', value: (p.chg > 0 ? '+' : '') + p.chg.toFixed(1) + '%' }
+      ],
+      bars,
+      placements,
+      note: p.owner
+    };
+  }
+
+  renderVals() {
+    const p = PERIODS[this.state.period] || PERIODS['30D'];
+    const showAlerts = this.props.showAlerts !== false;
+    const peak = Math.max.apply(null, p.series);
+    const maxBar = peak * 1.14;
+    const planPerBar = p.target / p.series.length / p.unit;
+
+    const axis = [];
+    for (let i = 4; i >= 0; i--) axis.push(this.money((maxBar * p.unit) * (i / 4)));
+
+    const alerts = [
+      { sev: 'CRITICAL', ago: '40 MIN AGO', text: 'Sport5 Digital RPM fell 18% after the Prebid timeout change on Aug 24.', cta: 'OPEN ACCOUNT', screen: 'accounts', sevColor: 'var(--color-accent-900)' },
+      { sev: 'HIGH', ago: '1 HR AGO', text: 'Prebid EU fill rate under 80% for two consecutive days.', cta: 'REVIEW DEMAND', screen: 'accounts', sevColor: 'var(--color-accent-800)' },
+      { sev: 'FINANCE', ago: '3 HRS AGO', text: '₪548K invoiced to partners is past 60 days.', cta: 'OPEN COLLECTION', screen: 'finance', sevColor: 'var(--color-accent-700)' },
+      { sev: 'GROWTH', ago: 'TODAY', text: 'Three publishers cleared quality review and await your sign-off.', cta: 'REVIEW QUEUE', screen: 'accounts', sevColor: 'var(--color-accent-600)' }
+    ].map(a => Object.assign({}, a, { act: () => this.setState({ screen: a.screen, selected: null }) }));
+
+    const q = this.state.query.trim().toLowerCase();
+    const filtered = ACCOUNTS
+      .filter(x => this.state.typeFilter === 'All' || x.type === this.state.typeFilter)
+      .filter(x => !q || x.name.toLowerCase().indexOf(q) >= 0);
+
+    return {
+      nav: Object.keys(SCREENS).map((key, i) => ({
+        num: '0' + (i + 1),
+        label: SCREENS[key].title,
+        icon: SCREENS[key].icon,
+        bg: this.state.screen === key ? 'color-mix(in srgb, var(--paper) 14%, transparent)' : 'transparent',
+        fg: 'var(--paper)',
+        mark: this.state.screen === key ? 'var(--color-accent-300)' : 'transparent',
+        go: () => this.setState({ screen: key, selected: null })
+      })),
+      watchlist: ACCOUNTS.slice(0, 3).map(x => ({
+        name: x.name,
+        chg: (x.chg > 0 ? '+' : '') + x.chg.toFixed(1) + '%',
+        color: x.chg >= 0 ? 'var(--color-accent-300)' : 'var(--paper)',
+        led: x.chg >= 0 ? 'var(--color-accent-300)' : 'var(--color-neutral-400)',
+        open: () => this.setState({ selected: x })
+      })),
+      syncAgo: '4 MIN AGO',
+      screenKicker: SCREENS[this.state.screen].kicker,
+      screenTitle: SCREENS[this.state.screen].title,
+      isOverview: this.state.screen === 'overview',
+      isFinance: this.state.screen === 'finance',
+      isAccounts: this.state.screen === 'accounts',
+      periods: Object.keys(PERIODS).map(k => ({
+        label: k,
+        checked: this.state.period === k,
+        pick: () => this.setState({ period: k })
+      })),
+      periodCode: p.code,
+      clock: '08:42',
+      telemetry: (() => {
+        const out = [];
+        for (let i = 0; i < 22; i++) {
+          const v = 30 + ((i * 37) % 62);
+          out.push({ h: v + '%', dur: (1.6 + (i % 5) * 0.35).toFixed(2) + 's', delay: ((i % 7) * 0.18).toFixed(2) + 's' });
+        }
+        return out;
+      })(),
+      ticker: [
+        { label: 'REVENUE PACE', value: '97.1%' },
+        { label: 'RPM INDEX', value: p.kpi[2] },
+        { label: 'FILL', value: p.kpi[3] },
+        { label: 'OPEN SIGNALS', value: alerts.length },
+        { label: 'PIPELINE', value: '₪7.4M' },
+        { label: 'RUNWAY', value: '19 MO' }
+      ],
+      ticks: (() => {
+        const marked = p.labels.map((l, i) => ({ l, i })).filter(x => x.l);
+        if (marked.length <= 6) return marked.map(x => x.l);
+        const out = [];
+        for (let k = 0; k < 5; k++) out.push(marked[Math.round((marked.length - 1) * (k / 4))].l);
+        return out;
+      })(),
+      kpis: KPI_META.map((m, i) => ({
+        label: m.label,
+        unit: m.unit,
+        index: m.index,
+        value: p.kpi[i],
+        delta: (p.delta[i] > 0 ? '+' : '') + p.delta[i].toFixed(1) + '%',
+        deltaNote: p.deltaNote[i],
+        deltaColor: p.delta[i] >= 0 ? UP : DOWN,
+        spark: this.spark(p.series.slice(-Math.min(12, p.series.length)).map(v => v * (1 + i * 0.04))),
+        gauge: [97, 91, 94, Math.round((parseFloat(p.kpi[3]) / 92) * 100)][i] + '%'
+      })),
+      axis,
+      bars: p.series.map((v, i) => ({
+        h: ((v / maxBar) * 100).toFixed(1) + '%',
+        label: p.labels[i] || '',
+        tip: (p.labels[i] || 'STEP ' + (i + 1)) + ' · ' + this.money(v * p.unit)
+      })),
+      targetTop: (100 - (planPerBar / maxBar) * 100).toFixed(1) + '%',
+      targetLabel: this.money(p.target),
+      subStats: p.sub.map(s => ({ label: s[0], value: s[1], note: s[2] })),
+      alerts: showAlerts ? alerts : [],
+      alertCount: alerts.length + ' OPEN',
+      topAccounts: ACCOUNTS.slice(0, 6).map(x => this.row(x)),
+      allAccounts: filtered.map(x => this.row(x)),
+      accountsNote: filtered.length + ' OF ' + ACCOUNTS.length + ' ACCOUNTS · NET REVENUE, LAST 30 DAYS',
+      typeFilters: ['All', 'Publisher', 'Client'].map(t => ({
+        label: t.toUpperCase(),
+        checked: this.state.typeFilter === t,
+        pick: () => this.setState({ typeFilter: t })
+      })),
+      query: this.state.query,
+      setQuery: e => this.setState({ query: e.target.value }),
+      goAccounts: () => this.setState({ screen: 'accounts' }),
+      approvals: [
+        { title: 'Q4 media budget', due: 'DUE SEP 2', detail: '₪1.2M increase for traffic acquisition across Tier 2 publishers.', primary: 'APPROVE BUDGET' },
+        { title: 'Sr. AdOps Engineer offer', due: 'DUE SEP 4', detail: 'Two finalists cleared the third round; salary band already approved.', primary: 'APPROVE OFFER' },
+        { title: 'Mako Video renewal', due: 'DUE SEP 9', detail: '12-month term, revenue share moves from 70% to 72%.', primary: 'APPROVE TERMS' }
+      ].map(t => Object.assign({}, t, {
+        approve: () => this.setState({ screen: 'finance' }),
+        defer: () => this.setState({ screen: 'overview' })
+      })),
+      approvalsNote: 'Four more items sit with the leadership team and need no CEO sign-off.',
+      pipelineNote: 'WEIGHTED ₪7.4M · 42 OPEN DEALS',
+      pipeline: [
+        { stage: 'QUALIFIED', count: '14 deals', value: '₪3.1M', pct: 100, note: 'Avg 9 days in stage' },
+        { stage: 'PROPOSAL', count: '9 deals', value: '₪2.4M', pct: 77, note: 'Two proposals overdue' },
+        { stage: 'NEGOTIATION', count: '5 deals', value: '₪1.8M', pct: 58, note: 'Legal review on two' },
+        { stage: 'CLOSING', count: '3 deals', value: '₪1.1M', pct: 35, note: 'Signature expected this week' },
+        { stage: 'WON QTD', count: '11 deals', value: '₪2.9M', pct: 93, note: '93% of target' }
+      ],
+      people: [
+        { label: 'HEADCOUNT', value: '48', note: '44 active, 4 on leave' },
+        { label: 'OPEN ROLES', value: '6', note: '3 in final stage' },
+        { label: 'LABOR COST', value: '₪1.94M', note: 'This month, from hours logged' },
+        { label: 'HOURS LOGGED', value: '7,320', note: '96% of expected' }
+      ],
+      roles: [
+        { title: 'Sr. AdOps Engineer', stage: 'OFFER OUT' },
+        { title: 'Publisher Success Manager', stage: 'FINAL ROUND' },
+        { title: 'Data Analyst', stage: 'SCREENING' },
+        { title: 'Account Executive — EU', stage: 'SOURCING' }
+      ],
+      trend: (() => {
+        const trendMax = Math.max.apply(null, TREND.map(t => t.income)) * 1.08;
+        return TREND.map(t => ({
+          label: t.label,
+          hIncome: ((t.income / trendMax) * 100).toFixed(1) + '%',
+          hExpenses: ((t.expenses / trendMax) * 100).toFixed(1) + '%',
+          hLabor: ((t.labor / trendMax) * 100).toFixed(1) + '%',
+          tipIncome: 'Income ' + this.money(t.income),
+          tipExpenses: 'Direct expenses ' + this.money(t.expenses),
+          tipLabor: 'Labor cost ' + this.money(t.labor)
+        }));
+      })(),
+      pnl: [
+        { label: 'Income', note: 'PUBLISHER AND CLIENT BILLING', value: '₪6.80M', color: 'var(--color-text)' },
+        { label: 'Direct expenses', note: 'TRAFFIC, SERVING, MARKETING', value: '−₪2.94M', color: 'var(--color-neutral-700)' },
+        { label: 'Labor cost', note: 'HOURS LOGGED × HOURLY RATE', value: '−₪1.94M', color: 'var(--color-neutral-700)' },
+        { label: 'Net profit', note: '27.4% MARGIN', value: '₪1.92M', color: 'var(--color-accent-900)' }
+      ],
+      categories: (() => {
+        const catMax = Math.max.apply(null, CATEGORIES.map(c => c.amount));
+        return CATEGORIES.map(c => ({
+          name: c.name,
+          amount: this.money(c.amount),
+          pct: Math.round((c.amount / catMax) * 100),
+          note: c.note
+        }));
+      })(),
+      receivables: [
+        { client: 'Taboola DSP', amount: '₪548K', age: '62 D', state: 'OVERDUE', tagClass: 'tag tag-outline' },
+        { client: 'Bezeq Brand Studio', amount: '₪486K', age: '21 D', state: 'CURRENT', tagClass: 'tag tag-accent' },
+        { client: 'Fiverr Growth', amount: '₪198K', age: '38 D', state: 'WATCH', tagClass: 'tag tag-neutral' },
+        { client: 'Outbrain Partner', amount: '₪164K', age: '12 D', state: 'CURRENT', tagClass: 'tag tag-accent' },
+        { client: 'Sport5 Digital', amount: '₪121K', age: '47 D', state: 'WATCH', tagClass: 'tag tag-neutral' }
+      ],
+      cashStats: [
+        { label: 'CASH ON HAND', value: '₪12.4M' },
+        { label: 'RECEIVABLES', value: '₪1.52M' },
+        { label: 'RUNWAY', value: '19 MO' }
+      ],
+      selected: this.state.selected ? this.detail(this.state.selected) : null,
+      closePanel: () => this.setState({ selected: null })
+    };
+  }
+}
+</script>
+</body>
+</html>
