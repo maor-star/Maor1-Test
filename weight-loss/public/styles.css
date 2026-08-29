@@ -369,11 +369,36 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 
 /* The illustration at the head of an article, and its smaller twin on the card.
    Both declare an aspect ratio so the page holds its height before the image loads. */
-.article-figure { position: relative; margin: 0; }
+/* 16:9 is what the image model returns, so matching it here means the picture is
+   shown whole instead of being cropped through the middle by a wider frame. */
+.article-figure { position: relative; margin: 0 auto; width: 100%; }
 .article-figure img {
-  display: block; width: 100%; aspect-ratio: 16 / 7; object-fit: cover; object-position: center 30%;
+  display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; object-position: center;
   border: 1px solid var(--color-divider);
   filter: saturate(0.92) contrast(1.04);
+}
+
+/* Real text rather than pixels burnt into the file: it stays sharp at any size, and
+   it also marks photographs uploaded by hand. The scrim keeps it readable whether the
+   corner underneath is light or dark. */
+/* The scrim spans the full width of the picture and fades out, so it reads as part of
+   the photograph rather than as a grey label stuck in the corner. */
+.article-figure::after {
+  content: ""; position: absolute; left: 1px; right: 1px; bottom: 1px; height: 34%;
+  background: linear-gradient(to top, rgb(0 0 0 / 40%), rgb(0 0 0 / 12%) 45%, rgb(0 0 0 / 0%));
+  pointer-events: none;
+}
+.article-figure .watermark {
+  /* physically bottom-left: on an RTL page inline-start would resolve to the right */
+  position: absolute; left: 0; bottom: 0; z-index: 1;
+  padding: 0 0 12px var(--space-5);
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 13px; letter-spacing: 0.07em; color: rgb(255 255 255 / 92%);
+  text-shadow: 0 1px 4px rgb(0 0 0 / 45%);
+  pointer-events: none;
+}
+@media (max-width: 720px) {
+  .article-figure .watermark { font-size: 11px; padding: 0 0 9px var(--space-4); }
 }
 .article-figure::before, .article-figure::after {
   content: ""; position: absolute; top: -6px; width: 11px; height: 11px; pointer-events: none;
