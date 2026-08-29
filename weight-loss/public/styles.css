@@ -401,35 +401,19 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 
 /* The week as one form. The day column carries the name, the date and, on Tuesday, the
    weigh-in mark, so the rhythm of the week is readable before anything is filled in. */
-/* The weigh-in leads the weekly report rather than living in its own panel: one form,
-   one button, one submission a week covering the scale and the days behind it. */
-.weighin-strip {
+/* The number the whole programme is measured from, stated once above the schedule it
+   sets the target for. */
+.start-weight {
   display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;
-  padding: var(--space-4); margin-bottom: var(--space-4);
-  border: 1px solid var(--color-accent-300); background: var(--color-accent-100);
+  margin-bottom: var(--space-4);
 }
-.weighin-strip.is-done { border-color: var(--color-divider); background: transparent; }
-.weighin-when { flex: 1 1 200px; min-width: 0; }
-.weighin-date {
-  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
-  font-size: 24px; line-height: 1.15; margin: 4px 0 4px;
-}
-.weighin-count { text-align: center; flex: none; padding-inline: var(--space-4); border-inline: 1px solid var(--color-divider); }
-.weighin-count .val {
-  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
-  font-size: 34px; line-height: 1; color: var(--color-accent); font-variant-numeric: tabular-nums;
-}
-.weighin-count .cap { margin-top: 4px; font-size: 11px; letter-spacing: 0.06em; color: var(--color-neutral-600); }
-.weighin-input { flex: none; display: grid; gap: 4px; }
-.weighin-input label { font-size: 11px; letter-spacing: 0.06em; color: var(--color-neutral-600); }
-.weighin-input .input { width: 120px; }
+.start-weight > div:first-child { flex: 1 1 260px; min-width: 0; }
+.start-weight-form { display: flex; gap: var(--space-3); flex: none; margin-inline-start: auto; }
+.start-weight-form .input { width: 110px; }
+.start-weight-target { flex: 1 1 100%; color: var(--color-accent-700); }
 @media (max-width: 560px) {
-  .weighin-strip { gap: var(--space-3); padding: var(--space-3); }
-  .weighin-date { font-size: 20px; }
-  .weighin-count { padding-inline: var(--space-3); }
-  .weighin-count .val { font-size: 28px; }
-  .weighin-input { flex: 1 1 100%; }
-  .weighin-input .input { width: 100%; }
+  .start-weight-form { flex: 1 1 100%; margin-inline-start: 0; }
+  .start-weight-form .input { flex: 1; width: auto; }
 }
 
 /* The week's three numbers, inside the report they describe. */

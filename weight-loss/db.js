@@ -151,6 +151,9 @@ addColumn('profiles', 'is_editor', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('profiles', 'target_weight', 'REAL');
 addColumn('profiles', 'photo_url', 'TEXT');
 addColumn('profiles', 'coach_note', 'TEXT');
+// Where the member says they started, which need not be their first weigh-in here: the
+// group's ten-percent target is measured from it.
+addColumn('profiles', 'start_weight', 'REAL');
 
 // ---- Seed the master list of badges ----
 export const BADGE_SEED = [

@@ -375,7 +375,10 @@ function personalStats(userId) {
     || null;
   const nextWeighIn = slots.find((d) => d > today) || null;
 
-  const targetWeight = targetFrom(first ? first.weight : null);
+  // The declared starting weight wins over the first weigh-in, so someone who joined
+  // mid-way is measured from where they actually began.
+  const startWeight = profile.start_weight ?? (first ? first.weight : null);
+  const targetWeight = targetFrom(startWeight);
 
   const firstWaist = weighIns.find((w) => w.waist != null);
   const lastWaist = [...weighIns].reverse().find((w) => w.waist != null);
@@ -398,7 +401,7 @@ function personalStats(userId) {
     current_slot_weight: currentSlotWeight,
     target_share: TARGET_SHARE,
     target_weight: targetWeight,
-    target_loss: first ? Number((first.weight * TARGET_SHARE).toFixed(1)) : null,
+    target_loss: startWeight ? Number((startWeight * TARGET_SHARE).toFixed(1)) : null,
     to_target: targetWeight && last ? Number((last.weight - targetWeight).toFixed(1)) : null,
     coach_note: profile.coach_note,
     has_photo: !!profile.photo_url,
@@ -423,9 +426,10 @@ function personalStats(userId) {
         is_open: true,
       };
     }),
-    weight_start: first ? first.weight : null,
+    weight_start: startWeight,
+    start_weight_set: profile.start_weight != null,
     weight_latest: last ? last.weight : null,
-    weight_change: first && last ? Number((last.weight - first.weight).toFixed(1)) : null,
+    weight_change: startWeight && last ? Number((last.weight - startWeight).toFixed(1)) : null,
     waist_change: firstWaist && lastWaist && firstWaist.id !== lastWaist.id
       ? Number((lastWaist.waist - firstWaist.waist).toFixed(1)) : null,
   };
@@ -789,7 +793,16 @@ app.put('/api/settings/bot-url', requireEditor, asyncRoute((req, res) => {
   res.json({ ok: true, url });
 }));
 
-// ---------- The profile photo ----------
+// ---------- The starting weight and photo ----------
+app.put('/api/me/start-weight', requireAuth, asyncRoute((req, res) => {
+  const raw = req.body.start_weight;
+  const value = raw === '' || raw === null || raw === undefined ? null : num(raw);
+  if (value !== null && !(value > 20 && value < 400)) throw fail('משקל ההתחלה חייב להיות בין 20 ל-400 ק"ג');
+  db.prepare('UPDATE profiles SET start_weight = ? WHERE id = ?').run(value, req.user.id);
+  res.json(profileState(req.user.id));
+}));
+
+
 app.post('/api/me/photo', requireAuth, asyncRoute((req, res) => {
   const previous = req.user.photo_url;
   const name = savePhoto(req.body.photo);

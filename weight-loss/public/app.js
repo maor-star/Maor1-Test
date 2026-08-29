@@ -123,38 +123,6 @@ function barChart(items, { goal = 0, unit = '', goodWhen = 'above' } = {}) {
  * words rather than hiding it in a corner label. It writes into the slot it names, so
  * there is no second step and no wondering which week the number landed in.
  */
-function weighInStrip(stats) {
-  // Weighed for this week already: the strip confirms it and still points at that week,
-  // so an edit corrects the number instead of filling the next slot.
-  const done = stats.current_slot_weight !== null;
-  const slot = done ? stats.current_slot : stats.open_slot;
-  if (!slot) return { html: '<p class="note-line">כל שקילות התוכנית מולאו.</p>', slot: null };
-
-  const days = Math.round((Date.parse(slot) - Date.parse(stats.today)) / 86400000);
-  const when = days === 0 ? 'היום' : days === 1 ? 'מחר'
-    : days > 1 ? `בעוד ${nf(days)} ימים` : 'התאריך עבר, אפשר עדיין למלא';
-
-  return {
-    slot,
-    html: `
-      <div class="weighin-strip ${done ? 'is-done' : ''}">
-        <div class="weighin-when">
-          <div class="kicker">${done ? 'השקילה של השבוע' : 'השקילה הבאה'}</div>
-          <div class="weighin-date">יום שלישי, ${fmtDate(slot)}</div>
-          <div class="note-line">${done ? 'נשמרה. אפשר לתקן את המספר כאן.' : `${when}. שוקלים בבוקר, לפני האוכל.`}</div>
-        </div>
-        ${!done && days >= 0
-          ? `<div class="weighin-count"><div class="val">${nf(days)}</div><div class="cap">${days === 1 ? 'יום' : 'ימים'}</div></div>`
-          : ''}
-        <div class="weighin-input">
-          <label for="wg">משקל · ק״ג</label>
-          <input class="input" id="wg" type="number" min="20" max="400" step="0.1" data-weighin
-                 value="${done ? stats.current_slot_weight : ''}" placeholder="${stats.weight_latest ?? '—'}" />
-        </div>
-      </div>`,
-  };
-}
-
 /**
  * The last seven days as one form. Reporting a day at a time meant a missed evening was
  * a hole nobody went back to fill; here the whole week is on screen, the gaps are visible
@@ -184,10 +152,9 @@ function weekModel(stats) {
   };
 }
 
-function weekReport(week, me, stats) {
+function weekReport(week, me) {
   const from = week.days[week.days.length - 1].date;
   const goal = me.weekly_workouts_goal;
-  const weighIn = weighInStrip(stats);
 
   return `
     <section class="panel bp week-panel">
@@ -196,8 +163,7 @@ function weekReport(week, me, stats) {
         <h3>הדיווח השבועי</h3>
         <span class="when">${ltr(`${shortDate(from)} - ${shortDate(week.days[0].date)}`)}</span>
       </header>
-      ${weighIn.html}
-      ${weighIn.slot ? `<input type="hidden" id="weighin-date" value="${weighIn.slot}" />` : ''}
+
       <div class="week-summary">
         <div><div class="val accent">${ltr(`${nf(week.workouts)}/${nf(goal)}`)}</div><div class="cap">אימוני כוח · 7 ימים</div></div>
         <div><div class="val">${nf(week.avgProtein)}</div><div class="cap">ממוצע חלבון ליום · ג׳</div></div>
@@ -236,9 +202,8 @@ function weekReport(week, me, stats) {
           </tbody>
         </table>
       </div>
-      <button type="button" id="week-save" class="btn btn-primary btn-block">שמירת הדיווח השבועי</button>
+      <button type="button" id="week-save" class="btn btn-primary btn-block">שמירת הדיווח</button>
       <p class="note-line" style="margin-top:var(--space-3)">
-        כפתור אחד שומר את הכול: השקילה של השבוע והימים שמילאת.
         יעד אימוני הכוח הוא מינימום ${goal} בשבעה ימים.
       </p>
     </section>`;
@@ -400,7 +365,9 @@ async function viewDashboard(el) {
         <p class="coach-note">${esc(stats.coach_note)}</p>
       </section>` : ''}
 
-    ${weekReport(week, me, stats)}
+    ${weighInPlan(stats)}
+
+    ${weekReport(week, me)}
 
     <div class="sec">
       <div class="kicker">איפה אתה עומד</div>
@@ -426,8 +393,6 @@ async function viewDashboard(el) {
         ${tipRotator(tips, goal.goal_kg)}
       </div>
     </div>
-
-    ${weighInPlan(stats)}
 
     <div class="sec">
       <div class="kicker">מסרים</div>
@@ -495,14 +460,7 @@ async function viewDashboard(el) {
       };
     }).filter(Boolean);
 
-    // The weigh-in rides on the same button: one submission a week covers the number on
-    // the scale and the days behind it.
-    const weighInput = el.querySelector('[data-weighin]');
-    const weighDate = el.querySelector('#weighin-date')?.value;
-    const weight = weighInput?.value.trim();
-    const weighChanged = !!(weight && weighDate && Number(weight) !== stats.current_slot_weight);
-
-    if (!changed.length && !weighChanged) {
+    if (!changed.length) {
       toast('אין שינוי לשמור');
       button.disabled = false;
       return;
@@ -513,11 +471,6 @@ async function viewDashboard(el) {
       let last = null;
       const badges = [];
 
-      if (weighChanged) {
-        last = await api('/weigh-ins', { method: 'POST', body: { date: weighDate, weight } });
-        gained += last.points_gained || 0;
-        badges.push(...(last.new_badges || []));
-      }
       for (const body of changed) {
         last = await api('/logs', { method: 'PUT', body });
         gained += last.points_gained || 0;
@@ -525,10 +478,7 @@ async function viewDashboard(el) {
       }
 
       state.me = last.profile;
-      const parts = [];
-      if (weighChanged) parts.push('השקילה');
-      if (changed.length) parts.push(`${nf(changed.length)} ימים`);
-      toast(`נשמר: ${parts.join(' ו-')}${gained > 0 ? ` · ${nf(gained)} נקודות` : ''}`);
+      toast(`נשמרו ${nf(changed.length)} ימים${gained > 0 ? ` · ${nf(gained)} נקודות` : ''}`);
       badges.forEach((badge, i) => {
         setTimeout(() => toast(`תג חדש: ${badge.name}`), 1600 * (i + 1));
       });
@@ -552,6 +502,22 @@ async function viewDashboard(el) {
       loadThread();
     } catch (err) {
       toast(err.message, true);
+    }
+  });
+
+  el.querySelector('#start-weight-save')?.addEventListener('click', async (e) => {
+    const button = e.currentTarget;
+    button.disabled = true;
+    try {
+      await api('/me/start-weight', {
+        method: 'PUT',
+        body: { start_weight: el.querySelector('#start-weight').value.trim() },
+      });
+      toast('משקל ההתחלה נשמר');
+      render();
+    } catch (err) {
+      toast(err.message, true);
+      button.disabled = false;
     }
   });
 
@@ -613,22 +579,38 @@ function weighInPlan(stats) {
 
   return `
     <div class="sec">
-      <div class="kicker">לוח השקילות</div>
+      <div class="kicker">יעדי השקילה</div>
       <h2>כל יום שלישי בבוקר, ${rows.length} שבועות</h2>
       <p>השקילה הראשונה ב-${fmtDate(first.date)}, ומשם כל יום שלישי עוקב.
-         שוקלים בבוקר, לפני האוכל ואחרי השירותים, ורושמים כאן.
-         ${next ? `הבאה בתור: ${fmtDate(next.date)}.` : 'כל השקילות מולאו.'}
-         התאריך של כל שורה מוכן מראש, ואפשר לשנות אותו לכל יום באותו שבוע.</p>
+         שוקלים בבוקר, לפני האוכל ואחרי השירותים, וממלאים את השורה.
+         ${next ? `השורה המסומנת היא הבאה בתור: ${fmtDate(next.date)}.` : 'כל השקילות מולאו.'}
+         אפשר להזיז את התאריך לכל יום באותו שבוע, ולהשלים שבוע שפוספס.</p>
     </div>
 
-    ${statBlock([
-      { value: startW ? nf(startW, 1) : '-', cap: 'משקל התחלתי · ק״ג' },
-      { value: stats.weight_change === null ? '-' : ltr(signed(stats.weight_change)), cap: 'שינוי · ק״ג', accent: true },
-      { value: ltr(`${done}/${rows.length}`), cap: 'שקילות שמולאו' },
-    ])}
+    <section class="panel bp start-weight">
+      ${corners()}
+      <div>
+        <div class="label">משקל התחלתי</div>
+        <p class="note-line">${stats.start_weight_set
+          ? 'זה המשקל שממנו נמדד היעד שלך. אפשר לתקן אותו.'
+          : 'המשקל שממנו התחלת. ממנו נגזר היעד של עשרה אחוזים, ולפיו נספרת הירידה.'}</p>
+      </div>
+      <div class="start-weight-form">
+        <input class="input" id="start-weight" type="number" min="20" max="400" step="0.1"
+               value="${startW ?? ''}" placeholder="ק״ג" aria-label="משקל התחלתי בקילוגרמים" />
+        <button type="button" id="start-weight-save" class="btn btn-secondary">שמירה</button>
+      </div>
+      ${stats.target_weight ? `
+        <p class="note-line start-weight-target">היעד שלך: ${ltr(nf(stats.target_weight, 1))} ק״ג,
+          ירידה של ${ltr(nf(stats.target_loss, 1))} ק״ג.</p>` : ''}
+    </section>
 
     <section class="panel bp">
       ${corners()}
+      <header>
+        <h3>לוח השקילות</h3>
+        <span class="when">${ltr(`${done}/${rows.length}`)} מולאו</span>
+      </header>
       <div class="table-wrap">
         <table class="table plan-table">
           <thead><tr><th>שבוע</th><th>תאריך השקילה</th><th>משקל · ק״ג</th><th>שינוי</th><th></th></tr></thead>
@@ -637,9 +619,9 @@ function weighInPlan(stats) {
               const prev = [...rows.slice(0, i)].reverse().find((x) => x.weight !== null);
               const diff = r.weight !== null && prev ? Number((r.weight - prev.weight).toFixed(1)) : null;
               const state = r.weight !== null ? 'is-done'
-                : r.is_current ? 'is-now'
-                : !r.is_open ? 'is-ahead'
-                : 'is-missed';
+                : r.date === next?.date ? 'is-now'
+                : r.is_past ? 'is-missed'
+                : 'is-ahead';
               return `
                 <tr class="${state}" data-slot="${r.date}">
                   <td class="plan-n">${r.n}</td>
@@ -647,7 +629,8 @@ function weighInPlan(stats) {
                     <input class="input input-sm" type="date" value="${r.logged_date || r.date}"
                            min="${r.week_from}" max="${r.week_to}" data-plan-date
                            aria-label="תאריך השקילה לשבוע ${r.n}" ${r.is_open ? '' : 'disabled'} />
-                    ${r.is_current ? '<span class="tag tag-accent">השבוע</span>' : ''}
+                    ${r.date === next?.date ? '<span class="tag tag-accent">הבאה</span>'
+                      : r.is_current ? '<span class="tag tag-accent">השבוע</span>' : ''}
                   </td>
                   <td>
                     <input class="input input-sm" type="number" min="20" max="400" step="0.1"
