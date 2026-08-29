@@ -668,7 +668,12 @@ app.post('/api/posts/:id/generate-image', requireEditor, asyncRoute(async (req, 
       {
         method: 'POST',
         headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          // Asking in the prompt is not enough: without this the model returns a
+          // square, which the 16:7 header would then crop through the middle.
+          generationConfig: { imageConfig: { aspectRatio: '16:9' } },
+        }),
         signal: AbortSignal.timeout(90_000),
       }
     );
@@ -703,7 +708,8 @@ app.get('/api/posts/:id/image', asyncRoute((req, res) => {
   if (!post || !post.image_url) throw fail('אין תמונה', 404);
   const path = join(uploadsDir, post.image_url);
   if (!existsSync(path)) throw fail('אין תמונה', 404);
-  res.setHeader('Cache-Control', 'public, max-age=300');
+  // A replacement image gets a fresh filename, so this can be cached hard.
+  res.setHeader('Cache-Control', 'public, max-age=86400');
   res.sendFile(path);
 }));
 
