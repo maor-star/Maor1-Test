@@ -12,6 +12,12 @@ import type {
  * upserts in batches, and can be resumed from a cursor. Owner ids are resolved
  * to names once per run rather than per record — the CRM has a handful of
  * owners and 60,000+ companies.
+ *
+ * One rule matters more than the rest now that HubSpot is being wound down: a
+ * row that has been edited or archived in the cockpit is never overwritten. The
+ * upsert's WHERE clause enforces it, so it holds for every future run without
+ * anyone having to remember it. The cockpit is the book; this is a one-way
+ * import into it.
  */
 
 const BATCH = 200;
@@ -66,6 +72,8 @@ async function upsertCompanies(rows: HubSpotCompany[], owners: Map<string, strin
         hsUpdatedAt: sql`excluded.hs_updated_at`,
         syncedAt: sql`excluded.synced_at`,
       },
+      // Edited here, or archived here — leave it alone, for good.
+      setWhere: sql`${crmCompanies.editedAt} is null and ${crmCompanies.archivedAt} is null`,
     });
 
   return values.length;
@@ -112,6 +120,7 @@ async function upsertContacts(rows: HubSpotContact[], owners: Map<string, string
         hsUpdatedAt: sql`excluded.hs_updated_at`,
         syncedAt: sql`excluded.synced_at`,
       },
+      setWhere: sql`${crmContacts.editedAt} is null and ${crmContacts.archivedAt} is null`,
     });
 
   return values.length;

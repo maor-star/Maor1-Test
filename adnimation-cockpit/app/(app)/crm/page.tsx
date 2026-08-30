@@ -4,6 +4,9 @@ import {
   listContacts, stageLabel, type CrmFilter,
 } from '@/lib/crm/queries';
 import { contactName } from '@/lib/integrations/hubspot';
+import { companySuggestions } from '@/lib/crm/mutations';
+import { ArchiveButton, EditCompany, EditContact } from '@/components/crm/record-forms';
+import { AddCrmRecord } from '@/components/crm/add-record';
 import { fmtDateTime, fmtNumber } from '@/lib/utils';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
@@ -23,6 +26,8 @@ interface SearchParams {
   country?: string;
   industry?: string;
   people?: string;
+  source?: string;
+  archived?: string;
   page?: string;
 }
 
@@ -57,12 +62,25 @@ export default async function CrmPage({
     country: sp.country,
     industry: sp.industry,
     withContacts: sp.people === '1',
+    source: sp.source,
+    archived: sp.archived === '1',
     page,
   };
 
-  const [summary, options] = await Promise.all([crmSummary(), crmFilterOptions()]);
-  const filtered =
-    Boolean(sp.q || sp.stage || sp.owner || sp.country || sp.industry || sp.people);
+  const [summary, options, companies] = await Promise.all([
+    crmSummary(),
+    crmFilterOptions(),
+    // Only needed by the contacts form, and it is 800 names — do not pay for it
+    // while looking at the companies list.
+    view === 'contacts' ? companySuggestions() : Promise.resolve<string[]>([]),
+  ]);
+  const vocab = {
+    stages: [...STAGE_ORDER].map((v) => ({ value: v as string, label: stageLabel(v) })),
+    owners: options.owners.map((o) => o.value),
+  };
+  const filtered = Boolean(
+    sp.q || sp.stage || sp.owner || sp.country || sp.industry || sp.people || sp.source || sp.archived,
+  );
 
   return (
     <div className="space-y-5">
@@ -71,7 +89,7 @@ export default async function CrmPage({
         title="CRM"
         action={
           <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
-            SOURCE: HUBSPOT · COPIED INTO THE COCKPIT
+            THE BOOK LIVES HERE · HUBSPOT IS ONLY WHERE IT CAME FROM
           </span>
         }
       />
@@ -96,11 +114,8 @@ export default async function CrmPage({
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-4">
           <Figure label="COMPANIES" value={fmtNumber(summary.companies)} big />
           <Figure label="CONTACTS" value={fmtNumber(summary.contacts)} big />
-          <Figure label="CONTACTS WITH EMAIL" value={fmtNumber(summary.contactsWithEmail)} />
-          <Figure
-            label="OWNERS"
-            value={fmtNumber(summary.owners.length)}
-          />
+          <Figure label="ADDED OR EDITED HERE" value={fmtNumber(summary.ownedHere)} />
+          <Figure label="ARCHIVED" value={fmtNumber(summary.archived)} />
         </div>
 
         {summary.byStage.length > 0 ? (
@@ -143,6 +158,8 @@ export default async function CrmPage({
           {sp.country ? <input type="hidden" name="country" value={sp.country} /> : null}
           {sp.industry ? <input type="hidden" name="industry" value={sp.industry} /> : null}
           {sp.people ? <input type="hidden" name="people" value={sp.people} /> : null}
+          {sp.source ? <input type="hidden" name="source" value={sp.source} /> : null}
+          {sp.archived ? <input type="hidden" name="archived" value={sp.archived} /> : null}
           <label className="sr-only" htmlFor="crm-search">
             Search the CRM
           </label>
@@ -173,16 +190,26 @@ export default async function CrmPage({
 
       <CrmFilters sp={sp} view={view} options={options} />
 
+      <AddCrmRecord view={view} vocab={vocab} companies={companies} />
+
       {view === 'companies' ? (
-        <Companies filter={filter} sp={sp} />
+        <Companies filter={filter} sp={sp} vocab={vocab} />
       ) : (
-        <Contacts filter={filter} sp={sp} />
+        <Contacts filter={filter} sp={sp} vocab={vocab} companies={companies} />
       )}
     </div>
   );
 }
 
-async function Companies({ filter, sp }: { filter: CrmFilter; sp: SearchParams }) {
+async function Companies({
+  filter,
+  sp,
+  vocab,
+}: {
+  filter: CrmFilter;
+  sp: SearchParams;
+  vocab: { stages: { value: string; label: string }[]; owners: string[] };
+}) {
   const { rows, total, page } = await listCompanies(filter);
   const contacts = await contactsForCompanies(rows.map((r) => r.hubspotId));
 
@@ -218,10 +245,20 @@ async function Companies({ filter, sp }: { filter: CrmFilter; sp: SearchParams }
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    {c.source === 'local' ? (
+                      <Tag tone="accent" title="Created here, never in HubSpot">
+                        ADDED HERE
+                      </Tag>
+                    ) : c.editedAt ? (
+                      <Tag tone="outline" title="Edited here — no sync will overwrite it">
+                        EDITED HERE
+                      </Tag>
+                    ) : null}
                     {c.ownerName ? <Tag tone="outline">{c.ownerName}</Tag> : null}
                     <Tag tone={c.lifecycleStage === 'customer' ? 'ok' : 'neutral'}>
                       {stageLabel(c.lifecycleStage)}
                     </Tag>
+                    <ArchiveButton id={c.hubspotId} kind="company" archived={c.archivedAt !== null} />
                   </div>
                 </div>
 
@@ -245,6 +282,10 @@ async function Companies({ filter, sp }: { filter: CrmFilter; sp: SearchParams }
                     NOT YET COPIED
                   </p>
                 ) : null}
+
+                <div className="mt-2">
+                  <EditCompany company={c} vocab={vocab} />
+                </div>
               </li>
             );
           })}
@@ -256,7 +297,17 @@ async function Companies({ filter, sp }: { filter: CrmFilter; sp: SearchParams }
   );
 }
 
-async function Contacts({ filter, sp }: { filter: CrmFilter; sp: SearchParams }) {
+async function Contacts({
+  filter,
+  sp,
+  vocab,
+  companies,
+}: {
+  filter: CrmFilter;
+  sp: SearchParams;
+  vocab: { stages: { value: string; label: string }[]; owners: string[] };
+  companies: string[];
+}) {
   const { rows, total, page } = await listContacts(filter);
 
   return (
@@ -273,58 +324,51 @@ async function Contacts({ filter, sp }: { filter: CrmFilter; sp: SearchParams })
         />
       </div>
 
-      {/* Phone: a card per contact. Desktop: the table. */}
-      <ul className="lg:hidden">
+      {/* One row per contact, dense on a wide screen and stacked on a phone.
+          A table would scan better but cannot hold an edit form inside a row. */}
+      <ul>
         {rows.map((p) => (
-          <li key={`m:${p.hubspotId}`} className="border-t border-divider px-[18px] py-3">
-            <div className="flex items-start justify-between gap-3">
+          <li key={p.hubspotId} className="border-t border-divider px-[18px] py-3">
+            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
               <div className="min-w-0">
-                <p className="truncate font-cond text-[16px] text-neutral-900">{contactName(p)}</p>
-                <p className="hud-label mt-0.5 text-[9px]">{p.companyName ?? 'NO COMPANY'}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-cond text-[16px] leading-none text-neutral-900">
+                    {contactName(p)}
+                  </p>
+                  {p.source === 'local' ? (
+                    <Tag tone="accent" title="Created here, never in HubSpot">
+                      ADDED HERE
+                    </Tag>
+                  ) : p.editedAt ? (
+                    <Tag tone="outline" title="Edited here — no sync will overwrite it">
+                      EDITED HERE
+                    </Tag>
+                  ) : null}
+                  <Tag tone="neutral">{stageLabel(p.lifecycleStage)}</Tag>
+                </div>
+                <p className="hud-label mt-1 whitespace-normal text-[9px]">
+                  {[p.companyName, p.jobTitle].filter(Boolean).join(' · ') || 'NO COMPANY'}
+                </p>
+                <p className="mt-1 break-words text-[12px] text-neutral-600">
+                  {p.email ? <Num>{p.email}</Num> : null}
+                  {p.email && p.phone ? ' · ' : null}
+                  {p.phone ? <Num>{p.phone}</Num> : null}
+                  {!p.email && !p.phone ? 'No contact details' : null}
+                </p>
               </div>
-              <Tag tone="neutral">{stageLabel(p.lifecycleStage)}</Tag>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {p.ownerName ? <Tag tone="outline">{p.ownerName}</Tag> : null}
+                <ArchiveButton id={p.hubspotId} kind="contact" archived={p.archivedAt !== null} />
+              </div>
             </div>
-            <p className="mt-1 truncate font-semi text-[11px] text-neutral-600">
-              {[p.jobTitle, p.email, p.phone].filter(Boolean).join(' · ') || 'NO CONTACT DETAILS'}
-            </p>
+
+            <div className="mt-2">
+              <EditContact contact={p} vocab={vocab} companies={companies} />
+            </div>
           </li>
         ))}
       </ul>
-
-      <div className="hidden min-w-0 overflow-x-auto lg:block">
-        <table className="cockpit-table">
-          <thead>
-            <tr>
-              <th className="w-[22%]">Contact</th>
-              <th>Company</th>
-              <th>Title</th>
-              <th>Email</th>
-              <th>Phone</th>
-              <th>Owner</th>
-              <th className="text-end">Stage</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.hubspotId}>
-                <td className="whitespace-normal font-cond text-[15px] text-neutral-900">
-                  {contactName(p)}
-                </td>
-                <td className="text-neutral-600">{p.companyName ?? '—'}</td>
-                <td className="text-neutral-500">{p.jobTitle ?? '—'}</td>
-                <td className="text-neutral-500">
-                  {p.email ? <Num>{p.email}</Num> : '—'}
-                </td>
-                <td className="text-neutral-500">{p.phone ? <Num>{p.phone}</Num> : '—'}</td>
-                <td className="text-neutral-500">{p.ownerName ?? '—'}</td>
-                <td className="text-end">
-                  <Tag tone="neutral">{stageLabel(p.lifecycleStage)}</Tag>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
 
       {rows.length === 0 ? (
         <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
@@ -446,6 +490,16 @@ function CrmFilters({
         />
       ) : null}
 
+      <FilterChips
+        label="ORIGIN"
+        options={[
+          { value: 'local', label: 'ADDED HERE' },
+          { value: 'hubspot', label: 'FROM HUBSPOT' },
+        ]}
+        active={sp.source}
+        hrefFor={(v) => keep(sp, view, { source: v })}
+      />
+
       {view === 'companies' ? (
         <Link
           href={keep(sp, view, { people: sp.people === '1' ? undefined : '1' })}
@@ -458,6 +512,17 @@ function CrmFilters({
           Has a contact
         </Link>
       ) : null}
+
+      <Link
+        href={keep(sp, view, { archived: sp.archived === '1' ? undefined : '1' })}
+        className={`px-2 py-1 font-semi text-[10px] uppercase tracking-[0.14em] ${
+          sp.archived === '1'
+            ? 'bg-accent text-ground'
+            : 'border border-divider text-neutral-500 hover:text-accent'
+        }`}
+      >
+        Archived
+      </Link>
     </div>
   );
 }

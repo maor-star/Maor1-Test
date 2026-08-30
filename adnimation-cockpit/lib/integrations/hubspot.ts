@@ -162,13 +162,104 @@ export function contactName(c: {
   return full || c.email || 'Unnamed contact';
 }
 
+const refreshSchema = z.object({
+  oauthAccessToken: z.string().min(1),
+  expiresAtMillis: z.number().optional(),
+  expiresIn: z.number().optional(),
+  hubId: z.union([z.string(), z.number()]).transform(String).optional(),
+  portalId: z.union([z.string(), z.number()]).transform(String).optional(),
+  scopeGroups: z.array(z.string()).optional(),
+  scopes: z.array(z.string()).optional(),
+});
+
+export interface HubSpotIdentity {
+  portalId: string | null;
+  scopes: string[];
+}
+
+/** How the adapter gets a bearer token, and what it can say about itself. */
+interface TokenSource {
+  token(): Promise<string>;
+  identity(): Promise<HubSpotIdentity>;
+}
+
+/**
+ * A personal access key is an encoded refresh token — the same credential the
+ * HubSpot CLI stores in hubspot.config.yml. It is not a bearer token: it is
+ * exchanged for a short-lived access token at the endpoint the CLI itself uses,
+ * and that token is what the API accepts.
+ *
+ * The exchange is cached until a minute before expiry, so a sync that runs for
+ * an hour across sixty thousand companies renews once rather than per call.
+ */
+function personalKeySource(key: string): TokenSource {
+  let cached: { value: string; expiresAt: number } | null = null;
+  let identity: HubSpotIdentity = { portalId: null, scopes: [] };
+
+  const exchange = async () => {
+    const res = await fetch(`${API}/localdevauth/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ encodedOAuthRefreshToken: key }),
+    });
+    if (!res.ok) {
+      throw new Error(
+        `hubspot could not exchange the personal access key: http_${res.status}. ` +
+          'The key belongs to one user and one portal, and can be regenerated in ' +
+          'HubSpot under Integrations, Private Apps, Personal Access Key.',
+      );
+    }
+
+    const body = refreshSchema.parse(await res.json());
+    identity = {
+      portalId: body.hubId ?? body.portalId ?? null,
+      scopes: body.scopeGroups ?? body.scopes ?? [],
+    };
+    cached = {
+      value: body.oauthAccessToken,
+      expiresAt: body.expiresAtMillis ?? Date.now() + (body.expiresIn ?? 1800) * 1000,
+    };
+    return cached.value;
+  };
+
+  return {
+    async token() {
+      if (cached && cached.expiresAt > Date.now() + 60_000) return cached.value;
+      return exchange();
+    },
+    async identity() {
+      if (!cached) await exchange();
+      return identity;
+    },
+  };
+}
+
+/** A private-app access token is already a bearer token; nothing to exchange. */
+function staticTokenSource(token: string): TokenSource {
+  return {
+    async token() {
+      return token;
+    },
+    async identity() {
+      return { portalId: null, scopes: [] };
+    },
+  };
+}
+
 class RealHubSpotAdapter implements HubSpotAdapter {
   readonly name = 'hubspot' as const;
 
-  constructor(private readonly token: string) {}
+  constructor(private readonly source: TokenSource) {}
 
-  private headers() {
-    return { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' };
+  identity() {
+    return this.source.identity();
+  }
+
+  private async headers() {
+    return {
+      Authorization: `Bearer ${await this.source.token()}`,
+      'Content-Type': 'application/json',
+    };
   }
 
   private async page<T>(
@@ -183,8 +274,11 @@ class RealHubSpotAdapter implements HubSpotAdapter {
     url.searchParams.set('properties', properties.join(','));
     if (after) url.searchParams.set('after', after);
 
-    const res = await fetch(url, { headers: this.headers() });
-    if (!res.ok) throw new Error(`hubspot ${path} failed: http_${res.status}`);
+    const res = await fetch(url, { headers: await this.headers() });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`hubspot ${path} failed: http_${res.status} ${detail.slice(0, 200)}`);
+    }
 
     const body = pageSchema.parse(await res.json());
     const rows: T[] = [];
@@ -212,7 +306,7 @@ class RealHubSpotAdapter implements HubSpotAdapter {
       url.searchParams.set('limit', '100');
       if (after) url.searchParams.set('after', after);
 
-      const res = await fetch(url, { headers: this.headers() });
+      const res = await fetch(url, { headers: await this.headers() });
       if (!res.ok) throw new Error(`hubspot owners failed: http_${res.status}`);
 
       const body = z
@@ -289,8 +383,20 @@ export class FakeHubSpotAdapter implements HubSpotAdapter {
   }
 }
 
+/**
+ * Either credential works: a private-app access token, or the personal access
+ * key a user generates for themselves. The key is preferred when both are set,
+ * because it is the one tied to a person and therefore the one whose scopes can
+ * be checked against what the sync actually needs.
+ */
 export function createHubSpotAdapter(): HubSpotAdapter {
+  if (process.env.USE_FAKE_INTEGRATIONS === '1') return new FakeHubSpotAdapter();
+
+  const key = process.env.HUBSPOT_PERSONAL_ACCESS_KEY;
+  if (key) return new RealHubSpotAdapter(personalKeySource(key));
+
   const token = process.env.HUBSPOT_ACCESS_TOKEN;
-  if (process.env.USE_FAKE_INTEGRATIONS === '1' || !token) return new FakeHubSpotAdapter();
-  return new RealHubSpotAdapter(token);
+  if (token) return new RealHubSpotAdapter(staticTokenSource(token));
+
+  return new FakeHubSpotAdapter();
 }

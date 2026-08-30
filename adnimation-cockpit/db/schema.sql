@@ -674,11 +674,20 @@ CREATE TABLE crm_companies (
   contact_count     INTEGER NOT NULL DEFAULT 0,
   hs_created_at     TIMESTAMPTZ,
   hs_updated_at     TIMESTAMPTZ,
-  synced_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+  synced_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- The CRM is the book itself, not a mirror: source marks where a record came
+  -- from, edited_at freezes it against future syncs once a person has touched
+  -- it here, and archived_at retires a record without deleting it.
+  source            TEXT NOT NULL DEFAULT 'hubspot',
+  notes             TEXT,
+  edited_at         TIMESTAMPTZ,
+  edited_by         TEXT,
+  archived_at       TIMESTAMPTZ
 );
 CREATE INDEX idx_crm_companies_name ON crm_companies (lower(name));
 CREATE INDEX idx_crm_companies_stage ON crm_companies (lifecycle_stage);
 CREATE INDEX idx_crm_companies_updated ON crm_companies (hs_updated_at DESC);
+CREATE INDEX idx_crm_companies_live ON crm_companies (archived_at, name);
 
 CREATE TABLE crm_contacts (
   hubspot_id        TEXT PRIMARY KEY,
@@ -695,11 +704,20 @@ CREATE TABLE crm_contacts (
   last_activity_at  TIMESTAMPTZ,
   hs_created_at     TIMESTAMPTZ,
   hs_updated_at     TIMESTAMPTZ,
-  synced_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+  synced_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- The CRM is the book itself, not a mirror: source marks where a record came
+  -- from, edited_at freezes it against future syncs once a person has touched
+  -- it here, and archived_at retires a record without deleting it.
+  source            TEXT NOT NULL DEFAULT 'hubspot',
+  notes             TEXT,
+  edited_at         TIMESTAMPTZ,
+  edited_by         TEXT,
+  archived_at       TIMESTAMPTZ
 );
 CREATE INDEX idx_crm_contacts_company ON crm_contacts (company_id);
 CREATE INDEX idx_crm_contacts_email ON crm_contacts (lower(email));
 CREATE INDEX idx_crm_contacts_updated ON crm_contacts (hs_updated_at DESC);
+CREATE INDEX idx_crm_contacts_live ON crm_contacts (archived_at);
 
 -- The sales pipeline the CEO works: every client he is in touch with, with the
 -- classifications he tracks them by. Separate from crm_companies, which is a

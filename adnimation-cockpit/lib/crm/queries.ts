@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, isNotNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { crmCompanies, crmContacts, db } from '@/lib/db';
 
@@ -46,6 +46,10 @@ export interface CrmFilter {
   industry?: string;
   /** Only companies we actually have a person at. */
   withContacts?: boolean;
+  /** 'local' for records created here, 'hubspot' for copied ones. */
+  source?: string;
+  /** Retired records are hidden unless this is set — nothing is ever deleted. */
+  archived?: boolean;
   page?: number;
 }
 
@@ -65,6 +69,8 @@ function companyWhere(filter: CrmFilter) {
   if (filter.country) where.push(eq(crmCompanies.country, filter.country));
   if (filter.industry) where.push(eq(crmCompanies.industry, filter.industry));
   if (filter.withContacts) where.push(sql`${crmCompanies.contactCount} > 0`);
+  if (filter.source) where.push(eq(crmCompanies.source, filter.source));
+  where.push(filter.archived ? isNotNull(crmCompanies.archivedAt) : isNull(crmCompanies.archivedAt));
 
   return where;
 }
@@ -106,6 +112,8 @@ export async function listContacts(filter: CrmFilter = {}) {
   }
   if (filter.stage) where.push(eq(crmContacts.lifecycleStage, filter.stage));
   if (filter.owner) where.push(eq(crmContacts.ownerName, filter.owner));
+  if (filter.source) where.push(eq(crmContacts.source, filter.source));
+  where.push(filter.archived ? isNotNull(crmContacts.archivedAt) : isNull(crmContacts.archivedAt));
 
   const clause = where.length > 0 ? and(...where) : undefined;
 
@@ -130,7 +138,13 @@ export async function contactsForCompanies(companyIds: string[]) {
   const rows = await db
     .select()
     .from(crmContacts)
-    .where(and(isNotNull(crmContacts.companyId), inArray(crmContacts.companyId, companyIds)))
+    .where(
+      and(
+        isNotNull(crmContacts.companyId),
+        inArray(crmContacts.companyId, companyIds),
+        isNull(crmContacts.archivedAt),
+      ),
+    )
     .orderBy(asc(crmContacts.lastName));
 
   const byCompany = new Map<string, (typeof crmContacts.$inferSelect)[]>();
@@ -145,6 +159,9 @@ export interface CrmSummary {
   companies: number;
   contacts: number;
   contactsWithEmail: number;
+  /** Created or edited here rather than copied — what survives HubSpot going. */
+  ownedHere: number;
+  archived: number;
   lastSyncedAt: Date | null;
   byStage: { stage: string; label: string; companies: number }[];
   owners: { owner: string; companies: number }[];
@@ -153,22 +170,28 @@ export interface CrmSummary {
 export async function crmSummary(): Promise<CrmSummary> {
   const [[companies], [contacts], stages, owners] = await Promise.all([
     db
-      .select({ n: sql<number>`count(*)::int`, at: sql<Date | null>`max(synced_at)` })
+      .select({
+        n: sql<number>`count(*) filter (where archived_at is null)::int`,
+        at: sql<Date | null>`max(synced_at)`,
+        owned: sql<number>`count(*) filter (where (source = 'local' or edited_at is not null) and archived_at is null)::int`,
+        archived: sql<number>`count(*) filter (where archived_at is not null)::int`,
+      })
       .from(crmCompanies),
     db
       .select({
-        n: sql<number>`count(*)::int`,
-        withEmail: sql<number>`count(*) filter (where email is not null)::int`,
+        n: sql<number>`count(*) filter (where archived_at is null)::int`,
+        withEmail: sql<number>`count(*) filter (where email is not null and archived_at is null)::int`,
       })
       .from(crmContacts),
     db
       .select({ stage: crmCompanies.lifecycleStage, n: sql<number>`count(*)::int` })
       .from(crmCompanies)
+      .where(isNull(crmCompanies.archivedAt))
       .groupBy(crmCompanies.lifecycleStage),
     db
       .select({ owner: crmCompanies.ownerName, n: sql<number>`count(*)::int` })
       .from(crmCompanies)
-      .where(isNotNull(crmCompanies.ownerName))
+      .where(and(isNotNull(crmCompanies.ownerName), isNull(crmCompanies.archivedAt)))
       .groupBy(crmCompanies.ownerName)
       .orderBy(desc(sql`count(*)`))
       .limit(8),
@@ -180,6 +203,8 @@ export async function crmSummary(): Promise<CrmSummary> {
     companies: companies?.n ?? 0,
     contacts: contacts?.n ?? 0,
     contactsWithEmail: contacts?.withEmail ?? 0,
+    ownedHere: companies?.owned ?? 0,
+    archived: companies?.archived ?? 0,
     lastSyncedAt: companies?.at ?? null,
     byStage: stages
       .map((s) => ({
@@ -212,7 +237,7 @@ export async function crmFilterOptions(): Promise<CrmFilterOptions> {
     db
       .select({ value: column, n: sql<number>`count(*)::int` })
       .from(crmCompanies)
-      .where(isNotNull(column))
+      .where(and(isNotNull(column), isNull(crmCompanies.archivedAt)))
       .groupBy(column)
       .orderBy(desc(sql`count(*)`))
       .limit(30);

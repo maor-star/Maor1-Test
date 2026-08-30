@@ -67,6 +67,13 @@ async function main() {
   sh('cp', ['-a', '.next/standalone/.', '/tmp/cockpit-bundle/']);
   sh('cp', ['-a', '.next/static', '/tmp/cockpit-bundle/.next/static']);
   sh('cp', ['-a', 'db', '/tmp/cockpit-bundle/db']);
+  // The standalone bundle has no importable modules, so the sync jobs travel
+  // beside it as plain scripts and are installed into /opt/cockpit-jobs, which
+  // carries their one dependency.
+  sh('mkdir', ['-p', '/tmp/cockpit-bundle/jobs']);
+  for (const job of ['clickup-sync.mjs', 'hubspot-sync.mjs']) {
+    if (existsSync(`deploy/${job}`)) sh('cp', ['-a', `deploy/${job}`, '/tmp/cockpit-bundle/jobs/']);
+  }
   if (existsSync('public')) sh('cp', ['-a', 'public', '/tmp/cockpit-bundle/public']);
   if (!existsSync('/tmp/cockpit-bundle/.next/BUILD_ID')) {
     console.error('Bundle has no .next/BUILD_ID — the standalone output did not copy.');
@@ -99,6 +106,8 @@ async function main() {
     `mv /tmp/cockpit-bundle ${APP}`,
     `cp /tmp/cockpit.env ${APP}/.env && chmod 600 ${APP}/.env && rm -f /tmp/cockpit.env`,
     `touch ${APP}/READY`,
+    'mkdir -p /opt/cockpit-jobs',
+    `cp ${APP}/jobs/*.mjs /opt/cockpit-jobs/ 2>/dev/null || true`,
     // Values in .env can contain spaces, so read the one key needed rather than
     // sourcing the file — `. .env` breaks on `OWNER_NAME=Maor Davidovich`.
     `DBURL=$(grep -m1 '^DATABASE_URL=' ${APP}/.env | cut -d= -f2-)`,

@@ -258,6 +258,13 @@ export const crmCompanies = pgTable(
     hsCreatedAt: timestamptz('hs_created_at'),
     hsUpdatedAt: timestamptz('hs_updated_at'),
     syncedAt: timestamptz('synced_at').notNull().defaultNow(),
+    // 'hubspot' for a copied record, 'local' for one created here. Once
+    // editedAt is set the sync leaves the row alone — see db/migrations/0007.
+    source: text('source').notNull().default('hubspot'),
+    notes: text('notes'),
+    editedAt: timestamptz('edited_at'),
+    editedBy: text('edited_by'),
+    archivedAt: timestamptz('archived_at'),
   },
   (t) => [index('idx_crm_companies_stage').on(t.lifecycleStage)],
 );
@@ -280,6 +287,11 @@ export const crmContacts = pgTable(
     hsCreatedAt: timestamptz('hs_created_at'),
     hsUpdatedAt: timestamptz('hs_updated_at'),
     syncedAt: timestamptz('synced_at').notNull().defaultNow(),
+    source: text('source').notNull().default('hubspot'),
+    notes: text('notes'),
+    editedAt: timestamptz('edited_at'),
+    editedBy: text('edited_by'),
+    archivedAt: timestamptz('archived_at'),
   },
   (t) => [index('idx_crm_contacts_company').on(t.companyId)],
 );
