@@ -263,13 +263,20 @@ export class FakeSlackAdapter implements SlackAdapter {
  *
  * Read from the granted-scopes header on auth.test rather than by trying to
  * open a group conversation, because that attempt would create one as a side
- * effect. Cached for the life of the process — scopes change when somebody
- * reinstalls the app, not between page loads.
+ * effect.
+ *
+ * A yes is cached for the life of the process: a scope that has been granted is
+ * not taken away mid-session. A no is only cached briefly, because "no" is
+ * exactly the answer somebody is in the middle of fixing — caching it until the
+ * next deploy means granting the scope appears to do nothing.
  */
-let sharedThreadSupport: boolean | null = null;
+const NO_RECHECK_AFTER_MS = 60_000;
+
+let sharedThreads: { value: boolean; checkedAt: number } | null = null;
 
 export async function slackCanShareThreads(): Promise<boolean> {
-  if (sharedThreadSupport !== null) return sharedThreadSupport;
+  if (sharedThreads?.value) return true;
+  if (sharedThreads && Date.now() - sharedThreads.checkedAt < NO_RECHECK_AFTER_MS) return false;
 
   const token = process.env.SLACK_BOT_TOKEN;
   if (!token || !process.env.SLACK_CEO_USER_ID) return false;
@@ -278,9 +285,9 @@ export async function slackCanShareThreads(): Promise<boolean> {
     const res = await fetch('https://slack.com/api/auth.test', {
       headers: { Authorization: `Bearer ${token}` },
     });
-    const scopes = res.headers.get('x-oauth-scopes') ?? '';
-    sharedThreadSupport = scopes.split(',').includes('mpim:write');
-    return sharedThreadSupport;
+    const scopes = (res.headers.get('x-oauth-scopes') ?? '').split(',').map((s) => s.trim());
+    sharedThreads = { value: scopes.includes('mpim:write'), checkedAt: Date.now() };
+    return sharedThreads.value;
   } catch {
     return false;
   }
