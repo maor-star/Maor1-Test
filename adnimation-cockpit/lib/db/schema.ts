@@ -402,3 +402,39 @@ export type PipelineClient = typeof pipelineClients.$inferSelect;
 export type NewPipelineClient = typeof pipelineClients.$inferInsert;
 export type PipelineTouch = typeof pipelineTouches.$inferSelect;
 export type NewCrmContact = typeof crmContacts.$inferInsert;
+
+/**
+ * The company P&L by day, mirrored from the Ad Ops Architect source.
+ *
+ * This was a JSON fixture compiled into the build, which is why the numbers on
+ * screen aged: refreshing them required a redeploy. Here a timer can write it.
+ */
+export const companyDaily = pgTable('company_daily', {
+  date: date('date').primaryKey(),
+
+  pubGrossCents: moneyCents('pub_gross_cents').notNull().default(0),
+  pubSourceFeeCents: moneyCents('pub_source_fee_cents').notNull().default(0),
+  pubNetAfterFeeCents: moneyCents('pub_net_after_fee_cents').notNull().default(0),
+  pubPayoutCents: moneyCents('pub_payout_cents').notNull().default(0),
+  pubProfitCents: moneyCents('pub_profit_cents').notNull().default(0),
+  pubImpressions: moneyCents('pub_impressions').notNull().default(0),
+
+  bidderGrossCents: moneyCents('bidder_gross_cents').notNull().default(0),
+  bidderProfitCents: moneyCents('bidder_profit_cents').notNull().default(0),
+  bidderImpressions: moneyCents('bidder_impressions').notNull().default(0),
+
+  seatGrossCents: moneyCents('seat_gross_cents').notNull().default(0),
+  seatPayoutCents: moneyCents('seat_payout_cents').notNull().default(0),
+  seatProfitCents: moneyCents('seat_profit_cents').notNull().default(0),
+  seatImpressions: moneyCents('seat_impressions').notNull().default(0),
+
+  xeRevenueCents: moneyCents('xe_revenue_cents').notNull().default(0),
+  xeCostCents: moneyCents('xe_cost_cents').notNull().default(0),
+  xeProfitCents: moneyCents('xe_profit_cents').notNull().default(0),
+  xeImpressions: moneyCents('xe_impressions').notNull().default(0),
+
+  source: text('source').notNull().default('lovable'),
+  pulledAt: timestamptz('pulled_at').notNull().defaultNow(),
+});
+
+export type CompanyDaily = typeof companyDaily.$inferSelect;

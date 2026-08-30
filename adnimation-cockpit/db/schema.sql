@@ -810,3 +810,40 @@ CREATE INDEX idx_mail_recent ON mail_threads (last_message_at DESC);
 CREATE INDEX idx_mail_waiting ON mail_threads (last_message_at DESC)
   WHERE last_from_me = false AND dismissed_at IS NULL;
 CREATE INDEX idx_mail_counterpart ON mail_threads (lower(counterpart_email));
+
+-- ---------------------------------------------------------------------------
+-- The company P&L by day, mirrored from the Ad Ops Architect source.
+--
+-- Previously a JSON fixture compiled into the build, which is why the figures
+-- on screen aged: refreshing them required a redeploy. As a table, a timer can
+-- write it (deploy/revenue-sync.mjs, every three hours).
+-- ---------------------------------------------------------------------------
+create table if not exists company_daily (
+  date                      date primary key,
+
+  pub_gross_cents           bigint not null default 0,
+  pub_source_fee_cents      bigint not null default 0,
+  pub_net_after_fee_cents   bigint not null default 0,
+  pub_payout_cents          bigint not null default 0,
+  pub_profit_cents          bigint not null default 0,
+  pub_impressions           bigint not null default 0,
+
+  bidder_gross_cents        bigint not null default 0,
+  bidder_profit_cents       bigint not null default 0,
+  bidder_impressions        bigint not null default 0,
+
+  seat_gross_cents          bigint not null default 0,
+  seat_payout_cents         bigint not null default 0,
+  seat_profit_cents         bigint not null default 0,
+  seat_impressions          bigint not null default 0,
+
+  xe_revenue_cents          bigint not null default 0,
+  xe_cost_cents             bigint not null default 0,
+  xe_profit_cents           bigint not null default 0,
+  xe_impressions            bigint not null default 0,
+
+  source                    text not null default 'lovable',
+  pulled_at                 timestamptz not null default now()
+);
+
+create index if not exists company_daily_pulled_at_idx on company_daily (pulled_at desc);

@@ -1,3 +1,4 @@
+import { companyDaily, db } from '@/lib/db';
 import { rangeFor, type Period, type PeriodRange } from './periods';
 
 /**
@@ -67,12 +68,17 @@ interface Snapshot {
   lastCompleteDay: string;
   partialDay: string;
   pulledAt: string;
+  /** True when this came from the synced table rather than the built-in fixture. */
+  live: boolean;
 }
 
-let cache: Snapshot | null = null;
+/** How long a loaded snapshot is trusted before the table is read again. */
+const CACHE_MS = 60_000;
 
-async function load(): Promise<Snapshot> {
-  if (cache) return cache;
+let cache: (Snapshot & { loadedAt: number }) | null = null;
+
+/** The fixture, used only until the table has been filled by the sync job. */
+async function fromFixture(): Promise<Snapshot> {
   const snap = (await import('@/fixtures/company-daily.json')).default;
 
   const rows: Row[] = snap.rows.map((r) => ({
@@ -98,9 +104,67 @@ async function load(): Promise<Snapshot> {
 
   const partialDay = snap.partialDay;
   const lastComplete = rows.map((r) => r.date).filter((d) => d < partialDay).at(-1) ?? partialDay;
+  return { rows, partialDay, lastCompleteDay: lastComplete, pulledAt: snap.pulledAt, live: false };
+}
 
-  cache = { rows, partialDay, lastCompleteDay: lastComplete, pulledAt: snap.pulledAt };
-  return cache;
+/**
+ * The P&L, from the table the sync job writes.
+ *
+ * The fixture is the fallback, not the source. It exists so a fresh database
+ * renders something correct rather than an empty page, and so a failed sync
+ * degrades to yesterday's truth instead of a blank screen. Either way the
+ * snapshot carries `pulledAt`, and the screen shows it — a stale number that
+ * says how stale it is can still be acted on; one that pretends to be current
+ * cannot.
+ */
+async function load(): Promise<Snapshot> {
+  if (cache && Date.now() - cache.loadedAt < CACHE_MS) return cache;
+
+  let snapshot: Snapshot;
+  try {
+    const rows = await db.select().from(companyDaily).orderBy(companyDaily.date);
+    if (rows.length === 0) {
+      snapshot = await fromFixture();
+    } else {
+      const mapped: Row[] = rows.map((r) => ({
+        date: r.date,
+        pubGross: r.pubGrossCents,
+        pubSourceFee: r.pubSourceFeeCents,
+        pubNetAfterFee: r.pubNetAfterFeeCents,
+        pubPayout: r.pubPayoutCents,
+        pubProfit: r.pubProfitCents,
+        pubImpressions: r.pubImpressions,
+        bidderGross: r.bidderGrossCents,
+        bidderProfit: r.bidderProfitCents,
+        bidderImpressions: r.bidderImpressions,
+        seatGross: r.seatGrossCents,
+        seatPayout: r.seatPayoutCents,
+        seatProfit: r.seatProfitCents,
+        seatImpressions: r.seatImpressions,
+        xeRevenue: r.xeRevenueCents,
+        xeCost: r.xeCostCents,
+        xeProfit: r.xeProfitCents,
+        xeImpressions: r.xeImpressions,
+      }));
+
+      // The most recent day is always still filling in — the source keeps
+      // receiving reports for it for hours after midnight.
+      const partialDay = mapped[mapped.length - 1]?.date ?? '';
+      const lastComplete =
+        mapped.map((r) => r.date).filter((d) => d < partialDay).at(-1) ?? partialDay;
+      const pulledAt = rows
+        .reduce((a, r) => (r.pulledAt > a ? r.pulledAt : a), new Date(0))
+        .toISOString();
+
+      snapshot = { rows: mapped, partialDay, lastCompleteDay: lastComplete, pulledAt, live: true };
+    }
+  } catch {
+    // A database that cannot be reached must not blank the revenue screen.
+    snapshot = await fromFixture();
+  }
+
+  cache = { ...snapshot, loadedAt: Date.now() };
+  return snapshot;
 }
 
 /** Gross, profit and impressions for one line over a window. */
@@ -176,6 +240,8 @@ export interface CompanySummary {
   pulledAt: string;
   lastCompleteDay: string;
   partialDay: string;
+  /** False while the built-in fixture is standing in for the synced table. */
+  live: boolean;
 }
 
 function roll(
@@ -243,6 +309,7 @@ export async function summariseCompany(period: Period): Promise<CompanySummary> 
     pulledAt: snap.pulledAt,
     lastCompleteDay: snap.lastCompleteDay,
     partialDay: snap.partialDay,
+    live: snap.live,
   };
 }
 
@@ -259,6 +326,7 @@ export async function companyMeta() {
     lastCompleteDay: snap.lastCompleteDay,
     partialDay: snap.partialDay,
     pulledAt: snap.pulledAt,
+    live: snap.live,
   };
 }
 
@@ -279,5 +347,6 @@ export async function headline() {
     mtdProfitCents: mtd.company.profitCents,
     lines: yesterday.lines,
     pulledAt: yesterday.pulledAt,
+    live: yesterday.live,
   };
 }

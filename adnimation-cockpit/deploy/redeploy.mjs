@@ -74,8 +74,16 @@ async function main() {
   for (const job of [
     'clickup-sync.mjs', 'hubspot-sync.mjs', 'people-sync.mjs', 'mail-sync.mjs',
     'slack-check.mjs', 'gmail-check.mjs',
+    // revenue-sync imports revenue-source, and revenue-seed fills a fresh
+    // database from the checked-in snapshot. All three have to travel.
+    'revenue-sync.mjs', 'revenue-source.mjs', 'revenue-seed.mjs',
   ]) {
     if (existsSync(`deploy/${job}`)) sh('cp', ['-a', `deploy/${job}`, '/tmp/cockpit-bundle/jobs/']);
+  }
+  // revenue-seed reads the snapshot from disk, so it has to travel with the
+  // jobs rather than only inside the compiled app bundle.
+  if (existsSync('fixtures/company-daily.json')) {
+    sh('cp', ['-a', 'fixtures/company-daily.json', '/tmp/cockpit-bundle/jobs/']);
   }
   if (existsSync('public')) sh('cp', ['-a', 'public', '/tmp/cockpit-bundle/public']);
   if (!existsSync('/tmp/cockpit-bundle/.next/BUILD_ID')) {

@@ -9,6 +9,7 @@ import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
+import { Freshness } from '@/components/revenue/freshness';
 import { Sparkline } from '@/components/revenue/sparkline';
 import { DeltaPct } from '@/components/revenue/delta';
 
@@ -152,10 +153,12 @@ export default async function RevenuePage({
       {cut === 'category' ? <ByCategory period={period} /> : null}
       {cut === 'window' ? <ByWindow active={period} /> : null}
 
-      <p className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-        SOURCE: AD OPS ARCHITECT (LOVABLE) · READ-ONLY · PULLED <Num>{s.pulledAt}</Num> · LAST
-        COMPLETE DAY <Num>{s.lastCompleteDay}</Num> · TODAY <Num>{s.partialDay}</Num> IS PARTIAL
-      </p>
+      <Freshness
+        pulledAt={s.pulledAt}
+        lastCompleteDay={s.lastCompleteDay}
+        partialDay={s.partialDay}
+        live={s.live}
+      />
     </div>
   );
 }
