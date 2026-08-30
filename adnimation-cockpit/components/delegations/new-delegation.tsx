@@ -1,0 +1,146 @@
+'use client';
+
+import { useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { createDelegationAction } from '@/app/actions/delegations';
+import { Button } from '@/components/ui/button';
+import { Input, Label, Select, Textarea } from '@/components/ui/input';
+import { PRIORITY_META, TASK_PRIORITIES } from '@/lib/tasks/types';
+
+/**
+ * Handing something over.
+ *
+ * Sends a Slack message and, unless he says otherwise, creates the matching
+ * ClickUp task. Somebody with no Slack id cannot be sent to, so the form says
+ * so on the option rather than failing after the click.
+ */
+export function NewDelegation({
+  team,
+}: {
+  team: { id: string; name: string; email: string; slackId: string | null; role: string | null }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [errors, setErrors] = useState<Record<string, string[]>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
+
+  const reachable = team.filter((p) => p.slackId);
+
+  if (!open) {
+    return (
+      <Button type="button" size="sm" onClick={() => setOpen(true)}>
+        HAND SOMETHING OVER
+      </Button>
+    );
+  }
+
+  return (
+    <div className="w-full border border-divider p-3">
+      <form
+        ref={formRef}
+        className="space-y-2"
+        action={(formData) => {
+          startTransition(async () => {
+            const result = await createDelegationAction(formData);
+            setErrors(result.fieldErrors ?? {});
+            setFormError(result.ok ? null : (result.error ?? null));
+            setWarning(result.warning ?? null);
+            if (result.ok) {
+              formRef.current?.reset();
+              router.refresh();
+              if (!result.warning) setOpen(false);
+            }
+          });
+        }}
+      >
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="sm:col-span-2">
+            <Label htmlFor="dl-title">What are you handing over</Label>
+            <Input id="dl-title" name="title" required placeholder="Chase the Markito renewal" />
+            {errors.title ? (
+              <p className="mt-0.5 text-2xs text-destructive">{errors.title[0]}</p>
+            ) : null}
+          </div>
+
+          <div>
+            <Label htmlFor="dl-to">To</Label>
+            <Select id="dl-to" name="delegatedTo" required defaultValue="" className="w-full">
+              <option value="" disabled>
+                Pick someone
+              </option>
+              {reachable.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.role ? ` — ${p.role}` : ''}
+                </option>
+              ))}
+              {team
+                .filter((p) => !p.slackId)
+                .map((p) => (
+                  <option key={p.id} value={p.id} disabled>
+                    {p.name} — no Slack id, cannot be reached
+                  </option>
+                ))}
+            </Select>
+            {errors.delegatedTo ? (
+              <p className="mt-0.5 text-2xs text-destructive">{errors.delegatedTo[0]}</p>
+            ) : null}
+          </div>
+
+          <div>
+            <Label htmlFor="dl-due">Due</Label>
+            <Input id="dl-due" name="dueDate" type="date" />
+            {errors.dueDate ? (
+              <p className="mt-0.5 text-2xs text-destructive">{errors.dueDate[0]}</p>
+            ) : null}
+          </div>
+
+          <div>
+            <Label htmlFor="dl-priority">Priority</Label>
+            <Select id="dl-priority" name="priority" defaultValue="P2" className="w-full">
+              {TASK_PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {p} — {PRIORITY_META[p].label}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 pb-1.5 font-semi text-[11px] tracking-[0.1em] text-neutral-600">
+              <input type="checkbox" name="alsoClickUp" value="1" defaultChecked />
+              ALSO CREATE A CLICKUP TASK
+            </label>
+          </div>
+
+          <div className="sm:col-span-2 xl:col-span-4">
+            <Label htmlFor="dl-note">Context</Label>
+            <Textarea
+              id="dl-note"
+              name="note"
+              rows={2}
+              placeholder="What they need to know to actually do it"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="submit" disabled={pending}>
+            {pending ? 'SENDING…' : 'SEND IT'}
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+            CANCEL
+          </Button>
+          <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+            GOES TO THEIR SLACK — THEIR REPLY COMES BACK HERE
+          </span>
+          {formError ? <span className="text-2xs text-destructive">{formError}</span> : null}
+          {warning ? <span className="text-2xs text-sev-warning">{warning}</span> : null}
+        </div>
+      </form>
+    </div>
+  );
+}

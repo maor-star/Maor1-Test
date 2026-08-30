@@ -123,7 +123,7 @@ CREATE TABLE task_dependencies (
 CREATE TABLE delegations (
   id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_entity_type TEXT NOT NULL,
-  source_entity_id   UUID NOT NULL,
+  source_entity_id   UUID,
   task_id            UUID REFERENCES tasks(id),
   delegated_to       UUID NOT NULL REFERENCES people(id),
   clickup_task_id    TEXT,
@@ -140,7 +140,19 @@ CREATE TABLE delegations (
   reply_author       TEXT,
   reply_excerpt      TEXT,
   reply_url          TEXT,
-  replies_checked_at TIMESTAMPTZ
+  replies_checked_at TIMESTAMPTZ,
+  -- The Slack thread the conversation lives in, kept as channel + ts so a reply
+  -- can be posted into it. Plus what was handed over, how it was closed, and
+  -- how many times it has been chased.
+  slack_channel_id   TEXT,
+  slack_thread_ts    TEXT,
+  title              TEXT,
+  priority           TEXT NOT NULL DEFAULT 'P2',
+  closed_at          TIMESTAMPTZ,
+  closed_note        TEXT,
+  archived_at        TIMESTAMPTZ,
+  nudge_count        INTEGER NOT NULL DEFAULT 0,
+  last_nudge_at      TIMESTAMPTZ
 );
 CREATE INDEX idx_deleg_open ON delegations(status, last_movement_at);
 CREATE INDEX idx_deleg_unanswered ON delegations(replies_checked_at) WHERE reply_at IS NULL;

@@ -1,7 +1,10 @@
-import type { FoundReply, SlackAdapter, SlackMessage, SlackPostResult } from './types';
+import type {
+  FoundReply, SlackAdapter, SlackMessage, SlackPostResult, ThreadMessage,
+} from './types';
 
 const SLACK_API = 'https://slack.com/api/chat.postMessage';
 const SLACK_REPLIES = 'https://slack.com/api/conversations.replies';
+const SLACK_USERS = 'https://slack.com/api/users.info';
 
 /**
  * Slack permalinks carry the two things the API needs — the channel and the
@@ -59,7 +62,88 @@ class RealSlackAdapter implements SlackAdapter {
       parsed.ts && parsed.channel
         ? `https://slack.com/archives/${parsed.channel}/p${parsed.ts.replace('.', '')}`
         : null;
-    return { ok: true, messageUrl: permalink };
+    return {
+      ok: true,
+      messageUrl: permalink,
+      channelId: parsed.channel ?? null,
+      ts: parsed.ts ?? null,
+    };
+  }
+
+  /**
+   * Slack returns ids, not names. One call per unseen id, cached for the life of
+   * the adapter — a thread has a handful of participants, and resolving them
+   * per message would be a call per line.
+   */
+  private readonly names = new Map<string, string>();
+
+  private async userName(id: string | undefined): Promise<string> {
+    if (!id) return 'Unknown';
+    const cached = this.names.get(id);
+    if (cached) return cached;
+
+    const res = await fetch(`${SLACK_USERS}?user=${id}`, {
+      headers: { Authorization: `Bearer ${this.token}` },
+    });
+    const body = (await res.json().catch(() => null)) as
+      | { ok?: boolean; user?: { real_name?: string; name?: string } }
+      | null;
+    const name = body?.ok ? (body.user?.real_name ?? body.user?.name ?? id) : id;
+    this.names.set(id, name);
+    return name;
+  }
+
+  async readThread(channelId: string, threadTs: string): Promise<ThreadMessage[]> {
+    const url = `${SLACK_REPLIES}?channel=${channelId}&ts=${threadTs}&limit=200`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${this.token}` } });
+    const body = (await res.json().catch(() => null)) as {
+      ok?: boolean;
+      error?: string;
+      messages?: { user?: string; bot_id?: string; text?: string; ts?: string }[];
+    } | null;
+
+    if (!body?.ok || !body.messages) throw new Error(body?.error ?? 'slack_thread_unreadable');
+
+    const out: ThreadMessage[] = [];
+    for (const m of body.messages) {
+      if (!m.ts) continue;
+      const fromCockpit = Boolean(m.bot_id);
+      out.push({
+        ts: m.ts,
+        authorId: m.user ?? null,
+        authorName: fromCockpit ? 'Cockpit' : await this.userName(m.user),
+        text: m.text ?? '',
+        at: new Date(Number(m.ts.split('.')[0]) * 1000),
+        fromCockpit,
+      });
+    }
+    return out;
+  }
+
+  async postThreadReply(
+    channelId: string,
+    threadTs: string,
+    text: string,
+  ): Promise<SlackPostResult> {
+    const res = await fetch(SLACK_API, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+      body: JSON.stringify({ channel: channelId, thread_ts: threadTs, text, unfurl_links: false }),
+    });
+    const body = (await res.json().catch(() => null)) as
+      | { ok?: boolean; error?: string; ts?: string; channel?: string }
+      | null;
+
+    if (!body?.ok) return { ok: false, messageUrl: null, error: body?.error ?? `http_${res.status}` };
+    return {
+      ok: true,
+      messageUrl: body.ts ? `https://slack.com/archives/${channelId}/p${body.ts.replace('.', '')}` : null,
+      channelId,
+      ts: body.ts ?? null,
+    };
   }
 
   async findThreadReply(permalink: string, notFrom?: string): Promise<FoundReply | null> {
@@ -108,16 +192,38 @@ export class FakeSlackAdapter implements SlackAdapter {
     return {
       ok: true,
       messageUrl: `https://slack.test/archives/${message.target}/p${this.sent.length}`,
+      channelId: message.target,
+      ts: `${this.sent.length}.000000`,
     };
   }
 
   /** Tests set this to the reply the next probe should find. */
   nextReply: FoundReply | null = null;
+  /** And this to the conversation the next read should return. */
+  thread: ThreadMessage[] = [];
 
   async findThreadReply(): Promise<FoundReply | null> {
     const reply = this.nextReply;
     this.nextReply = null;
     return reply;
+  }
+
+  async readThread(): Promise<ThreadMessage[]> {
+    return this.thread;
+  }
+
+  async postThreadReply(channelId: string, threadTs: string, text: string): Promise<SlackPostResult> {
+    this.sent.push({ target: channelId, text });
+    const ts = `${this.sent.length}.000000`;
+    this.thread.push({
+      ts,
+      authorId: null,
+      authorName: 'Cockpit',
+      text,
+      at: new Date(),
+      fromCockpit: true,
+    });
+    return { ok: true, messageUrl: null, channelId, ts };
   }
 }
 

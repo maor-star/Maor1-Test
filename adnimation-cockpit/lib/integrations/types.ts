@@ -16,7 +16,22 @@ export interface SlackMessage {
 export interface SlackPostResult {
   ok: boolean;
   messageUrl: string | null;
+  /** The conversation the message landed in — a DM channel for a user target. */
+  channelId?: string | null;
+  /** The message timestamp, which is also the id of the thread it starts. */
+  ts?: string | null;
   error?: string;
+}
+
+/** One message in a delegation's thread, as the cockpit shows it. */
+export interface ThreadMessage {
+  ts: string;
+  authorId: string | null;
+  authorName: string;
+  text: string;
+  at: Date;
+  /** True for the cockpit's own posts, so the conversation reads correctly. */
+  fromCockpit: boolean;
 }
 
 /** A reply found somewhere else, matched back to the thing it answers. */
@@ -37,6 +52,10 @@ export interface SlackAdapter {
    * permalink because that is what the delegation stored when it posted.
    */
   findThreadReply(permalink: string, notFrom?: string): Promise<FoundReply | null>;
+  /** The whole conversation, oldest first, with names resolved. */
+  readThread(channelId: string, threadTs: string): Promise<ThreadMessage[]>;
+  /** Answer in the thread, as the cockpit's bot. */
+  postThreadReply(channelId: string, threadTs: string, text: string): Promise<SlackPostResult>;
 }
 
 export interface GmailAdapter {

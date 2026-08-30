@@ -1,32 +1,44 @@
-import { daysStuck, listOpenDelegations } from '@/lib/delegation/service';
+import Link from 'next/link';
+import { requireUser } from '@/lib/auth/session';
+import {
+  DELEGATION_VIEWS, VIEW_LABEL, delegatableTeam, delegationCounts, listDelegations,
+  type DelegationView,
+} from '@/lib/delegation/module';
 import { DELEGATION_STALE_DAYS } from '@/lib/tasks/types';
-import { fmtDateTime } from '@/lib/utils';
-import { HudCard } from '@/components/hud/card';
+import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
-import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { CheckReplies } from '@/components/delegations/check-replies';
+import { DelegationCard } from '@/components/delegations/delegation-card';
+import { NewDelegation } from '@/components/delegations/new-delegation';
 
 export const dynamic = 'force-dynamic';
 
-const STATUS_LABEL: Record<string, string> = {
-  sent: 'SENT',
-  acknowledged: 'ACKNOWLEDGED',
-  in_progress: 'IN PROGRESS',
-  stale: 'STUCK',
-  done: 'DONE',
-};
-
 /**
- * Spec 6.4 — Delegation Tracker. What I gave, to whom, when, and how long it
- * has sat. This is the screen that stops handed-off work from falling.
+ * Spec 6.4 — the delegation tracker, as somewhere work is actually run.
+ *
+ * What I gave, to whom, what came back, and what I did about it. The
+ * conversation lives in Slack and is read from there, so a reply typed in
+ * Slack and a reply typed here are the same conversation.
  */
-export default async function DelegationsPage() {
-  const rows = await listOpenDelegations();
-  const now = new Date();
-  const stuck = rows.filter((r) => r.status === 'stale').length;
-  const answered = rows.filter((r) => r.replyAt !== null).length;
-  const waiting = rows.length - answered;
+export default async function DelegationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const sp = await searchParams;
+  const view: DelegationView = DELEGATION_VIEWS.includes(sp.view as DelegationView)
+    ? (sp.view as DelegationView)
+    : 'open';
+
+  const user = await requireUser();
+  const [rows, counts, team] = await Promise.all([
+    listDelegations(view),
+    delegationCounts(),
+    delegatableTeam(user.email),
+  ]);
+
+  const unreachable = team.filter((p) => !p.slackId);
 
   return (
     <div className="space-y-5">
@@ -40,128 +52,98 @@ export default async function DelegationsPage() {
         }
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="font-semi text-[11px] tracking-[0.12em] text-neutral-500">
-          <Num>{answered}</Num> ANSWERED · <Num>{waiting}</Num> STILL WAITING · SLACK THREADS AND
-          EMAIL ARE READ FOR THE ANSWER
-        </p>
-        <CheckReplies />
-      </div>
+      <HudCard>
+        <HudCardHeader title="Handed over" index="D01" action={<NewDelegation team={team} />} />
 
-      {stuck > 0 ? (
-        <div className="border border-sev-warning/40 bg-sev-warning/10 px-4 py-2 font-semi text-[12px] tracking-[0.08em] text-sev-warning">
-          <Num>{stuck}</Num> stuck delegations need follow-up.
+        <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-5">
+          <Figure label="OPEN" value={counts.open} big />
+          <Figure label="WAITING ON THEM" value={counts.waiting} big />
+          <Figure label="ANSWERED" value={counts.answered} />
+          <Figure label="STUCK" value={counts.stuck} tone={counts.stuck > 0 ? 'warn' : undefined} />
+          <Figure label="DONE" value={counts.done} />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-divider pt-3">
+          <p className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+            SLACK THREADS AND EMAIL ARE READ FOR THE ANSWER
+          </p>
+          <CheckReplies />
+        </div>
+      </HudCard>
+
+      {unreachable.length > 0 ? (
+        <div className="border border-sev-warning/40 bg-sev-warning/10 px-4 py-2 font-semi text-[12px] tracking-[0.06em] text-sev-warning">
+          {unreachable.map((p) => p.name).join(', ')} — no Slack id on record, so nothing can be
+          delivered to them. Everyone else can be reached.
         </div>
       ) : null}
 
-      {rows.length === 0 ? (
-        <HudCard>
-          <p className="font-semi text-[12px] text-neutral-500">No open delegations.</p>
-        </HudCard>
-      ) : (
-        <HudCard className="p-0">
-          <div className="min-w-0 overflow-x-auto">
-          <table className="cockpit-table">
-            <thead>
-              <tr>
-                <th className="w-[30%]">What</th>
-                <th>Who</th>
-                <th>Status</th>
-                <th>Days quiet</th>
-                <th>Due</th>
-                <th>Delegated</th>
-                <th className="w-[22%]">Answer</th>
-                <th className="text-end">Links</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((d) => {
-                const stuckDays = daysStuck(d.lastMovementAt, now);
-                return (
-                  <tr key={d.id}>
-                    <td className="whitespace-normal font-cond text-[17px] text-neutral-900">{d.taskTitle ?? d.note ?? '—'}</td>
-                    <td className="text-neutral-500">{d.personName}</td>
-                    <td>
-                      <Tag tone={d.status === 'stale' ? 'warning' : 'outline'}>
-                        {STATUS_LABEL[d.status] ?? d.status}
-                      </Tag>
-                    </td>
-                    <td>
-                      <Num className={`font-cond text-[17px] ${stuckDays >= DELEGATION_STALE_DAYS ? 'text-sev-warning' : 'text-neutral-900'}`}>
-                        {stuckDays}
-                      </Num>
-                    </td>
-                    <td><Num className="text-neutral-500">{d.dueDate ?? '—'}</Num></td>
-                    <td><Num className="text-neutral-500">{fmtDateTime(d.delegatedAt)}</Num></td>
-                    <td className="whitespace-normal">
-                      {d.replyAt ? (
-                        <>
-                          <span className="flex flex-wrap items-center gap-2">
-                            <Tag tone="ok">{d.replyChannel === 'email' ? 'EMAIL' : 'SLACK'}</Tag>
-                            <Num className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-                              {fmtDateTime(d.replyAt)}
-                            </Num>
-                          </span>
-                          <span className="mt-1 block text-[12px] text-neutral-600">
-                            {d.replyExcerpt ? (
-                              d.replyUrl ? (
-                                <a
-                                  href={d.replyUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="hover:text-accent"
-                                >
-                                  {d.replyExcerpt.slice(0, 140)}
-                                </a>
-                              ) : (
-                                d.replyExcerpt.slice(0, 140)
-                              )
-                            ) : null}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                          {d.repliesCheckedAt ? (
-                            <>
-                              NO ANSWER · CHECKED <Num>{fmtDateTime(d.repliesCheckedAt)}</Num>
-                            </>
-                          ) : (
-                            'NOT CHECKED YET'
-                          )}
-                        </span>
-                      )}
-                    </td>
-                    <td className="text-end">
-                      <span className="flex justify-end gap-3 font-semi text-[11px] tracking-[0.12em]">
-                        {d.slackMessageUrl ? (
-                          <a href={d.slackMessageUrl} target="_blank" rel="noreferrer" className="text-accent-700 hover:text-accent">
-                            Slack ↗
-                          </a>
-                        ) : (
-                          <span className="text-destructive" title="Message was not delivered">Slack ✕</span>
-                        )}
-                        {d.clickupTaskId ? (
-                          <a
-                            href={`https://app.clickup.com/t/${d.clickupTaskId}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-accent-700 hover:text-accent"
-                          >
-                            ClickUp ↗
-                          </a>
-                        ) : (
-                          <span className="text-destructive" title="Task was not created">ClickUp ✕</span>
-                        )}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          </div>
-        </HudCard>
-      )}
+      <nav className="flex flex-wrap border border-divider">
+        {DELEGATION_VIEWS.map((v) => (
+          <Link
+            key={v}
+            href={`/delegations?view=${v}`}
+            className={`px-3 py-1 font-semi text-[11px] uppercase tracking-[0.16em] ${
+              v === view ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
+            }`}
+          >
+            {VIEW_LABEL[v]}
+          </Link>
+        ))}
+      </nav>
+
+      <HudCard className="gap-0 p-0">
+        <div className="p-[18px] pb-3">
+          <HudCardHeader
+            title={VIEW_LABEL[view]}
+            index="D02"
+            action={
+              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                <Num>{rows.length}</Num> {rows.length === 1 ? 'ITEM' : 'ITEMS'}
+              </span>
+            }
+          />
+        </div>
+
+        {rows.length === 0 ? (
+          <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+            {counts.open === 0 && counts.done === 0
+              ? 'Nothing handed over yet. Use “hand something over” above — it goes to their Slack, and their reply comes back here.'
+              : 'Nothing in this view.'}
+          </p>
+        ) : (
+          <ul>
+            {rows.map((d) => (
+              <DelegationCard key={d.id} delegation={d} />
+            ))}
+          </ul>
+        )}
+      </HudCard>
+    </div>
+  );
+}
+
+function Figure({
+  label,
+  value,
+  big = false,
+  tone,
+}: {
+  label: string;
+  value: number;
+  big?: boolean;
+  tone?: 'warn';
+}) {
+  return (
+    <div>
+      <span className="hud-label block text-[9px]">{label}</span>
+      <span
+        className={`font-cond leading-none ${big ? 'text-[30px]' : 'text-[22px]'} ${
+          tone === 'warn' ? 'text-sev-warning' : 'text-neutral-900'
+        }`}
+      >
+        <Num>{value}</Num>
+      </span>
     </div>
   );
 }

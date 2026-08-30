@@ -102,7 +102,9 @@ export const delegations = pgTable(
   {
     id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
     sourceEntityType: text('source_entity_type').notNull(),
-    sourceEntityId: uuid('source_entity_id').notNull(),
+    // Null for a delegation started from the tracker itself rather than from
+    // a task, alert or contract.
+    sourceEntityId: uuid('source_entity_id'),
     taskId: uuid('task_id').references(() => tasks.id),
     delegatedTo: uuid('delegated_to').notNull().references(() => people.id),
     clickupTaskId: text('clickup_task_id'),
@@ -120,6 +122,17 @@ export const delegations = pgTable(
     replyExcerpt: text('reply_excerpt'),
     replyUrl: text('reply_url'),
     repliesCheckedAt: timestamptz('replies_checked_at'),
+    // The Slack thread the conversation lives in — kept as channel + ts so a
+    // reply can be posted into it without re-parsing a permalink.
+    slackChannelId: text('slack_channel_id'),
+    slackThreadTs: text('slack_thread_ts'),
+    title: text('title'),
+    priority: text('priority').notNull().default('P2'),
+    closedAt: timestamptz('closed_at'),
+    closedNote: text('closed_note'),
+    archivedAt: timestamptz('archived_at'),
+    nudgeCount: integer('nudge_count').notNull().default(0),
+    lastNudgeAt: timestamptz('last_nudge_at'),
   },
   (t) => [index('idx_deleg_open').on(t.status, t.lastMovementAt)],
 );

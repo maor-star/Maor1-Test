@@ -71,7 +71,10 @@ async function main() {
   // beside it as plain scripts and are installed into /opt/cockpit-jobs, which
   // carries their one dependency.
   sh('mkdir', ['-p', '/tmp/cockpit-bundle/jobs']);
-  for (const job of ['clickup-sync.mjs', 'hubspot-sync.mjs', 'slack-check.mjs', 'gmail-check.mjs']) {
+  for (const job of [
+    'clickup-sync.mjs', 'hubspot-sync.mjs', 'people-sync.mjs',
+    'slack-check.mjs', 'gmail-check.mjs',
+  ]) {
     if (existsSync(`deploy/${job}`)) sh('cp', ['-a', `deploy/${job}`, '/tmp/cockpit-bundle/jobs/']);
   }
   if (existsSync('public')) sh('cp', ['-a', 'public', '/tmp/cockpit-bundle/public']);
