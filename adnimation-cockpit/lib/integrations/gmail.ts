@@ -179,12 +179,31 @@ export class FakeGmailAdapter implements GmailAdapter {
   }
 }
 
+/**
+ * The service-account key is JSON full of quotes and newlines, and it has to
+ * survive a systemd EnvironmentFile, which has its own opinions about both. So
+ * base64 is accepted as well as raw JSON — that is what the deploy actually
+ * stores, and raw JSON still works for anyone setting it by hand.
+ */
+export function readServiceAccountKey(raw: string): unknown {
+  const text = raw.trim().startsWith('{')
+    ? raw
+    : Buffer.from(raw, 'base64').toString('utf8');
+  return JSON.parse(text);
+}
+
 export function createGmailAdapter(): GmailAdapter {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
   const mailbox = process.env.GMAIL_MAILBOX ?? process.env.OWNER_EMAIL;
   if (process.env.USE_FAKE_INTEGRATIONS === '1' || !raw || !mailbox) return new FakeGmailAdapter();
 
-  const parsed = serviceAccountSchema.safeParse(JSON.parse(raw));
-  if (!parsed.success) return new FakeGmailAdapter();
-  return new RealGmailAdapter(parsed.data, mailbox);
+  try {
+    const parsed = serviceAccountSchema.safeParse(readServiceAccountKey(raw));
+    if (!parsed.success) return new FakeGmailAdapter();
+    return new RealGmailAdapter(parsed.data, mailbox);
+  } catch {
+    // A malformed key must not take the app down on boot — the radar simply
+    // reports itself unconfigured, which is what the screen already handles.
+    return new FakeGmailAdapter();
+  }
 }
