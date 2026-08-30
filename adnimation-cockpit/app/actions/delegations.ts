@@ -74,6 +74,7 @@ export async function createDelegationAction(formData: FormData): Promise<Action
     dueDate: str(formData.get('dueDate')),
     priority: (str(formData.get('priority')) || 'P2') as (typeof TASK_PRIORITIES)[number],
     alsoClickUp: str(formData.get('alsoClickUp')) === '1',
+    clickupListId: str(formData.get('clickupListId')),
   };
 
   try {

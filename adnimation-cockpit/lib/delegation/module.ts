@@ -179,13 +179,18 @@ export async function createDelegation(
   let clickupTaskId: string | null = null;
   let clickupError: string | undefined;
 
-  if (parsed.alsoClickUp && process.env.CLICKUP_DEFAULT_LIST_ID) {
+  const listId = parsed.clickupListId ?? process.env.CLICKUP_DEFAULT_LIST_ID ?? null;
+
+  if (parsed.alsoClickUp && listId) {
     const task = await deps.clickup
       .createTask({
-        listId: process.env.CLICKUP_DEFAULT_LIST_ID,
+        listId,
         name: parsed.title,
         description: note ?? '',
-        assigneeIds: person.clickupId ? [Number(person.clickupId)] : [],
+        // An assignee ClickUp does not consider a member of that list is
+        // rejected outright, taking the whole task with it. The task is worth
+        // more than the assignment, so a non-numeric id is simply left off.
+        assigneeIds: /^\d+$/.test(person.clickupId ?? '') ? [Number(person.clickupId)] : [],
         priority: PRIORITY_TO_CLICKUP[parsed.priority],
         dueDateMs: dueDate ? Date.parse(`${dueDate}T12:00:00Z`) : null,
         tags: ['ceo-delegation'],

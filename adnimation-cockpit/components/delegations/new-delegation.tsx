@@ -6,13 +6,15 @@ import { createDelegationAction } from '@/app/actions/delegations';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { PRIORITY_META, TASK_PRIORITIES } from '@/lib/tasks/types';
+import { CLICKUP_LIST_DEPTS } from '@/lib/sync/departments';
 
 /**
  * Handing something over.
  *
- * Sends a Slack message and, unless he says otherwise, creates the matching
- * ClickUp task. Somebody with no Slack id cannot be sent to, so the form says
- * so on the option rather than failing after the click.
+ * Sends a Slack message to that person and, unless he says otherwise, creates
+ * the matching ClickUp task in the department's list. Somebody with no Slack id
+ * cannot be sent to, so the form says so on the option rather than failing
+ * after the click.
  */
 export function NewDelegation({
   team,
@@ -109,6 +111,17 @@ export function NewDelegation({
             </Select>
           </div>
 
+          <div>
+            <Label htmlFor="dl-list">ClickUp list</Label>
+            <Select id="dl-list" name="clickupListId" defaultValue="901817617786" className="w-full">
+              {CLICKUP_LIST_DEPTS.map((l) => (
+                <option key={l.listId} value={l.listId}>
+                  {l.listName}
+                </option>
+              ))}
+            </Select>
+          </div>
+
           <div className="flex items-end">
             <label className="flex items-center gap-2 pb-1.5 font-semi text-[11px] tracking-[0.1em] text-neutral-600">
               <input type="checkbox" name="alsoClickUp" value="1" defaultChecked />
@@ -135,7 +148,7 @@ export function NewDelegation({
             CANCEL
           </Button>
           <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-            GOES TO THEIR SLACK — THEIR REPLY COMES BACK HERE
+            SENT AS A SLACK DM TO THEM — NOT TO YOU. READ IT UNDER “CONVERSATION” BELOW.
           </span>
           {formError ? <span className="text-2xs text-destructive">{formError}</span> : null}
           {warning ? <span className="text-2xs text-sev-warning">{warning}</span> : null}

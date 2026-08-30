@@ -97,7 +97,23 @@ class RealClickUpAdapter implements ClickUpAdapter {
       }),
     });
     if (!res.ok) {
-      return { ok: false, taskId: null, url: null, error: `http_${res.status}` };
+      // ClickUp says exactly what it disliked — an invalid list, an assignee
+      // who is not a member, a bad priority. Reporting only the status code
+      // turns a five-second fix into an investigation.
+      const detail = await res.text().catch(() => '');
+      let reason = detail.slice(0, 300);
+      try {
+        const parsedBody = JSON.parse(detail) as { err?: string; ECODE?: string };
+        if (parsedBody.err) reason = `${parsedBody.err}${parsedBody.ECODE ? ` (${parsedBody.ECODE})` : ''}`;
+      } catch {
+        // Not JSON — keep the raw text, which is still better than nothing.
+      }
+      return {
+        ok: false,
+        taskId: null,
+        url: null,
+        error: `http_${res.status}${reason ? `: ${reason}` : ''}`,
+      };
     }
     const task = normaliseClickUpTask(await res.json().catch(() => null));
     if (!task) return { ok: false, taskId: null, url: null, error: 'unparseable_response' };

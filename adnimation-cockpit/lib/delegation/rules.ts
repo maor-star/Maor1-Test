@@ -32,6 +32,14 @@ export const newDelegationSchema = z.object({
   priority: z.enum(TASK_PRIORITIES).default('P2'),
   /** Also create the matching ClickUp task. Off for a pure conversation. */
   alsoClickUp: z.boolean().default(true),
+  /**
+   * Which ClickUp list the task lands in — the company's departments are its
+   * lists. Unset falls back to CLICKUP_DEFAULT_LIST_ID.
+   */
+  clickupListId: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().trim().max(40).nullable(),
+  ).optional(),
 });
 
 export type NewDelegationInput = z.input<typeof newDelegationSchema>;
