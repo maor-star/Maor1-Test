@@ -71,6 +71,17 @@ const NOISE: RegExp[] = [
   /\b(out of office|automatic reply|delivery status|undeliverable)\b/i,
   /\b(conference|summit|expo|awards?)\b.*\b(register|tickets?|early bird)\b/i,
   /\b(job alert|applied|application|resume|cv)\b/i,
+  /*
+   * Platform and account notices. These read exactly like opportunities to a
+   * phrase matcher — they are about inventory, revenue and agreements — and
+   * are the opposite: something has gone wrong and needs handling now. Seen
+   * proposing "Your MCM agreement has been ended" and "Google ad serving has
+   * been restricted on your site" against the real mailbox.
+   */
+  /\b(has been (ended|restricted|suspended|disabled|paused|terminated))\b/i,
+  /\b(policy (violation|issue|centre|center)|ad serving (is|has been) restricted)\b/i,
+  /\b(account (suspended|disabled|under review)|disapproved|non-?compliant)\b/i,
+  /\b(action required|urgent action|immediate attention required)\b/i,
 ];
 
 /** Cheap sender-shape checks that catch most bulk mail before the phrases do. */

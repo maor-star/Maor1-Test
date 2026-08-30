@@ -28,6 +28,21 @@ const MAILBOX = process.env.GMAIL_MAILBOX;
 const DB = process.env.DATABASE_URL;
 const DAYS = Number(process.env.MAIL_SYNC_DAYS ?? 30);
 const MAX_THREADS = Number(process.env.MAIL_SYNC_MAX ?? 300);
+/*
+ * Deliberately NOT `in:inbox`.
+ *
+ * That was the first version and it was wrong: his inbox holds five threads
+ * where the mailbox holds four hundred over the same period, because he
+ * archives as he reads. The mirror was therefore almost empty and the
+ * "waiting on you" panel had nothing to show — it looked calm because it
+ * could not see anything, which is the worst way for a panel to be wrong.
+ *
+ * Waiting is decided by whether the last message is his, which does not need
+ * the inbox at all. Chats, spam and trash are excluded because none of them
+ * is something he owes an answer to.
+ */
+const QUERY =
+  process.env.MAIL_SYNC_QUERY ?? `newer_than:${DAYS}d -in:chats -in:spam -in:trash`;
 
 if (!RAW_KEY || !MAILBOX || !DB) {
   console.error('GOOGLE_SERVICE_ACCOUNT_KEY, GMAIL_MAILBOX and DATABASE_URL are all required.');
@@ -142,7 +157,7 @@ async function main() {
     `known: ${byEmail.size} addresses, ${byDomain.size} company domains`,
   );
 
-  const query = encodeURIComponent(`in:inbox newer_than:${DAYS}d`);
+  const query = encodeURIComponent(QUERY);
   const threads = [];
   let pageToken = '';
 
@@ -154,7 +169,7 @@ async function main() {
     pageToken = page.nextPageToken ?? '';
   } while (pageToken && threads.length < MAX_THREADS);
 
-  console.log(`${threads.length} threads in the last ${DAYS} days`);
+  console.log(`${threads.length} threads matching "${QUERY}"`);
 
   const rows = [];
   for (const ref of threads.slice(0, MAX_THREADS)) {

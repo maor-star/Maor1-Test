@@ -190,6 +190,11 @@ describe('opportunities — reading the mail', () => {
     ['an out of office', 'Automatic reply: out of office', 'I am away until Monday.'],
     ['a conference blast', 'AdTech Summit 2026', 'Register now — early bird tickets end soon.'],
     ['a job application', 'Application for Ad Ops role', 'Please find my CV attached.'],
+    // Both of these were proposed against the real mailbox before the platform
+    // notices were added to the noise set. They are problems, not opportunities.
+    ['an ended agreement', 'Your MCM agreement has been ended', 'Partner with us again to work together on inventory.'],
+    ['a serving restriction', 'Google ad serving has been restricted on your site', 'Your revenue and budget may be affected.'],
+    ['a suspension', 'Your account has been suspended', 'Working together requires a compliant integration.'],
   ])('stays silent on %s', (_label, subject, snippet) => {
     expect(detectOpportunity(mail({ subject, snippet })).isOpportunity).toBe(false);
   });
