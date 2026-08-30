@@ -3,8 +3,10 @@ import Link from 'next/link';
 import { summariseCompany } from '@/lib/revenue/company';
 import { topSeats } from '@/lib/seats/service';
 import { urgentWork, clientsToCall } from '@/lib/overview/service';
+import { listDelegations } from '@/lib/delegation/module';
+import { mailNeedingReply, mailCounts } from '@/lib/mail/service';
 import { PERIOD_LABEL } from '@/lib/revenue/periods';
-import { fmtMoney } from '@/lib/utils';
+import { fmtDateTime, fmtMoney } from '@/lib/utils';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
 import { Tag } from '@/components/hud/tag';
@@ -17,10 +19,15 @@ export const dynamic = 'force-dynamic';
 /**
  * The overview — the whole company on one screen.
  *
- * Five questions, in the order a CEO asks them: what did we make, which supply
- * is carrying us, which demand is carrying us, what is urgent, and who needs a
- * call. Everything below is a real figure from a real source; a panel with no
- * data says so rather than showing a zero that reads like a collapse.
+ * The questions a CEO asks, in order: what did we make yesterday, what is
+ * waiting on somebody, what is waiting on me, which seats are carrying us,
+ * what is urgent, and who needs a call.
+ *
+ * The two "waiting" panels come first because they are the only things here
+ * that decay: a delegation nobody answered and a mail nobody replied to both
+ * get worse by sitting. Everything below is a real figure from a real source;
+ * a panel with no data says so rather than showing a zero that reads like a
+ * collapse.
  */
 export default function OverviewPage() {
   return (
@@ -30,6 +37,15 @@ export default function OverviewPage() {
       <Suspense fallback={<Skeleton title="Profit" index="O01" />}>
         <ProfitStrip />
       </Suspense>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Suspense fallback={<Skeleton title="Waiting on the team" index="O02" />}>
+          <WaitingOnTeamCard />
+        </Suspense>
+        <Suspense fallback={<Skeleton title="Waiting on you" index="O03" />}>
+          <WaitingOnYouCard />
+        </Suspense>
+      </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
         <Suspense fallback={<Skeleton title="Strongest supply" index="O02" />}>
@@ -305,6 +321,137 @@ function Figure({ label, value, big }: { label: string; value: string; big?: boo
         <Num>{value}</Num>
       </p>
     </div>
+  );
+}
+
+/**
+ * Slack hand-offs nobody has answered. Oldest first — the one that has been
+ * sitting longest is the one most likely to have been forgotten.
+ */
+async function WaitingOnTeamCard() {
+  const rows = (await listDelegations('waiting')).sort((a, b) => b.daysQuiet - a.daysQuiet);
+  const top = rows.slice(0, 5);
+
+  return (
+    <HudCard className="gap-0 p-0">
+      <div className="p-[18px] pb-3">
+        <HudCardHeader
+          title="Waiting on the team"
+          index="O02"
+          action={
+            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+              <Num>{rows.length}</Num> UNANSWERED ·{' '}
+              <Link href="/delegations?view=waiting" className="text-accent-700 hover:text-accent">
+                ALL
+              </Link>
+            </span>
+          }
+        />
+      </div>
+
+      {top.length === 0 ? (
+        <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+          Nothing handed over is waiting for an answer.
+        </p>
+      ) : (
+        <ul>
+          {top.map((d) => (
+            <li
+              key={d.id}
+              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-divider px-[18px] py-2.5"
+            >
+              <div className="min-w-0">
+                <p className="break-words font-cond text-[15px] text-neutral-900">{d.title}</p>
+                <p className="hud-label mt-0.5 whitespace-normal text-[9px]">
+                  {d.personName}
+                  {d.nudgeCount > 0 ? ` · CHASED ${d.nudgeCount}×` : ''}
+                </p>
+              </div>
+              <div className="text-end">
+                <span className="hud-label block text-[9px]">QUIET</span>
+                <span
+                  className={`font-cond text-[19px] leading-none ${
+                    d.stuck ? 'text-sev-warning' : 'text-neutral-900'
+                  }`}
+                >
+                  <Num>{d.daysQuiet}d</Num>
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </HudCard>
+  );
+}
+
+/**
+ * Mail from somebody the company deals with, where the last word was theirs.
+ * Deliberately not the inbox: this is only the part that is on him.
+ */
+async function WaitingOnYouCard() {
+  const [rows, counts] = await Promise.all([mailNeedingReply(5), mailCounts()]);
+
+  return (
+    <HudCard className="gap-0 p-0">
+      <div className="p-[18px] pb-3">
+        <HudCardHeader
+          title="Waiting on you"
+          index="O03"
+          action={
+            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+              <Num>{counts.important}</Num> IMPORTANT ·{' '}
+              <Link href="/mail" className="text-accent-700 hover:text-accent">
+                ALL MAIL
+              </Link>
+            </span>
+          }
+        />
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+          {counts.lastSyncedAt
+            ? 'No important mail is waiting on a reply.'
+            : 'The mailbox has not been read yet — the sync runs every fifteen minutes.'}
+        </p>
+      ) : (
+        <ul>
+          {rows.map((t) => (
+            <li
+              key={t.threadId}
+              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-divider px-[18px] py-2.5"
+            >
+              <div className="min-w-0">
+                <a
+                  href={t.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="break-words font-cond text-[15px] text-neutral-900 hover:text-accent"
+                >
+                  {t.subject || '(no subject)'}
+                </a>
+                <p className="hud-label mt-0.5 whitespace-normal text-[9px]">
+                  {t.counterpartName || t.counterpartEmail}
+                  {t.knownCompany ? ` · ${t.knownCompany}` : ''} ·{' '}
+                  <Num>{fmtDateTime(t.lastMessageAt)}</Num>
+                </p>
+              </div>
+              <div className="text-end">
+                <span className="hud-label block text-[9px]">WAITING</span>
+                <span
+                  className={`font-cond text-[19px] leading-none ${
+                    t.daysWaiting >= 3 ? 'text-sev-warning' : 'text-neutral-900'
+                  }`}
+                >
+                  <Num>{t.daysWaiting}d</Num>
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </HudCard>
   );
 }
 

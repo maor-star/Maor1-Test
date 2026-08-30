@@ -1,0 +1,174 @@
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { db, mailThreads } from '@/lib/db';
+
+/**
+ * The mailbox, as the cockpit reads it.
+ *
+ * He is already in Gmail all day, so a second copy of his inbox is worth
+ * nothing. What is worth something is the part Gmail will not tell him: which
+ * conversations are waiting on *him*, and which of those are with people the
+ * company actually does business with.
+ *
+ * So the default view is not "mail". It is "the last word was theirs".
+ */
+
+export const MAIL_VIEWS = ['waiting', 'important', 'recent', 'handled'] as const;
+export type MailView = (typeof MAIL_VIEWS)[number];
+
+export const MAIL_VIEW_LABEL: Record<MailView, string> = {
+  waiting: 'NEEDS A REPLY',
+  important: 'IMPORTANT & WAITING',
+  recent: 'EVERYTHING RECENT',
+  handled: 'MARKED HANDLED',
+};
+
+export interface MailRow {
+  threadId: string;
+  subject: string | null;
+  snippet: string | null;
+  counterpartName: string | null;
+  counterpartEmail: string | null;
+  messageCount: number;
+  lastMessageAt: Date;
+  lastFromMe: boolean;
+  unread: boolean;
+  starred: boolean;
+  gmailImportant: boolean;
+  knownContact: boolean;
+  knownCompany: string | null;
+  dismissedAt: Date | null;
+  /** Days since the last message — how long they have been waiting. */
+  daysWaiting: number;
+  url: string;
+}
+
+const daysSince = (d: Date, now: Date) =>
+  Math.max(0, Math.floor((now.getTime() - d.getTime()) / 86_400_000));
+
+/**
+ * Important means somebody the company deals with, not Gmail's guess.
+ *
+ * A CRM contact, a known company domain, or a colleague. Gmail's own IMPORTANT
+ * flag counts only when it agrees with a starred thread — on its own, in a
+ * mailbox of 151,000 messages, it is noise.
+ */
+const isImportant = sql`(
+  ${mailThreads.knownContact} = true
+  or (${mailThreads.gmailImportant} = true and ${mailThreads.starred} = true)
+)`;
+
+export async function listMail(view: MailView = 'waiting', limit = 100): Promise<MailRow[]> {
+  const waiting = and(eq(mailThreads.lastFromMe, false), isNull(mailThreads.dismissedAt));
+
+  const where =
+    view === 'waiting'
+      ? waiting
+      : view === 'important'
+        ? and(waiting, isImportant)
+        : view === 'handled'
+          ? sql`${mailThreads.dismissedAt} is not null`
+          : undefined;
+
+  const rows = await db
+    .select()
+    .from(mailThreads)
+    .where(where)
+    .orderBy(desc(mailThreads.lastMessageAt))
+    .limit(limit);
+
+  const now = new Date();
+  return rows.map((r) => ({
+    threadId: r.threadId,
+    subject: r.subject,
+    snippet: r.snippet,
+    counterpartName: r.counterpartName,
+    counterpartEmail: r.counterpartEmail,
+    messageCount: r.messageCount,
+    lastMessageAt: r.lastMessageAt,
+    lastFromMe: r.lastFromMe,
+    unread: r.unread,
+    starred: r.starred,
+    gmailImportant: r.gmailImportant,
+    knownContact: r.knownContact,
+    knownCompany: r.knownCompany,
+    dismissedAt: r.dismissedAt,
+    daysWaiting: daysSince(r.lastMessageAt, now),
+    url: `https://mail.google.com/mail/u/0/#all/${r.threadId}`,
+  }));
+}
+
+export interface MailCounts {
+  waiting: number;
+  important: number;
+  total: number;
+  oldestWaitingDays: number | null;
+  lastSyncedAt: Date | null;
+}
+
+export async function mailCounts(now = new Date()): Promise<MailCounts> {
+  const [row] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      waiting: sql<number>`count(*) filter (where last_from_me = false and dismissed_at is null)::int`,
+      important: sql<number>`count(*) filter (
+        where last_from_me = false and dismissed_at is null
+        and (known_contact = true or (gmail_important = true and starred = true))
+      )::int`,
+      oldest: sql<Date | null>`min(last_message_at) filter (where last_from_me = false and dismissed_at is null)`,
+      syncedAt: sql<Date | null>`max(synced_at)`,
+    })
+    .from(mailThreads);
+
+  return {
+    total: row?.total ?? 0,
+    waiting: row?.waiting ?? 0,
+    important: row?.important ?? 0,
+    oldestWaitingDays: row?.oldest ? daysSince(new Date(row.oldest), now) : null,
+    lastSyncedAt: row?.syncedAt ?? null,
+  };
+}
+
+/** The few that belong on the home page: important, waiting, oldest first. */
+export async function mailNeedingReply(limit = 5): Promise<MailRow[]> {
+  const rows = await db
+    .select()
+    .from(mailThreads)
+    .where(and(eq(mailThreads.lastFromMe, false), isNull(mailThreads.dismissedAt), isImportant))
+    .orderBy(mailThreads.lastMessageAt)
+    .limit(limit);
+
+  const now = new Date();
+  return rows.map((r) => ({
+    threadId: r.threadId,
+    subject: r.subject,
+    snippet: r.snippet,
+    counterpartName: r.counterpartName,
+    counterpartEmail: r.counterpartEmail,
+    messageCount: r.messageCount,
+    lastMessageAt: r.lastMessageAt,
+    lastFromMe: r.lastFromMe,
+    unread: r.unread,
+    starred: r.starred,
+    gmailImportant: r.gmailImportant,
+    knownContact: r.knownContact,
+    knownCompany: r.knownCompany,
+    dismissedAt: r.dismissedAt,
+    daysWaiting: daysSince(r.lastMessageAt, now),
+    url: `https://mail.google.com/mail/u/0/#all/${r.threadId}`,
+  }));
+}
+
+/**
+ * Mark a thread as handled here.
+ *
+ * The cockpit cannot reply, so a thread he has dealt with elsewhere — by
+ * phone, in person, or because it needed nothing — would otherwise sit in
+ * "needs a reply" for ever. The next sync clears this the moment he actually
+ * answers in Gmail, so it cannot hide a live conversation.
+ */
+export async function dismissThread(threadId: string, undo = false) {
+  await db
+    .update(mailThreads)
+    .set({ dismissedAt: undo ? null : new Date() })
+    .where(eq(mailThreads.threadId, threadId));
+}

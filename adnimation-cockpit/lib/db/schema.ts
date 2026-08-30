@@ -352,6 +352,38 @@ export const pipelineTouches = pgTable('pipeline_touches', {
   createdBy: text('created_by').notNull().default('ceo'),
 });
 
+/**
+ * The mailbox, mirrored. See db/migrations/0010_mail.sql — the screen reads
+ * this table rather than Gmail, and nothing is ever written back.
+ */
+export const mailThreads = pgTable(
+  'mail_threads',
+  {
+    threadId: text('thread_id').primaryKey(),
+    subject: text('subject'),
+    snippet: text('snippet'),
+    counterpartName: text('counterpart_name'),
+    counterpartEmail: text('counterpart_email'),
+    participants: text('participants').array().notNull().default([]),
+    messageCount: integer('message_count').notNull().default(1),
+    lastMessageAt: timestamptz('last_message_at').notNull(),
+    firstMessageAt: timestamptz('first_message_at'),
+    /** The last word is theirs, so the ball is with him. */
+    lastFromMe: boolean('last_from_me').notNull().default(false),
+    unread: boolean('unread').notNull().default(false),
+    starred: boolean('starred').notNull().default(false),
+    gmailImportant: boolean('gmail_important').notNull().default(false),
+    knownContact: boolean('known_contact').notNull().default(false),
+    knownCompany: text('known_company'),
+    labels: text('labels').array().notNull().default([]),
+    syncedAt: timestamptz('synced_at').notNull().defaultNow(),
+    dismissedAt: timestamptz('dismissed_at'),
+  },
+  (t) => [index('idx_mail_recent_drz').on(t.lastMessageAt)],
+);
+
+export type MailThread = typeof mailThreads.$inferSelect;
+
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type TaskComment = typeof taskComments.$inferSelect;

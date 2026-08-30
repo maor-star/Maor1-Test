@@ -72,7 +72,7 @@ async function main() {
   // carries their one dependency.
   sh('mkdir', ['-p', '/tmp/cockpit-bundle/jobs']);
   for (const job of [
-    'clickup-sync.mjs', 'hubspot-sync.mjs', 'people-sync.mjs',
+    'clickup-sync.mjs', 'hubspot-sync.mjs', 'people-sync.mjs', 'mail-sync.mjs',
     'slack-check.mjs', 'gmail-check.mjs',
   ]) {
     if (existsSync(`deploy/${job}`)) sh('cp', ['-a', `deploy/${job}`, '/tmp/cockpit-bundle/jobs/']);

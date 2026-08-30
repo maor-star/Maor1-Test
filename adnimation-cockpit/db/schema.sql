@@ -777,3 +777,36 @@ CREATE TABLE pipeline_touches (
   created_by  TEXT NOT NULL DEFAULT 'ceo'
 );
 CREATE INDEX idx_pipeline_touches ON pipeline_touches (client_id, happened_at DESC);
+
+-- ============================================================
+-- MAIL
+-- ============================================================
+
+-- The mailbox, mirrored. Showing a hundred threads live means a hundred Gmail
+-- calls; the sync runs on a timer and the screen reads this table. Read-only in
+-- both directions of meaning: the scope granted is readonly, and nothing here
+-- is ever written back.
+CREATE TABLE mail_threads (
+  thread_id         TEXT PRIMARY KEY,
+  subject           TEXT,
+  snippet           TEXT,
+  counterpart_name  TEXT,
+  counterpart_email TEXT,
+  participants      TEXT[] NOT NULL DEFAULT '{}',
+  message_count     INTEGER NOT NULL DEFAULT 1,
+  last_message_at   TIMESTAMPTZ NOT NULL,
+  first_message_at  TIMESTAMPTZ,
+  last_from_me      BOOLEAN NOT NULL DEFAULT false,
+  unread            BOOLEAN NOT NULL DEFAULT false,
+  starred           BOOLEAN NOT NULL DEFAULT false,
+  gmail_important   BOOLEAN NOT NULL DEFAULT false,
+  known_contact     BOOLEAN NOT NULL DEFAULT false,
+  known_company     TEXT,
+  labels            TEXT[] NOT NULL DEFAULT '{}',
+  synced_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  dismissed_at      TIMESTAMPTZ
+);
+CREATE INDEX idx_mail_recent ON mail_threads (last_message_at DESC);
+CREATE INDEX idx_mail_waiting ON mail_threads (last_message_at DESC)
+  WHERE last_from_me = false AND dismissed_at IS NULL;
+CREATE INDEX idx_mail_counterpart ON mail_threads (lower(counterpart_email));
