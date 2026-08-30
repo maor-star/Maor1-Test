@@ -66,34 +66,64 @@ async function authTest(token, label) {
 }
 
 /**
- * The two calls the delegation radar actually makes. A token that passes
- * auth.test can still be useless for reading a thread, which is the only
- * thing this integration needs it for.
+ * Exactly what the two integrations do, and nothing else.
+ *
+ * Delegation posts with chat.postMessage to a person's Slack id, which opens a
+ * DM; the reply radar then reads that thread with conversations.replies, having
+ * recovered the channel and timestamp from the permalink it stored. It never
+ * lists channels — so conversations.list failing on a missing channels:read
+ * scope says nothing about whether the radar works, and testing it would be
+ * testing the wrong thing.
+ *
+ * Pass a user id to prove the whole round trip: open the DM, post, read the
+ * thread back, then delete the message so nothing is left behind.
  */
-async function capability(token) {
-  const call = async (method, params = {}) => {
+async function capability(token, userId) {
+  const call = async (method, params = {}, method_ = 'GET') => {
     const url = new URL(`https://slack.com/api/${method}`);
-    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
-    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const init = { headers: { Authorization: `Bearer ${token}` } };
+    if (method_ === 'POST') {
+      init.method = 'POST';
+      init.headers['Content-Type'] = 'application/json; charset=utf-8';
+      init.body = JSON.stringify(params);
+    } else {
+      for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+    }
+    const r = await fetch(url, init);
     return r.json();
   };
 
-  const list = await call('conversations.list', { limit: 1, types: 'public_channel' });
-  console.log(`  conversations.list: ${list.ok ? `ok (${list.channels?.length ?? 0} shown)` : list.error}`);
-
-  const channel = list.channels?.[0]?.id;
-  if (channel) {
-    const hist = await call('conversations.history', { channel, limit: 1 });
-    console.log(`  conversations.history: ${hist.ok ? 'ok' : hist.error}`);
-    const ts = hist.messages?.[0]?.ts;
-    if (ts) {
-      const replies = await call('conversations.replies', { channel, ts, limit: 1 });
-      console.log(`  conversations.replies: ${replies.ok ? 'ok — the reply radar can read threads' : replies.error}`);
-    }
+  if (!userId) {
+    console.log('  no user id given — pass SLACK_CEO_USER_ID to test the round trip');
+    return;
   }
+
+  const open = await call('conversations.open', { users: userId }, 'POST');
+  console.log(`  conversations.open: ${open.ok ? 'ok' : open.error}`);
+  if (!open.ok) return;
+
+  const channel = open.channel.id;
+  const posted = await call(
+    'chat.postMessage',
+    { channel, text: 'Cockpit connection check — this message deletes itself.' },
+    'POST',
+  );
+  console.log(`  chat.postMessage: ${posted.ok ? 'ok — delegation can reach Slack' : posted.error}`);
+  if (!posted.ok) return;
+
+  const replies = await call('conversations.replies', { channel, ts: posted.ts, limit: 5 });
+  console.log(
+    `  conversations.replies: ${replies.ok ? 'ok — the reply radar can read threads' : replies.error}`,
+  );
+
+  const hist = await call('conversations.history', { channel, limit: 1 });
+  console.log(`  conversations.history: ${hist.ok ? 'ok' : hist.error}`);
+
+  const gone = await call('chat.delete', { channel, ts: posted.ts }, 'POST');
+  console.log(`  cleaned up the test message: ${gone.ok ? 'yes' : gone.error}`);
 }
 
-if (await authTest(TOKEN, 'used directly')) await capability(TOKEN);
+if (await authTest(TOKEN, 'used directly')) await capability(TOKEN, process.env.SLACK_CEO_USER_ID);
 
 if (shape.startsWith('refresh token')) {
   // The configuration-token path needs nothing else, so try it first.
