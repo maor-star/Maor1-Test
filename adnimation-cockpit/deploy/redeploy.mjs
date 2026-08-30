@@ -119,6 +119,8 @@ async function main() {
     `touch ${APP}/READY`,
     'mkdir -p /opt/cockpit-jobs',
     `cp ${APP}/jobs/*.mjs /opt/cockpit-jobs/ 2>/dev/null || true`,
+    // revenue-seed reads the snapshot from beside itself.
+    `cp ${APP}/jobs/*.json /opt/cockpit-jobs/ 2>/dev/null || true`,
     // Values in .env can contain spaces, so read the one key needed rather than
     // sourcing the file — `. .env` breaks on `OWNER_NAME=Maor Davidovich`.
     `DBURL=$(grep -m1 '^DATABASE_URL=' ${APP}/.env | cut -d= -f2-)`,
