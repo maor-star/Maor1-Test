@@ -61,6 +61,8 @@ export interface DelegationRow {
   slackMessageUrl: string | null;
   slackChannelId: string | null;
   slackThreadTs: string | null;
+  /** True when he is in the Slack conversation too, not only the bot and them. */
+  slackShared: boolean;
   clickupTaskId: string | null;
   replyChannel: string | null;
   replyAt: Date | null;

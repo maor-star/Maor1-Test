@@ -146,6 +146,9 @@ CREATE TABLE delegations (
   -- how many times it has been chased.
   slack_channel_id   TEXT,
   slack_thread_ts    TEXT,
+  -- True when the Slack conversation includes the CEO, not only the bot and
+  -- the person it was handed to.
+  slack_shared       BOOLEAN NOT NULL DEFAULT false,
   title              TEXT,
   priority           TEXT NOT NULL DEFAULT 'P2',
   closed_at          TIMESTAMPTZ,

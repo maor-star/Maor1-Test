@@ -18,8 +18,11 @@ import { CLICKUP_LIST_DEPTS } from '@/lib/sync/departments';
  */
 export function NewDelegation({
   team,
+  sharedThreads,
 }: {
   team: { id: string; name: string; email: string; slackId: string | null; role: string | null }[];
+  /** Whether Slack lets the cockpit put him in the conversation as well. */
+  sharedThreads: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -148,7 +151,9 @@ export function NewDelegation({
             CANCEL
           </Button>
           <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-            SENT AS A SLACK DM TO THEM — NOT TO YOU. READ IT UNDER “CONVERSATION” BELOW.
+            {sharedThreads
+              ? 'SENT AS A SLACK THREAD WITH BOTH OF YOU — IT APPEARS IN YOUR SLACK TOO'
+              : 'SENT AS A SLACK DM TO THEM — READ IT UNDER “CONVERSATION” BELOW'}
           </span>
           {formError ? <span className="text-2xs text-destructive">{formError}</span> : null}
           {warning ? <span className="text-2xs text-sev-warning">{warning}</span> : null}

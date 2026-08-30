@@ -5,6 +5,7 @@ import {
   type DelegationView,
 } from '@/lib/delegation/module';
 import { DELEGATION_STALE_DAYS } from '@/lib/tasks/types';
+import { slackCanShareThreads } from '@/lib/integrations/slack';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
 import { Num } from '@/components/num';
@@ -32,10 +33,11 @@ export default async function DelegationsPage({
     : 'open';
 
   const user = await requireUser();
-  const [rows, counts, team] = await Promise.all([
+  const [rows, counts, team, sharedThreads] = await Promise.all([
     listDelegations(view),
     delegationCounts(),
     delegatableTeam(user.email),
+    slackCanShareThreads(),
   ]);
 
   const unreachable = team.filter((p) => !p.slackId);
@@ -53,7 +55,7 @@ export default async function DelegationsPage({
       />
 
       <HudCard>
-        <HudCardHeader title="Handed over" index="D01" action={<NewDelegation team={team} />} />
+        <HudCardHeader title="Handed over" index="D01" action={<NewDelegation team={team} sharedThreads={sharedThreads} />} />
 
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-5">
           <Figure label="OPEN" value={counts.open} big />
@@ -70,6 +72,16 @@ export default async function DelegationsPage({
           <CheckReplies />
         </div>
       </HudCard>
+
+      {!sharedThreads ? (
+        <div className="border border-divider px-4 py-2 font-semi text-[11px] tracking-[0.06em] text-neutral-500">
+          Hand-offs go out as a Slack DM from the bot to the person, so they do not appear in your
+          own Slack — read and answer them under “conversation” below. To have them arrive in your
+          Slack too, add the <span className="text-accent-700">mpim:write</span> and{' '}
+          <span className="text-accent-700">mpim:history</span> scopes to the Slack app and
+          reinstall it; the cockpit will start using a shared thread on its own.
+        </div>
+      ) : null}
 
       {unreachable.length > 0 ? (
         <div className="border border-sev-warning/40 bg-sev-warning/10 px-4 py-2 font-semi text-[12px] tracking-[0.06em] text-sev-warning">

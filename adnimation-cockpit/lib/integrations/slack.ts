@@ -5,6 +5,7 @@ import type {
 const SLACK_API = 'https://slack.com/api/chat.postMessage';
 const SLACK_REPLIES = 'https://slack.com/api/conversations.replies';
 const SLACK_USERS = 'https://slack.com/api/users.info';
+const SLACK_OPEN = 'https://slack.com/api/conversations.open';
 
 /**
  * Slack permalinks carry the two things the API needs — the channel and the
@@ -91,6 +92,25 @@ class RealSlackAdapter implements SlackAdapter {
     const name = body?.ok ? (body.user?.real_name ?? body.user?.name ?? id) : id;
     this.names.set(id, name);
     return name;
+  }
+
+  async openConversation(userIds: string[]) {
+    const res = await fetch(SLACK_OPEN, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+      body: JSON.stringify({ users: userIds.join(',') }),
+    });
+    const body = (await res.json().catch(() => null)) as
+      | { ok?: boolean; error?: string; channel?: { id?: string } }
+      | null;
+
+    if (!body?.ok || !body.channel?.id) {
+      return { ok: false, channelId: null, error: body?.error ?? `http_${res.status}` };
+    }
+    return { ok: true, channelId: body.channel.id };
   }
 
   async readThread(channelId: string, threadTs: string): Promise<ThreadMessage[]> {
@@ -208,6 +228,16 @@ export class FakeSlackAdapter implements SlackAdapter {
     return reply;
   }
 
+  /** Tests set this to make the group-conversation attempt fail. */
+  openFailsWithMultipleUsers = false;
+
+  async openConversation(userIds: string[]) {
+    if (userIds.length > 1 && this.openFailsWithMultipleUsers) {
+      return { ok: false, channelId: null, error: 'missing_scope' };
+    }
+    return { ok: true, channelId: `C${userIds.join('-')}` };
+  }
+
   async readThread(): Promise<ThreadMessage[]> {
     return this.thread;
   }
@@ -224,6 +254,35 @@ export class FakeSlackAdapter implements SlackAdapter {
       fromCockpit: true,
     });
     return { ok: true, messageUrl: null, channelId, ts };
+  }
+}
+
+/**
+ * Whether the workspace has granted the scopes needed to put the CEO in the
+ * conversation as well as the person it was handed to.
+ *
+ * Read from the granted-scopes header on auth.test rather than by trying to
+ * open a group conversation, because that attempt would create one as a side
+ * effect. Cached for the life of the process — scopes change when somebody
+ * reinstalls the app, not between page loads.
+ */
+let sharedThreadSupport: boolean | null = null;
+
+export async function slackCanShareThreads(): Promise<boolean> {
+  if (sharedThreadSupport !== null) return sharedThreadSupport;
+
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token || !process.env.SLACK_CEO_USER_ID) return false;
+
+  try {
+    const res = await fetch('https://slack.com/api/auth.test', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const scopes = res.headers.get('x-oauth-scopes') ?? '';
+    sharedThreadSupport = scopes.split(',').includes('mpim:write');
+    return sharedThreadSupport;
+  } catch {
+    return false;
   }
 }
 

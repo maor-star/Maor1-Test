@@ -44,6 +44,7 @@ export async function listDelegations(
       slackMessageUrl: delegations.slackMessageUrl,
       slackChannelId: delegations.slackChannelId,
       slackThreadTs: delegations.slackThreadTs,
+      slackShared: delegations.slackShared,
       clickupTaskId: delegations.clickupTaskId,
       replyChannel: delegations.replyChannel,
       replyAt: delegations.replyAt,
@@ -121,6 +122,8 @@ function slackBody(title: string, note: string | null, dueDate: string | null) {
 
 export interface CreateResult {
   id: string;
+  /** True when the Slack conversation includes him as well as them. */
+  shared: boolean;
   slackOk: boolean;
   slackError?: string;
   clickupOk: boolean;
@@ -158,11 +161,36 @@ export async function createDelegation(
   const note = parsed.note ?? null;
   const dueDate = parsed.dueDate ?? null;
 
+  /*
+   * A bot DM to the person is a conversation between the bot and them: it never
+   * shows up in his own Slack, which is not what pressing send looks like it
+   * does. So try for a conversation with both of them first, and fall back to
+   * the plain DM when the workspace has not granted the mpim scopes. The moment
+   * they are granted this starts working with no code change.
+   */
+  const owner = process.env.SLACK_CEO_USER_ID;
+  let target = person.slackId;
+  let shared = false;
+
+  if (owner && owner !== person.slackId) {
+    const group = await deps.slack
+      .openConversation([owner, person.slackId])
+      .catch(() => ({ ok: false as const, channelId: null }));
+    if (group.ok && group.channelId) {
+      target = group.channelId;
+      shared = true;
+    }
+  }
+
   const posted = await deps.slack
     .postMessage({
-      target: person.slackId,
+      target,
       text: slackBody(parsed.title, note, dueDate),
-      contextLines: ['Handed over from the cockpit — reply here and it will be tracked.'],
+      contextLines: [
+        shared
+          ? 'Handed over from the cockpit — reply in this thread and it is tracked.'
+          : 'Handed over from the cockpit — reply here and it will be tracked.',
+      ],
     })
     .catch(
       (e: unknown): SlackPostResult => ({
@@ -221,6 +249,7 @@ export async function createDelegation(
       slackMessageUrl: posted.messageUrl,
       slackChannelId: posted.channelId ?? null,
       slackThreadTs: posted.ts ?? null,
+      slackShared: shared,
       status: 'sent',
     })
     .returning({ id: delegations.id });
@@ -237,6 +266,7 @@ export async function createDelegation(
 
   return {
     id: row.id,
+    shared,
     slackOk: posted.ok,
     ...(posted.error ? { slackError: posted.error } : {}),
     clickupOk: clickupTaskId !== null,

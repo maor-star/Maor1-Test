@@ -52,6 +52,12 @@ export interface SlackAdapter {
    * permalink because that is what the delegation stored when it posted.
    */
   findThreadReply(permalink: string, notFrom?: string): Promise<FoundReply | null>;
+  /**
+   * Opens a conversation with these people and returns its channel. One user
+   * gives a direct message; more than one gives a group conversation, which
+   * needs the mpim scopes and fails with missing_scope without them.
+   */
+  openConversation(userIds: string[]): Promise<{ ok: boolean; channelId: string | null; error?: string }>;
   /** The whole conversation, oldest first, with names resolved. */
   readThread(channelId: string, threadTs: string): Promise<ThreadMessage[]>;
   /** Answer in the thread, as the cockpit's bot. */

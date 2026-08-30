@@ -96,7 +96,8 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
           </div>
 
           <p className="hud-label mt-1 whitespace-normal text-[9px]">
-            SLACK DM TO {d.personName} · HANDED OVER <Num>{fmtDateTime(d.delegatedAt)}</Num>
+            {d.slackShared ? 'SLACK THREAD WITH' : 'SLACK DM TO'} {d.personName} · HANDED OVER{' '}
+            <Num>{fmtDateTime(d.delegatedAt)}</Num>
             {d.dueDate ? (
               <>
                 {' '}

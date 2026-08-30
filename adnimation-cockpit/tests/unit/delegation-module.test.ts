@@ -33,6 +33,7 @@ const row = (over: Partial<DelegationRow> = {}): DelegationRow => ({
   slackMessageUrl: 'https://slack.com/archives/D1/p1700000000000100',
   slackChannelId: 'D1',
   slackThreadTs: '1700000000.000100',
+  slackShared: false,
   clickupTaskId: null,
   replyChannel: null,
   replyAt: null,

@@ -126,6 +126,8 @@ export const delegations = pgTable(
     // reply can be posted into it without re-parsing a permalink.
     slackChannelId: text('slack_channel_id'),
     slackThreadTs: text('slack_thread_ts'),
+    /** True when the CEO is in the conversation too, not only the bot and them. */
+    slackShared: boolean('slack_shared').notNull().default(false),
     title: text('title'),
     priority: text('priority').notNull().default('P2'),
     closedAt: timestamptz('closed_at'),
