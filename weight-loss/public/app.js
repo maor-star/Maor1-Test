@@ -1023,14 +1023,22 @@ function barFigure({ kicker, title, note, rows }) {
     </figure>`;
 }
 
-/** Renders the seeded article body: blank lines split paragraphs, **bold** lines are sub-headings. */
+/**
+ * Renders the seeded article body: blank lines split paragraphs, **bold** lines are
+ * sub-headings and *italic* lines are the level under them, for a long article whose
+ * sections need grouping inside a section.
+ */
 async function viewArticle(el, slug) {
   const post = await api('/posts/' + encodeURIComponent(slug));
   // Escaping happens first, so the markup below can never be used to inject HTML.
   const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   const blocks = post.content.split('\n\n').map((block) => {
-    const heading = /^\*\*(.+)\*\*$/.exec(block.trim());
-    return heading ? `<h4>${esc(heading[1])}</h4>` : `<p>${inline(block.trim())}</p>`;
+    const line = block.trim();
+    const heading = /^\*\*(.+)\*\*$/.exec(line);
+    if (heading) return `<h4>${esc(heading[1])}</h4>`;
+    const sub = /^\*([^*]+)\*$/.exec(line);
+    if (sub) return `<h5>${esc(sub[1])}</h5>`;
+    return `<p>${inline(line)}</p>`;
   }).join('');
 
   el.innerHTML = `

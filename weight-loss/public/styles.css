@@ -330,6 +330,12 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .article-body { max-width: 68ch; display: grid; gap: var(--space-4); }
 .article-body p { margin: 0; }
 .article-body h4 { margin: var(--space-4) 0 0; font-size: 19px; }
+/* The level under a sub-heading: it groups a few paragraphs without competing with the
+   section title above it, so it is smaller and carries the accent instead of the size. */
+.article-body h5 {
+  margin: var(--space-3) 0 0; font-size: 14px; letter-spacing: 0.04em;
+  color: var(--color-accent-700);
+}
 
 /* ── Group ─────────────────────────────────────────────────────────────── */
 .members { display: grid; }
