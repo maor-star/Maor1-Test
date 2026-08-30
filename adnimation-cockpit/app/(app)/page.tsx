@@ -5,6 +5,7 @@ import { topSeats } from '@/lib/seats/service';
 import { urgentWork, clientsToCall } from '@/lib/overview/service';
 import { listDelegations } from '@/lib/delegation/module';
 import { mailNeedingReply, mailCounts } from '@/lib/mail/service';
+import { opportunitiesNeedingAttention, opportunityCounts } from '@/lib/opportunities/module';
 import { PERIOD_LABEL } from '@/lib/revenue/periods';
 import { fmtDateTime, fmtMoney } from '@/lib/utils';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
@@ -46,6 +47,10 @@ export default function OverviewPage() {
           <WaitingOnYouCard />
         </Suspense>
       </div>
+
+      <Suspense fallback={<Skeleton title="Slipping away" index="O04" />}>
+        <SlippingAwayCard />
+      </Suspense>
 
       <div className="grid gap-5 xl:grid-cols-2">
         <Suspense fallback={<Skeleton title="Strongest supply" index="O02" />}>
@@ -460,6 +465,72 @@ function Skeleton({ title, index }: { title: string; index: string }) {
     <HudCard>
       <HudCardHeader title={title} index={index} />
       <div className="h-16 animate-pulse bg-neutral-200/40" />
+    </HudCard>
+  );
+}
+
+/**
+ * The opportunities that are going quiet.
+ *
+ * These belong on the home page for the same reason the waiting panels do:
+ * they decay. Nothing tells him an opportunity died — it simply stops being
+ * mentioned, and the only moment he would notice is one where he happens to
+ * remember it. This is that moment, made to happen daily.
+ */
+async function SlippingAwayCard() {
+  const [rows, counts] = await Promise.all([
+    opportunitiesNeedingAttention(4),
+    opportunityCounts(),
+  ]);
+
+  return (
+    <HudCard>
+      <HudCardHeader
+        title="Slipping away"
+        index="O04"
+        action={
+          <Link
+            href="/opportunities?view=cold"
+            className="font-semi text-[10px] tracking-[0.12em] text-accent-700 hover:text-accent"
+          >
+            <Num>{counts.cold}</Num> COLD · <Num>{counts.open}</Num> OPEN ·{' '}
+            <Num>{fmtMoney(counts.openValueCents)}</Num> ON THE TABLE ↗
+          </Link>
+        }
+      />
+
+      {rows.length === 0 ? (
+        <p className="font-semi text-[12px] text-neutral-500">
+          {counts.open === 0
+            ? 'Nothing written down yet. Anything you meant to do and have not — put it in opportunities.'
+            : 'Nothing has gone cold. Every open opportunity has a next step.'}
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((o) => (
+            <li key={o.id} className="border-t border-divider pt-2 first:border-0 first:pt-0">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                <Link
+                  href="/opportunities?view=cold"
+                  className="font-cond text-[15px] leading-none text-neutral-900 hover:text-accent"
+                >
+                  {o.title}
+                </Link>
+                <span className="font-cond text-[15px] leading-none text-sev-warning">
+                  <Num>{o.state.daysQuiet}d</Num>
+                </span>
+              </div>
+              <p className="hud-label mt-1 whitespace-normal text-[9px]">
+                {o.counterparty ? `${o.counterparty} · ` : ''}
+                {o.valueCents !== null ? <Num>{fmtMoney(o.valueCents)}</Num> : 'UNSIZED'}
+                {o.state.dueToRevisit ? ' · DUE TO REVISIT' : ''}
+                {o.state.needsNextStep ? ' · NO NEXT STEP' : ''}
+                {o.state.overdue ? ' · NEXT STEP OVERDUE' : ''}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
     </HudCard>
   );
 }

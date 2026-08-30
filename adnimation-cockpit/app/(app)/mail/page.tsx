@@ -36,7 +36,7 @@ export default async function MailPage({
   return (
     <div className="space-y-5">
       <PageHeader
-        kicker="MAIL / 05"
+        kicker="MAIL / 06"
         title="Mail"
         action={
           <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">

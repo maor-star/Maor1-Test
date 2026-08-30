@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { dismissThreadAction } from '@/app/actions/mail';
+import { captureMailAction } from '@/app/actions/opportunities';
 import { Button } from '@/components/ui/button';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
@@ -21,6 +22,7 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
   const t = thread;
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [captured, setCaptured] = useState(false);
   const router = useRouter();
 
   const dismissed = t.dismissedAt !== null;
@@ -109,6 +111,34 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
           }
         >
           {pending ? '…' : dismissed ? 'STILL WAITING' : 'MARK HANDLED'}
+        </Button>
+
+        {/*
+          The capture path for mail. The thread is already mirrored, so this
+          needs nothing from Gmail — it files the conversation as an
+          opportunity with its subject, counterpart and link intact, which is
+          the step that otherwise never happens.
+        */}
+        <Button
+          type="button"
+          size="xs"
+          variant="ghost"
+          disabled={pending || captured}
+          onClick={() =>
+            startTransition(async () => {
+              const data = new FormData();
+              data.set('threadId', t.threadId);
+              const result = await captureMailAction(data);
+              setError(result.ok ? null : (result.error ?? 'That did not work'));
+              if (result.ok) {
+                setCaptured(true);
+                router.refresh();
+              }
+            })
+          }
+          title="File this conversation as an opportunity to come back to"
+        >
+          {captured ? 'SAVED AS OPPORTUNITY ✓' : '→ OPPORTUNITY'}
         </Button>
 
         {error ? <span className="text-2xs text-destructive">{error}</span> : null}

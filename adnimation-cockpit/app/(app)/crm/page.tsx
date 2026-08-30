@@ -85,7 +85,7 @@ export default async function CrmPage({
   return (
     <div className="space-y-5">
       <PageHeader
-        kicker="SALES / 06"
+        kicker="SALES / 09"
         title="CRM"
         action={
           <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">

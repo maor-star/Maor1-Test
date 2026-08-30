@@ -29,7 +29,7 @@ export default async function ContractsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        kicker="CONTRACTS / 08"
+        kicker="CONTRACTS / 07"
         title="Contracts"
         action={
           <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">

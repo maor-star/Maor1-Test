@@ -438,3 +438,48 @@ export const companyDaily = pgTable('company_daily', {
 });
 
 export type CompanyDaily = typeof companyDaily.$inferSelect;
+
+/**
+ * Opportunities — what he noticed and has not acted on.
+ *
+ * The stage before the pipeline: no owner, no stage, no next step yet. They do
+ * not fail loudly, they stop being mentioned, so `lastTouchedAt` is the column
+ * the whole module is built around.
+ */
+export const opportunities = pgTable(
+  'opportunities',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    title: text('title').notNull(),
+    kind: text('kind').notNull().default('other'),
+    status: text('status').notNull().default('new'),
+    note: text('note'),
+    counterparty: text('counterparty'),
+    /** Null means he has not sized it — different from zero. */
+    valueCents: moneyCents('value_cents'),
+    nextStep: text('next_step'),
+    nextStepDate: date('next_step_date'),
+    revisitOn: date('revisit_on'),
+
+    source: text('source').notNull().default('manual'),
+    sourceUrl: text('source_url'),
+    sourceExcerpt: text('source_excerpt'),
+    /** The mail thread id or Slack ts, so the same thing is never captured twice. */
+    sourceRef: text('source_ref'),
+    sourceAt: timestamptz('source_at'),
+
+    detectReasons: text('detect_reasons').array().notNull().default([]),
+    detectScore: smallint('detect_score'),
+
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    createdBy: text('created_by'),
+    lastTouchedAt: timestamptz('last_touched_at').notNull().defaultNow(),
+    decidedAt: timestamptz('decided_at'),
+    decidedNote: text('decided_note'),
+    archivedAt: timestamptz('archived_at'),
+  },
+  (t) => [index('idx_opportunities_live_drz').on(t.lastTouchedAt)],
+);
+
+export type Opportunity = typeof opportunities.$inferSelect;
+export type NewOpportunity = typeof opportunities.$inferInsert;
