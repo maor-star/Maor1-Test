@@ -857,6 +857,23 @@ function ensureDefaults(){
     (db.transactions||[]).forEach(t=>{ if(t.kind==='expense' && t.category_id && MOVE16.test(strv(t.merchant)+' '+strv(t.description))){ t.category_id=null; cleared++; } });
     db.defaultsV=16; save();
   }
+  if((db.defaultsV||0) < 17){
+    // מניעת ספירה כפולה: מוחקים חיוב אשראי חודשי (חשבונית מהבנק) של חברה שכבר יש לה פירוט מפורט —
+    // אחרת אותה הוצאה נרשמת פעמיים (פעם כחיוב המרוכז ופעם בפירוט). חברה ללא פירוט (ישראכרט) — החיוב נשאר.
+    const CARD17=['ישראכרט','אמריקן אקספרס','אמריקן','אמקס','לאומי קארד','דיינרס','כאל','מקס','ויזה','כרטיסי אשראי'];
+    const det17=s=>{ s=strv(s); for(const k of CARD17) if(k&&s.includes(k)) return (k==='אמריקן'||k==='אמקס')?'אמריקן אקספרס':k; return null; };
+    const prevYM17=ym=>{ const p=String(ym).split('-').map(Number),y=p[0],mo=p[1]; if(!y||!mo) return ''; return (mo-1?y:y-1)+'-'+String(mo-1||12).padStart(2,'0'); };
+    const detMonths=new Set();
+    (db.transactions||[]).forEach(t=>{ if(t.kind==='expense'){ const a=det17(t.account); if(a) detMonths.add(a+'|'+String(t.tx_date).slice(0,7)); } });
+    db.transactions=(db.transactions||[]).filter(t=>{
+      if(t.kind!=='expense') return true;
+      const mi=det17(t.merchant||t.description); if(!mi || det17(t.account)) return true; // לא חיוב מרוכז
+      const ym=String(t.tx_date).slice(0,7);
+      const covered = detMonths.has(mi+'|'+ym) || detMonths.has(mi+'|'+prevYM17(ym));
+      return !covered; // חיוב מרוכז מכוסה ע"י פירוט — מוחקים
+    });
+    db.defaultsV=17; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
@@ -1000,7 +1017,12 @@ function h_transactions(m,id,sub,b,qp){
       db.transactions.push({id:uid(),tx_date:date,source:src,account:acct,description:desc,merchant,amount,kind,category_id:cat,notes:'',hash});
       seen.push(ref); refMap.set(bk,seen); added++;
     }
-    return {added,skipped,autoCategorized};
+    // מניעת כפילות: לאחר הייבוא מסירים חיובי אשראי מרוכזים שכבר יש להם פירוט מפורט (חברה עם תדפיס פירוט)
+    _detailMonths=null;
+    const removed=db.transactions.length;
+    db.transactions=db.transactions.filter(t=>!(t.kind==='expense' && isAggLump(t) && lumpCovered(t)));
+    const prunedDup=removed-db.transactions.length;
+    return {added,skipped,autoCategorized,prunedDup};
   }
   if(id==='bulk-delete'){ const {source,account,month}=b; db.transactions=db.transactions.filter(t=>!((!source||t.source===source)&&(!account||t.account===account)&&(!month||inMonth(t.tx_date,month)))); return {ok:true}; }
   if(id==='classify'){ // סיווג קבוצתי לפי רשימת מזהים
@@ -2627,18 +2649,21 @@ views.analytics=async()=>{
     </div>
     ${pendingSum?`<div class="hintbar" style="border-color:color-mix(in srgb,var(--amber) 40%,var(--border));background:color-mix(in srgb,var(--amber) 8%,transparent)">⚠️ <strong>${money(pendingSum)}</strong> הם <strong>חיובי אשראי חודשיים ללא פירוט</strong>${state.month?` לחודש ${fmtMonth(state.month)}`:''} — הסכום הזה יצא מהחשבון אבל <strong>אין פירוט מה נקנה</strong>, ולכן הוא <strong>לא מופיע</strong> בפילוח הקטגוריות (מזון, מסעדות, קניות…). זו הסיבה שהקטגוריות נראות נמוכות. <a class="link" data-nav="import">העלו את תדפיס האשראי לאותו חודש ←</a></div>`:''}
     ${moveSum?`<div class="hintbar" style="border-color:color-mix(in srgb,var(--accent) 30%,var(--border));background:color-mix(in srgb,var(--accent) 6%,transparent)">🔄 <strong>${money(moveSum)}</strong> הם <strong>העברות ומזומן</strong> — נספרים בתזרים אך <strong>אינם משויכים לקטגוריה</strong> (לא ניתן לדעת למה שימשו), ולכן לא נכללים בפילוח לפי קטגוריה.</div>`:''}
-    <div id="deep-anchor"></div>
-    <div class="section-head"><h2>🎯 תקציב וביצוע</h2><span class="rule"></span></div>
-    <div class="panel" style="margin-bottom:22px"><h3>תקציב מול ביצוע ${state.month?'(בחודש הנבחר)':'(בחרו חודש להשוואה מדויקת)'}</h3><button class="btn" id="set-budgets" style="margin-bottom:14px">✏️ הגדרת תקציבים לכל הקטגוריות</button>${budgetHTML}</div>
-    <div class="section-head"><h2>📊 פילוחים מפורטים</h2><span class="rule"></span></div>
+    <div class="section-head"><h2>📊 הוצאות הבית לפי קטגוריה ${state.month?`· ${fmtMonth(state.month)}`:''}</h2><span class="rule"></span></div>
     <div class="panels">
-      <div class="panel" data-drill="exp"><h3>הוצאות לפי מהות (קטגוריה)</h3>${donut(byCatFull,true)}<div class="hint" style="margin-top:8px">כולל את מלוא ההוצאה${state.month?` של ${fmtMonth(state.month)}`:''} — גם חיוב אשראי שטרם פורט וגם העברות, כדי שהסכום הגדול לא ייעלם.</div></div>
-      <div class="panel" data-drill="exp"><h3>פילוח הוצאות מלא</h3>${barsHTML(byCatFull.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
+      <div class="panel" data-drill="exp"><h3>פילוח לפי קטגוריה</h3>${donut(byCatFull,true)}<div class="hint" style="margin-top:8px">כולל את מלוא ההוצאה — גם חיוב אשראי שטרם פורט וגם העברות, כדי שהסכום הגדול לא ייעלם.</div></div>
+      <div class="panel" data-drill="exp"><h3>פילוח מלא (בלחיצה — פירוט העסקאות)</h3>${barsHTML(byCatFull.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
+    </div>
+    <div id="deep-anchor"></div>
+    <div class="section-head"><h2>💡 עוד פילוחים</h2><span class="rule"></span><span class="hint" style="margin:0">מקורות, הכנסות, תקציב ותובנות</span></div>
+    <div class="panels">
+      <div class="panel" data-drill="exp"><h3>הכי הרבה הוצאתי על…</h3>${barsHTML(topMerch,money,true)}</div>
       <div class="panel" data-drill="src"><h3>הוצאות לפי מקור (אשראי / בנק / מזומן)</h3>${donut(bySrc,true)}</div>
-      <div class="panel" data-drill="exp"><h3>הכי הרבה הוצאתי על… (לפי קטגוריה)</h3>${barsHTML(topMerch,money,true)}</div>
       <div class="panel" data-drill="inc"><h3>הכנסות לפי מהות</h3>${donut(byInc,true)}</div>
       <div class="panel" data-drill="inc"><h3>פילוח הכנסות מלא</h3>${barsHTML(byInc.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
-    </div>`;
+    </div>
+    <div class="section-head"><h2>🎯 תקציב וביצוע</h2><span class="rule"></span></div>
+    <div class="panel" style="margin-bottom:22px"><h3>תקציב מול ביצוע ${state.month?'(בחודש הנבחר)':'(בחרו חודש להשוואה מדויקת)'}</h3><button class="btn" id="set-budgets" style="margin-bottom:14px">✏️ הגדרת תקציבים לכל הקטגוריות</button>${budgetHTML}</div>`;
 
   /* ===================== מגמות עומק ותובנות — כל התקופה ===================== */
   const isMort=t=>/משכנתא/.test((t.merchant||'')+(t.description||'')) || t.main_name===MORTGAGE_NAME || t.category_name===MORTGAGE_NAME;
@@ -2700,10 +2725,6 @@ views.analytics=async()=>{
   const topMerchInd=Object.keys(merSumScoped).map(k=>({label:k,value:merSumScoped[k],color:'#7c3aed'})).sort((a,b)=>b.value-a.value).slice(0,12);
   // עסקאות בודדות גדולות — ללא העברות/משיכות, לפי החודש הנבחר
   const bigTx=purchScoped.slice().sort((a,b)=>b.amount-a.amount).slice(0,10);
-  // הוצאה לפי יום בשבוע — לפי החודש הנבחר
-  const dayNames=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת']; const dSum=Array(7).fill(0),dCnt=Array(7).fill(0);
-  scopedEss.forEach(t=>{ const [y,mo,d]=String(t.tx_date).slice(0,10).split('-').map(Number); if(!y)return; const wd=new Date(y,mo-1,d).getDay(); dSum[wd]+=t.amount; dCnt[wd]++; });
-  const dowData=dayNames.map((nm,i)=>({label:nm,value:Math.round(dSum[i]),color:'#0d9488'}));
   // חודשים לגרפי מגמה — רק חודשים עם נתונים אמיתיים (מסנן חודשי-קצה כמעט-ריקים שמעוותים את הפרופורציה)
   const trendMonths=months.filter(m=>M[m].txCount>=5);
   // מגמת 5 הקטגוריות המובילות לאורך זמן — רק חודשים מלאים (עם פירוט אשראי), כדי שהקווים לא יצנחו לאפס
@@ -2749,8 +2770,6 @@ views.analytics=async()=>{
   if(saveRate!=null) insights.push({ic:saveRate>=0?'💚':'⚠️',t:`שיעור חיסכון: <strong>${saveRate}%</strong> מההכנסה`,s:saveRate>=0?`נותרו ${money(sumIncC-sumExpC)} מ${money(sumIncC)}`:`הוצאתם ${money(sumExpC-sumIncC)} מעל ההכנסה`});
   if(bktTot>0) insights.push({ic:'🛍️',t:`מותרות: <strong>${discShare}%</strong> מההוצאה (${money(bkt['מותרות'])})`,s:`חיוני ${money(bkt['חיוני'])} · ${100-discShare-Math.round(bkt['אחר']/bktTot*100)}%`});
   if(bktTot>0) insights.push({ic:'🔁',t:`הוצאות קבועות: <strong>${fixShare}%</strong> (${money(fixedSum)})`,s:`משתנות ${money(varSum)} · ${fixedMers.length} בתי עסק חוזרים`});
-  const busiest=dowData.slice().sort((a,b)=>b.value-a.value)[0];
-  if(busiest&&busiest.value>0) insights.push({ic:'🗓️',t:`יום ההוצאה הגדול: <strong>יום ${busiest.label}</strong>`,s:`סה״כ ${money(busiest.value)} לאורך התקופה`});
   const insightsHTML=insights.map(i=>`<div class="stat-card accent" style="min-width:210px"><div class="label">${i.ic} תובנה</div><div class="value" style="font-size:15px;line-height:1.35;font-weight:600">${i.t}</div><div class="sub">${i.s}</div></div>`).join('');
 
   const partialNote=partialMonths.length?`<div class="hint" style="margin:2px 0 12px">התובנות והממוצעים מחושבים על <strong>${complete.length} חודשים מלאים</strong>. חודשים חלקיים (${partialMonths.map(fmtMonth).join(', ')}) מוצגים בגרפי המגמה אך אינם משוקללים בממוצעים.</div>`:'';
@@ -2800,7 +2819,6 @@ views.analytics=async()=>{
       <div class="panel" data-drill="merch"><h3>🏬 בתי העסק היקרים ביותר (בודדים)</h3>${barsHTML(topMerchInd,money,true)}</div>
       <div class="panel" data-drill="merchfixed"><h3>🔁 הוצאות קבועות מזוהות</h3>${topFixed.length?barsHTML(topFixed.map(f=>({label:f.label+' · '+f.months+' חוד׳',value:f.value,color:f.color})),money,true):'<div class="empty">לא זוהו הוצאות קבועות</div>'}</div>
       ${state.month?'':`<div class="panel"><h3>🧭 מגמת 5 הקטגוריות המובילות לאורך זמן</h3>${multiLineChart(catTrendMonths,catSeries)}</div>`}
-      <div class="panel" data-drill="dow" style="${state.month?'grid-column:1/-1':''}"><h3>🗓️ הוצאה ממוצעת לפי יום בשבוע</h3>${barsHTML(dowData,money,true)}</div>
       <div class="panel" style="grid-column:1/-1"><h3>💥 10 העסקאות הגדולות</h3><div class="hint" style="margin-bottom:6px">בחרו סיווג ישירות מהרשימה כדי לתקן — השינוי חל על אותו בית עסק בכל החודשים ומתעדכן בכל הגרפים.</div><div class="table-wrap"><table style="width:100%"><thead><tr><th>תאריך</th><th>בית עסק</th><th style="min-width:170px">סיווג (ניתן לשינוי)</th><th class="tnum">סכום</th></tr></thead><tbody>${bigTx.map(t=>`<tr><td class="tnum" style="white-space:nowrap">${fmtDate(t.tx_date)}</td><td>${esc(t.merchant||t.description||'—')}</td><td><select class="big-cat" data-merch="${esc((t.merchant||t.description||'').trim())}" data-id="${t.id}" style="width:100%">${catSelectOptions(cats,t.category_id)}</select></td><td class="tnum amount-neg">${money(t.amount)}</td></tr>`).join('')||'<tr><td class="empty">אין נתונים</td></tr>'}</tbody></table></div></div>
       <div class="panel" style="grid-column:1/-1"><h3>📝 ניתוח חודשי מילולי</h3><div class="hint" style="margin-bottom:6px">סיכום מילולי אוטומטי לכל חודש — מה קרה, מה השתנה, ומהיכן יצא הכסף.</div>${narr||'<div class="empty">אין מספיק נתונים לניתוח חודשי.</div>'}</div>
     </div>`;
@@ -2839,7 +2857,6 @@ views.analytics=async()=>{
     else if(kind==='src'){ const key=Object.keys(srcMeta).find(k=>srcMeta[k].label===label); list=expCash.filter(t=>outKind(t)===key); }
     else if(kind==='bucket'){ const b=label.indexOf('חיוני')===0?'חיוני':label.indexOf('מותרות')===0?'מותרות':'אחר'; list=scopedEss.filter(t=>bucketOf(t.main_name||'')===b); }
     else if(kind==='fixed'){ const wantFix=label.indexOf('קבוע')===0; list=purchScoped.filter(t=>isFixedMer((t.merchant||t.description||'—').trim())===wantFix); }
-    else if(kind==='dow'){ const di=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'].indexOf(label); list=scopedEss.filter(t=>{ const [y,mo,d]=String(t.tx_date).slice(0,10).split('-').map(Number); return y&&new Date(y,mo-1,d).getDay()===di; }); title='יום '+label; }
     else if(/· ללא סיווג$/.test(label)){ const mer=label.replace(/ · ללא סיווג$/,''); list=exp.filter(t=>!t.category_id && (t.merchant||t.description||'—').trim()===mer); }
     else { list=exp.filter(t=>(t.main_name||'ללא סיווג')===label); }
     showTxDrill(`${title} · ${money((list||[]).reduce((s,t)=>s+t.amount,0))}`, list||[]);
