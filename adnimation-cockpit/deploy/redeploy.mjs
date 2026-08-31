@@ -149,6 +149,18 @@ async function main() {
     `cp ${APP}/.env /tmp/cockpit.env`,
     `rm -rf ${APP}.old && mv ${APP} ${APP}.old`,
     `mv /tmp/cockpit-bundle ${APP}`,
+    /*
+     * Keep the previous build's static chunks alongside the new ones.
+     *
+     * A tab that was open when the deploy happened asks for a chunk by the old
+     * build's hashed name on its next click. Replacing .next/static outright
+     * deletes those files, the fetch 404s, and the page dies with "a
+     * client-side exception occurred" — which is what he saw, mid-classify,
+     * with nothing wrong with his click. Old chunks are small and immutable;
+     * carrying the last build's forward costs a few megabytes and keeps every
+     * open tab working across a deploy.
+     */
+    `if [ -d ${APP}.old/.next/static ]; then cp -rn ${APP}.old/.next/static/. ${APP}/.next/static/ || true; fi`,
     `cp /tmp/cockpit.env ${APP}/.env && chmod 600 ${APP}/.env && rm -f /tmp/cockpit.env`,
     `touch ${APP}/READY`,
     'mkdir -p /opt/cockpit-jobs',
