@@ -71,7 +71,7 @@ async function main() {
   // beside it as plain scripts and are installed into /opt/cockpit-jobs, which
   // carries their one dependency.
   sh('mkdir', ['-p', '/tmp/cockpit-bundle/jobs']);
-  for (const job of [
+  const JOBS = [
     'clickup-sync.mjs', 'hubspot-sync.mjs', 'people-sync.mjs', 'mail-sync.mjs',
     'slack-check.mjs', 'gmail-check.mjs',
     // revenue-sync imports revenue-source, and revenue-seed fills a fresh
@@ -82,7 +82,32 @@ async function main() {
     // contract-sync imports the generated copy of the intake rules.
     'contract-sync.mjs', 'contract-intake.mjs', 'contract-folders.mjs',
     'invoice-forward.mjs', 'internal-mail.mjs', 'mailbox-tidy.mjs', 'mailbox-rules.mjs', 'mail-answer.mjs', 'autoreply-rules.mjs', 'drive-find.mjs', 'gmail-send-check.mjs', 'claude-check.mjs', 'contract-backfill.mjs',
-  ]) {
+    // Who speaks in Slack, shared by the jobs that report what they did.
+    'bot-post.mjs', 'slack-bots.mjs',
+  ];
+
+  /*
+   * Every local import of a shipped job must itself be shipped.
+   *
+   * The list above is maintained by hand, and a job whose helper was left
+   * behind does not fail at deploy time — it fails at 3am on a timer, with
+   * ERR_MODULE_NOT_FOUND and nothing done. Reading the imports is cheap and
+   * catches it here instead.
+   */
+  const missing = [];
+  for (const job of JOBS) {
+    if (!existsSync(`deploy/${job}`)) continue;
+    const source = readFileSync(`deploy/${job}`, 'utf8');
+    for (const m of source.matchAll(/from '\.\/([\w.-]+\.mjs)'/g)) {
+      if (!JOBS.includes(m[1])) missing.push(`${job} imports ${m[1]}, which is not shipped`);
+    }
+  }
+  if (missing.length > 0) {
+    console.error(missing.join('\n'));
+    process.exit(1);
+  }
+
+  for (const job of JOBS) {
     if (existsSync(`deploy/${job}`)) sh('cp', ['-a', `deploy/${job}`, '/tmp/cockpit-bundle/jobs/']);
   }
   // revenue-seed reads the snapshot from disk, so it has to travel with the
