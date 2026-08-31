@@ -874,6 +874,23 @@ function ensureDefaults(){
     });
     db.defaultsV=17; save();
   }
+  if((db.defaultsV||0) < 18){
+    // חשבון מים דו-חודשי — מפצלים כל חיוב מים (תאגיד המים) לשני חצאים: חצי בחודש החיוב וחצי בחודש שלפניו,
+    // כדי שהעלות החודשית האמיתית תופיע בכל תצוגה (גרף, חודשי, פילוח). רק חשבונות מים אמיתיים, לא מסווגים שגויים.
+    const waterCatIds=new Set((db.categories||[]).filter(c=>/מים/.test(c.name||'')).map(c=>c.id));
+    // תאגיד מים אמיתי: שם בית העסק מתחיל ב«מי » (מי מודיעין / מי אביבים) או שם תאגיד ידוע — לא בית עסק שסתם מכיל «מודיעין».
+    const isWaterBill=t=>{ if(t.kind!=='expense' || !waterCatIds.has(t.category_id)) return false; const nm=(strv(t.merchant)||strv(t.description)).trim(); return /^מי\s/.test(nm) || /^מיתב|^מקורות|^תאגיד|^הגיחון|^מעיינות|^פלגי|אביבים/.test(nm); };
+    const addW=[];
+    (db.transactions||[]).forEach(t=>{ if(t.waterSplit || !isWaterBill(t)) return;
+      const orig=Math.round(t.amount*100)/100; const half=Math.round(orig*50)/100;
+      t.amount=half; t.waterSplit=true;
+      const d=new Date(t.tx_date+'T00:00:00'); d.setMonth(d.getMonth()-1);
+      const prev=d.toISOString().slice(0,10);
+      addW.push({...t, id:(++db.seq), amount:Math.round((orig-half)*100)/100, tx_date:prev, waterSplit:true});
+    });
+    if(addW.length) db.transactions.push(...addW);
+    db.defaultsV=18; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
@@ -2817,11 +2834,9 @@ views.analytics=async()=>{
   const utilBars=UTIL.map(u=>({label:u.name,color:u.color,value:Math.round(scopedEss.filter(t=>u.k.test(t.category_name||'')).reduce((s,t)=>s+t.amount,0))})).filter(x=>x.value>0).sort((a,b)=>b.value-a.value);
   // ---- מגמות ארוכות טווח (למקסימום התקופה) ----
   const catMonthlySub=(re)=>trendCompl.map(m=>Math.round(essExpAll.filter(t=>String(t.tx_date).slice(0,7)===m && re.test(t.category_name||'')).reduce((s,t)=>s+t.amount,0)));
-  // חשבון המים דו-חודשי — פורסים כל חשבון לשני חודשים (חצי לכל חודש) כדי לקבל עלות חודשית אמיתית וחלקה
-  const spreadBimonthly=(vals)=>vals.map((v,i)=>Math.round((v||0)/2 + ((i+1<vals.length)?(vals[i+1]||0):0)/2));
   const utilSeries=[
     {name:'⚡ חשמל',color:'#f97316',values:catMonthlySub(/חשמל/)},
-    {name:'💧 מים (דו-חודשי, נפרס)',color:'#0891b2',values:spreadBimonthly(catMonthlySub(/מים/))},
+    {name:'💧 מים',color:'#0891b2',values:catMonthlySub(/מים/)},
     {name:'🔥 גז',color:'#ef4444',values:catMonthlySub(/(^|\s)גז/)},
     {name:'🏛️ ארנונה',color:'#64748b',values:catMonthlySub(/ארנונ/)},
     {name:'📶 תקשורת',color:'#3b82f6',values:catMonthlySub(/אינטרנט|טלוויזיה|טלפון|סלולר|מנוי/)},
@@ -2833,7 +2848,7 @@ views.analytics=async()=>{
   const homeVals=trendCompl.map(m=>Math.round(M[m].home));
   const foodVals=catMonthlySum(x=>x.main==='מזון');
   const elecVals=catMonthlySub(/חשמל/);
-  const waterVals=spreadBimonthly(catMonthlySub(/מים/));
+  const waterVals=catMonthlySub(/מים/);
   const metricCard=(emoji,title,vals,color,note,mk)=>{ const nz=vals.filter(v=>v>0); const latest=[...vals].reverse().find(v=>v>0)||0; const avg=nz.length?Math.round(nz.reduce((a,b)=>a+b,0)/nz.length):0;
     return `<div class="panel"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px">
       <div><h3 style="margin:0">${emoji} ${title} <button class="icon-btn metric-drill" data-mk="${mk}" title="הצג ועריכת העסקאות">🔍</button></h3>${note?`<div class="hint" style="margin:2px 0 0">${note}</div>`:''}</div>
