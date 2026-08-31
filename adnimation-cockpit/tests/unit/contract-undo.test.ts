@@ -1,7 +1,9 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { and, desc, eq } from 'drizzle-orm';
-import { auditLog, contracts, db } from '@/lib/db';
-import { classifyContract, setWaitingOn, undoLastChange } from '@/lib/contracts/intake-module';
+import { auditLog, contracts, db, opportunities, pipelineClients } from '@/lib/db';
+import {
+  classifyContract, createLinkTarget, setWaitingOn, undoLastChange,
+} from '@/lib/contracts/intake-module';
 
 /**
  * Undoing a click.
@@ -91,5 +93,90 @@ describe('contracts — taking a change back', () => {
     const result = await undoLastChange(fresh!.id, 'test@adnimation.com');
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/nothing recorded/i);
+  });
+});
+
+/**
+ * Creating what a contract belongs to, from the contract.
+ *
+ * The counterparty on a contract is often the first the cockpit has heard of
+ * them — the agreement arrives before anyone captured an opportunity. Making
+ * the record exist first means leaving the screen, which is how contracts end
+ * up linked to nothing.
+ */
+describe('contracts — creating the thing it belongs to', () => {
+  it('creates an opportunity from the contract and links it both ways', async () => {
+    const [row] = await db
+      .insert(contracts)
+      .values({
+        counterpartyName: 'LinkTarget Demand Ltd',
+        category: 'demand',
+        categoryConfirmed: true,
+        docType: 'Demand agreement',
+        status: 'in_review',
+        source: 'manual',
+      })
+      .returning({ id: contracts.id });
+
+    const result = await createLinkTarget(row!.id, 'opportunity', 'test@adnimation.com');
+    expect(result.ok).toBe(true);
+
+    const [after] = await db.select().from(contracts).where(eq(contracts.id, row!.id)).limit(1);
+    expect(after!.opportunityId).toBe(result.ok ? result.id : null);
+
+    const [created] = await db
+      .select()
+      .from(opportunities)
+      .where(eq(opportunities.id, result.ok ? result.id : ''))
+      .limit(1);
+    expect(created!.counterparty).toBe('LinkTarget Demand Ltd');
+    // The contract says which side of the business this is.
+    expect(created!.kind).toBe('demand');
+    // A contract exists, so it is past "noticed".
+    expect(created!.status).toBe('exploring');
+  });
+
+  it('creates a deal at a stage that matches the contract', async () => {
+    const [row] = await db
+      .insert(contracts)
+      .values({
+        counterpartyName: 'LinkTarget Signed Ltd',
+        category: 'supply',
+        categoryConfirmed: true,
+        docType: 'Supply agreement',
+        status: 'signed',
+        source: 'manual',
+      })
+      .returning({ id: contracts.id });
+
+    const result = await createLinkTarget(row!.id, 'deal', 'test@adnimation.com');
+    expect(result.ok).toBe(true);
+
+    const [deal] = await db
+      .select()
+      .from(pipelineClients)
+      .where(eq(pipelineClients.id, result.ok ? result.id : ''))
+      .limit(1);
+    expect(deal!.name).toBe('LinkTarget Signed Ltd');
+    expect(deal!.clientType).toBe('supply');
+    // Signed means the deal is being integrated, not still out for signature.
+    expect(deal!.stage).toBe('integration');
+  });
+
+  it('refuses without a counterparty, which is the name it would file under', async () => {
+    const [row] = await db
+      .insert(contracts)
+      .values({
+        counterpartyName: '   ',
+        category: 'general',
+        categoryConfirmed: false,
+        docType: 'Test',
+        status: 'unclassified',
+        source: 'manual',
+      })
+      .returning({ id: contracts.id });
+
+    const result = await createLinkTarget(row!.id, 'opportunity', 'test@adnimation.com');
+    expect(result.ok).toBe(false);
   });
 });

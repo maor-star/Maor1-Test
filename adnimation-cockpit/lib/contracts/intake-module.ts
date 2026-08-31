@@ -235,6 +235,83 @@ export async function suggestLinks(counterparty: string) {
   return { opportunities: ops, deals };
 }
 
+/**
+ * Create the thing this contract belongs to, when it does not exist yet.
+ *
+ * A contract arriving for a counterparty nobody has captured is the common
+ * case, not the exception — often the agreement IS the first record of the
+ * relationship. Making him leave the screen, create an opportunity, come back
+ * and find the contract again is how contracts end up linked to nothing.
+ */
+export async function createLinkTarget(
+  contractId: string,
+  what: 'opportunity' | 'deal',
+  actor: string,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const [contract] = await db
+    .select()
+    .from(contracts)
+    .where(eq(contracts.id, contractId))
+    .limit(1);
+  if (!contract) return { ok: false, error: 'No such contract' };
+
+  const name = contract.counterpartyName.trim();
+  if (name === '') return { ok: false, error: 'It needs a counterparty first' };
+
+  // The contract says which side of the business it is. Where it does not,
+  // `other` is honest and he can change it.
+  const side =
+    contract.category === 'demand' ? 'demand' : contract.category === 'supply' ? 'supply' : 'other';
+
+  try {
+    if (what === 'opportunity') {
+      const [created] = await db
+        .insert(opportunities)
+        .values({
+          title: `${name} — ${contract.docType || 'agreement'}`.slice(0, 300),
+          kind: side,
+          // A contract exists, so this is past "noticed" and is being worked.
+          status: 'exploring',
+          counterparty: name,
+          note: `Created from the ${name} contract.`,
+          source: 'manual',
+          sourceUrl: contract.sourceUrl,
+          createdBy: actor,
+        })
+        .returning({ id: opportunities.id });
+      if (!created) return { ok: false, error: 'Could not create it' };
+
+      await db
+        .update(contracts)
+        .set({ opportunityId: created.id })
+        .where(eq(contracts.id, contractId));
+      return { ok: true, id: created.id };
+    }
+
+    const [created] = await db
+      .insert(pipelineClients)
+      .values({
+        name,
+        clientType: side,
+        // A signed contract is past being worked; anything else is out with them.
+        stage: contract.status === 'signed' ? 'integration' : 'contract_out',
+        temperature: 'warm',
+        source: 'contract',
+        notes: `Created from the ${name} contract.`,
+      })
+      .returning({ id: pipelineClients.id });
+    if (!created) return { ok: false, error: 'Could not create it' };
+
+    await db
+      .update(contracts)
+      .set({ pipelineClientId: created.id })
+      .where(eq(contracts.id, contractId));
+    return { ok: true, id: created.id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not create it' };
+  }
+}
+
 export interface ClassifyInput {
   counterpartyName?: string;
   category?: ContractCategory;

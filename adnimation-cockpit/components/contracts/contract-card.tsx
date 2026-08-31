@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  archiveContractAction, classifyAction, refileAction, setContractStatusAction,
+  archiveContractAction, classifyAction, createLinkAction, refileAction, setContractStatusAction,
   setWaitingOnAction, suggestLinksAction, undoAction,
 } from '@/app/actions/contract-intake';
 import { Button } from '@/components/ui/button';
@@ -437,6 +437,25 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
                   </option>
                 ))}
               </Select>
+              {/*
+                Often the contract IS the first record of the relationship, so
+                the thing to link to has to be creatable from here.
+              */}
+              {!c.opportunityId ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    const data = new FormData();
+                    data.set('id', c.id);
+                    data.set('what', 'opportunity');
+                    run(createLinkAction, data);
+                  }}
+                  className="mt-1 font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+                >
+                  + Create one for {c.counterpartyName}
+                </button>
+              ) : null}
             </div>
             <div>
               <Label htmlFor={`dl-${c.id}`}>Belongs to a deal</Label>
@@ -453,6 +472,21 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
                   </option>
                 ))}
               </Select>
+              {!c.pipelineClientId ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    const data = new FormData();
+                    data.set('id', c.id);
+                    data.set('what', 'deal');
+                    run(createLinkAction, data);
+                  }}
+                  className="mt-1 font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+                >
+                  + Create a deal for {c.counterpartyName}
+                </button>
+              ) : null}
             </div>
 
             <div className="sm:col-span-2 xl:col-span-4">

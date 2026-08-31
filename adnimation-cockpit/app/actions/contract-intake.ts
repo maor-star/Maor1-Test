@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
 import {
-  archiveContract, classifyContract, fileContract, setWaitingOn, suggestLinks, undoLastChange,
+  archiveContract, classifyContract, createLinkTarget, fileContract, setWaitingOn, suggestLinks,
+  undoLastChange,
 } from '@/lib/contracts/intake-module';
 import { CONTRACT_STATUSES } from '@/lib/contracts/status';
 
@@ -172,6 +173,40 @@ export async function undoAction(formData: FormData): Promise<ContractActionResu
 
   refresh();
   return { ok: true, warning: `Undid: ${result.restored}` };
+}
+
+/**
+ * Create the opportunity or the deal this contract belongs to, and link it.
+ *
+ * Often the contract is the first record of the relationship, so requiring the
+ * other record to exist first is requiring him to leave the screen and come
+ * back — which is how contracts end up linked to nothing.
+ */
+export async function createLinkAction(
+  formData: FormData,
+): Promise<ContractActionResult & { id?: string }> {
+  const user = await requireUser();
+
+  const parsed = z
+    .object({ id: z.string().uuid(), what: z.enum(['opportunity', 'deal']) })
+    .safeParse({
+      id: String(formData.get('id') ?? ''),
+      what: String(formData.get('what') ?? ''),
+    });
+  if (!parsed.success) return { ok: false, error: 'Not a valid choice' };
+
+  const result = await createLinkTarget(parsed.data.id, parsed.data.what, user.email);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  refresh();
+  return {
+    ok: true,
+    id: result.id,
+    warning:
+      parsed.data.what === 'opportunity'
+        ? 'Opportunity created and linked.'
+        : 'Deal created in the pipeline and linked.',
+  };
 }
 
 /** Candidates to link a contract to, matched on the counterparty. */
