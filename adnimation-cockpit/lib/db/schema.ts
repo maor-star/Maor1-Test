@@ -233,6 +233,19 @@ export const contracts = pgTable(
     legalOwner: text('legal_owner'),
     bizOwnerPersonId: uuid('biz_owner_person_id').references(() => people.id),
     nextAlertAt: date('next_alert_at'),
+
+    /** Where it arrived from, so it keeps its trail back to the conversation. */
+    source: text('source').notNull().default('manual'),
+    sourceRef: text('source_ref'),
+    sourceUrl: text('source_url'),
+    receivedAt: timestamptz('received_at'),
+    /** What it belongs to. Either, both, or neither. */
+    opportunityId: uuid('opportunity_id'),
+    pipelineClientId: uuid('pipeline_client_id'),
+    drivePath: text('drive_path'),
+    notes: text('notes'),
+    archivedAt: timestamptz('archived_at'),
+
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [index('idx_contracts_status').on(t.status, t.statusChangedAt)],
@@ -250,6 +263,29 @@ export const contractVersions = pgTable('contract_versions', {
   source: text('source').notNull(),
   receivedAt: timestamptz('received_at').notNull().defaultNow(),
   isApprovedBaseline: boolean('is_approved_baseline').notNull().default(false),
+  drivePath: text('drive_path'),
+  mimeType: text('mime_type'),
+  sizeBytes: moneyCents('size_bytes'),
+  sourceRef: text('source_ref'),
+  sourceUrl: text('source_url'),
+  /** Set once the bytes are actually in Drive, not merely recorded. */
+  uploadedAt: timestamptz('uploaded_at'),
+});
+
+/**
+ * Attachments already looked at, so a re-scan does not re-propose what he has
+ * dealt with. Keyed on where it came from rather than on the file, because the
+ * same file arriving twice from two places is two decisions to make once each.
+ */
+export const contractIntakeSeen = pgTable('contract_intake_seen', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  source: text('source').notNull(),
+  sourceRef: text('source_ref').notNull(),
+  fileName: text('file_name'),
+  fileHash: text('file_hash'),
+  decided: text('decided').notNull().default('pending'),
+  contractId: uuid('contract_id'),
+  seenAt: timestamptz('seen_at').notNull().defaultNow(),
 });
 
 /**

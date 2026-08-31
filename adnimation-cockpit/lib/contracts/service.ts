@@ -61,7 +61,7 @@ function toView(row: Selected, now: Date): ContractView {
   const endDate = isoDay(row.endDate);
   // The stage decides which sub-folder the documents live in: an unexecuted
   // draft must not land beside the signed originals.
-  const stage = status === 'signed' || status === 'expired' ? 'signed' : 'in_progress';
+  const stage = status === 'signed' || status === 'expired' ? 'signed' : 'in_review';
 
   return {
     id: row.id,

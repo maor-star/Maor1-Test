@@ -21,13 +21,45 @@ export const CATEGORY_FOLDER: Record<ContractCategory, string> = {
   general: 'General',
 };
 
-/** Where a contract lives depends on whether it is executed. */
-export type FilingStage = 'signed' | 'in_progress';
+/**
+ * Where a contract lives inside its counterparty's folder.
+ *
+ * The status is a folder, not just a field, so opening Drive answers "what is
+ * stuck" without opening the cockpit. The cost is that a file moves when its
+ * status changes — Drive keeps the file id across a move, so any link already
+ * shared stays valid.
+ */
+export type FilingStage =
+  | 'unclassified'
+  | 'in_review'
+  | 'out_for_signature'
+  | 'awaiting_my_signature'
+  | 'signed';
 
 export const STAGE_FOLDER: Record<FilingStage, string> = {
+  unclassified: 'Needs classifying',
+  in_review: 'In review',
+  out_for_signature: 'Out for signature',
+  awaiting_my_signature: 'Awaiting my signature',
   signed: 'Signed',
-  in_progress: 'In Progress',
 };
+
+/** How a contract's status maps onto the folder it belongs in. */
+export function stageForStatus(status: string): FilingStage {
+  switch (status) {
+    case 'signed':
+      return 'signed';
+    case 'awaiting_my_signature':
+      return 'awaiting_my_signature';
+    case 'out_for_signature':
+    case 'negotiation':
+      return 'out_for_signature';
+    case 'unclassified':
+      return 'unclassified';
+    default:
+      return 'in_review';
+  }
+}
 
 /** Counterparties whose category could not be determined go here, never guessed. */
 export const UNCLASSIFIED_FOLDER = '_Unclassified';
@@ -59,6 +91,8 @@ export function filingFolder(
   category: ContractCategory | null,
   stage: FilingStage = 'signed',
 ): FilingTarget {
+  // A contract with no category has nowhere sensible to sit under Demand or
+  // Supply, so it waits in _Unclassified rather than being guessed into one.
   const classified = category !== null;
   const segments = classified
     ? [DRIVE_ROOT, CATEGORY_FOLDER[category], safeFolderName(counterparty), STAGE_FOLDER[stage]]

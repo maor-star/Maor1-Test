@@ -11,6 +11,13 @@ import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { ConfirmFiling, ContractActions } from '@/components/contracts/contract-actions';
 import { NewContractForm } from '@/components/contracts/new-contract-form';
+import Link from 'next/link';
+import {
+  CONTRACT_VIEWS, CONTRACT_VIEW_LABEL, contractCounts,
+  listContracts as listIntake, type ContractView as IntakeView,
+} from '@/lib/contracts/intake-module';
+import { ContractCard } from '@/components/contracts/contract-card';
+import { driveStatus } from '@/lib/integrations/drive';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,8 +28,23 @@ export const dynamic = 'force-dynamic';
  * ladder turns silence into a dated obligation, and every row carries the Drive
  * folder it belongs in so filing is never a separate question.
  */
-export default async function ContractsPage() {
-  const [board, departments] = await Promise.all([contractBoard(), listDepartments()]);
+export default async function ContractsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const sp = await searchParams;
+  const intakeView: IntakeView = CONTRACT_VIEWS.includes(sp.view as IntakeView)
+    ? (sp.view as IntakeView)
+    : 'classify';
+
+  const [board, departments, intake, counts, drive] = await Promise.all([
+    contractBoard(),
+    listDepartments(),
+    listIntake(intakeView),
+    contractCounts(),
+    driveStatus().catch(() => ({ configured: false, authorised: false, reason: 'unknown' })),
+  ]);
   const all = await listContracts();
   const tree = filingTree(all);
 
@@ -38,6 +60,94 @@ export default async function ContractsPage() {
           </span>
         }
       />
+
+      {/*
+        The intake sits above everything else because it is the only part that
+        needs him: a contract nobody has classified is filed nowhere, linked to
+        nothing, and invisible to every other view.
+      */}
+      <HudCard>
+        <HudCardHeader
+          title="Arriving from mail and Slack"
+          index="C00"
+          action={
+            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+              CLASSIFY IT AND IT IS FILED
+            </span>
+          }
+        />
+
+        <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-5">
+          <Figure
+            label="NEEDS CLASSIFYING"
+            value={counts.needsClassifying}
+            big
+            tone={counts.needsClassifying > 0 ? 'warn' : undefined}
+          />
+          <Figure label="WAITING ON YOU" value={counts.onYou} big />
+          <Figure label="WAITING ON THEM" value={counts.onThem} />
+          <Figure label="SIGNED" value={counts.signed} />
+          <Figure
+            label="NOT IN DRIVE"
+            value={counts.notFiled}
+            tone={counts.notFiled > 0 ? 'warn' : undefined}
+          />
+        </div>
+
+        {!drive.authorised ? (
+          <div className="border border-sev-warning/40 bg-sev-warning/10 px-3 py-2 font-semi text-[11px] tracking-[0.06em] text-sev-warning">
+            Drive is not authorised, so contracts are recorded here with their versions and links
+            but the files are not filed yet. Add{' '}
+            <span className="text-accent-700">https://www.googleapis.com/auth/drive</span> to the
+            service account under domain-wide delegation and set{' '}
+            <span className="text-accent-700">DRIVE_CONTRACTS_ROOT_ID</span>. Nothing is lost in the
+            meantime — press “file to Drive” once it is on.
+          </div>
+        ) : null}
+      </HudCard>
+
+      <nav className="flex flex-wrap border border-divider">
+        {CONTRACT_VIEWS.map((v) => (
+          <Link
+            key={v}
+            href={`/contracts?view=${v}`}
+            className={`px-3 py-1 font-semi text-[11px] uppercase tracking-[0.16em] ${
+              v === intakeView ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
+            }`}
+          >
+            {CONTRACT_VIEW_LABEL[v]}
+            {v === 'classify' && counts.needsClassifying > 0 ? ` (${counts.needsClassifying})` : ''}
+          </Link>
+        ))}
+      </nav>
+
+      <HudCard className="gap-0 p-0">
+        <div className="p-[18px] pb-3">
+          <HudCardHeader
+            title={CONTRACT_VIEW_LABEL[intakeView]}
+            index="C01"
+            action={
+              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                <Num>{intake.length}</Num> {intake.length === 1 ? 'CONTRACT' : 'CONTRACTS'}
+              </span>
+            }
+          />
+        </div>
+
+        {intake.length === 0 ? (
+          <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+            {intakeView === 'classify'
+              ? 'Nothing waiting to be classified. Contracts arriving by mail or Slack land here.'
+              : 'Nothing in this view.'}
+          </p>
+        ) : (
+          <ul>
+            {intake.map((c) => (
+              <ContractCard key={c.id} contract={c} />
+            ))}
+          </ul>
+        )}
+      </HudCard>
 
       <HudCard>
         <HudCardHeader
@@ -288,5 +398,30 @@ function FilingCard({
         </ul>
       )}
     </HudCard>
+  );
+}
+
+function Figure({
+  label,
+  value,
+  big = false,
+  tone,
+}: {
+  label: string;
+  value: number;
+  big?: boolean;
+  tone?: 'warn';
+}) {
+  return (
+    <div>
+      <span className="hud-label block text-[9px]">{label}</span>
+      <span
+        className={`font-cond leading-none ${big ? 'text-[30px]' : 'text-[22px]'} ${
+          tone === 'warn' ? 'text-sev-warning' : 'text-neutral-900'
+        }`}
+      >
+        <Num>{value}</Num>
+      </span>
+    </div>
   );
 }

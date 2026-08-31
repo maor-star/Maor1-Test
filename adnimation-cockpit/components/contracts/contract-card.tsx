@@ -1,0 +1,361 @@
+'use client';
+
+import { useEffect, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  archiveContractAction, classifyAction, refileAction, setContractStatusAction,
+  suggestLinksAction,
+} from '@/app/actions/contract-intake';
+import { Button } from '@/components/ui/button';
+import { Input, Label, Select, Textarea } from '@/components/ui/input';
+import { Tag } from '@/components/hud/tag';
+import { Num } from '@/components/num';
+import { BOARD_STATUSES, STATUS_LABEL } from '@/lib/contracts/status';
+import type { ContractRow } from '@/lib/contracts/intake-module';
+import { fmtDateTime, fmtMoney } from '@/lib/utils';
+
+const CATEGORY_LABEL: Record<string, string> = {
+  demand: 'DEMAND',
+  supply: 'SUPPLY',
+  general: 'GENERAL',
+};
+
+/**
+ * One contract: what arrived, what it is, and what it belongs to.
+ *
+ * Classifying is one form rather than a sequence of decisions, because the
+ * whole point is that it takes less effort than leaving it in the queue.
+ * Linking candidates are fetched when he opens it, not for every row — a
+ * board of thirty contracts would otherwise be sixty queries for links nobody
+ * is looking at.
+ */
+export function ContractCard({ contract }: { contract: ContractRow }) {
+  const c = contract;
+  const [open, setOpen] = useState(c.status === 'unclassified' && !c.categoryConfirmed);
+  const [links, setLinks] = useState<{
+    opportunities: { id: string; title: string; counterparty: string | null }[];
+    deals: { id: string; name: string; stage: string }[];
+  } | null>(null);
+  const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!open || links !== null) return;
+    suggestLinksAction(c.counterpartyName)
+      .then(setLinks)
+      .catch(() => setLinks({ opportunities: [], deals: [] }));
+  }, [open, links, c.counterpartyName]);
+
+  const run = (
+    action: (f: FormData) => Promise<{ ok: boolean; error?: string; warning?: string }>,
+    data: FormData,
+  ) =>
+    startTransition(async () => {
+      const result = await action(data);
+      setMessage(result.ok ? null : (result.error ?? 'That did not work'));
+      setWarning(result.warning ?? null);
+      if (result.ok) {
+        setLinks(null);
+        router.refresh();
+        if (!result.warning) setOpen(false);
+      }
+    });
+
+  const needsClassifying = c.status === 'unclassified' || !c.categoryConfirmed;
+  const unfiled = c.versions.filter((v) => v.uploadedAt === null).length;
+
+  return (
+    <li className="border-t border-divider px-[18px] py-3">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-cond text-[17px] leading-none text-neutral-900">
+              {c.counterpartyName}
+            </p>
+            <Tag
+              tone={
+                c.status === 'signed' ? 'ok' : needsClassifying ? 'warning' : 'outline'
+              }
+            >
+              {c.statusLabel}
+            </Tag>
+            {c.categoryConfirmed ? (
+              <Tag tone="accent">{CATEGORY_LABEL[c.category ?? 'general']}</Tag>
+            ) : (
+              <Tag tone="warning">NO CATEGORY YET</Tag>
+            )}
+            {c.waitingOn === 'you' && c.status !== 'unclassified' ? (
+              <Tag tone="critical">YOUR MOVE</Tag>
+            ) : null}
+            <Tag tone="neutral">FROM {c.source.toUpperCase()}</Tag>
+            {unfiled > 0 ? (
+              <Tag tone="warning" title="Recorded here, but the file is not in Drive yet">
+                <Num>{unfiled}</Num> NOT IN DRIVE
+              </Tag>
+            ) : null}
+          </div>
+
+          <p className="hud-label mt-1 whitespace-normal text-[9px]">
+            {c.docType}
+            {c.receivedAt ? (
+              <>
+                {' '}· ARRIVED <Num>{fmtDateTime(c.receivedAt)}</Num>
+              </>
+            ) : null}
+            {' '}· <Num>{c.versions.length}</Num>{' '}
+            {c.versions.length === 1 ? 'VERSION' : 'VERSIONS'}
+            {c.drivePath ? (
+              <>
+                {' '}· <span className="text-accent-700">{c.drivePath}</span>
+              </>
+            ) : null}
+          </p>
+
+          {c.opportunityTitle || c.pipelineClientName ? (
+            <p className="hud-label mt-1 whitespace-normal text-[9px] text-accent-700">
+              LINKED TO {c.opportunityTitle ? `OPPORTUNITY: ${c.opportunityTitle}` : ''}
+              {c.opportunityTitle && c.pipelineClientName ? ' · ' : ''}
+              {c.pipelineClientName ? `DEAL: ${c.pipelineClientName}` : ''}
+            </p>
+          ) : null}
+
+          {c.notes ? <p className="mt-1 text-[13px] text-neutral-600">{c.notes}</p> : null}
+
+          {c.versions.length > 0 ? (
+            <ul className="mt-1.5 space-y-0.5">
+              {c.versions.map((v) => (
+                <li key={v.id} className="text-[12px] text-neutral-500">
+                  <span className="font-semi text-accent-700">v{v.versionNo}</span> {v.fileName}
+                  {v.uploadedAt === null ? (
+                    <span className="text-sev-warning"> · not in Drive</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+
+        <div className="flex shrink-0 items-start gap-5">
+          {c.valueCents !== null ? (
+            <div className="text-end">
+              <span className="hud-label block text-[9px]">VALUE</span>
+              <span className="font-cond text-[19px] leading-none text-neutral-900">
+                <Num>{fmtMoney(c.valueCents)}</Num>
+              </span>
+            </div>
+          ) : null}
+          <div className="text-end">
+            <span className="hud-label block text-[9px]">IN THIS STATE</span>
+            <span
+              className={`font-cond text-[19px] leading-none ${
+                needsClassifying && c.daysInStatus >= 2
+                  ? 'text-sev-warning'
+                  : 'text-neutral-900'
+              }`}
+            >
+              <Num>{c.daysInStatus}d</Num>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Button type="button" size="xs" variant={needsClassifying ? 'default' : 'outline'} onClick={() => setOpen((v) => !v)}>
+          {open ? 'CLOSE' : needsClassifying ? 'CLASSIFY IT' : 'EDIT'}
+        </Button>
+
+        {!needsClassifying ? (
+          <>
+            <label className="sr-only" htmlFor={`cs-${c.id}`}>
+              Status
+            </label>
+            <Select
+              id={`cs-${c.id}`}
+              value={c.status}
+              disabled={pending}
+              className="h-7 text-[12px]"
+              onChange={(e) => {
+                const data = new FormData();
+                data.set('id', c.id);
+                data.set('status', e.target.value);
+                run(setContractStatusAction, data);
+              }}
+            >
+              {BOARD_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
+                </option>
+              ))}
+            </Select>
+          </>
+        ) : null}
+
+        {c.sourceUrl ? (
+          <a
+            href={c.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+          >
+            {c.source === 'mail' ? 'Open in Gmail ↗' : 'Open in Slack ↗'}
+          </a>
+        ) : null}
+
+        {unfiled > 0 ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            disabled={pending}
+            onClick={() => {
+              const data = new FormData();
+              data.set('id', c.id);
+              run(refileAction, data);
+            }}
+          >
+            FILE TO DRIVE
+          </Button>
+        ) : null}
+
+        <Button
+          type="button"
+          size="xs"
+          variant="ghost"
+          disabled={pending}
+          onClick={() => {
+            const data = new FormData();
+            data.set('id', c.id);
+            run(archiveContractAction, data);
+          }}
+        >
+          ARCHIVE
+        </Button>
+
+        {message ? <span className="text-2xs text-destructive">{message}</span> : null}
+        {warning ? <span className="text-2xs text-sev-warning">{warning}</span> : null}
+      </div>
+
+      {open ? (
+        <form
+          className="mt-2 border border-divider p-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            data.set('id', c.id);
+            run(classifyAction, data);
+          }}
+        >
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <Label htmlFor={`cp-${c.id}`}>Who it is with</Label>
+              <Input
+                id={`cp-${c.id}`}
+                name="counterpartyName"
+                defaultValue={c.counterpartyName}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor={`cat-${c.id}`}>Category</Label>
+              <Select
+                id={`cat-${c.id}`}
+                name="category"
+                defaultValue={c.categoryConfirmed ? (c.category ?? 'general') : ''}
+                required
+                className="w-full"
+              >
+                <option value="" disabled>
+                  Pick one
+                </option>
+                <option value="demand">DEMAND</option>
+                <option value="supply">SUPPLY</option>
+                <option value="general">GENERAL</option>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor={`dt-${c.id}`}>What kind of document</Label>
+              <Input
+                id={`dt-${c.id}`}
+                name="docType"
+                defaultValue={c.docType}
+                placeholder="Demand agreement, NDA, addendum"
+              />
+            </div>
+            <div>
+              <Label htmlFor={`st-${c.id}`}>Status</Label>
+              <Select
+                id={`st-${c.id}`}
+                name="status"
+                defaultValue={c.status === 'unclassified' ? 'in_review' : c.status}
+                className="w-full"
+              >
+                {BOARD_STATUSES.filter((s) => s !== 'unclassified').map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_LABEL[s]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor={`op-${c.id}`}>Belongs to an opportunity</Label>
+              <Select
+                id={`op-${c.id}`}
+                name="opportunityId"
+                defaultValue={c.opportunityId ?? ''}
+                className="w-full"
+              >
+                <option value="">— none —</option>
+                {(links?.opportunities ?? []).map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.title}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor={`dl-${c.id}`}>Belongs to a deal</Label>
+              <Select
+                id={`dl-${c.id}`}
+                name="pipelineClientId"
+                defaultValue={c.pipelineClientId ?? ''}
+                className="w-full"
+              >
+                <option value="">— none —</option>
+                {(links?.deals ?? []).map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name} — {d.stage}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="sm:col-span-2 xl:col-span-4">
+              <Label htmlFor={`nt-${c.id}`}>Notes</Label>
+              <Textarea id={`nt-${c.id}`} name="notes" rows={2} defaultValue={c.notes ?? ''} />
+            </div>
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button type="submit" size="sm" disabled={pending}>
+              {pending ? 'FILING…' : 'SAVE AND FILE IT'}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+              CANCEL
+            </Button>
+            <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+              {links === null
+                ? 'LOOKING FOR WHAT THIS BELONGS TO…'
+                : (links.opportunities.length + links.deals.length === 0
+                    ? 'NOTHING MATCHING THIS COUNTERPARTY IN OPPORTUNITIES OR THE PIPELINE'
+                    : `${links.opportunities.length + links.deals.length} POSSIBLE MATCHES FOUND`)}
+              {' · MARKING IT SIGNED MOVES THE LINKED DEAL TO INTEGRATION'}
+            </span>
+          </div>
+        </form>
+      ) : null}
+    </li>
+  );
+}

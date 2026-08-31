@@ -1,8 +1,8 @@
 /**
  * GENERATED FROM lib/opportunities/detect.ts — do not edit by hand.
  *
- * The sweep job runs as plain ESM outside the compiled app, so it needs a
- * JavaScript copy of the detection rules. tests/unit/detect-parity.test.ts
+ * The jobs run as plain ESM outside the compiled app, so they need a
+ * JavaScript copy of these rules. tests/unit/detect-parity.test.ts
  * feeds both this file and the TypeScript original the same inputs and fails
  * if they ever disagree, so an edit to one without the other cannot ship.
  *

@@ -23,8 +23,8 @@ export const dealSource = pgEnum('deal_source', [
 ]);
 export const contractCategory = pgEnum('contract_category', ['demand', 'supply', 'general']);
 export const contractStatus = pgEnum('contract_status', [
-  'draft', 'negotiation', 'out_for_signature', 'awaiting_my_signature',
-  'signed', 'expired', 'cancelled',
+  'unclassified', 'draft', 'in_review', 'negotiation', 'out_for_signature',
+  'awaiting_my_signature', 'signed', 'expired', 'cancelled',
 ]);
 export const renewalType = pgEnum('renewal_type', ['auto', 'manual']);
 export const versionSource = pgEnum('version_source', [

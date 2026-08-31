@@ -9,7 +9,10 @@ import type { ContractCategory } from './drive';
  */
 
 export const CONTRACT_STATUSES = [
+  // Everything arriving from mail or Slack lands here until he says what it is.
+  'unclassified',
   'draft',
+  'in_review',
   'negotiation',
   'out_for_signature',
   'awaiting_my_signature',
@@ -20,7 +23,9 @@ export const CONTRACT_STATUSES = [
 export type ContractStatus = (typeof CONTRACT_STATUSES)[number];
 
 export const STATUS_LABEL: Record<ContractStatus, string> = {
+  unclassified: 'NEEDS CLASSIFYING',
   draft: 'DRAFT',
+  in_review: 'IN REVIEW / NEEDS CHANGES',
   negotiation: 'IN NEGOTIATION',
   out_for_signature: 'OUT FOR SIGNATURE',
   awaiting_my_signature: 'AWAITING MY SIGNATURE',
@@ -31,11 +36,46 @@ export const STATUS_LABEL: Record<ContractStatus, string> = {
 
 /** Statuses where the contract is still work in progress — the "what's waiting" set. */
 export const OPEN_STATUSES: ContractStatus[] = [
+  'unclassified',
   'draft',
+  'in_review',
   'negotiation',
   'out_for_signature',
   'awaiting_my_signature',
 ];
+
+/**
+ * The statuses he chose to run the board on, in the order work moves through
+ * them. `draft` and `negotiation` predate this and are kept so old rows stay
+ * valid, but they are not offered as steps.
+ */
+export const BOARD_STATUSES: ContractStatus[] = [
+  'unclassified',
+  'in_review',
+  'out_for_signature',
+  'awaiting_my_signature',
+  'signed',
+];
+
+/**
+ * Whose move it is.
+ *
+ * The distinction the board is built on: a contract waiting on THEM is a
+ * chase, and a contract waiting on HIM is a task. Conflating them is how
+ * "awaiting my signature" sits for three weeks looking like someone else's
+ * problem.
+ */
+export const WAITING_ON: Record<ContractStatus, 'you' | 'them' | 'nobody'> = {
+  unclassified: 'you',
+  draft: 'you',
+  in_review: 'you',
+  negotiation: 'them',
+  out_for_signature: 'them',
+  awaiting_my_signature: 'you',
+  signed: 'nobody',
+  expired: 'nobody',
+  cancelled: 'nobody',
+};
 
 /** Spec 9.3 — chase at 7, 14 and 21 days of silence. */
 export const ESCALATION_DAYS = [7, 14, 21] as const;

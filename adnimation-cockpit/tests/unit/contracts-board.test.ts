@@ -15,7 +15,7 @@ function view(over: Partial<ContractView> = {}): ContractView {
   const statusChangedAt = over.statusChangedAt ?? daysAgo(1);
   const category = over.category ?? 'demand';
   const counterparty = over.counterparty ?? 'PubMatic';
-  const stage = status === 'signed' || status === 'expired' ? 'signed' : 'in_progress';
+  const stage = status === 'signed' || status === 'expired' ? 'signed' : 'in_review';
 
   return {
     id: 'c1',
