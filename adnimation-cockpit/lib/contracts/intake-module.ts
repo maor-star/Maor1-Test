@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import {
   contractIntakeSeen, contractVersions, contracts, db, opportunities, pipelineClients,
 } from '@/lib/db';
@@ -85,7 +85,10 @@ export async function listContracts(
     ? await db
         .select()
         .from(contractVersions)
-        .where(sql`${contractVersions.contractId} = any(${ids})`)
+        // inArray, not a hand-written any(): a JS array bound into raw SQL
+        // reaches Postgres as a scalar, and "op ANY/ALL requires array on right
+        // side" only appears once there is actually a contract to list.
+        .where(inArray(contractVersions.contractId, ids))
         .orderBy(desc(contractVersions.versionNo))
     : [];
 
