@@ -159,9 +159,20 @@ async function forward(message, fromName, subject) {
 async function main() {
   const started = Date.now();
 
+  /*
+   * The inbox only.
+   *
+   * Not everything recent: he processes his inbox to near zero, so a mail he
+   * has already archived is one he has already dealt with, and forwarding it
+   * now would send finance a pile of things they were sent months ago. What is
+   * still sitting in the inbox is what has not been handled — which is exactly
+   * the set worth forwarding.
+   */
+  const scope = process.env.INVOICE_SCOPE ?? 'in:inbox';
   const query = encodeURIComponent(
-    `has:attachment newer_than:${DAYS}d -in:spam -in:trash -from:${MAILBOX}`,
+    `${scope} has:attachment newer_than:${DAYS}d -in:spam -in:trash -from:${MAILBOX}`,
   );
+  console.log(`looking in: ${scope}, last ${DAYS} days`);
   const refs = [];
   let pageToken = '';
   do {
