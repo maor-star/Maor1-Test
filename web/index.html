@@ -849,6 +849,14 @@ function ensureDefaults(){
     db.rules=(db.rules||[]).filter(r=>!MOVE15.test(strv(r.match_text)));
     db.defaultsV=15; save();
   }
+  if((db.defaultsV||0) < 16){
+    // ניקוי סיווגים שגויים: העברות/מזומן/שיקים שסווגו בטעות (למשל לגינון/השקיה/ביטוח) — מבטלים את הסיווג.
+    // אי אפשר לדעת למה שימשה כל העברה, ולכן הן נשארות ללא סיווג ומוחרגות מפילוח הקטגוריות.
+    const MOVE16=/העבר|העב['׳]|לאחר.?נייד|משיכ|מזומן|כספומט|בנקט|שיק|פייבוקס|paybox|זיכוי|הפקד|ביט|bit/i;
+    let cleared=0;
+    (db.transactions||[]).forEach(t=>{ if(t.kind==='expense' && t.category_id && MOVE16.test(strv(t.merchant)+' '+strv(t.description))){ t.category_id=null; cleared++; } });
+    db.defaultsV=16; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
@@ -901,7 +909,10 @@ function countsInTotal(t){ if(t.kind!=='expense') return true;
   return true;
 }
 // פילוח לפי מהות: פירוט האשראי (בית עסק אמיתי) + הוצאות רגילות. חיוב מרוכז אינו נספר (חסר מהות).
-function countsEssence(t){ if(t.kind!=='expense') return true; return !isAggLump(t); }
+// העברות/מזומן/שיקים אינם נספרים במהות — הם תנועות כספים ללא «בית עסק» אמיתי, ולא ניתן לדעת למה שימשו,
+// ולכן אסור שיזהמו את פילוח הקטגוריות (מזון, מסעדות וכו׳).
+function isMoneyMove(t){ return isMoneyMovement((t.merchant||'')+' '+(t.description||'')); }
+function countsEssence(t){ if(t.kind!=='expense') return true; return !isAggLump(t) && !isMoneyMove(t); }
 
 /* ============================ Local "API" ============================ */
 async function api(path, opts={}){
@@ -2569,10 +2580,12 @@ views.analytics=async()=>{
   const srcMeta={credit:{label:'💳 כרטיס אשראי',color:'#6366f1'},bank:{label:'🏦 חשבון בנק (הו״ק/העברות/משכנתא)',color:'#0ea5e9'},cash:{label:'💵 מזומן',color:'#16a34a'}};
   const srcMap={}; expCash.forEach(t=>{ const k=outKind(t); if(!srcMap[k])srcMap[k]={label:srcMeta[k].label,value:0,color:srcMeta[k].color}; srcMap[k].value+=t.amount; });
   const bySrc=Object.values(srcMap).sort((a,b)=>b.value-a.value);
-  // חיובים מרוכזים שטרם פורטו (מסבירים את הפער בין תזרים לפילוח)
+  // חיובי אשראי מרוכזים שאין להם פירוט לאותו חודש — הסכום «שנעלם» מהפילוח לפי קטגוריה (צריך להעלות תדפיס אשראי לאותו חודש)
   const mortSum=mortAll;
-  const detailIssuers=new Set(rows.filter(t=>t.kind==='expense'&&isCardDetail(t)).map(t=>detectIssuer(t.account)));
-  const pendingSum=detailIssuers.size>0? 0 : expCash.filter(t=>isAggLump(t)&&!detailIssuers.has(detectIssuer(t.merchant||t.description))).reduce((s,t)=>s+t.amount,0);
+  const detailIM=new Set(); allRows.forEach(t=>{ if(t.kind==='expense'&&isCardDetail(t)){ const i=detectIssuer(t.account); if(i) detailIM.add(i+'|'+String(t.tx_date).slice(0,7)); } });
+  const pendingSum=expCash.filter(t=>isAggLump(t) && !detailIM.has(detectIssuer(t.merchant||t.description)+'|'+String(t.tx_date).slice(0,7))).reduce((s,t)=>s+t.amount,0);
+  // העברות/מזומן/שיקים — נספרים בתזרים אך אינם משויכים לקטגוריה (לא ידוע ייעודם)
+  const moveSum=expCash.filter(t=>isMoneyMove(t)).reduce((s,t)=>s+t.amount,0);
   const homeCost=totalExp;
   // הכי הרבה הוצאתי על… — מקובץ לפי קטגוריה (מסעדות/דלק/ביטוח יחד). לא-מסווג מוצג לפי בית עסק.
   const spendMap={}; exp.forEach(t=>{ if(/משכנתא/.test((t.merchant||'')+(t.description||''))) return;
@@ -2604,7 +2617,8 @@ views.analytics=async()=>{
       <div class="stat-card ${net>=0?'income':'expense'}"><div class="label">${net>=0?'📈':'📉'} מאזן אחזקת בית</div><div class="value tnum">${money(net)}</div><div class="sub">הכנסות − הוצאות (ללא משכנתא/שכירות)</div></div>
       <div class="stat-card ${uncat||pendingSum?'warn':'accent'}"><div class="label">🏷️ לא מסווג / לא פורט</div><div class="value tnum">${money(uncat+pendingSum)}</div><div class="sub">${uncat?`ללא סיווג ${money(uncat)}`:''}${pendingSum?`${uncat?' · ':''}אשראי לא פורט ${money(pendingSum)}`:''} · <a class="link" data-nav="review">טפל ←</a></div></div>
     </div>
-    ${pendingSum?`<div class="hintbar" style="border-color:color-mix(in srgb,var(--amber) 40%,var(--border));background:color-mix(in srgb,var(--amber) 8%,transparent)">🔗 <strong>${money(pendingSum)}</strong> נמצאים ב<strong>חיובי אשראי מרוכזים שטרם פורטו</strong> — לכן חלק מההוצאות (מזון, מסעדות, דלק…) עדיין לא מופיעות בפילוח לפי קטגוריה. <a class="link" data-nav="import">העלה את תדפיסי הכרטיסים</a> כדי לפרק אותם ולראות את התמונה המלאה.</div>`:''}
+    ${pendingSum?`<div class="hintbar" style="border-color:color-mix(in srgb,var(--amber) 40%,var(--border));background:color-mix(in srgb,var(--amber) 8%,transparent)">⚠️ <strong>${money(pendingSum)}</strong> הם <strong>חיובי אשראי חודשיים ללא פירוט</strong>${state.month?` לחודש ${fmtMonth(state.month)}`:''} — הסכום הזה יצא מהחשבון אבל <strong>אין פירוט מה נקנה</strong>, ולכן הוא <strong>לא מופיע</strong> בפילוח הקטגוריות (מזון, מסעדות, קניות…). זו הסיבה שהקטגוריות נראות נמוכות. <a class="link" data-nav="import">העלו את תדפיס האשראי לאותו חודש ←</a></div>`:''}
+    ${moveSum?`<div class="hintbar" style="border-color:color-mix(in srgb,var(--accent) 30%,var(--border));background:color-mix(in srgb,var(--accent) 6%,transparent)">🔄 <strong>${money(moveSum)}</strong> הם <strong>העברות ומזומן</strong> — נספרים בתזרים אך <strong>אינם משויכים לקטגוריה</strong> (לא ניתן לדעת למה שימשו), ולכן לא נכללים בפילוח לפי קטגוריה.</div>`:''}
     <div id="deep-anchor"></div>
     <div class="section-head"><h2>🎯 תקציב וביצוע</h2><span class="rule"></span></div>
     <div class="panel" style="margin-bottom:22px"><h3>תקציב מול ביצוע ${state.month?'(בחודש הנבחר)':'(בחרו חודש להשוואה מדויקת)'}</h3><button class="btn" id="set-budgets" style="margin-bottom:14px">✏️ הגדרת תקציבים לכל הקטגוריות</button>${budgetHTML}</div>
@@ -2732,7 +2746,37 @@ views.analytics=async()=>{
 
   const partialNote=partialMonths.length?`<div class="hint" style="margin:2px 0 12px">התובנות והממוצעים מחושבים על <strong>${complete.length} חודשים מלאים</strong>. חודשים חלקיים (${partialMonths.map(fmtMonth).join(', ')}) מוצגים בגרפי המגמה אך אינם משוקללים בממוצעים.</div>`:'';
 
-  const deepHTML=`
+  // ===== קטגוריות חשובות — חיתוכים מדויקים (מהות: ללא משכנתא / העברות / חיובים מרוכזים) =====
+  const catMonthlySum=(pred)=>trendMonths.map(m=>Math.round(essExpAll.filter(t=>String(t.tx_date).slice(0,7)===m && pred({main:t.main_name||'',sub:t.category_name||''})).reduce((s,t)=>s+t.amount,0)));
+  const KEYCUTS=[
+    {name:'מזון וסופר',color:'#f59e0b',f:x=>x.main==='מזון'},
+    {name:'מסעדות ובילויים',color:'#ec4899',f:x=>x.main==='פנאי, בילויים וקניות'},
+    {name:'ילדים וחינוך',color:'#06b6d4',f:x=>x.main==='ילדים וחינוך'},
+    {name:'גינה ובריכה',color:'#16a34a',f:x=>x.main==='גינה ובריכה'},
+    {name:'רכב ותחבורה',color:'#84cc16',f:x=>x.main==='רכב ותחבורה'},
+    {name:'בריאות',color:'#ef4444',f:x=>x.main==='בריאות'},
+  ];
+  const keyCutSeries=KEYCUTS.map(c=>({name:c.name,color:c.color,values:catMonthlySum(c.f)})).filter(s=>s.values.some(v=>v>0));
+  // סה״כ לכל קטגוריה חשובה (לתקופה) — לדירוג לפי גודל
+  const cutTotal=(f)=>Math.round(essExpAll.filter(t=>f({main:t.main_name||'',sub:t.category_name||''})).reduce((s,t)=>s+t.amount,0));
+  const keyBars=KEYCUTS.map(c=>({label:c.name,color:c.color,value:cutTotal(c.f)})).filter(x=>x.value>0).sort((a,b)=>b.value-a.value);
+  // חשבונות בית קבועים (תשתיות) — חשמל, מים, גז, ארנונה, ועד, תקשורת
+  const UTIL=[
+    {name:'⚡ חשמל',color:'#f97316',k:/חשמל/},{name:'💧 מים וביוב',color:'#0891b2',k:/מים/},
+    {name:'🔥 גז',color:'#ef4444',k:/(^|\s)גז/},{name:'🏛️ ארנונה',color:'#64748b',k:/ארנונ/},
+    {name:'🏢 ועד בית',color:'#6366f1',k:/ועד/},{name:'📶 אינטרנט/טלוויזיה',color:'#3b82f6',k:/אינטרנט|טלוויזיה|מנוי/},
+    {name:'📱 טלפון/סלולר',color:'#22d3ee',k:/טלפון|סלולר/},
+  ];
+  const utilBars=UTIL.map(u=>({label:u.name,color:u.color,value:Math.round(essExpAll.filter(t=>u.k.test(t.category_name||'')).reduce((s,t)=>s+t.amount,0))})).filter(x=>x.value>0).sort((a,b)=>b.value-a.value);
+  const cutsHTML=`
+    <div class="section-head"><h2>📊 קטגוריות חשובות</h2><span class="rule"></span><span class="hint" style="margin:0">כל התקופה · ${trendMonths.length} חודשים · מהות (ללא משכנתא/העברות/מזומן)</span></div>
+    <div class="panels">
+      ${trendMonths.length>=2&&keyCutSeries.length?`<div class="panel" style="grid-column:1/-1"><h3>📈 מגמת הקטגוריות המרכזיות לאורך זמן</h3>${multiLineChart(trendMonths,keyCutSeries)}<div class="hint" style="margin-top:8px">מזון, מסעדות, ילדים, גינה, רכב ובריאות — לפי חודש. חודשים שבהם חסר פירוט אשראי יופיעו נמוך (ראו התראה למעלה).</div></div>`:''}
+      <div class="panel"><h3>🥇 קטגוריות מובילות (סה״כ לתקופה)</h3>${keyBars.length?barsHTML(keyBars,money):'<div class="empty">אין נתונים</div>'}</div>
+      <div class="panel"><h3>🏠 חשבונות בית קבועים (תשתיות)</h3>${utilBars.length?barsHTML(utilBars,money):'<div class="empty">אין נתונים</div>'}<div class="hint" style="margin-top:8px">חשמל · מים · גז · ארנונה · ועד · תקשורת — סה״כ לתקופה.</div></div>
+    </div>`;
+
+  const deepHTML=cutsHTML+`
     <div class="section-head"><h2>🔬 מגמות עומק ותובנות</h2><span class="rule"></span><span class="hint" style="margin:0">${state.month?`הפילוחים מציגים את <strong>${fmtMonth(state.month)}</strong> · גרפי המגמה מוצגים בתצוגת «הכל»`:`כל התקופה · ${months.length} חודשים`}</span></div>
     ${state.month?'':partialNote}
     <div class="stats-grid" style="margin-bottom:20px">${insightsHTML||'<div class="empty">אין מספיק נתונים לתובנות. דרושים לפחות חודש מלא אחד.</div>'}</div>
