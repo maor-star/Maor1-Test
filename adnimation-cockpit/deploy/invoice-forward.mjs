@@ -257,11 +257,37 @@ async function main() {
     // Recorded before archiving, so a failure here can never cause a second
     // forward on the next run.
     const archived = await archive(ref.id);
+    if (archived.ok) {
+      await sql`update invoice_forwards set archived_at = now() where message_id = ${ref.id}`;
+    }
     console.log(
       archived.ok
         ? '      archived out of the inbox'
         : `      left in the inbox (${archived.reason})`,
     );
+  }
+
+  /*
+   * Anything already forwarded but still sitting in the inbox.
+   *
+   * Archiving arrived after the first forwards did, so without this the ones
+   * finance already has would stay in front of him for ever — and a rule that
+   * only applies to mail arriving from now on is a rule he has to remember the
+   * exception to.
+   */
+  if (!DRY) {
+    const stale = await sql`
+      select message_id, subject from invoice_forwards where archived_at is null
+    `;
+    for (const row of stale) {
+      const result = await archive(row.message_id);
+      if (result.ok) {
+        await sql`update invoice_forwards set archived_at = now() where message_id = ${row.message_id}`;
+        console.log(`  archived a previously forwarded invoice: ${row.subject}`);
+      } else {
+        console.log(`  could not archive "${row.subject}": ${result.reason}`);
+      }
+    }
   }
 
   console.log(
