@@ -29,7 +29,7 @@ const DAYS = Number(process.env.OPPORTUNITY_LOOKBACK_DAYS ?? 30);
  * already is, and applying it is his judgement — so a labelled thread is filed
  * as his, not proposed.
  */
-const CAPTURE_LABELS = (process.env.GMAIL_OPPORTUNITY_LABEL ?? 'Opportunity')
+const CAPTURE_LABELS = (process.env.GMAIL_OPPORTUNITY_LABEL ?? 'Opportunity,הזדמנות')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);

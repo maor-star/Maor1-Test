@@ -285,6 +285,22 @@ async function main() {
   // dismissal — otherwise dismissing once hides it for good.
   await sql`update mail_threads set dismissed_at = null where last_from_me = true`;
 
+  /*
+   * Drop anything that has since moved to trash or spam.
+   *
+   * This is a mirror of Gmail, not a record of its own, and the query no
+   * longer returns those — so without this they would sit here for ever,
+   * counted as waiting on him. Cache eviction, not deletion of anything the
+   * cockpit owns: an opportunity captured from such a thread keeps its own row
+   * and its link.
+   */
+  const pruned = await sql`
+    delete from mail_threads
+    where labels && array['TRASH','SPAM']
+    returning thread_id
+  `;
+  if (pruned.length > 0) console.log(`pruned ${pruned.length} trashed or spam threads`);
+
   const [counts] = await sql`
     select
       count(*) as total,

@@ -75,7 +75,12 @@ export default async function OpportunitiesPage({
         </div>
       </HudCard>
 
-      <HowToCapture gmailLabel={process.env.GMAIL_OPPORTUNITY_LABEL ?? 'Opportunity'} />
+      <HowToCapture
+        gmailLabels={(process.env.GMAIL_OPPORTUNITY_LABEL ?? 'Opportunity,הזדמנות')
+          .split(',')
+          .map((l) => l.trim())
+          .filter(Boolean)}
+      />
 
       <nav className="flex flex-wrap border border-divider">
         {OPPORTUNITY_VIEWS.map((v) => (

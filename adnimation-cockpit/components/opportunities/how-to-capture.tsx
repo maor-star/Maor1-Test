@@ -10,7 +10,7 @@ import { Num } from '@/components/num';
  * being told again — so the instructions live on the page rather than in a
  * message he has to remember.
  */
-export function HowToCapture({ gmailLabel }: { gmailLabel: string }) {
+export function HowToCapture({ gmailLabels }: { gmailLabels: string[] }) {
   return (
     <div className="border border-divider p-4">
       <p className="hud-label mb-3 text-[9px]">THREE WAYS IN — ALL FROM WHERE YOU ALREADY ARE</p>
@@ -22,9 +22,15 @@ export function HowToCapture({ gmailLabel }: { gmailLabel: string }) {
           body={
             <>
               Apply the label{' '}
-              <span className="font-semi text-accent-700">{gmailLabel}</span> to any conversation.
-              It appears here within the hour, with the thread linked. Make the label once in
-              Gmail; after that it is one click while you read.
+              {gmailLabels.map((l, i) => (
+                <span key={l}>
+                  {i > 0 ? ' or ' : ''}
+                  <span className="font-semi text-accent-700">{l}</span>
+                </span>
+              ))}{' '}
+              to any conversation. It appears here within the hour, with the thread linked. Create
+              the label once in Gmail; after that it is one click while you read — including on
+              conversations you have already replied to.
             </>
           }
         />
