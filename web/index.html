@@ -891,6 +891,25 @@ function ensureDefaults(){
     if(addW.length) db.transactions.push(...addW);
     db.defaultsV=18; save();
   }
+  if((db.defaultsV||0) < 19){
+    // ספירה כפולה של «ישראכרט»: ישראכרט מנפיקה את American Express בישראל, והבנק מפצל את חשבון
+    // האמריקן החודשי לשתי שורות חיוב — «אמריקן אקספרס» + «ישראכרט». שתיהן יחד = אותו חשבון אמריקן,
+    // שכבר מפורט קנייה-קנייה בתדפיס האמריקן. לכן חיוב «ישראכרט» מהבנק הוא כפילות של פירוט האמריקן — מוחקים.
+    // (כאל/ויזה הם כרטיסים אחרים לגמרי ואינם מושפעים.)
+    const CARD19=['ישראכרט','אמריקן אקספרס','אמריקן','אמקס','לאומי קארד','דיינרס','כאל','מקס','ויזה','כרטיסי אשראי'];
+    const det19=s=>{ s=strv(s); for(const k of CARD19) if(k&&s.includes(k)) return (k==='אמריקן'||k==='אמקס')?'אמריקן אקספרס':k; return null; };
+    const prevYM19=ym=>{ const p=String(ym).split('-').map(Number),y=p[0],mo=p[1]; if(!y||!mo) return ''; return (mo-1?y:y-1)+'-'+String(mo-1||12).padStart(2,'0'); };
+    const amexMonths=new Set();
+    (db.transactions||[]).forEach(t=>{ if(t.kind==='expense' && det19(t.account)==='אמריקן אקספרס') amexMonths.add(String(t.tx_date).slice(0,7)); });
+    db.transactions=(db.transactions||[]).filter(t=>{
+      if(t.kind!=='expense') return true;
+      const mi=det19(t.merchant||t.description); if(mi!=='ישראכרט' || det19(t.account)) return true; // רק חיוב מרוכז «ישראכרט»
+      const ym=String(t.tx_date).slice(0,7);
+      const covered = amexMonths.has(ym) || amexMonths.has(prevYM19(ym));
+      return !covered; // מכוסה ע"י פירוט האמריקן — מוחקים כפילות
+    });
+    db.defaultsV=19; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
@@ -936,7 +955,13 @@ var _detailMonths=null;
 function detailMonths(){ if(_detailMonths===null){ _detailMonths=new Set(); db.transactions.forEach(t=>{ if(t.kind==='expense'&&isCardDetail(t)){ const i=detectIssuer(t.account); if(i) _detailMonths.add(i+'|'+String(t.tx_date).slice(0,7)); } }); } return _detailMonths; }
 function _prevYM(ym){ const p=String(ym).split('-').map(Number); const y=p[0],m=p[1]; if(!y||!m) return ''; return (m-1?y:y-1)+'-'+String(m-1||12).padStart(2,'0'); }
 // חיוב מרוכז «מכוסה» אם קיים פירוט לאותה חברה בחודש החיוב או בחודש שלפניו (חיוב מפרט בערך את קניות החודש הקודם).
-function lumpCovered(t){ const i=detectIssuer(t.merchant||t.description); if(!i) return false; const ym=String(t.tx_date).slice(0,7); const s=detailMonths(); return s.has(i+'|'+ym) || s.has(i+'|'+_prevYM(ym)); }
+// ישראכרט מנפיקה גם את American Express, והבנק מפצל את חשבון האמריקן לשתי שורות («אמריקן אקספרס» + «ישראכרט») —
+// לכן חיוב «ישראכרט» מכוסה גם ע"י פירוט האמריקן (הוא החלק השני של אותו חשבון, שכבר מפורט). כאל/ויזה הם כרטיסים אחרים.
+function lumpCovered(t){ const i=detectIssuer(t.merchant||t.description); if(!i) return false; const ym=String(t.tx_date).slice(0,7); const s=detailMonths();
+  if(s.has(i+'|'+ym) || s.has(i+'|'+_prevYM(ym))) return true;
+  if(i==='ישראכרט' && (s.has('אמריקן אקספרס|'+ym) || s.has('אמריקן אקספרס|'+_prevYM(ym)))) return true;
+  return false;
+}
 // עלות/תזרים על בסיס מהות (accrual): פירוט האשראי (מקור האמת, לפי תאריך הקנייה) + הוצאות רגילות תמיד נספרים.
 // חיוב מרוכז נספר רק אם אין פירוט מקביל — חברה שיש לה פירוט (למשל אמריקן) לא סופרים את חיובה המרוכז (הוא כפילות של הפירוט);
 // חברה ללא פירוט (למשל ישראכרט) — החיוב המרוכז נספר כי הוא המידע היחיד.
