@@ -1,0 +1,103 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+// @ts-expect-error — the jobs are plain ESM with no types.
+import { agentState, briefVeto, mayAct } from '@/deploy/agent-brief.mjs';
+
+/**
+ * The switch on the screen has to mean something in the job.
+ *
+ * Every one of these is a way an agent could act when he believed it was off,
+ * which is the failure that matters here: he judges the agents by what they do
+ * while he is watching a dry run, and then trusts the OFF button.
+ */
+type Row = Record<string, unknown>;
+
+/** A postgres-shaped tag function: answers by which table the query names. */
+function fakeSql(rows: { flag?: Row[]; agent?: Row[] }, fail = false) {
+  return (strings: TemplateStringsArray) => {
+    const text = strings.join(' ');
+    if (fail) return Promise.reject(new Error('no database'));
+    if (text.includes('system_flags')) return Promise.resolve(rows.flag ?? []);
+    return Promise.resolve(rows.agent ?? []);
+  };
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  delete process.env.AGENTS_GLOBAL_KILL;
+});
+
+describe('the agent gate', () => {
+  it('reads the switch and the brief from the agent’s own row', async () => {
+    const state = await agentState(
+      fakeSql({ flag: [{ value: 'false' }], agent: [{ enabled: true, instructions: '  be careful  ' }] }),
+      'mail-answerer',
+    );
+    expect(state).toEqual({ exists: true, enabled: true, brief: 'be careful', killed: false });
+  });
+
+  it('treats an unreadable kill switch as a stop, not as permission', async () => {
+    const state = await agentState(fakeSql({}, true), 'mail-answerer');
+    expect(state.killed).toBe(true);
+  });
+
+  it('refuses when the kill switch is on, whatever the agent says', () => {
+    expect(mayAct({ exists: true, enabled: true, killed: true }).act).toBe(false);
+  });
+
+  it('refuses a switched-off agent, and one that is not installed', () => {
+    expect(mayAct({ exists: true, enabled: false, killed: false }).act).toBe(false);
+    expect(mayAct({ exists: false, enabled: false, killed: false }).act).toBe(false);
+  });
+
+  it('lets a dry run through whatever the switches say — that is what it is for', () => {
+    const gate = mayAct({ exists: false, enabled: false, killed: true }, { dry: true });
+    expect(gate.act).toBe(false);
+    expect(gate.dryRun).toBe(true);
+  });
+
+  it('lets a hand-run through with FORCE, but never past the kill switch', () => {
+    expect(mayAct({ exists: true, enabled: false, killed: false }, { force: true }).act).toBe(true);
+    expect(mayAct({ exists: true, enabled: false, killed: true }, { force: true }).act).toBe(false);
+  });
+});
+
+describe('the brief', () => {
+  const item = { subject: 'Invoice 4471', from: 'billing@vendor.com' };
+
+  it('does nothing when he has not written one', async () => {
+    const veto = await briefVeto({ brief: '', agent: 'x', what: 'forward it', item });
+    expect(veto.go).toBe(true);
+  });
+
+  it('holds an item back when his brief covers it', async () => {
+    vi.stubGlobal('fetch', async () => ({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: '{"holdBack": true, "why": "gym receipts are personal"}' }],
+      }),
+    }));
+    const veto = await briefVeto({ brief: 'gym receipts are mine', agent: 'x', what: 'forward it', item, apiKey: 'k' });
+    expect(veto.go).toBe(false);
+    expect(veto.why).toContain('gym');
+  });
+
+  it('goes ahead when his brief does not cover it', async () => {
+    vi.stubGlobal('fetch', async () => ({
+      ok: true,
+      json: async () => ({ content: [{ type: 'text', text: '{"holdBack": false, "why": ""}' }] }),
+    }));
+    const veto = await briefVeto({ brief: 'gym receipts are mine', agent: 'x', what: 'forward it', item, apiKey: 'k' });
+    expect(veto.go).toBe(true);
+  });
+
+  it('holds back rather than guessing when it cannot ask', async () => {
+    // He wrote instructions; acting without reading them is the worst outcome.
+    vi.stubGlobal('fetch', async () => ({ ok: false, status: 500, json: async () => ({}) }));
+    expect((await briefVeto({ brief: 'careful', agent: 'x', what: 'forward it', item, apiKey: 'k' })).go).toBe(false);
+
+    vi.stubGlobal('fetch', async () => { throw new Error('network'); });
+    expect((await briefVeto({ brief: 'careful', agent: 'x', what: 'forward it', item, apiKey: 'k' })).go).toBe(false);
+
+    expect((await briefVeto({ brief: 'careful', agent: 'x', what: 'forward it', item, apiKey: undefined })).go).toBe(false);
+  });
+});

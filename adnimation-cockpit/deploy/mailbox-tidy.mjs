@@ -24,6 +24,7 @@ import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { ANSWERED_LABEL, PROMO_LABEL, isSpentAuthCode, looksPromotional } from './mailbox-rules.mjs';
 import { postAsBot } from './bot-post.mjs';
+import { agentState, briefVeto, mayAct } from './agent-brief.mjs';
 
 const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -193,8 +194,28 @@ async function main() {
   const refs = messages ?? [];
   console.log(`${refs.length} messages in the inbox`);
 
+  /*
+   * Two agents share this job — one files the sales mail, one clears the spent
+   * codes — so each half is gated on its own switch and taught by its own
+   * brief. Switching off the filing must not also stop the codes.
+   */
+  const promoAgent = await agentState(sql, 'promo-filer');
+  const codeAgent = await agentState(sql, 'code-cleaner');
+  const force = process.env.FORCE === '1';
+  const mayFile = mayAct(promoAgent, { dry: DRY, force });
+  const mayTrash = mayAct(codeAgent, { dry: DRY, force });
+  if (!DRY) {
+    console.log(`filing sales mail: ${mayFile.act ? 'on' : `off — ${mayFile.why}`}`);
+    console.log(`clearing spent codes: ${mayTrash.act ? 'on' : `off — ${mayTrash.why}`}`);
+    if (!mayFile.act && !mayTrash.act) {
+      await sql.end();
+      process.exit(0);
+    }
+  }
+
   let filed = 0;
   let trashed = 0;
+  let held = 0;
   const did = [];
 
   for (const ref of refs) {
@@ -218,7 +239,7 @@ async function main() {
     };
 
     const code = isSpentAuthCode(facts);
-    if (code.isExpiredCode) {
+    if (code.isExpiredCode && (DRY || mayTrash.act)) {
       console.log(`  ${DRY ? 'WOULD TRASH' : 'trashing'}: ${subject}`);
       console.log(`      ${code.reasons.join(', ')}`);
       if (!DRY) {
@@ -230,7 +251,19 @@ async function main() {
     }
 
     const promo = looksPromotional(facts);
-    if (promo.isPromo) {
+    if (promo.isPromo && (DRY || mayFile.act)) {
+      const veto = await briefVeto({
+        brief: promoAgent.brief,
+        agent: 'promo-filer',
+        what: `take this out of the inbox and file it under "${PROMO_LABEL}"`,
+        item: { subject, from, why: promo.reasons.join(', ') },
+      });
+      if (!veto.go) {
+        held += 1;
+        console.log(`  left in the inbox: ${subject}\n      ${veto.why}`);
+        continue;
+      }
+
       console.log(`  ${DRY ? 'WOULD FILE' : 'filing'}: ${subject}`);
       console.log(`      from ${from}`);
       console.log(`      ${promo.reasons.join(', ')}`);
@@ -257,6 +290,7 @@ async function main() {
     DRY
       ? `dry run — nothing touched, in ${Math.round((Date.now() - started) / 1000)}s.`
       : `filed ${filed} to "${PROMO_LABEL}", trashed ${trashed} spent codes, ` +
+        `${held} held back by your brief, ` +
         `in ${Math.round((Date.now() - started) / 1000)}s.`,
   );
 

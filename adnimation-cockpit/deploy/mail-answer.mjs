@@ -22,6 +22,7 @@ import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { triage } from './autoreply-rules.mjs';
 import { postAsBot } from './bot-post.mjs';
+import { agentState, mayAct } from './agent-brief.mjs';
 
 const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -30,7 +31,12 @@ const CLAUDE = process.env.ANTHROPIC_API_KEY;
 const ANSWERED_LABEL = process.env.ANSWERED_LABEL ?? 'Claude Answered';
 const DRY = process.env.DRY === '1';
 const MAX = Number(process.env.ANSWER_MAX ?? 25);
-const INSTRUCTIONS = process.env.ANSWER_INSTRUCTIONS ?? '';
+/*
+ * What he has taught it, from the agent's own row — the same text the "TEACH
+ * IT" box on the agents screen writes. The environment variable stays as an
+ * override for a run by hand.
+ */
+let INSTRUCTIONS = process.env.ANSWER_INSTRUCTIONS ?? '';
 
 if (!DB || !RAW_KEY || !MAILBOX) {
   console.error('DATABASE_URL, GOOGLE_SERVICE_ACCOUNT_KEY and GMAIL_MAILBOX are required.');
@@ -237,6 +243,24 @@ async function tellHim(lines) {
 
 async function main() {
   const started = Date.now();
+
+  /*
+   * The switch on the screen decides whether this runs. A job that reads only
+   * its own environment is a job whose OFF button does nothing.
+   */
+  const state = await agentState(sql, 'mail-answerer');
+  const gate = mayAct(state, { dry: DRY, force: process.env.FORCE === '1' });
+  if (!gate.act && !DRY) {
+    console.log(`not answering anything: ${gate.why}.`);
+    await sql.end();
+    process.exit(0);
+  }
+  if (state.brief && !process.env.ANSWER_INSTRUCTIONS) {
+    INSTRUCTIONS = state.brief;
+    console.log(`using the brief you wrote it (${state.brief.length} chars).`);
+  } else if (!state.brief) {
+    console.log('no brief written for it yet — the built-in rules alone decide.');
+  }
 
   await sql`
     create table if not exists mail_answers (

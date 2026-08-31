@@ -23,6 +23,7 @@ import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { assertInternalRecipients, looksLikeInvoice } from './internal-mail.mjs';
 import { postAsBot } from './bot-post.mjs';
+import { agentState, briefVeto, mayAct } from './agent-brief.mjs';
 
 const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -213,8 +214,23 @@ async function main() {
 
   console.log(`${refs.length} messages with attachments in the last ${DAYS} days`);
 
+  const state = await agentState(sql, 'invoice-forwarder');
+  const gate = mayAct(state, { dry: DRY, force: process.env.FORCE === '1' });
+  if (!gate.act && !DRY) {
+    console.log(`forwarding nothing: ${gate.why}.`);
+    await sql.end();
+    process.exit(0);
+  }
+  if (gate.why) console.log(gate.why);
+  console.log(
+    state.brief
+      ? `checking each one against the brief you wrote it (${state.brief.length} chars).`
+      : 'no brief written for it yet — the built-in rules alone decide.',
+  );
+
   let found = 0;
   let sent = 0;
+  let held = 0;
   const forwarded = [];
 
   for (const ref of refs.slice(0, MAX)) {
@@ -237,6 +253,23 @@ async function main() {
     const [already] = await sql`select message_id from invoice_forwards where message_id = ${ref.id}`;
     if (already) {
       console.log(`  already forwarded: ${subject}`);
+      continue;
+    }
+
+    /*
+     * His brief, applied to this one. It can only hold something back — a
+     * sentence he wrote about one supplier must never turn into permission to
+     * forward something the rules refused.
+     */
+    const veto = await briefVeto({
+      brief: state.brief,
+      agent: 'invoice-forwarder',
+      what: `forward this email to ${to}, because it looks like an invoice`,
+      item: { subject, from, attachments: names.join(', ') },
+    });
+    if (!veto.go) {
+      held += 1;
+      console.log(`  left alone: ${subject}\n      ${veto.why}`);
       continue;
     }
 
@@ -294,7 +327,8 @@ async function main() {
   }
 
   console.log(
-    `${found} looked like invoices, ${DRY ? '0 sent (dry run)' : `${sent} forwarded to ${to}`}, ` +
+    `${found} looked like invoices, ${held} held back by your brief, ` +
+      `${DRY ? '0 sent (dry run)' : `${sent} forwarded to ${to}`}, ` +
       `in ${Math.round((Date.now() - started) / 1000)}s.`,
   );
 

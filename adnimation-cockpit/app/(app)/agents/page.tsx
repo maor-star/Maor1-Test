@@ -1,5 +1,5 @@
 import { requireUser } from '@/lib/auth/session';
-import { agentsOverview, listAgents } from '@/lib/agents/module';
+import { agentsOverview, listAgents, seedAgents } from '@/lib/agents/module';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
 import { Num } from '@/components/num';
@@ -20,7 +20,18 @@ export const dynamic = 'force-dynamic';
  * can now do.
  */
 export default async function AgentsPage() {
-  await requireUser();
+  const user = await requireUser();
+
+  /*
+   * Install whatever built-in agents are not here yet, on the way in.
+   *
+   * It only ever adds: an agent he switched off stays off, a level he set
+   * stays set, a brief he wrote stays written. Without this, an agent that
+   * exists in the code is invisible until he happens to press a button —
+   * which is exactly what happened to the mail answerer, and the symptom was
+   * him asking where it was.
+   */
+  const installed = await seedAgents(user.email);
   const [agents, overview] = await Promise.all([listAgents(), agentsOverview()]);
   const bots = botStatuses();
 
@@ -35,6 +46,13 @@ export default async function AgentsPage() {
           </span>
         }
       />
+
+      {installed.added.length > 0 ? (
+        <div className="border border-divider bg-accent/5 px-4 py-3 font-semi text-[12px] tracking-[0.06em] text-neutral-700">
+          Added <Num>{installed.added.length}</Num> agents that were not installed yet:{' '}
+          {installed.added.join(', ')}. All at level 1 and all switched off.
+        </div>
+      ) : null}
 
       {overview.killed ? (
         <div className="border border-sev-critical/40 bg-sev-critical/10 px-4 py-3 font-semi text-[12px] tracking-[0.06em] text-sev-critical">
