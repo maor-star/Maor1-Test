@@ -36,7 +36,7 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
     ],
     autonomyLevel: 1,
     maxRunsPerHour: 20,
-    enabled: true,
+    enabled: false,
   },
   {
     name: 'contract-redliner',
@@ -151,6 +151,166 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
     actions: [{ type: 'post_slack_internal', config: {} }],
     autonomyLevel: 1,
     maxRunsPerHour: 4,
+    enabled: false,
+  },
+  {
+    name: 'invoice-forwarder',
+    description:
+      'Forwards every invoice that arrives to finance@adnimation.com, with the original message ' +
+      'attached exactly as it came.',
+    rationale:
+      'The only agent that sends anything, and it physically cannot send outside the company — ' +
+      'every recipient is checked against adnimation.com before anything leaves. It needs both ' +
+      'the word and a document, because a missed invoice you forward by hand and a wrong one has ' +
+      'finance chasing a payment that does not exist.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 */6 * * *' },
+    conditions: [{ name: 'It really is an invoice', check: 'looks_like_invoice', config: {} }],
+    actions: [{ type: 'send_internal_email', config: { to: 'finance@adnimation.com' } }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 4,
+    enabled: false,
+  },
+  {
+    name: 'renewal-warner',
+    description:
+      'Watches every signed contract for its notice period and warns you before the window to ' +
+      'get out closes.',
+    rationale:
+      'An auto-renewal you notice a week late costs a year. The contract reader already finds ' +
+      'the notice period; this is the thing that remembers it.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 8 * * 1' },
+    conditions: [{ name: 'A notice window is closing', check: 'renewal_window', config: { days: 45 } }],
+    actions: [{ type: 'create_alert', config: { severity: 'warning' } }, { type: 'create_task', config: {} }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 2,
+    enabled: false,
+  },
+  {
+    name: 'meeting-prep',
+    description:
+      'Before each meeting, one card: who they are, what we last agreed, what is open with them, ' +
+      'and what they are worth.',
+    rationale:
+      'Everything the cockpit knows about a counterparty, assembled in the ten minutes before ' +
+      'you speak to them instead of in the hour after.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 6 * * 0-4' },
+    conditions: [{ name: 'There is a meeting today', check: 'meeting_today', config: {} }],
+    actions: [{ type: 'post_slack_internal', config: { to: 'ceo' } }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 2,
+    enabled: false,
+  },
+  {
+    name: 'payment-chaser',
+    description:
+      'Tracks invoices we have sent and drafts the chase when one goes past its terms.',
+    rationale:
+      'Money owed to us is the one number nobody in a small company is asked about daily. The ' +
+      'draft goes to you; sending to a customer stays yours.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 9 * * 2' },
+    conditions: [{ name: 'Something is overdue', check: 'receivable_overdue', config: { days: 7 } }],
+    actions: [{ type: 'draft_reply', config: {} }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 2,
+    enabled: false,
+  },
+  {
+    name: 'partner-health-watch',
+    description:
+      'Watches each demand and supply partner for a drop that is unusual for that partner, not ' +
+      'just unusual in general.',
+    rationale:
+      'A partner halving is invisible in a company total. This compares each one against its own ' +
+      'pattern, which is the only comparison that catches it early.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 10 * * *' },
+    conditions: [{ name: 'A partner moved abnormally', check: 'partner_anomaly', config: {} }],
+    actions: [{ type: 'create_alert', config: { severity: 'warning' } }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 4,
+    enabled: false,
+  },
+  {
+    name: 'weekly-review',
+    description:
+      'One message on Friday: what moved, what did not, what you said you would do and did not, ' +
+      'and what is waiting on you going into next week.',
+    rationale:
+      'The report you would write yourself if you had an hour. Reversible, internal, and the ' +
+      'natural second agent to promote.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 13 * * 4' },
+    conditions: [],
+    actions: [{ type: 'post_slack_internal', config: { to: 'ceo' } }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 2,
+    enabled: false,
+  },
+  {
+    name: 'intro-writer',
+    description:
+      'When you say who you want introduced to whom, drafts the introduction in your voice with ' +
+      'the context both sides need.',
+    rationale:
+      'Introductions are high value and slow to write, which is why they get postponed. The ' +
+      'draft is yours to send.',
+    triggerType: 'manual',
+    triggerConfig: {},
+    conditions: [{ name: 'Claude is connected', check: 'claude_configured', config: {} }],
+    actions: [{ type: 'draft_reply', config: {} }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 10,
+    enabled: false,
+  },
+  {
+    name: 'expense-sorter',
+    description:
+      'Reads receipts and invoices as they arrive and files them by category and month, so the ' +
+      'bookkeeping is done before anyone asks for it.',
+    rationale:
+      'The month-end scramble, removed. Filing is reversible and internal, which makes this a ' +
+      'good candidate to run without asking once it has a record.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 5 * * *' },
+    conditions: [{ name: 'Claude is connected', check: 'claude_configured', config: {} }],
+    actions: [{ type: 'update_record', config: {} }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 4,
+    enabled: false,
+  },
+  {
+    name: 'commitment-tracker',
+    description:
+      'Reads what you promised in Slack and email — "I will send you", "by Thursday" — and turns ' +
+      'each into a task before you forget it.',
+    rationale:
+      'The promises you make in passing are the ones that damage trust when they are missed, and ' +
+      'they are never written down anywhere.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 */4 * * *' },
+    conditions: [{ name: 'Claude is connected', check: 'claude_configured', config: {} }],
+    actions: [{ type: 'create_task', config: {} }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 8,
+    enabled: false,
+  },
+  {
+    name: 'quiet-client-watch',
+    description:
+      'Notices a client you have not spoken to in longer than you usually would, and says who.',
+    rationale:
+      'Churn is quiet before it is loud. This is the list you would have made if you had ' +
+      'remembered to make it.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 9 * * 1' },
+    conditions: [{ name: 'Someone has gone quiet', check: 'client_quiet', config: { days: 30 } }],
+    actions: [{ type: 'create_alert', config: { severity: 'info' } }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 2,
     enabled: false,
   },
 ];

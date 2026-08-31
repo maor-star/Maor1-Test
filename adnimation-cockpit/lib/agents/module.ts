@@ -32,6 +32,8 @@ function toRecord(r: Row): AgentRecord {
 
 export interface AgentListItem extends AgentRecord {
   rationale: string | null;
+  instructions: string | null;
+  instructionsUpdatedAt: Date | null;
   lastRun: { startedAt: Date; outcome: string | null; haltReason: string | null } | null;
   runsToday: number;
 }
@@ -61,6 +63,8 @@ export async function listAgents(): Promise<AgentListItem[]> {
       return {
         ...toRecord(r),
         rationale: rationales.get(r.name) ?? null,
+        instructions: r.instructions,
+        instructionsUpdatedAt: r.instructionsUpdatedAt,
         lastRun: last ?? null,
         runsToday: today?.n ?? 0,
       };
@@ -135,6 +139,45 @@ export async function seedAgents(actor: string): Promise<{ added: string[] }> {
     });
   }
   return { added };
+}
+
+/**
+ * What he has taught an agent.
+ *
+ * Free text on purpose. The useful corrections are the ones nobody could have
+ * anticipated — "the gym invoices are personal, leave them", "Elki's reports
+ * are never invoices", "keep drafts to three sentences" — and a form with
+ * fields for the corrections we thought of is a form that cannot hold them.
+ *
+ * It is passed to the model as part of the agent's own instructions, so it
+ * shapes the work rather than filtering the result.
+ */
+export async function setInstructions(
+  id: string,
+  instructions: string | null,
+  actor: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const [before] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+  if (!before) return { ok: false, error: 'No such agent' };
+
+  const text = instructions?.trim() ?? '';
+  await db
+    .update(agents)
+    .set({
+      instructions: text === '' ? null : text,
+      instructionsUpdatedAt: new Date(),
+    })
+    .where(eq(agents.id, id));
+
+  await writeAudit({
+    actor,
+    action: 'agent.instructions',
+    entityType: 'agent',
+    entityId: id,
+    before: { instructions: before.instructions },
+    after: { instructions: text === '' ? null : text },
+  });
+  return { ok: true };
 }
 
 export async function setAgentEnabled(

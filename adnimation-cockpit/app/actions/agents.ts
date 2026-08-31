@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
 import {
-  runById, seedAgents, setAgentEnabled, setAutonomy, setGlobalKill,
+  runById, seedAgents, setAgentEnabled, setAutonomy, setGlobalKill, setInstructions,
 } from '@/lib/agents/module';
 
 /**
@@ -92,6 +92,24 @@ export async function runAgentAction(formData: FormData): Promise<AgentActionRes
           ? `Dry run — would have: ${report.actions.map((a) => a.type).join(', ') || 'nothing'}`
           : 'Ran.',
   };
+}
+
+/** Teach an agent something, in his own words. */
+export async function setInstructionsAction(formData: FormData): Promise<AgentActionResult> {
+  const user = await requireUser();
+  const parsed = z
+    .object({ id: idSchema, instructions: z.string().max(20_000) })
+    .safeParse({
+      id: String(formData.get('id') ?? ''),
+      instructions: String(formData.get('instructions') ?? ''),
+    });
+  if (!parsed.success) return { ok: false, error: 'Could not save that' };
+
+  const result = await setInstructions(parsed.data.id, parsed.data.instructions, user.email);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath('/agents');
+  return { ok: true, message: 'Saved. It will use this from the next run.' };
 }
 
 export async function killSwitchAction(formData: FormData): Promise<AgentActionResult> {

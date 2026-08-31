@@ -47,6 +47,22 @@ const TARGETS = [
     ],
   },
   {
+    src: new URL('../lib/agents/internal-mail.ts', import.meta.url),
+    out: new URL('./internal-mail.mjs', import.meta.url),
+    from: 'lib/agents/internal-mail.ts',
+    test: 'tests/unit/internal-mail-parity.test.ts',
+    rewrites: [
+      [/export interface InvoiceInput \{[\s\S]*?\n\}\n\n/, ''],
+      [/export interface InvoiceGuess \{[\s\S]*?\n\}\n\n/, ''],
+      ['const INVOICE_WORDS = [', 'const INVOICE_WORDS = ['],
+      ['const NOT_AN_INVOICE = [', 'const NOT_AN_INVOICE = ['],
+      ['export function isInternalAddress(address: string, domains = INTERNAL_DOMAINS): boolean {', 'export function isInternalAddress(address, domains = INTERNAL_DOMAINS) {'],
+      [/export function assertInternalRecipients\(\n  recipients: string\[\],\n  domains = INTERNAL_DOMAINS,\n\): \{ ok: true; recipients: string\[\] \} \| \{ ok: false; error: string \} \{/, 'export function assertInternalRecipients(recipients, domains = INTERNAL_DOMAINS) {'],
+      ['export function looksLikeInvoice(input: InvoiceInput): InvoiceGuess {', 'export function looksLikeInvoice(input) {'],
+      ['  const reasons: string[] = [];', '  const reasons = [];'],
+    ],
+  },
+  {
     src: new URL('../lib/contracts/drive.ts', import.meta.url),
     out: new URL('./contract-folders.mjs', import.meta.url),
     from: 'lib/contracts/drive.ts',
@@ -88,7 +104,7 @@ for (const target of TARGETS) {
   // Anything left with a type annotation would be a syntax error at run time,
   // and a job that crashes on the timer is worse than one that fails to build.
   if (
-    /:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget)\b/.test(
+    /:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget|InvoiceInput|InvoiceGuess)\b/.test(
       body,
     )
   ) {

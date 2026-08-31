@@ -28,6 +28,14 @@ export type IrreversibleAction = (typeof IRREVERSIBLE_ACTIONS)[number];
 /** Everything an agent can do. The reversible ones are safe to automate. */
 export const ACTION_TYPES = [
   'summarise_contract',
+  /*
+   * Sending inside the company is its own action, apart from
+   * send_external_email. The risk in a send is almost entirely about who
+   * receives it: a misrouted invoice inside Adnimation is an awkward minute,
+   * the same mail to a counterparty is a different kind of day. The narrowness
+   * is enforced in lib/agents/internal-mail.ts, not assumed here.
+   */
+  'send_internal_email',
   'draft_reply',
   'propose_contract_changes',
   'post_slack_internal',

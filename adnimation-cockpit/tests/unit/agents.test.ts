@@ -3,6 +3,7 @@ import {
   ACTION_TYPES, AUTONOMY_LABEL, IRREVERSIBLE_ACTIONS, PROMOTION_MIN_RUNS, agentInputSchema,
   isIrreversible, validateAgentConfig,
 } from '@/lib/agents/types';
+import { SEED_AGENTS } from '@/lib/agents/definitions';
 
 /**
  * The agent engine's hard constraints — CLAUDE.md §6.
@@ -130,5 +131,70 @@ describe('agents — the shape of one', () => {
 
   it('labels every autonomy level, so none is a bare number on screen', () => {
     for (const level of [1, 2, 3, 4]) expect(AUTONOMY_LABEL[level]).toBeTruthy();
+  });
+});
+
+/**
+ * The built-in agents, checked as a set.
+ *
+ * They are the ones that will actually be switched on, so the properties that
+ * matter are properties of the whole list: nothing arrives switched on, nothing
+ * arrives above level 1, and nothing that can send outside the company exists
+ * at all yet.
+ */
+describe('agents — the built-in set', () => {
+  it('ships every agent switched off', () => {
+    for (const agent of SEED_AGENTS) {
+      expect(agent.enabled, `${agent.name} arrives switched on`).toBe(false);
+    }
+  });
+
+  it('ships every agent at level 1', () => {
+    for (const agent of SEED_AGENTS) {
+      expect(agent.autonomyLevel ?? 1, `${agent.name} is above level 1`).toBe(1);
+    }
+  });
+
+  it('rate limits every one, because an unlimited agent is a loop', () => {
+    for (const agent of SEED_AGENTS) {
+      expect(agent.maxRunsPerHour ?? 10).toBeLessThanOrEqual(24);
+    }
+  });
+
+  it('gives every one a reason it exists, in his terms not ours', () => {
+    for (const agent of SEED_AGENTS) {
+      expect(agent.rationale.length, `${agent.name} has no rationale`).toBeGreaterThan(40);
+    }
+  });
+
+  it('contains no agent that signs, and none that mails the outside world', () => {
+    // contract-countersign is gated behind legal preconditions and an
+    // e-signature provider; external send has no agent that needs it yet.
+    for (const agent of SEED_AGENTS) {
+      for (const action of agent.actions) {
+        expect(action.type).not.toBe('sign_contract');
+        expect(action.type).not.toBe('send_external_email');
+        expect(action.type).not.toBe('send_external_document');
+      }
+    }
+  });
+
+  it('passes its own validation — every definition is a legal agent', () => {
+    for (const agent of SEED_AGENTS) {
+      const result = validateAgentConfig({
+        actions: agent.actions,
+        autonomyLevel: agent.autonomyLevel ?? 1,
+      });
+      expect(result.ok, `${agent.name}: ${result.ok ? '' : result.error}`).toBe(true);
+    }
+  });
+
+  it('has one and only one agent that sends anything, and it sends internally', () => {
+    const senders = SEED_AGENTS.filter((a) =>
+      a.actions.some((x) => x.type.startsWith('send_')),
+    );
+    expect(senders).toHaveLength(1);
+    expect(senders[0]!.name).toBe('invoice-forwarder');
+    expect(senders[0]!.actions.some((x) => x.type === 'send_internal_email')).toBe(true);
   });
 });

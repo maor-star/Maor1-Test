@@ -3,10 +3,10 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  runAgentAction, setAutonomyAction, toggleAgentAction,
+  runAgentAction, setAutonomyAction, setInstructionsAction, toggleAgentAction,
 } from '@/app/actions/agents';
 import { Button } from '@/components/ui/button';
-import { Select } from '@/components/ui/input';
+import { Label, Select, Textarea } from '@/components/ui/input';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { AUTONOMY_LABEL, PROMOTION_MIN_RUNS, isIrreversible } from '@/lib/agents/types';
@@ -24,6 +24,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
   const a = agent;
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+  const [teaching, setTeaching] = useState(false);
   const router = useRouter();
 
   const irreversible = a.actions.filter((x) => isIrreversible(x.type));
@@ -128,6 +129,21 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
           DRY RUN
         </Button>
 
+        {/*
+          Teaching it. The corrections that matter are the ones nobody could
+          have anticipated, so this is free text rather than a form of the
+          options we thought of.
+        */}
+        <Button
+          type="button"
+          size="xs"
+          variant={a.instructions ? 'outline' : 'ghost'}
+          onClick={() => setTeaching((v) => !v)}
+          title="Tell it exactly what to do and what to leave alone"
+        >
+          {teaching ? 'CLOSE' : a.instructions ? 'EDIT ITS BRIEF' : 'TEACH IT'}
+        </Button>
+
         <label className="sr-only" htmlFor={`lvl-${a.id}`}>
           Autonomy
         </label>
@@ -155,6 +171,59 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
           <span className="font-semi text-[10px] tracking-[0.1em] text-accent-700">{message}</span>
         ) : null}
       </div>
+
+      {a.instructions && !teaching ? (
+        <p className="mt-2 border-s-2 border-accent bg-accent/5 py-1 ps-2 text-[13px] whitespace-pre-wrap text-neutral-700">
+          {a.instructions}
+        </p>
+      ) : null}
+
+      {teaching ? (
+        <form
+          className="mt-2 border border-divider p-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            data.set('id', a.id);
+            run(setInstructionsAction, data);
+            setTeaching(false);
+          }}
+        >
+          <Label htmlFor={`ins-${a.id}`}>
+            What should it do, and what should it leave alone?
+          </Label>
+          <Textarea
+            id={`ins-${a.id}`}
+            name="instructions"
+            rows={6}
+            defaultValue={a.instructions ?? ''}
+            placeholder={
+              'Write it as you would tell a new assistant. For example:\n' +
+              '· Anything from Elki is never an invoice, it is a report.\n' +
+              '· Gym and personal receipts are mine, not the company’s — leave them.\n' +
+              '· Keep drafts to three sentences, no pleasantries.\n' +
+              '· If you are not sure, do nothing and tell me why.'
+            }
+            className="w-full"
+          />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button type="submit" size="sm" disabled={pending}>
+              SAVE THE BRIEF
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setTeaching(false)}>
+              CANCEL
+            </Button>
+            <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+              THIS GOES TO THE AGENT AS ITS OWN INSTRUCTIONS, NOT AS A FILTER ON WHAT IT PRODUCES
+              {a.instructionsUpdatedAt ? (
+                <>
+                  {' '}· LAST TAUGHT <Num>{fmtDateTime(a.instructionsUpdatedAt)}</Num>
+                </>
+              ) : null}
+            </span>
+          </div>
+        </form>
+      ) : null}
     </li>
   );
 }
