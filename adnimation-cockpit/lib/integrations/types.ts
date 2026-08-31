@@ -131,12 +131,32 @@ export interface ClickUpStatusResult {
   error?: string;
 }
 
+/** The fields of a mirrored task the cockpit is allowed to change. */
+export interface ClickUpTaskPatch {
+  name?: string;
+  description?: string | null;
+  /** 1 urgent … 4 low. Null clears it. */
+  priority?: 1 | 2 | 3 | 4 | null;
+  /** Epoch milliseconds, or null to clear the date. */
+  dueDateMs?: number | null;
+}
+
+export interface ClickUpUpdateResult {
+  ok: boolean;
+  error?: string;
+}
+
 export interface ClickUpAdapter {
   readonly name: 'clickup';
   /** The statuses a task's list allows — ClickUp rejects anything else. */
   listStatuses(taskId: string): Promise<string[]>;
-  /** Moves a task to a status, or closes it. The one write the cockpit makes. */
+  /** Moves a task to a status, or closes it. */
   setTaskStatus(taskId: string, status: string): Promise<ClickUpStatusResult>;
+  /**
+   * Edits the fields ClickUp and the cockpit both hold. ClickUp stays the
+   * system of record, so this is written there first and mirrored after.
+   */
+  updateTask(taskId: string, patch: ClickUpTaskPatch): Promise<ClickUpUpdateResult>;
   createTask(input: ClickUpTaskInput): Promise<ClickUpTaskResult>;
   /** Delta poll: everything changed since `sinceMs` (spec 6.1.2 — every 5 minutes). */
   listTasksUpdatedSince(sinceMs: number): Promise<ClickUpTask[]>;

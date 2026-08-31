@@ -10,6 +10,7 @@ import { Num } from '@/components/num';
 import { HeatBar, OverdueChip, PriorityBadge, StatusBadge, TaskTitleLink } from '@/components/task-bits';
 import { CommentForm } from '@/components/tasks/comment-form';
 import { EditTaskForm } from '@/components/tasks/edit-task-form';
+import { ClickUpStatus } from '@/components/tasks/clickup-status';
 import { NewTaskForm } from '@/components/tasks/new-task-form';
 import { DelegateButton } from '@/components/tasks/delegate-button';
 
@@ -75,30 +76,31 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
             </div>
             <div>
               {isMirror ? (
-                <dl className="grid grid-cols-2 gap-2 text-xs md:grid-cols-3">
-                  <Field label="Description" value={task.description ?? '—'} />
-                  <Field label="Department" value={task.deptNameHe ?? '—'} />
-                  <Field label="Owner" value={task.ownerName ?? '—'} />
-                  <Field label="Due date" value={task.dueDate ?? '—'} ltr />
-                </dl>
-              ) : (
-                <EditTaskForm
-                  task={{
-                    id: task.id,
-                    title: task.title,
-                    description: task.description,
-                    priority: task.priority,
-                    status: task.status,
-                    dueDate: task.dueDate,
-                    deptId: null,
-                    ownerPersonId: null,
-                    tags: task.tags,
-                    moneyImpactCents: task.moneyImpactCents,
-                  }}
-                  departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
-                  people={peopleOptions}
-                />
-              )}
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-divider pb-2">
+                  <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                    STATUS COMES FROM THIS TASK&apos;S OWN CLICKUP LIST
+                  </span>
+                  <ClickUpStatus taskId={task.id} status={task.status} />
+                </div>
+              ) : null}
+
+              <EditTaskForm
+                mode={isMirror ? 'clickup' : 'mine'}
+                task={{
+                  id: task.id,
+                  title: task.title,
+                  description: task.description,
+                  priority: task.priority,
+                  status: task.status,
+                  dueDate: task.dueDate,
+                  deptId: task.deptId,
+                  ownerPersonId: task.ownerPersonId,
+                  tags: task.tags,
+                  moneyImpactCents: task.moneyImpactCents,
+                }}
+                departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
+                people={peopleOptions}
+              />
             </div>
           </HudCard>
 

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type {
-  ClickUpAdapter, ClickUpStatusResult, ClickUpTask, ClickUpTaskInput, ClickUpTaskResult,
+  ClickUpAdapter, ClickUpStatusResult, ClickUpTask, ClickUpTaskInput, ClickUpTaskPatch,
+  ClickUpTaskResult, ClickUpUpdateResult,
 } from './types';
 
 const API = 'https://api.clickup.com/api/v2';
@@ -118,6 +119,43 @@ class RealClickUpAdapter implements ClickUpAdapter {
     const task = normaliseClickUpTask(await res.json().catch(() => null));
     if (!task) return { ok: false, taskId: null, url: null, error: 'unparseable_response' };
     return { ok: true, taskId: task.id, url: task.url };
+  }
+
+  /**
+   * The edit write-through.
+   *
+   * Only the fields present are sent: ClickUp treats an absent key as "leave
+   * it", and a null due date as "clear it", which is exactly the distinction
+   * the cockpit's form needs. Sending the whole task back would overwrite
+   * whatever the team changed in the meantime with what his page happened to
+   * be showing.
+   */
+  async updateTask(taskId: string, patch: ClickUpTaskPatch): Promise<ClickUpUpdateResult> {
+    const body: Record<string, unknown> = {};
+    if (patch.name !== undefined) body.name = patch.name;
+    if (patch.description !== undefined) body.description = patch.description ?? '';
+    if (patch.priority !== undefined) body.priority = patch.priority;
+    if (patch.dueDateMs !== undefined) body.due_date = patch.dueDateMs;
+    if (Object.keys(body).length === 0) return { ok: true };
+
+    const res = await fetch(`${API}/task/${taskId}`, {
+      method: 'PUT',
+      headers: this.headers(),
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return { ok: true };
+
+    // ClickUp says exactly what it disliked; the status code alone turns a
+    // five-second fix into an investigation.
+    const detail = await res.text().catch(() => '');
+    let reason = detail.slice(0, 300);
+    try {
+      const parsed = JSON.parse(detail) as { err?: string; ECODE?: string };
+      if (parsed.err) reason = `${parsed.err}${parsed.ECODE ? ` (${parsed.ECODE})` : ''}`;
+    } catch {
+      // Not JSON — the raw text is still better than nothing.
+    }
+    return { ok: false, error: `http_${res.status}${reason ? `: ${reason}` : ''}` };
   }
 
   async listTasksUpdatedSince(sinceMs: number): Promise<ClickUpTask[]> {
@@ -248,6 +286,29 @@ export class FakeClickUpAdapter implements ClickUpAdapter {
     if (!task) return { ok: false, status: null, error: 'not_found' };
     this.tasks.set(taskId, { ...task, status, dateClosedMs: status === 'complete' ? Date.now() : null });
     return { ok: true, status };
+  }
+
+  /** Tests assert against this. */
+  readonly updates: { taskId: string; patch: ClickUpTaskPatch }[] = [];
+  failNextUpdate = false;
+
+  async updateTask(taskId: string, patch: ClickUpTaskPatch): Promise<ClickUpUpdateResult> {
+    if (this.failNextUpdate) {
+      this.failNextUpdate = false;
+      return { ok: false, error: 'fake_failure' };
+    }
+    const task = this.tasks.get(taskId);
+    if (!task) return { ok: false, error: 'not_found' };
+
+    this.updates.push({ taskId, patch });
+    this.tasks.set(taskId, {
+      ...task,
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.description !== undefined ? { description: patch.description } : {}),
+      ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+      ...(patch.dueDateMs !== undefined ? { dueDateMs: patch.dueDateMs } : {}),
+    });
+    return { ok: true };
   }
 }
 

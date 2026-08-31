@@ -26,6 +26,11 @@ export interface TaskRow {
   deptNameHe: string | null;
   ownerName: string | null;
   ownerEmail: string | null;
+  /** The ids, not only the labels — the edit form needs something to select. */
+  deptId: string | null;
+  ownerPersonId: string | null;
+  /** On a mirrored task, the fields the cockpit owns. */
+  pinnedFields: string[];
 }
 
 const selection = {
@@ -52,6 +57,9 @@ const selection = {
   deptNameHe: departments.nameHe,
   ownerName: people.name,
   ownerEmail: people.email,
+  deptId: tasks.deptId,
+  ownerPersonId: tasks.ownerPersonId,
+  pinnedFields: tasks.pinnedFields,
 };
 
 const baseQuery = () =>

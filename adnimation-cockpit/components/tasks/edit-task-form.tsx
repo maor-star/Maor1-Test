@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { archiveTaskAction, updateTaskAction } from '@/app/actions/tasks';
+import { detachFromClickUpAction, editClickUpTaskAction } from '@/app/actions/clickup-tasks';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import {
@@ -26,11 +27,21 @@ export function EditTaskForm({
   task,
   departments,
   people,
+  /**
+   * A mirrored ClickUp task edits through ClickUp: the fields it owns are
+   * written there first and only mirrored once accepted, and the fields it has
+   * nowhere to keep are written here and pinned against the next poll. The
+   * status is not in this form for those — it belongs to the task's own
+   * ClickUp list, which has its own words for it.
+   */
+  mode = 'mine',
 }: {
   task: EditableTask;
   departments: { id: string; label: string }[];
   people: { id: string; label: string }[];
+  mode?: 'mine' | 'clickup';
 }) {
+  const mirrored = mode === 'clickup';
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -41,7 +52,9 @@ export function EditTaskForm({
       className="space-y-2"
       action={(formData) => {
         startTransition(async () => {
-          const result = await updateTaskAction(formData);
+          const result = mirrored
+            ? await editClickUpTaskAction(formData)
+            : await updateTaskAction(formData);
           setMessage(result.ok ? null : (result.error ?? 'Update failed'));
           setSaved(result.ok);
           if (result.ok) router.refresh();
@@ -69,14 +82,16 @@ export function EditTaskForm({
             ))}
           </Select>
         </div>
-        <div>
-          <Label htmlFor="edit-status">Status</Label>
-          <Select id="edit-status" name="status" defaultValue={task.status} className="w-full">
-            {TASK_STATUSES.map((s) => (
-              <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-            ))}
-          </Select>
-        </div>
+        {mirrored ? null : (
+          <div>
+            <Label htmlFor="edit-status">Status</Label>
+            <Select id="edit-status" name="status" defaultValue={task.status} className="w-full">
+              {TASK_STATUSES.map((s) => (
+                <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+              ))}
+            </Select>
+          </div>
+        )}
         <div>
           <Label htmlFor="edit-due">Due date</Label>
           <Input id="edit-due" name="dueDate" type="date" defaultValue={task.dueDate ?? ''} />
@@ -118,11 +133,54 @@ export function EditTaskForm({
         <Input id="edit-tags" name="tags" defaultValue={task.tags.join(', ')} />
       </div>
 
+      {/*
+        Which half of this form goes where. Without it, a department that
+        never appears in ClickUp and a title that does look identical, and the
+        first surprise is a colleague asking why the task was renamed.
+      */}
+      {mirrored ? (
+        <p className="text-2xs text-neutral-500">
+          Title, description, priority and due date are written to ClickUp — the team sees them.
+          Department, owner, tags and money impact are kept here only, and the next sync will
+          leave them alone now that you have set them.
+        </p>
+      ) : null}
+
       {message ? <p className="text-2xs text-destructive">{message}</p> : null}
       {saved && !message ? <p className="text-2xs text-sev-ok">Saved.</p> : null}
 
       <div className="flex items-center gap-2 pt-1">
         <Button type="submit" disabled={pending}>{pending ? 'SAVING…' : 'SAVE'}</Button>
+        {mirrored ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={pending}
+            title="Stop following the ClickUp task. It becomes yours, with your fields."
+            onClick={() => {
+              if (
+                !window.confirm(
+                  'Cut this task loose from ClickUp? It becomes yours to edit freely here, ' +
+                    'and stops updating from ClickUp. The ClickUp task itself is left alone. ' +
+                    'This cannot be undone.',
+                )
+              ) {
+                return;
+              }
+              const fd = new FormData();
+              fd.set('id', task.id);
+              startTransition(async () => {
+                const result = await detachFromClickUpAction(fd);
+                setMessage(result.ok ? null : (result.error ?? 'Could not detach it'));
+                if (result.ok) router.refresh();
+              });
+            }}
+          >
+            DETACH FROM CLICKUP
+          </Button>
+        ) : null}
+
         <Button
           type="button"
           variant="ghost"

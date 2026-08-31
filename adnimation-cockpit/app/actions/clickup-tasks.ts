@@ -6,6 +6,8 @@ import { z } from 'zod';
 import { db, tasks } from '@/lib/db';
 import { requireUser } from '@/lib/auth/session';
 import { createClickUpAdapter } from '@/lib/integrations/clickup';
+import { editMirroredTask } from '@/lib/tasks/clickup-edit';
+import { TASK_PRIORITIES } from '@/lib/tasks/types';
 import { mapClickUpStatus } from '@/lib/sync/clickup-map';
 import { removeFinished } from '@/lib/sync/clickup-mirror';
 import { writeAudit } from '@/lib/audit';
@@ -117,4 +119,118 @@ export async function clickUpStatusesAction(taskId: string): Promise<string[]> {
   return createClickUpAdapter()
     .listStatuses(row.clickupId)
     .catch(() => []);
+}
+
+/**
+ * Editing a mirrored task, properly.
+ *
+ * The company layer used to be read-only here, which was defensible when the
+ * cockpit could only read ClickUp — but it made his own list a screen he could
+ * look at and not use. So the fields ClickUp holds are written there first and
+ * mirrored only once it accepts them, and the fields ClickUp has nowhere to
+ * keep are written here and pinned, so the next poll leaves them alone.
+ *
+ * If ClickUp refuses, nothing changes here either: a cockpit showing an edit
+ * the team never sees is worse than an edit that failed loudly.
+ */
+const editSchema = z.object({
+  taskId: z.string().uuid(),
+  title: z.string().trim().min(1, 'A task needs a title').max(300).optional(),
+  description: z.string().trim().max(20_000).nullable().optional(),
+  priority: z.enum(TASK_PRIORITIES).optional(),
+  dueDate: z.string().trim().nullable().optional(),
+  deptId: z.string().uuid().nullable().optional(),
+  ownerPersonId: z.string().uuid().nullable().optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+  moneyImpactCents: z.number().int().nonnegative().nullable().optional(),
+});
+
+const emptyToNull = (v: FormDataEntryValue | null) => {
+  const s = String(v ?? '').trim();
+  return s === '' ? null : s;
+};
+
+export async function editClickUpTaskAction(formData: FormData): Promise<TaskActionResult> {
+  const user = await requireUser();
+
+  const rawTags = String(formData.get('tags') ?? '')
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const rawMoney = String(formData.get('moneyImpact') ?? '').trim();
+
+  const parsed = editSchema.safeParse({
+    taskId: formData.get('id'),
+    title: formData.get('title') ?? undefined,
+    description: emptyToNull(formData.get('description')),
+    priority: formData.get('priority') ?? undefined,
+    dueDate: emptyToNull(formData.get('dueDate')),
+    deptId: emptyToNull(formData.get('deptId')),
+    ownerPersonId: emptyToNull(formData.get('ownerPersonId')),
+    tags: rawTags,
+    moneyImpactCents: rawMoney === '' ? null : Math.round(Number(rawMoney) * 100),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.flatten().formErrors[0] ?? 'That is not a valid edit' };
+  }
+
+  const { taskId, ...patch } = parsed.data;
+  const result = await editMirroredTask(taskId, patch, user.email);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath('/tasks');
+  revalidatePath(`/tasks/${taskId}`);
+  revalidatePath('/');
+  return { ok: true };
+}
+
+/**
+ * Cutting a task loose from ClickUp.
+ *
+ * The escape hatch he asked for: when ClickUp will not take an edit — a list
+ * he cannot write to, a field it does not have, a token that has lost its
+ * permissions — the task becomes his, with his fields, and stops being
+ * mirrored. The ClickUp task is left exactly as it is; this only stops the
+ * cockpit following it.
+ *
+ * One-way on purpose. Re-attaching would mean deciding whose version wins,
+ * and that is a question with no safe default.
+ */
+export async function detachFromClickUpAction(formData: FormData): Promise<TaskActionResult> {
+  const user = await requireUser();
+  const id = z.string().uuid().safeParse(String(formData.get('id') ?? ''));
+  if (!id.success) return { ok: false, error: 'Not a task' };
+
+  const [row] = await db
+    .select({ id: tasks.id, clickupId: tasks.clickupId, clickupUrl: tasks.clickupUrl, title: tasks.title })
+    .from(tasks)
+    .where(and(eq(tasks.id, id.data), isNotNull(tasks.clickupId)))
+    .limit(1);
+  if (!row?.clickupId) return { ok: false, error: 'That task is not mirrored from ClickUp.' };
+
+  await writeAudit({
+    actor: user.email,
+    action: 'clickup.detach',
+    entityType: 'task',
+    entityId: row.id,
+    before: { clickupId: row.clickupId, clickupUrl: row.clickupUrl, layer: 'company' },
+    after: { layer: 'mine', title: row.title },
+  });
+
+  await db
+    .update(tasks)
+    .set({
+      layer: 'mine',
+      clickupId: null,
+      clickupUrl: null,
+      pinnedFields: [],
+      lastSyncedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(tasks.id, row.id));
+
+  revalidatePath('/tasks');
+  revalidatePath(`/tasks/${row.id}`);
+  revalidatePath('/');
+  return { ok: true };
 }

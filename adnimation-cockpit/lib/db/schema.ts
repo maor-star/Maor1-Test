@@ -71,6 +71,8 @@ export const tasks = pgTable(
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
     lastSyncedAt: timestamptz('last_synced_at'),
+    /** Fields the cockpit owns on a mirrored task; the sync leaves them alone. */
+    pinnedFields: text('pinned_fields').array().notNull().default([]),
   },
   (t) => [
     index('idx_tasks_layer_status').on(t.layer, t.status),

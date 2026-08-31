@@ -47,8 +47,14 @@ export async function updateTask(patch: TaskPatch, actor: string) {
   const [before] = await db.select().from(tasks).where(eq(tasks.id, patch.id)).limit(1);
   if (!before) throw new Error('Task not found');
   if (before.layer === 'company') {
-    // Spec 6.1.2 — ClickUp is the source of truth for the company layer.
-    throw new Error('ClickUp tasks are read-only here. Edit them in ClickUp.');
+    /*
+     * ClickUp is the system of record for the company layer, so an edit to one
+     * of its tasks goes through the write-through path, which puts it in
+     * ClickUp first and pins the fields ClickUp cannot hold. Letting this
+     * function write to the row directly would look like it worked until the
+     * next poll reverted it.
+     */
+    throw new Error('Use editMirroredTask for a ClickUp task — it writes to ClickUp first.');
   }
 
   const merged = {

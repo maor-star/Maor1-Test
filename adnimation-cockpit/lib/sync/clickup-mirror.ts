@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, lt, ne } from 'drizzle-orm';
 import { db, departments, people, tasks } from '@/lib/db';
 import type { ClickUpAdapter, ClickUpTask } from '@/lib/integrations/types';
 import { recordFailure, recordSuccess } from '@/lib/integrations/health';
@@ -7,8 +7,13 @@ import { deptForList } from './departments';
 import { toMirrorRow, type MirrorRow } from './clickup-map';
 
 /**
- * Spec 6.1.2 — the company layer mirrors ClickUp. Read-only: the mirror never
- * writes back, and a `layer = 'company'` row is rejected by the task editor.
+ * Spec 6.1.2 — the company layer mirrors ClickUp, which stays the system of
+ * record: every poll rewrites a task's fields from ClickUp, and an edit made
+ * here is written to ClickUp first and mirrored only once it is accepted.
+ *
+ * Two exceptions, both because ClickUp has nowhere to keep them: the fields
+ * he has taken over (see PINNABLE) survive a poll, and a task detached from
+ * ClickUp stops being mirrored at all.
  *
  * The mirror holds open work only. A finished task is removed from the cockpit
  * rather than kept as a done row, because the cockpit's job is to show what is
@@ -90,27 +95,52 @@ export async function syncSingleTask(
 }
 
 /**
- * Drops every mirrored task ClickUp no longer counts as open. Used both by the
- * delta sync and by the one-off cleanup that runs when the token is first
- * connected, to clear tasks that finished before the mirror existed.
+ * Marks every mirrored task ClickUp no longer counts as open as done.
+ *
+ * It used to delete them. That made the list right and reopening impossible:
+ * a task closed by mistake was simply gone from the cockpit, with no row to
+ * put back. Nothing in this system deletes (CLAUDE.md §2), and the default
+ * list already hides done, so keeping the row costs nothing on screen and
+ * gives him the undo. purgeFinishedMirror clears the old ones.
  */
-export async function removeFinished(clickupIds: string[]): Promise<number> {
+export async function removeFinished(clickupIds: string[], now = new Date()): Promise<number> {
   if (clickupIds.length === 0) return 0;
-  const deleted = await db
-    .delete(tasks)
-    .where(and(eq(tasks.layer, 'company'), inArray(tasks.clickupId, clickupIds)))
+  const closed = await db
+    .update(tasks)
+    .set({ status: 'done', updatedAt: now, lastSyncedAt: now })
+    .where(
+      and(
+        eq(tasks.layer, 'company'),
+        inArray(tasks.clickupId, clickupIds),
+        ne(tasks.status, 'done'),
+      ),
+    )
     .returning({ id: tasks.id });
-  return deleted.length;
+  return closed.length;
 }
 
+/** How long a finished ClickUp task stays reopenable from the cockpit. */
+export const KEEP_FINISHED_DAYS = 30;
+
 /**
- * Clears mirrored tasks whose status is already done — the tasks the CEO asked
- * not to carry. Safe to run repeatedly.
+ * Clears mirrored tasks that finished long enough ago that nobody is going to
+ * reopen them. Safe to run repeatedly.
+ *
+ * Recent ones stay: the whole reason they are kept is the task closed by
+ * mistake, and that is noticed within a day or two, not a month.
  */
-export async function purgeFinishedMirror(): Promise<number> {
+export async function purgeFinishedMirror(olderThanDays = KEEP_FINISHED_DAYS): Promise<number> {
+  const cutoff = new Date(Date.now() - olderThanDays * 24 * 3600_000);
   const deleted = await db
     .delete(tasks)
-    .where(and(eq(tasks.layer, 'company'), isNotNull(tasks.clickupId), eq(tasks.status, 'done')))
+    .where(
+      and(
+        eq(tasks.layer, 'company'),
+        isNotNull(tasks.clickupId),
+        eq(tasks.status, 'done'),
+        lt(tasks.updatedAt, cutoff),
+      ),
+    )
     .returning({ id: tasks.id });
   return deleted.length;
 }
@@ -129,6 +159,16 @@ async function loadDepartments(): Promise<Map<string, string>> {
   const rows = await db.select({ id: departments.id, code: departments.code }).from(departments);
   return new Map(rows.map((d) => [d.code, d.id]));
 }
+
+/**
+ * The fields the cockpit may take over on a mirrored task.
+ *
+ * Everything else on the row is ClickUp's and is rewritten on every poll —
+ * which is right: the team's edits must not be silently reverted by a stale
+ * copy here.
+ */
+export const PINNABLE = ['deptId', 'tags', 'ownerPersonId'] as const;
+export type Pinnable = (typeof PINNABLE)[number];
 
 async function upsert(
   row: MirrorRow,
@@ -170,5 +210,40 @@ async function upsert(
     lastSyncedAt: now,
   };
 
-  await db.insert(tasks).values(values).onConflictDoUpdate({ target: tasks.clickupId, set: values });
+  /*
+   * What he has taken over stays his.
+   *
+   * A department he filed the task under, or a tag he added, exists nowhere in
+   * ClickUp — so writing ClickUp's version of those back over his would clear
+   * them five minutes after he set them, with nothing to show what happened.
+   */
+  const [existing] = await db
+    .select({ pinned: tasks.pinnedFields, deptId: tasks.deptId, tags: tasks.tags, ownerPersonId: tasks.ownerPersonId })
+    .from(tasks)
+    .where(eq(tasks.clickupId, row.clickupId))
+    .limit(1);
+
+  const pinned = new Set(existing?.pinned ?? []);
+  const update = { ...values };
+  if (pinned.has('deptId')) update.deptId = existing?.deptId ?? null;
+  if (pinned.has('tags')) update.tags = existing?.tags ?? [];
+  if (pinned.has('ownerPersonId')) {
+    update.ownerPersonId = existing?.ownerPersonId ?? null;
+    // Heat depends on whether a task is owned, so it follows the owner he set.
+    update.heatScore = computeHeat(
+      {
+        priority: row.priority,
+        dueDate: row.dueDate,
+        moneyImpactCents: null,
+        blockedPeople: [],
+        ownerPersonId: update.ownerPersonId,
+      },
+      now,
+    );
+  }
+
+  await db
+    .insert(tasks)
+    .values(values)
+    .onConflictDoUpdate({ target: tasks.clickupId, set: update });
 }
