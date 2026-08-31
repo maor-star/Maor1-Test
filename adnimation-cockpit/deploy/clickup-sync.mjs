@@ -10,11 +10,14 @@
  * plain script a systemd timer can run. The rules — and they must stay in step
  * with the TypeScript:
  *
- *  - the mirror holds OPEN work only;
- *  - a task ClickUp has closed, or whose status maps to done, is deleted from
- *    the mirror rather than kept as a completed row;
- *  - the department is the ClickUp list the task sits in;
- *  - it never writes to ClickUp.
+ *  - the mirror shows OPEN work; a task ClickUp has closed is marked done and
+ *    kept for thirty days, so one closed by mistake can be reopened;
+ *  - the fields he has taken over on a task (its pinned_fields) are his, and
+ *    are not overwritten from ClickUp;
+ *  - the department is the ClickUp list the task sits in, unless he has said
+ *    otherwise;
+ *  - it never writes to ClickUp. The one write the cockpit makes goes through
+ *    the app, which puts it in ClickUp first.
  */
 import postgres from 'postgres';
 
@@ -144,28 +147,51 @@ async function main() {
           clickup_url = excluded.clickup_url, title = excluded.title,
           description = excluded.description, status = excluded.status,
           priority = excluded.priority, due_date = excluded.due_date,
-          start_date = excluded.start_date, tags = excluded.tags,
-          owner_person_id = excluded.owner_person_id, dept_id = excluded.dept_id,
+          start_date = excluded.start_date,
+          /*
+           * What he has taken over stays his.
+           *
+           * A department he filed the task under, an owner he assigned here or
+           * a tag he added exists nowhere in ClickUp — so writing ClickUp's
+           * version back over his would clear it at the next poll, five
+           * minutes after he set it, with nothing on screen to say why. The
+           * row names which of its fields the cockpit owns.
+           */
+          tags = case when 'tags' = any(tasks.pinned_fields)
+                      then tasks.tags else excluded.tags end,
+          owner_person_id = case when 'ownerPersonId' = any(tasks.pinned_fields)
+                                 then tasks.owner_person_id else excluded.owner_person_id end,
+          dept_id = case when 'deptId' = any(tasks.pinned_fields)
+                         then tasks.dept_id else excluded.dept_id end,
           heat_score = excluded.heat_score, updated_at = excluded.updated_at,
           last_synced_at = excluded.last_synced_at
       `;
       upserted += 1;
     }
 
+    /*
+     * A task ClickUp has closed is marked done here and kept, not deleted.
+     *
+     * Deleting made the list right and reopening impossible: a task closed by
+     * mistake was simply gone from the cockpit, with no row to put back. The
+     * default view hides done, so keeping it costs nothing on screen.
+     */
     let removed = 0;
     if (finished.length > 0) {
-      const gone = await sql`
-        delete from tasks
-         where layer = 'company' and clickup_id = any(${finished})
+      const closed = await sql`
+        update tasks set status = 'done', updated_at = ${now}, last_synced_at = ${now}
+         where layer = 'company' and clickup_id = any(${finished}) and status <> 'done'
         returning id
       `;
-      removed = gone.length;
+      removed = closed.length;
     }
 
-    // Anything already mirrored as done, from before this rule existed.
+    // Long-finished tasks nobody is going to reopen. Thirty days, because a
+    // task closed by mistake is noticed in a day or two, not a month.
     const swept = await sql`
       delete from tasks
        where layer = 'company' and clickup_id is not null and status = 'done'
+         and updated_at < now() - interval '30 days'
       returning id
     `;
 
@@ -180,7 +206,7 @@ async function main() {
 
     const [{ count }] = await sql`select count(*)::int as count from tasks where layer = 'company'`;
     console.log(
-      `open mirrored: ${upserted}; finished removed: ${removed + swept.length}; ` +
+      `open mirrored: ${upserted}; closed: ${removed}; long-done cleared: ${swept.length}; ` +
         `mirror now holds ${count} company tasks`,
     );
   } catch (e) {
