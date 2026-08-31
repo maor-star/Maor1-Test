@@ -16,11 +16,16 @@ import {
  */
 let id: string;
 
+// These write real rows, and a name that repeats across runs collides with the
+// previous run's — which showed up as the create silently returning ok:false
+// on the second run and passing on the first.
+const unique = (name: string) => `${name} ${Date.now().toString(36)}`;
+
 beforeAll(async () => {
   const [row] = await db
     .insert(contracts)
     .values({
-      counterpartyName: 'Undo Test Ltd',
+      counterpartyName: unique('Undo Test'),
       category: 'general',
       categoryConfirmed: false,
       docType: 'Test agreement',
@@ -81,7 +86,7 @@ describe('contracts — taking a change back', () => {
     const [fresh] = await db
       .insert(contracts)
       .values({
-        counterpartyName: 'Never Touched Ltd',
+        counterpartyName: unique('Never Touched'),
         category: 'general',
         categoryConfirmed: false,
         docType: 'Test',
@@ -105,11 +110,14 @@ describe('contracts — taking a change back', () => {
  * up linked to nothing.
  */
 describe('contracts — creating the thing it belongs to', () => {
+  const demandName = unique('LinkTarget Demand');
+  const signedName = unique('LinkTarget Signed');
+
   it('creates an opportunity from the contract and links it both ways', async () => {
     const [row] = await db
       .insert(contracts)
       .values({
-        counterpartyName: 'LinkTarget Demand Ltd',
+        counterpartyName: demandName,
         category: 'demand',
         categoryConfirmed: true,
         docType: 'Demand agreement',
@@ -129,7 +137,7 @@ describe('contracts — creating the thing it belongs to', () => {
       .from(opportunities)
       .where(eq(opportunities.id, result.ok ? result.id : ''))
       .limit(1);
-    expect(created!.counterparty).toBe('LinkTarget Demand Ltd');
+    expect(created!.counterparty).toBe(demandName);
     // The contract says which side of the business this is.
     expect(created!.kind).toBe('demand');
     // A contract exists, so it is past "noticed".
@@ -140,7 +148,7 @@ describe('contracts — creating the thing it belongs to', () => {
     const [row] = await db
       .insert(contracts)
       .values({
-        counterpartyName: 'LinkTarget Signed Ltd',
+        counterpartyName: signedName,
         category: 'supply',
         categoryConfirmed: true,
         docType: 'Supply agreement',
@@ -150,14 +158,14 @@ describe('contracts — creating the thing it belongs to', () => {
       .returning({ id: contracts.id });
 
     const result = await createLinkTarget(row!.id, 'deal', 'test@adnimation.com');
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
 
     const [deal] = await db
       .select()
       .from(pipelineClients)
       .where(eq(pipelineClients.id, result.ok ? result.id : ''))
       .limit(1);
-    expect(deal!.name).toBe('LinkTarget Signed Ltd');
+    expect(deal!.name).toBe(signedName);
     expect(deal!.clientType).toBe('supply');
     // Signed means the deal is being integrated, not still out for signature.
     expect(deal!.stage).toBe('integration');
