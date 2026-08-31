@@ -4,19 +4,22 @@ import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   archiveContractAction, classifyAction, refileAction, setContractStatusAction,
-  suggestLinksAction,
+  setWaitingOnAction, suggestLinksAction,
 } from '@/app/actions/contract-intake';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { BOARD_STATUSES, STATUS_LABEL } from '@/lib/contracts/status';
+import { CONTRACT_CATEGORIES } from '@/lib/contracts/drive';
 import type { ContractRow } from '@/lib/contracts/intake-module';
 import { fmtDateTime, fmtMoney } from '@/lib/utils';
 
 const CATEGORY_LABEL: Record<string, string> = {
   demand: 'DEMAND',
   supply: 'SUPPLY',
+  mutual: 'MUTUAL',
+  quote: 'QUOTE',
   general: 'GENERAL',
 };
 
@@ -90,6 +93,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
             {c.waitingOn === 'you' && c.status !== 'unclassified' ? (
               <Tag tone="critical">YOUR MOVE</Tag>
             ) : null}
+            {c.waitingOn === 'them' ? <Tag tone="outline">WITH THEM</Tag> : null}
             <Tag tone="neutral">FROM {c.source.toUpperCase()}</Tag>
             {unfiled > 0 ? (
               <Tag tone="warning" title="Recorded here, but the file is not in Drive yet">
@@ -251,6 +255,41 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
           </>
         ) : null}
 
+        {/*
+          Whose move it is, as a control rather than a consequence. "Sent back
+          with changes" and "waiting for a signature" are both with them, and
+          only one of those is a status.
+        */}
+        {!needsClassifying && c.status !== 'signed' ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={pending}
+            title={
+              c.waitingOnIsOverridden
+                ? 'You set this. Click again to let the status decide.'
+                : 'Set whose move it is'
+            }
+            onClick={() => {
+              const data = new FormData();
+              data.set('id', c.id);
+              // you → them → back to following the status.
+              data.set(
+                'who',
+                c.waitingOn === 'you' ? 'them' : c.waitingOnIsOverridden ? 'auto' : 'you',
+              );
+              run(setWaitingOnAction, data);
+            }}
+          >
+            {c.waitingOn === 'you'
+              ? '→ WAITING ON THEM'
+              : c.waitingOnIsOverridden
+                ? '→ FOLLOW THE STATUS'
+                : '→ WAITING ON ME'}
+          </Button>
+        ) : null}
+
         {c.sourceUrl ? (
           <a
             href={c.sourceUrl}
@@ -328,9 +367,13 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
                 <option value="" disabled>
                   Pick one
                 </option>
-                <option value="demand">DEMAND</option>
-                <option value="supply">SUPPLY</option>
-                <option value="general">GENERAL</option>
+                {CONTRACT_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {CATEGORY_LABEL[cat] ?? cat}
+                    {cat === 'mutual' ? ' — BOTH DEMAND AND SUPPLY' : ''}
+                    {cat === 'quote' ? ' — הצעת מחיר' : ''}
+                  </option>
+                ))}
               </Select>
             </div>
             <div>

@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import {
   contractIntakeSeen, contractVersions, contracts, db, opportunities, pipelineClients,
 } from '@/lib/db';
-import { ensureFolderPath, moveFile, uploadFile } from '@/lib/integrations/drive';
+import { ensureFolderPath, moveFile, pruneEmptyFolders, uploadFile } from '@/lib/integrations/drive';
 import { filingFolder, stageForStatus, versionedFileName, type ContractCategory } from './drive';
 import { BOARD_STATUSES, STATUS_LABEL, WAITING_ON, type ContractStatus } from './status';
 import { versionFromName } from './intake';
@@ -39,6 +39,8 @@ export interface ContractRow {
   status: ContractStatus;
   statusLabel: string;
   waitingOn: 'you' | 'them' | 'nobody';
+  /** True when he said so rather than the status deciding. */
+  waitingOnIsOverridden: boolean;
   daysInStatus: number;
   valueCents: number | null;
   source: string;
@@ -109,7 +111,13 @@ export async function listContracts(
       docType: c.docType,
       status,
       statusLabel: STATUS_LABEL[status] ?? status,
-      waitingOn: WAITING_ON[status] ?? 'nobody',
+      // His word beats the status's guess: "in review" is with him by default
+      // but is with them the moment he has sent back changes.
+      waitingOn:
+        c.waitingOnOverride === 'you' || c.waitingOnOverride === 'them'
+          ? c.waitingOnOverride
+          : (WAITING_ON[status] ?? 'nobody'),
+      waitingOnIsOverridden: c.waitingOnOverride !== null,
       daysInStatus: daysSince(c.statusChangedAt, now),
       valueCents: c.valueCents,
       source: c.source,
@@ -335,8 +343,12 @@ export async function fileContract(
     .from(contractVersions)
     .where(eq(contractVersions.contractId, id));
 
+  // Where the files were, so the folders they leave behind can be cleared.
+  const vacated = new Set<string>();
+
   for (const version of versions) {
     if (version.driveFileId) {
+      if (version.drivePath && version.drivePath !== target.path) vacated.add(version.drivePath);
       // Already in Drive: a status change is a move, never a second copy.
       await moveFile(version.driveFileId, folder.folderId).catch(() => ({ ok: false }));
       await db
@@ -344,6 +356,13 @@ export async function fileContract(
         .set({ drivePath: target.path })
         .where(eq(contractVersions.id, version.id));
     }
+  }
+
+  // Classifying moves everything out of _Unclassified/<Counterparty>, and that
+  // folder would otherwise sit there empty for ever.
+  for (const path of vacated) {
+    const segments = path.replace(/^\/?Adnimation Contracts\/?/, '').split('/').filter(Boolean);
+    if (segments.length > 0) await pruneEmptyFolders(segments).catch(() => ({ trashed: [] }));
   }
 
   await db.update(contracts).set({ drivePath: target.path }).where(eq(contracts.id, id));
@@ -467,6 +486,28 @@ export async function recordArrival(input: {
     return { ok: true, contractId, versionNo };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not record it' };
+  }
+}
+
+/**
+ * Say whose move it is, regardless of the status.
+ *
+ * Passing null hands the decision back to the status, which is what he wants
+ * once the contract moves on — an override that outlives the situation it was
+ * set for is worse than none.
+ */
+export async function setWaitingOn(
+  id: string,
+  who: 'you' | 'them' | null,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await db
+      .update(contracts)
+      .set({ waitingOnOverride: who })
+      .where(eq(contracts.id, id));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not update it' };
   }
 }
 

@@ -21,7 +21,9 @@ export const dealStage = pgEnum('deal_stage', [
 export const dealSource = pgEnum('deal_source', [
   'calendly', 'conference', 'referral', 'outbound', 'inbound', 'other',
 ]);
-export const contractCategory = pgEnum('contract_category', ['demand', 'supply', 'general']);
+export const contractCategory = pgEnum('contract_category', [
+  'demand', 'supply', 'mutual', 'quote', 'general',
+]);
 export const contractStatus = pgEnum('contract_status', [
   'unclassified', 'draft', 'in_review', 'negotiation', 'out_for_signature',
   'awaiting_my_signature', 'signed', 'expired', 'cancelled',

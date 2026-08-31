@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
 import {
-  archiveContract, classifyContract, fileContract, suggestLinks,
+  archiveContract, classifyContract, fileContract, setWaitingOn, suggestLinks,
 } from '@/lib/contracts/intake-module';
 import { CONTRACT_STATUSES } from '@/lib/contracts/status';
 
@@ -16,7 +16,7 @@ import { CONTRACT_STATUSES } from '@/lib/contracts/status';
  * "now file it" to forget.
  */
 
-const CATEGORIES = ['demand', 'supply', 'general'] as const;
+const CATEGORIES = ['demand', 'supply', 'mutual', 'quote', 'general'] as const;
 
 function refresh() {
   revalidatePath('/contracts');
@@ -105,6 +105,34 @@ export async function setContractStatusAction(
 
   refresh();
   return { ok: true, ...(result.warning ? { warning: result.warning } : {}) };
+}
+
+/**
+ * Flip whose move it is.
+ *
+ * Sending it back with changes and waiting for a signature are both "with
+ * them" and only one of them is a status, so this is a control of its own
+ * rather than another status to pick.
+ */
+export async function setWaitingOnAction(formData: FormData): Promise<ContractActionResult> {
+  await requireUser();
+
+  const parsed = z
+    .object({ id: z.string().uuid(), who: z.enum(['you', 'them', 'auto']) })
+    .safeParse({
+      id: String(formData.get('id') ?? ''),
+      who: String(formData.get('who') ?? ''),
+    });
+  if (!parsed.success) return { ok: false, error: 'Not a valid choice' };
+
+  const result = await setWaitingOn(
+    parsed.data.id,
+    parsed.data.who === 'auto' ? null : parsed.data.who,
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+
+  refresh();
+  return { ok: true };
 }
 
 export async function refileAction(formData: FormData): Promise<ContractActionResult> {

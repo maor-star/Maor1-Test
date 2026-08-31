@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { confirmCategoryAction, setContractStatusAction } from '@/app/actions/contracts';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/input';
-import { CATEGORY_FOLDER, type ContractCategory } from '@/lib/contracts/drive';
+import {
+  CATEGORY_FOLDER, CONTRACT_CATEGORIES, type ContractCategory,
+} from '@/lib/contracts/drive';
 import { STATUS_LABEL, type ContractStatus } from '@/lib/contracts/status';
 
 /**
@@ -86,7 +88,7 @@ export function ConfirmFiling({
         onChange={(e) => setChoice(e.target.value as ContractCategory)}
         className="h-7 text-[12px]"
       >
-        {(['demand', 'supply', 'general'] as const).map((c) => (
+        {CONTRACT_CATEGORIES.map((c) => (
           <option key={c} value={c}>
             {CATEGORY_FOLDER[c]}
           </option>

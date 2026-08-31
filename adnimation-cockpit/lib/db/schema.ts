@@ -244,6 +244,8 @@ export const contracts = pgTable(
     pipelineClientId: uuid('pipeline_client_id'),
     drivePath: text('drive_path'),
     notes: text('notes'),
+    /** Overrides the status's idea of whose move it is. Null follows the status. */
+    waitingOnOverride: text('waiting_on_override'),
     archivedAt: timestamptz('archived_at'),
 
     createdAt: timestamptz('created_at').notNull().defaultNow(),

@@ -13,11 +13,33 @@
 
 export const DRIVE_ROOT = 'Adnimation Contracts';
 
-export type ContractCategory = 'demand' | 'supply' | 'general';
+/**
+ * `mutual` is a partner we both buy from and sell to, which is common enough
+ * that forcing one of those agreements onto a single side files it where
+ * nobody will look for it.
+ *
+ * `quote` is not an agreement at all but the document that precedes one, and
+ * it carries its own question — is it still outstanding — so it keeps its own
+ * pile rather than being buried among signed contracts.
+ */
+export type ContractCategory = 'demand' | 'supply' | 'mutual' | 'quote' | 'general';
+
+/**
+ * Every category, in the order they are offered.
+ *
+ * One list, because three separate screens each hardcoded their own and two of
+ * them silently kept offering the old three when `mutual` and `quote` were
+ * added — a category you cannot pick may as well not exist.
+ */
+export const CONTRACT_CATEGORIES: readonly ContractCategory[] = [
+  'demand', 'supply', 'mutual', 'quote', 'general',
+] as const;
 
 export const CATEGORY_FOLDER: Record<ContractCategory, string> = {
   demand: 'Demand',
   supply: 'Supply',
+  mutual: 'Mutual',
+  quote: 'Quotes',
   general: 'General',
 };
 
@@ -135,13 +157,28 @@ export function categoriseCounterparty(signals: {
   isPublisher?: boolean;
   hint?: string | null;
 }): ContractCategory | null {
-  if (signals.isDemandPartner && !signals.isSupplyPartner) return 'demand';
-  if (signals.isSupplyPartner || signals.isPublisher) return 'supply';
+  const supplySide = signals.isSupplyPartner || signals.isPublisher;
+
+  // Both sides is its own answer. Before `mutual` existed this fell through to
+  // supply, which quietly filed every two-way agreement on one side.
+  if (signals.isDemandPartner && supplySide) return 'mutual';
+  if (signals.isDemandPartner) return 'demand';
+  if (supplySide) return 'supply';
 
   const hint = signals.hint?.toLowerCase() ?? '';
   if (!hint) return null;
-  if (/\b(dsp|demand|advertiser|buyer)\b/.test(hint)) return 'demand';
-  if (/\b(ssp|supply|publisher|inventory|seller)\b/.test(hint)) return 'supply';
+
+  // A quote names itself, and reading as a quote beats reading as a side: a
+  // supply quote is still a quote.
+  if (/\b(quote|quotation|price list|rate card|pricing proposal)\b/.test(hint)) return 'quote';
+  if (/(הצעת מחיר|הצעה כספית)/.test(hint)) return 'quote';
+
+  const saysDemand = /\b(dsp|demand|advertiser|buyer)\b/.test(hint);
+  const saysSupply = /\b(ssp|supply|publisher|inventory|seller)\b/.test(hint);
+  if (saysDemand && saysSupply) return 'mutual';
+  if (/\b(mutual|two-?way|reciprocal|bi-?directional)\b/.test(hint)) return 'mutual';
+  if (saysDemand) return 'demand';
+  if (saysSupply) return 'supply';
   if (/\b(nda|office|lease|employment|vendor|insurance|bank)\b/.test(hint)) return 'general';
   return null;
 }

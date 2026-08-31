@@ -248,6 +248,85 @@ export async function uploadFile(opts: {
 }
 
 /**
+ * Remove folders left empty after a file moved out.
+ *
+ * Classifying a contract moves its versions from `_Unclassified/<Counterparty>`
+ * into the real category, and the folder it left behind stays for ever unless
+ * something clears it. Walking up from the deepest segment means the
+ * counterparty folder goes, and then its parent if that is now empty too.
+ *
+ * It trashes rather than deletes. An empty folder is not data, but Drive's
+ * delete is permanent and its trash is not — and a folder that turns out to
+ * have mattered is then still recoverable, which costs nothing.
+ *
+ * Three things it will not do: touch the root, touch a folder holding
+ * anything at all, or walk outside the path it was given.
+ */
+export async function pruneEmptyFolders(
+  segments: string[],
+  rootId = process.env.DRIVE_CONTRACTS_ROOT_ID,
+): Promise<{ trashed: string[]; error?: string }> {
+  const auth = await token();
+  if ('error' in auth) return { trashed: [], error: auth.error };
+  if (!rootId) return { trashed: [], error: 'no Drive root configured' };
+
+  const trashed: string[] = [];
+
+  // Resolve the chain first, so each level knows its own id and its parent's.
+  const chain: { id: string; name: string }[] = [];
+  let parent = rootId;
+  for (const segment of segments) {
+    const q = [
+      `name = '${escapeName(segment)}'`,
+      `mimeType = '${FOLDER_MIME}'`,
+      `'${parent}' in parents`,
+      'trashed = false',
+    ].join(' and ');
+    const found = (await api(
+      `/files?q=${encodeURIComponent(q)}&fields=files(id,name)` +
+        '&supportsAllDrives=true&includeItemsFromAllDrives=true',
+      {},
+      auth.token,
+    ).catch(() => ({ files: [] }))) as { files?: { id: string; name: string }[] };
+
+    const hit = found.files?.[0];
+    if (!hit) break;
+    chain.push(hit);
+    parent = hit.id;
+  }
+
+  // Deepest first: a parent can only be empty once its child has gone.
+  for (let i = chain.length - 1; i >= 0; i -= 1) {
+    const folder = chain[i]!;
+    // Never the root, whatever was passed in.
+    if (folder.id === rootId) break;
+
+    const children = (await api(
+      `/files?q=${encodeURIComponent(`'${folder.id}' in parents and trashed = false`)}` +
+        '&fields=files(id)&pageSize=1&supportsAllDrives=true&includeItemsFromAllDrives=true',
+      {},
+      auth.token,
+    ).catch(() => null)) as { files?: { id: string }[] } | null;
+
+    // Could not read it, or it still holds something — stop climbing.
+    if (children === null || (children.files?.length ?? 0) > 0) break;
+
+    const res = await fetch(
+      `${API}/files/${folder.id}?supportsAllDrives=true`,
+      {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trashed: true }),
+      },
+    );
+    if (!res.ok) break;
+    trashed.push(folder.name);
+  }
+
+  return { trashed };
+}
+
+/**
  * Move a file to a different folder when its status changes.
  *
  * Drive keeps the file id across a move, so every link already shared, and

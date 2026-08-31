@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createContractAction } from '@/app/actions/contracts';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select } from '@/components/ui/input';
-import { CATEGORY_FOLDER } from '@/lib/contracts/drive';
+import { CATEGORY_FOLDER, CONTRACT_CATEGORIES } from '@/lib/contracts/drive';
 import { CONTRACT_STATUSES, STATUS_LABEL } from '@/lib/contracts/status';
 
 const DOC_TYPES = ['IO', 'MSA', 'NDA', 'Amendment', 'Renewal', 'SOW'];
@@ -61,7 +61,7 @@ export function NewContractForm({ departments }: { departments: { id: string; la
         <div>
           <Label htmlFor="new-contract-category">Drive category</Label>
           <Select id="new-contract-category" name="category" defaultValue="demand">
-            {(['demand', 'supply', 'general'] as const).map((c) => (
+            {CONTRACT_CATEGORIES.map((c) => (
               <option key={c} value={c}>
                 {CATEGORY_FOLDER[c]}
               </option>

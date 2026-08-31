@@ -13,7 +13,12 @@
  * REFILE=1 instead moves everything already in Drive into the folder its
  * contract belongs in now. That is what a classification or a status change
  * does for one contract; this does it for all of them, which is how a mistake
- * in the folder rules gets corrected without re-uploading anything.
+ * in the folder rules gets corrected without re-uploading anything. It then
+ * clears out every folder left empty, so the tree only ever shows places that
+ * hold something.
+ *
+ * PRUNE=1 does only that clearing, over the whole tree, for the folders left
+ * behind by everything filed before this existed.
  */
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
@@ -153,6 +158,68 @@ async function moveInto(fileId, folderId) {
   return res.ok;
 }
 
+/**
+ * Trash every empty folder under the root, deepest first.
+ *
+ * Trash rather than delete: an empty folder is not data, but Drive's delete is
+ * permanent and its trash is not, so a folder that turns out to have mattered
+ * is still recoverable at no cost.
+ *
+ * Depth first, because a folder holding only empty folders is itself empty
+ * once they have gone — clearing "_Unclassified/Taboola" is what makes
+ * "_Unclassified" clearable.
+ */
+async function pruneTree() {
+  const started = Date.now();
+  const t = await token(DRIVE);
+  const trashed = [];
+
+  async function children(id) {
+    const q = `'${id}' in parents and trashed = false`;
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}` +
+        '&fields=files(id,name,mimeType)&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true',
+      { headers: { Authorization: `Bearer ${t}` } },
+    ).then((r) => (r.ok ? r.json() : { files: [] }));
+    return res.files ?? [];
+  }
+
+  /** Returns true when this folder is empty after its children were handled. */
+  async function walk(id, name, path, isRoot) {
+    const kids = await children(id);
+    const folders = kids.filter((k) => k.mimeType === 'application/vnd.google-apps.folder');
+    const files = kids.filter((k) => k.mimeType !== 'application/vnd.google-apps.folder');
+
+    let remaining = files.length;
+    for (const folder of folders) {
+      const emptied = await walk(folder.id, folder.name, `${path}/${folder.name}`, false);
+      if (!emptied) remaining += 1;
+    }
+
+    if (remaining > 0 || isRoot) return false;
+
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${id}?supportsAllDrives=true`,
+      {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trashed: true }),
+      },
+    );
+    if (!res.ok) return false;
+
+    trashed.push(path);
+    console.log(`  trashed empty  ${path}`);
+    return true;
+  }
+
+  await walk(ROOT, 'Adnimation Contracts', '/Adnimation Contracts', true);
+  console.log(
+    `cleared ${trashed.length} empty folders in ${Math.round((Date.now() - started) / 1000)}s.`,
+  );
+  return trashed.length;
+}
+
 async function refile() {
   const started = Date.now();
   const rows = await sql`
@@ -185,11 +252,20 @@ async function refile() {
   }
 
   console.log(`moved ${moved} of ${rows.length} in ${Math.round((Date.now() - started) / 1000)}s.`);
+
+  // Whatever those moves emptied should not be left standing.
+  await pruneTree();
+
   await sql.end();
   process.exit(0);
 }
 
 async function main() {
+  if (process.env.PRUNE === '1') {
+    await pruneTree();
+    await sql.end();
+    process.exit(0);
+  }
   if (process.env.REFILE === '1') return refile();
 
   const started = Date.now();

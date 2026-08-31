@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   counterpartyFrom, looksLikeContract, versionFromName, type AttachmentInput,
 } from '@/lib/contracts/intake';
-import { STAGE_FOLDER, filingFolder, stageForStatus, versionedFileName } from '@/lib/contracts/drive';
+import {
+  CATEGORY_FOLDER, CONTRACT_CATEGORIES, STAGE_FOLDER, categoriseCounterparty, filingFolder,
+  stageForStatus, versionedFileName,
+} from '@/lib/contracts/drive';
 import { BOARD_STATUSES, WAITING_ON } from '@/lib/contracts/status';
 
 function attachment(over: Partial<AttachmentInput> = {}): AttachmentInput {
@@ -180,6 +183,26 @@ describe('contracts — where it is filed', () => {
     expect(WAITING_ON.signed).toBe('nobody');
   });
 
+  it('gives mutual and quote their own folders, apart from the two sides', () => {
+    expect(filingFolder('Vidazoo', 'mutual', 'signed').path).toBe(
+      '/Adnimation Contracts/Mutual/Vidazoo/Signed',
+    );
+    expect(filingFolder('Vidazoo', 'quote', 'in_review').path).toBe(
+      '/Adnimation Contracts/Quotes/Vidazoo/In review',
+    );
+  });
+
+  it('has a folder for every category on offer, and offers every one it can file', () => {
+    // The two must not drift: a category with no folder cannot be filed, and a
+    // folder with no option cannot be chosen.
+    for (const category of CONTRACT_CATEGORIES) {
+      expect(CATEGORY_FOLDER[category], `no folder for ${category}`).toBeTruthy();
+    }
+    expect(new Set(CONTRACT_CATEGORIES)).toEqual(
+      new Set(Object.keys(CATEGORY_FOLDER)),
+    );
+  });
+
   it('names versions so they sort and never collide', () => {
     const v1 = versionedFileName({
       counterparty: 'Google', docType: 'Demand agreement', version: 1, date: '2026-05-02',
@@ -190,5 +213,41 @@ describe('contracts — where it is filed', () => {
     expect(v1).not.toBe(v2);
     expect(v2).toContain('v2');
     expect(v2).toContain('2026-08-31');
+  });
+});
+
+/**
+ * Categorising a counterparty automatically.
+ *
+ * The interesting case is a partner on both sides, which before `mutual`
+ * existed fell through to supply — so every two-way agreement was quietly
+ * filed on one side of the business.
+ */
+describe('contracts — categorising the counterparty', () => {
+  it('calls a partner on both sides mutual, not whichever side wins a tie', () => {
+    expect(categoriseCounterparty({ isDemandPartner: true, isSupplyPartner: true })).toBe('mutual');
+    expect(categoriseCounterparty({ isDemandPartner: true, isPublisher: true })).toBe('mutual');
+  });
+
+  it('still calls a one-sided partner by its side', () => {
+    expect(categoriseCounterparty({ isDemandPartner: true })).toBe('demand');
+    expect(categoriseCounterparty({ isSupplyPartner: true })).toBe('supply');
+    expect(categoriseCounterparty({ isPublisher: true })).toBe('supply');
+  });
+
+  it('reads both sides out of the text as mutual', () => {
+    expect(categoriseCounterparty({ hint: 'DSP and SSP integration agreement' })).toBe('mutual');
+    expect(categoriseCounterparty({ hint: 'a mutual agreement' })).toBe('mutual');
+  });
+
+  it('recognises a quote, in either language, before it picks a side', () => {
+    // A supply quote is still a quote — the pile it belongs in is quotes.
+    expect(categoriseCounterparty({ hint: 'supply rate card and quotation' })).toBe('quote');
+    expect(categoriseCounterparty({ hint: 'הצעת מחיר לשירותי דימנד' })).toBe('quote');
+  });
+
+  it('says nothing rather than guessing', () => {
+    expect(categoriseCounterparty({ hint: 'hello' })).toBeNull();
+    expect(categoriseCounterparty({})).toBeNull();
   });
 });
