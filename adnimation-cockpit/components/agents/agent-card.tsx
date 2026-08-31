@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  runAgentAction, setAutonomyAction, setInstructionsAction, toggleAgentAction,
+  runAgentAction, setAutonomyAction, setInstructionsAction, setNotifyAction, toggleAgentAction,
 } from '@/app/actions/agents';
 import { Button } from '@/components/ui/button';
 import { Label, Select, Textarea } from '@/components/ui/input';
@@ -134,6 +134,27 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
           have anticipated, so this is free text rather than a form of the
           options we thought of.
         */}
+        {/*
+          Per agent, and off by default. A notification for every action is a
+          notification he stops reading — and an agent he has stopped reading
+          about is worse than a silent one, because he thinks he is watching it.
+          A halt always speaks, whatever this says.
+        */}
+        <Button
+          type="button"
+          size="xs"
+          variant={a.notifySlack ? 'outline' : 'ghost'}
+          disabled={pending}
+          title={
+            a.notifySlack
+              ? 'Telling you in Slack after every run. Click to silence.'
+              : 'Silent unless it halts. Click to have it report in Slack.'
+          }
+          onClick={() => run(setNotifyAction, withId({ on: a.notifySlack ? '0' : '1' }))}
+        >
+          {a.notifySlack ? 'SLACK: ON' : 'SLACK: OFF'}
+        </Button>
+
         <Button
           type="button"
           size="xs"

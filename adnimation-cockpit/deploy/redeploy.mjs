@@ -81,7 +81,7 @@ async function main() {
     'opportunity-sweep.mjs', 'opportunity-detect.mjs', 'slack-capture.mjs',
     // contract-sync imports the generated copy of the intake rules.
     'contract-sync.mjs', 'contract-intake.mjs', 'contract-folders.mjs',
-    'invoice-forward.mjs', 'internal-mail.mjs', 'drive-find.mjs', 'gmail-send-check.mjs', 'claude-check.mjs', 'contract-backfill.mjs',
+    'invoice-forward.mjs', 'internal-mail.mjs', 'mailbox-tidy.mjs', 'mailbox-rules.mjs', 'drive-find.mjs', 'gmail-send-check.mjs', 'claude-check.mjs', 'contract-backfill.mjs',
   ]) {
     if (existsSync(`deploy/${job}`)) sh('cp', ['-a', `deploy/${job}`, '/tmp/cockpit-bundle/jobs/']);
   }

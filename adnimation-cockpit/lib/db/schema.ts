@@ -546,6 +546,8 @@ export const agents = pgTable('agents', {
   maxRunsPerHour: integer('max_runs_per_hour').notNull().default(10),
   enabled: boolean('enabled').notNull().default(true),
   runCount: integer('run_count').notNull().default(0),
+  /** Whether this agent reports what it did in Slack. */
+  notifySlack: boolean('notify_slack').notNull().default(false),
   /** What he has taught this agent, in his own words. */
   instructions: text('instructions'),
   instructionsUpdatedAt: timestamptz('instructions_updated_at'),

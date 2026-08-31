@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
 import {
   runById, seedAgents, setAgentEnabled, setAutonomy, setGlobalKill, setInstructions,
+  setNotifySlack,
 } from '@/lib/agents/module';
 
 /**
@@ -110,6 +111,23 @@ export async function setInstructionsAction(formData: FormData): Promise<AgentAc
 
   revalidatePath('/agents');
   return { ok: true, message: 'Saved. It will use this from the next run.' };
+}
+
+/** Whether this agent tells him what it did, in Slack. */
+export async function setNotifyAction(formData: FormData): Promise<AgentActionResult> {
+  const user = await requireUser();
+  const id = idSchema.safeParse(String(formData.get('id') ?? ''));
+  if (!id.success) return { ok: false, error: 'Not an agent' };
+
+  const on = String(formData.get('on') ?? '') === '1';
+  const result = await setNotifySlack(id.data, on, user.email);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath('/agents');
+  return {
+    ok: true,
+    message: on ? 'It will tell you in Slack.' : 'It will stay quiet unless it halts.',
+  };
 }
 
 export async function killSwitchAction(formData: FormData): Promise<AgentActionResult> {

@@ -13,6 +13,11 @@
  * send, so this cannot mail the outside world even if FINANCE_EMAIL is set to
  * something it should not be. Each message is forwarded once — the id is
  * recorded, and a re-run skips it.
+ *
+ * A forwarded invoice is then archived out of the inbox: finance has it, so it
+ * is no longer his to look at. Archived, not deleted — it stays in All Mail and
+ * one search away. That needs gmail.modify; without it the forward still
+ * happens and the archiving is reported as skipped rather than failing the run.
  */
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
@@ -81,6 +86,30 @@ async function token(scope) {
 
 const READ = 'https://www.googleapis.com/auth/gmail.readonly';
 const SEND = 'https://www.googleapis.com/auth/gmail.send';
+const MODIFY = 'https://www.googleapis.com/auth/gmail.modify';
+
+/**
+ * Take a forwarded invoice out of the inbox.
+ *
+ * Never fatal. The forward is the point; archiving is tidying, and a missing
+ * scope should not make a delivered invoice look like a failed run.
+ */
+async function archive(messageId) {
+  try {
+    const t = await token(MODIFY);
+    const res = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ removeLabelIds: ['INBOX'] }),
+      },
+    );
+    return res.ok ? { ok: true } : { ok: false, reason: `http_${res.status}` };
+  } catch (e) {
+    return { ok: false, reason: e.message ?? 'could not archive' };
+  }
+}
 
 async function gmail(path) {
   const t = await token(READ);
@@ -224,6 +253,15 @@ async function main() {
       on conflict (message_id) do nothing
     `;
     sent += 1;
+
+    // Recorded before archiving, so a failure here can never cause a second
+    // forward on the next run.
+    const archived = await archive(ref.id);
+    console.log(
+      archived.ok
+        ? '      archived out of the inbox'
+        : `      left in the inbox (${archived.reason})`,
+    );
   }
 
   console.log(

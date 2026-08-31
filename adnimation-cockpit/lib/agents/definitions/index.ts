@@ -172,6 +172,40 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
     enabled: false,
   },
   {
+    name: 'promo-filer',
+    description:
+      'Files sales and marketing mail under “קידום מכירות” and takes it out of the inbox, so ' +
+      'what is left is what still needs you.',
+    rationale:
+      'Filed, never deleted, and it will not touch anyone the company deals with, anyone you ' +
+      'have replied to, or any reply or forward. Marketing left in the inbox costs you a glance; ' +
+      'a client filed as marketing costs you the client, so it errs the other way.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 */3 * * *' },
+    conditions: [{ name: 'It really is marketing', check: 'looks_promotional', config: {} }],
+    actions: [{ type: 'update_record', config: { label: 'קידום מכירות', removeFromInbox: true } }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 8,
+    enabled: false,
+  },
+  {
+    name: 'code-cleaner',
+    description:
+      'Throws out one-time login codes an hour after they arrive, by which time they no longer ' +
+      'work.',
+    rationale:
+      'They are worthless the moment they expire and they clutter the inbox for ever. It never ' +
+      'touches a security alert — those share almost all of a code’s vocabulary and are how you ' +
+      'find out an account was taken. Trash, not delete: Gmail keeps it thirty days.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '30 * * * *' },
+    conditions: [{ name: 'The code has expired', check: 'code_expired', config: { hours: 1 } }],
+    actions: [{ type: 'update_record', config: { trash: true } }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 4,
+    enabled: false,
+  },
+  {
     name: 'renewal-warner',
     description:
       'Watches every signed contract for its notice period and warns you before the window to ' +

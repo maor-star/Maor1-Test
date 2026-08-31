@@ -3,6 +3,7 @@ import { agentRuns, agents, db } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 import { claudeStatus } from '@/lib/integrations/claude';
 import { SEED_AGENTS } from './definitions';
+import { notifyRun } from './notify';
 import { globalKill, runAgent, setGlobalKill, type Runtime } from './runtime';
 import {
   isIrreversible, validateAgentConfig, type AgentInput, type AgentRecord,
@@ -32,6 +33,7 @@ function toRecord(r: Row): AgentRecord {
 
 export interface AgentListItem extends AgentRecord {
   rationale: string | null;
+  notifySlack: boolean;
   instructions: string | null;
   instructionsUpdatedAt: Date | null;
   lastRun: { startedAt: Date; outcome: string | null; haltReason: string | null } | null;
@@ -63,6 +65,7 @@ export async function listAgents(): Promise<AgentListItem[]> {
       return {
         ...toRecord(r),
         rationale: rationales.get(r.name) ?? null,
+        notifySlack: r.notifySlack,
         instructions: r.instructions,
         instructionsUpdatedAt: r.instructionsUpdatedAt,
         lastRun: last ?? null,
@@ -180,6 +183,27 @@ export async function setInstructions(
   return { ok: true };
 }
 
+/** Whether this agent reports what it did in Slack. */
+export async function setNotifySlack(
+  id: string,
+  on: boolean,
+  actor: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const [before] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+  if (!before) return { ok: false, error: 'No such agent' };
+
+  await db.update(agents).set({ notifySlack: on }).where(eq(agents.id, id));
+  await writeAudit({
+    actor,
+    action: 'agent.notify',
+    entityType: 'agent',
+    entityId: id,
+    before: { notifySlack: before.notifySlack },
+    after: { notifySlack: on },
+  });
+  return { ok: true };
+}
+
 export async function setAgentEnabled(
   id: string,
   enabled: boolean,
@@ -279,7 +303,13 @@ export async function runById(
 ) {
   const [row] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
   if (!row) return { outcome: 'failed' as const, conditions: [], actions: [], error: 'No such agent' };
-  return runAgent(toRecord(row), buildRuntime(), options);
+
+  const report = await runAgent(toRecord(row), buildRuntime(), options);
+
+  // Telling him must never be able to fail the run it is reporting on.
+  await notifyRun(row.id, row.name, report).catch(() => ({ sent: false }));
+
+  return report;
 }
 
 export { recentRuns } from './runtime';

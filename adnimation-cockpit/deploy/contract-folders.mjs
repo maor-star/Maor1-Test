@@ -32,7 +32,6 @@ export const DRIVE_ROOT = 'Adnimation Contracts';
  * it carries its own question — is it still outstanding — so it keeps its own
  * pile rather than being buried among signed contracts.
  */
-
 /**
  * Every category, in the order they are offered.
  *
@@ -60,7 +59,6 @@ export const CATEGORY_FOLDER = {
  * status changes — Drive keeps the file id across a move, so any link already
  * shared stays valid.
  */
-
 export const STAGE_FOLDER = {
   unclassified: 'Needs classifying',
   in_review: 'In review',

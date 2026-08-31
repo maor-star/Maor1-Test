@@ -47,6 +47,21 @@ const TARGETS = [
     ],
   },
   {
+    src: new URL('../lib/agents/mailbox.ts', import.meta.url),
+    out: new URL('./mailbox-rules.mjs', import.meta.url),
+    from: 'lib/agents/mailbox.ts',
+    test: 'tests/unit/mailbox-parity.test.ts',
+    rewrites: [
+      [/export interface MailFacts \{[\s\S]*?\n\}\n\n/, ''],
+      [/export interface PromoGuess \{[\s\S]*?\n\}\n\n/, ''],
+      [/export interface CodeGuess \{[\s\S]*?\n\}\n\n/, ''],
+      ['const PROMO_SIGNALS: [RegExp, string][] = [', 'const PROMO_SIGNALS = ['],
+      ['export function looksPromotional(mail: MailFacts): PromoGuess {', 'export function looksPromotional(mail) {'],
+      ['export function isSpentAuthCode(mail: MailFacts, expiryHours = CODE_EXPIRY_HOURS): CodeGuess {', 'export function isSpentAuthCode(mail, expiryHours = CODE_EXPIRY_HOURS) {'],
+      ['  const reasons: string[] = [];', '  const reasons = [];'],
+    ],
+  },
+  {
     src: new URL('../lib/agents/internal-mail.ts', import.meta.url),
     out: new URL('./internal-mail.mjs', import.meta.url),
     from: 'lib/agents/internal-mail.ts',
@@ -97,14 +112,45 @@ const header = (from, test) => `/**
  */
 `;
 
+/**
+ * Strip the type-only declarations every file has, before the per-file
+ * rewrites deal with what is left.
+ *
+ * Doing this generically rather than naming each interface per target is what
+ * stops a new type in a source file quietly breaking its generated copy — the
+ * per-file lists were three files long and already drifting.
+ */
+function stripTypeDeclarations(source) {
+  return (
+    source
+      // export interface X { … } and export type X = …;
+      .replace(/export interface \w+ \{[\s\S]*?\n\}\n+/g, '')
+      .replace(/export type \w+ =[\s\S]*?;\n+/g, '')
+      .replace(/^type \w+ =[\s\S]*?;\n+/gm, '')
+      // import type { … } from '…';
+      .replace(/import type \{[^}]*\} from [^;]+;\n/g, '')
+      /*
+       * Local annotations: `const reasons: string[] = []`.
+       *
+       * Globally, because a per-file string rewrite replaces only the first
+       * occurrence — and `const reasons: string[] = []` appears twice in the
+       * mailbox rules, which is exactly how this was found.
+       */
+      .replace(/\b(const|let) (\w+): [\w[\]<>, |'"]+ =/g, '$1 $2 =')
+      // `as const` is TypeScript-only and a syntax error at run time.
+      .replace(/\n\] as const;/g, '\n];')
+      .replace(/ as const;/g, ';')
+  );
+}
+
 for (const target of TARGETS) {
-  let body = readFileSync(target.src, 'utf8');
+  let body = stripTypeDeclarations(readFileSync(target.src, 'utf8'));
   for (const [from, to] of target.rewrites) body = body.replace(from, to);
 
   // Anything left with a type annotation would be a syntax error at run time,
   // and a job that crashes on the timer is worse than one that fails to build.
   if (
-    /:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget|InvoiceInput|InvoiceGuess)\b/.test(
+    /:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget|InvoiceInput|InvoiceGuess|MailFacts|PromoGuess|CodeGuess)\b/.test(
       body,
     )
   ) {
