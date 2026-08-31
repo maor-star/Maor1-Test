@@ -40,7 +40,7 @@ if (!DB) {
   process.exit(1);
 }
 
-const sql = postgres(DB, { max: 2 });
+const sql = postgres(DB, { max: 2, onnotice: () => {} });
 
 async function main() {
   const started = Date.now();

@@ -29,7 +29,7 @@ const MAX_THREADS = Number(process.env.CONTRACT_SYNC_MAX ?? 300);
 
 if (!DB) { console.error('DATABASE_URL is required.'); process.exit(1); }
 
-const sql = postgres(DB, { max: 2 });
+const sql = postgres(DB, { max: 2, onnotice: () => {} });
 const b64 = (i) =>
   Buffer.from(i).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 

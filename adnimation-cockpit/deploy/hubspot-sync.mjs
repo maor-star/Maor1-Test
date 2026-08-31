@@ -116,7 +116,7 @@ const date = (v) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-const sqlDb = postgres(DB, { max: 2 });
+const sqlDb = postgres(DB, { max: 2, onnotice: () => {} });
 
 async function owners() {
   const byId = new Map();

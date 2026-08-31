@@ -46,7 +46,7 @@ if (!DB || !RAW_KEY || !MAILBOX || !ROOT) {
   process.exit(1);
 }
 
-const sql = postgres(DB, { max: 2 });
+const sql = postgres(DB, { max: 2, onnotice: () => {} });
 const key = JSON.parse(
   RAW_KEY.trim().startsWith('{') ? RAW_KEY : Buffer.from(RAW_KEY, 'base64').toString('utf8'),
 );

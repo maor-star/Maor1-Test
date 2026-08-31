@@ -27,7 +27,7 @@ if (!path) {
   process.exit(1);
 }
 const snap = JSON.parse(readFileSync(path, 'utf8'));
-const sql = postgres(DB, { max: 2 });
+const sql = postgres(DB, { max: 2, onnotice: () => {} });
 
 const COLS = [
   'pub_gross_cents', 'pub_source_fee_cents', 'pub_net_after_fee_cents', 'pub_payout_cents',

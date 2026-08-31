@@ -31,7 +31,7 @@ if (!TOKEN || !CEO) {
   process.exit(78); // EX_CONFIG — a known unconfigured state, not a fault.
 }
 
-const sql = postgres(DB, { max: 2 });
+const sql = postgres(DB, { max: 2, onnotice: () => {} });
 
 async function slack(method, params = {}, post = false) {
   const url = `https://slack.com/api/${method}`;

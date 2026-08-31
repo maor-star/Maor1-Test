@@ -54,7 +54,7 @@ if (!CLAUDE) {
   process.exit(78);
 }
 
-const sql = postgres(DB, { max: 2 });
+const sql = postgres(DB, { max: 2, onnotice: () => {} });
 const b64 = (i) =>
   Buffer.from(i).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 

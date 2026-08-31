@@ -47,7 +47,7 @@ if (!recipients.ok) {
 }
 const to = recipients.recipients[0];
 
-const sql = postgres(DB, { max: 2 });
+const sql = postgres(DB, { max: 2, onnotice: () => {} });
 const b64url = (i) =>
   Buffer.from(i).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 

@@ -30,7 +30,7 @@ if (!TOKEN || !DB) {
   process.exit(1);
 }
 
-const sql = postgres(DB, { max: 2 });
+const sql = postgres(DB, { max: 2, onnotice: () => {} });
 
 /** Names differ in spacing and case between the two systems; this is the key. */
 const nameKey = (s) => (s ?? '').toLowerCase().replace(/[^a-z]/g, '');

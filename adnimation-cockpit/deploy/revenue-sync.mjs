@@ -39,7 +39,7 @@ if (!KEY || !PROJECT) {
   process.exit(78); // EX_CONFIG — systemd records it without flapping the unit.
 }
 
-const sql = postgres(DB, { max: 2 });
+const sql = postgres(DB, { max: 2, onnotice: () => {} });
 
 async function query(statement) {
   assertSelect(statement);
