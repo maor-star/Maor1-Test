@@ -80,7 +80,7 @@ async function main() {
     // opportunity-sweep imports the generated copy of the detection rules.
     'opportunity-sweep.mjs', 'opportunity-detect.mjs', 'slack-capture.mjs',
     // contract-sync imports the generated copy of the intake rules.
-    'contract-sync.mjs', 'contract-intake.mjs', 'drive-find.mjs', 'gmail-send-check.mjs',
+    'contract-sync.mjs', 'contract-intake.mjs', 'drive-find.mjs', 'gmail-send-check.mjs', 'contract-backfill.mjs',
   ]) {
     if (existsSync(`deploy/${job}`)) sh('cp', ['-a', `deploy/${job}`, '/tmp/cockpit-bundle/jobs/']);
   }
