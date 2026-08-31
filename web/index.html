@@ -519,7 +519,7 @@ function persistLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(db)); 
 function save(){
   db.updatedAt=Date.now();
   dirty=true; // יש שינוי מקומי שצריך להעלות
-  _hasCardDetail=null; // איפוס מטמון (ייתכן שהשתנו שורות פירוט)
+  _hasCardDetail=null; _lumpMonths=null; // איפוס מטמון (ייתכן שהשתנו שורות פירוט/חיובים מרוכזים)
   persistLocal();
   const s=document.getElementById('save-state');
   if(s && !authToken){ s.textContent='נשמר ✔'; clearTimeout(saveTimer); saveTimer=setTimeout(()=>s.textContent='נשמר בדפדפן',1500); }
@@ -889,9 +889,17 @@ function isCardDetail(t){ return !!detectIssuer(t.account); }
 // האם קיימים חיובי אשראי מרוכזים (חשבוניות) בנתונים
 var _hasCardDetail=null; // var (מונע TDZ כי save() ניגש אליו כבר ב-ensureDefaults שרץ קודם)
 function hasCardDetail(){ if(_hasCardDetail===null) _hasCardDetail=db.transactions.some(t=>t.kind==='expense'&&isCardDetail(t)); return _hasCardDetail; }
+// אינדקס «חברת אשראי|חודש» לכל חיוב מרוכז — כדי לדעת מתי פירוט אשראי כבר מכוסה ע"י חיוב מרוכז (למניעת ספירה כפולה)
+var _lumpMonths=null;
+function lumpMonths(){ if(_lumpMonths===null){ _lumpMonths=new Set(); db.transactions.forEach(t=>{ if(t.kind==='expense'&&isAggLump(t)){ const i=detectIssuer(t.merchant||t.description); if(i) _lumpMonths.add(i+'|'+String(t.tx_date).slice(0,7)); } }); } return _lumpMonths; }
 // עלות/תזרים: הפירוט (בית עסק אמיתי) + הוצאות רגילות תמיד נספרים.
 // חיוב מרוכז (חשבונית) לא נספר כשקיים פירוט — הפירוט הוא מקור האמת (מניעת כפילות).
-function countsInTotal(t){ if(t.kind!=='expense') return true; if(isAggLump(t)) return !hasCardDetail(); return true; }
+function countsInTotal(t){ if(t.kind!=='expense') return true;
+  // חיוב מרוכז + הוצאות רגילות תמיד נספרים בתזרים. פירוט אשראי נספר רק אם אין חיוב מרוכז של אותה חברה באותו חודש
+  // (אחרת נספור פעמיים — פעם בפירוט ופעם בחיוב המרוכז). כך חודש שיש בו רק חיוב מרוכז (בלי פירוט) עדיין מקבל את מלוא הסכום.
+  if(isCardDetail(t)){ const i=detectIssuer(t.account); return !lumpMonths().has(i+'|'+String(t.tx_date).slice(0,7)); }
+  return true;
+}
 // פילוח לפי מהות: פירוט האשראי (בית עסק אמיתי) + הוצאות רגילות. חיוב מרוכז אינו נספר (חסר מהות).
 function countsEssence(t){ if(t.kind!=='expense') return true; return !isAggLump(t); }
 
@@ -965,7 +973,9 @@ function h_transactions(m,id,sub,b,qp){
       const amount=Math.abs(numv(r.amount)); if(!date||amount<=0){skipped++;continue;}
       const yr=+String(date).slice(0,4); if(yr<2010||yr>2027){skipped++;continue;}   // תאריך לא-סביר (שגיאת פענוח)
       if(!desc&&!merchant){skipped++;continue;}                                        // שורת סיכום ללא בית עסק — לא עסקה
-      if(isAggMerchant(merchant)){skipped++;continue;}                                 // «חיוב מרוכז»/שורת-סיכום (בית העסק=שם חברת אשראי) — לא מייבאים, הפירוט הוא מקור האמת
+      // בית העסק = שם חברת אשראי: בתדפיס אשראי זו שורת-סיכום (מדלגים). בתדפיס בנק זהו החיוב המרוכז האמיתי שירד מהחשבון —
+      // מייבאים אותו כתזרים (הוא מוחרג אוטומטית מפילוח בתי-העסק והמהות, ונספר רק כשאין פירוט אשראי מקביל לאותו חודש).
+      if(isAggMerchant(merchant) && src!=='bank'){skipped++;continue;}
       const kind=r.kind==='income'?'income':'expense';
       const ref=strv(r.ref);
       const bk=[kind,date,merchant.trim(),amount].join('|');
