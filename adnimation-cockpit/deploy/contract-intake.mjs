@@ -46,6 +46,12 @@ const NOT_CONTRACT = [
   /\b(report|analytics|dashboard|newsletter|deck|presentation|proposal deck)\b/i,
   /\b(cv|resume|curriculum vitae)\b/i,
   /(חשבונית|קבלה|דו"?ח|תלוש)/,
+  /*
+   * Seen against the real mailbox. Travel documents are PDFs from a company
+   * with a real domain and read exactly like an agreement to a phrase matcher.
+   */
+  /\b(booking (confirmation|reference)|e-?ticket|itinerary|boarding pass|reservation)\b/i,
+  /\b(deduction|credit note|self-?bill|payout statement|reconciliation)\b/i,
 ];
 
 /** Below this it is a logo or a signature block, not an agreement. */
@@ -120,9 +126,22 @@ const FREE_MAIL = new Set([
 ]);
 
 export function counterpartyFrom(opts) {
+  const domain = (opts.email ?? '').split('@')[1]?.toLowerCase().replace(/^www\./, '');
+  const own = opts.ownDomain?.toLowerCase().replace(/^www\./, '') ?? null;
+
+  /*
+   * Mail from our own people is not a contract with ourselves.
+   *
+   * Against the real mailbox this put fourteen unrelated documents under one
+   * "Adnimation" contract, because every internal forward resolved to our own
+   * domain. Where the thread names a company we deal with, that is the
+   * counterparty; otherwise we do not know, and a colleague's name is a worse
+   * answer than none.
+   */
+  if (own && domain === own) return opts.knownCompany ?? null;
+
   if (opts.knownCompany) return opts.knownCompany;
 
-  const domain = (opts.email ?? '').split('@')[1]?.toLowerCase().replace(/^www\./, '');
   if (domain && !FREE_MAIL.has(domain)) {
     // markito.co.il → Markito. The registrable part is the company.
     const label = domain.split('.')[0] ?? '';

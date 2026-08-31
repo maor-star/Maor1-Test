@@ -173,7 +173,11 @@ async function record({ counterparty, docType, source, ref, url, receivedAt, fil
     values (${contractId}, ${versionNo}, ${fileName}, ${hash},
             ${source === 'mail' ? 'inbound_mail' : 'manual_upload'}, ${receivedAt},
             ${mime}, ${size}, ${ref}, ${url})
-    on conflict (contract_id, file_hash) do nothing
+    -- Bare ON CONFLICT, not a named target: the schema carries a global unique
+    -- on file_hash as well as the per-contract one, and identical bytes are the
+    -- same document wherever they arrive from. Naming one target made the other
+    -- throw and took the whole pass down with it.
+    on conflict do nothing
     returning id
   `;
 
@@ -213,6 +217,7 @@ async function fromMail() {
 
       for (const attachment of attachments) {
         scanned += 1;
+        try {
         const sourceRef = `${message.id}:${attachment.attachmentId.slice(0, 24)}`;
         if (await alreadySeen('mail', sourceRef)) continue;
 
@@ -243,7 +248,13 @@ async function fromMail() {
         const counterparty = counterpartyFrom({
           email: from.email,
           displayName: from.name,
-          knownCompany: known?.known_company ?? null,
+          // The CRM holds our own company under a few names, and any of them
+          // as a counterparty means a contract with ourselves.
+          knownCompany:
+            known?.known_company && !/^adnimation\b/i.test(known.known_company)
+              ? known.known_company
+              : null,
+          ownDomain: MAILBOX.split('@')[1] ?? null,
         });
         if (!counterparty) {
           await markSeen('mail', sourceRef, attachment.filename, hash, null);
@@ -267,6 +278,11 @@ async function fromMail() {
         if (versionId) {
           recorded += 1;
           await fileToDrive(versionId, counterparty, attachment, bytes);
+        }
+        } catch (e) {
+          // One unreadable attachment must not cost the whole run. Say which,
+          // and carry on — the next pass will try it again.
+          console.error(`  skipped ${attachment.filename}: ${e.message ?? e}`);
         }
       }
     }
@@ -371,6 +387,7 @@ async function fromSlack() {
     for (const message of history.messages ?? []) {
       for (const file of message.files ?? []) {
         scanned += 1;
+        try {
         const sourceRef = `slack:${file.id}`;
         if (await alreadySeen('slack', sourceRef)) continue;
 
@@ -411,6 +428,9 @@ async function fromSlack() {
         if (versionId) {
           recorded += 1;
           await fileToDrive(versionId, counterparty, { filename: file.name, mimeType: file.mimetype }, bytes);
+        }
+        } catch (e) {
+          console.error(`  skipped ${file.name}: ${e.message ?? e}`);
         }
       }
     }

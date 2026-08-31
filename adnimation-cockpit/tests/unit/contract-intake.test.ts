@@ -63,6 +63,8 @@ describe('contracts — spotting one in an attachment', () => {
     ['a report', 'August report.pdf', 'Monthly analytics report'],
     ['a CV', 'Dana CV.pdf', 'Applying for the ad ops role'],
     ['an invoice in Hebrew', 'חשבונית 221.pdf', 'לתשלום'],
+    ['a flight booking', 'EL AL booking.pdf', 'Your EL AL Booking Confirmation'],
+    ['a payout statement', 'August.pdf', 'Pubmatic deduction reconciliation'],
   ])('refuses %s', (_label, fileName, context) => {
     expect(looksLikeContract(attachment({ fileName, context })).isContract).toBe(false);
   });
@@ -122,6 +124,29 @@ describe('contracts — who it is with', () => {
 
   it('returns nothing rather than a guess', () => {
     expect(counterpartyFrom({ email: null, displayName: null })).toBeNull();
+  });
+
+  it('is never ourselves', () => {
+    // Every internal forward resolved to our own domain and piled fourteen
+    // unrelated documents into one "Adnimation" contract.
+    expect(
+      counterpartyFrom({
+        email: 'amir@adnimation.com',
+        displayName: 'Amir',
+        ownDomain: 'adnimation.com',
+      }),
+    ).toBeNull();
+  });
+
+  it('uses the company the thread is with when the sender is one of ours', () => {
+    expect(
+      counterpartyFrom({
+        email: 'maor@adnimation.com',
+        displayName: 'Maor',
+        knownCompany: 'Taboola',
+        ownDomain: 'adnimation.com',
+      }),
+    ).toBe('Taboola');
   });
 });
 

@@ -426,8 +426,10 @@ export async function recordArrival(input: {
         sourceRef: input.sourceRef,
         sourceUrl: input.sourceUrl,
       })
-      // Spec §10 — the same file twice is one version.
-      .onConflictDoNothing({ target: [contractVersions.contractId, contractVersions.fileHash] })
+      // Spec §10 — the same file twice is one version. Bare, not targeted: the
+      // schema also carries a global unique on file_hash, and naming one target
+      // makes the other throw instead of being a no-op.
+      .onConflictDoNothing()
       .returning({ id: contractVersions.id });
 
     if (version && input.bytes) {
