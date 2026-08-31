@@ -22,7 +22,7 @@
  */
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
-import { PROMO_LABEL, isSpentAuthCode, looksPromotional } from './mailbox-rules.mjs';
+import { ANSWERED_LABEL, PROMO_LABEL, isSpentAuthCode, looksPromotional } from './mailbox-rules.mjs';
 
 const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -144,8 +144,43 @@ async function knownContacts() {
   return new Set(rows.map((r) => r.email));
 }
 
+/**
+ * Make sure the labels exist, without filing anything.
+ *
+ * Creating a label the first time an agent needs it means the label appears in
+ * his Gmail at the same moment mail starts moving into it, which is the worst
+ * time to be discovering a new folder. This creates them up front so he can
+ * look at them, and at what will land there, before anything is switched on.
+ */
+async function ensureLabels() {
+  const { labels } = await gmail('/labels');
+  const existing = new Map((labels ?? []).map((l) => [l.name, l.id]));
+
+  for (const name of [PROMO_LABEL, ANSWERED_LABEL]) {
+    if (existing.has(name)) {
+      console.log(`  "${name}" already exists`);
+      continue;
+    }
+    const created = await gmail('/labels', MODIFY, {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        labelListVisibility: 'labelShow',
+        messageListVisibility: 'show',
+      }),
+    });
+    console.log(`  created "${name}" (${created.id})`);
+  }
+}
+
 async function main() {
   const started = Date.now();
+
+  if (process.env.ENSURE_LABELS === '1') {
+    await ensureLabels();
+    await sql.end();
+    process.exit(0);
+  }
 
   const [replied, known] = await Promise.all([repliedTo(), knownContacts()]);
   console.log(`${known.size} known addresses, ${replied.size} you have replied to`);
