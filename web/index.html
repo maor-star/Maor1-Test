@@ -1491,7 +1491,7 @@ function donut(items,clickable){
 }
 // גרף רב-קווי (כמה סדרות לאורך חודשים) — RTL: החודש המוקדם מימין
 function multiLineChart(months,series){ if(!months.length||!series.length) return '<div class="empty">אין מספיק נתונים</div>';
-  const W=580,H=306,padX=46,padT=20,padB=38; const all=series.flatMap(s=>s.values); const max=Math.max(...all,1); const n=months.length; const bw=(W-padX*2)/Math.max(n,1);
+  const W=860,H=250,padX=52,padT=18,padB=34; const all=series.flatMap(s=>s.values); const max=Math.max(...all,1); const n=months.length; const bw=(W-padX*2)/Math.max(n,1);
   const y=v=>H-padB-(v/max)*(H-padB-padT); const x=i=>padX+bw*(i+0.5);
   const grid=[0,.25,.5,.75,1].map(f=>{ const yy=H-padB-f*(H-padB-padT); return `<line x1="${padX}" y1="${yy}" x2="${W-padX}" y2="${yy}" stroke="currentColor" opacity="${f===0?'.16':'.06'}"/>`+((f===0||f===.5||f===1)?`<text x="${padX-6}" y="${yy+3}" text-anchor="end" font-size="9" fill="currentColor" opacity=".45">${money(Math.round(max*f))}</text>`:''); }).join('');
   const doArea=series.length<=2;
@@ -2817,9 +2817,11 @@ views.analytics=async()=>{
   const utilBars=UTIL.map(u=>({label:u.name,color:u.color,value:Math.round(scopedEss.filter(t=>u.k.test(t.category_name||'')).reduce((s,t)=>s+t.amount,0))})).filter(x=>x.value>0).sort((a,b)=>b.value-a.value);
   // ---- מגמות ארוכות טווח (למקסימום התקופה) ----
   const catMonthlySub=(re)=>trendCompl.map(m=>Math.round(essExpAll.filter(t=>String(t.tx_date).slice(0,7)===m && re.test(t.category_name||'')).reduce((s,t)=>s+t.amount,0)));
+  // חשבון המים דו-חודשי — פורסים כל חשבון לשני חודשים (חצי לכל חודש) כדי לקבל עלות חודשית אמיתית וחלקה
+  const spreadBimonthly=(vals)=>vals.map((v,i)=>Math.round((v||0)/2 + ((i+1<vals.length)?(vals[i+1]||0):0)/2));
   const utilSeries=[
     {name:'⚡ חשמל',color:'#f97316',values:catMonthlySub(/חשמל/)},
-    {name:'💧 מים',color:'#0891b2',values:catMonthlySub(/מים/)},
+    {name:'💧 מים (דו-חודשי, נפרס)',color:'#0891b2',values:spreadBimonthly(catMonthlySub(/מים/))},
     {name:'🔥 גז',color:'#ef4444',values:catMonthlySub(/(^|\s)גז/)},
     {name:'🏛️ ארנונה',color:'#64748b',values:catMonthlySub(/ארנונ/)},
     {name:'📶 תקשורת',color:'#3b82f6',values:catMonthlySub(/אינטרנט|טלוויזיה|טלפון|סלולר|מנוי/)},
@@ -2831,26 +2833,26 @@ views.analytics=async()=>{
   const homeVals=trendCompl.map(m=>Math.round(M[m].home));
   const foodVals=catMonthlySum(x=>x.main==='מזון');
   const elecVals=catMonthlySub(/חשמל/);
-  const waterVals=catMonthlySub(/מים/);
-  const metricCard=(emoji,title,vals,color,note)=>{ const nz=vals.filter(v=>v>0); const latest=[...vals].reverse().find(v=>v>0)||0; const avg=nz.length?Math.round(nz.reduce((a,b)=>a+b,0)/nz.length):0;
+  const waterVals=spreadBimonthly(catMonthlySub(/מים/));
+  const metricCard=(emoji,title,vals,color,note,mk)=>{ const nz=vals.filter(v=>v>0); const latest=[...vals].reverse().find(v=>v>0)||0; const avg=nz.length?Math.round(nz.reduce((a,b)=>a+b,0)/nz.length):0;
     return `<div class="panel"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px">
-      <div><h3 style="margin:0">${emoji} ${title}</h3>${note?`<div class="hint" style="margin:2px 0 0">${note}</div>`:''}</div>
+      <div><h3 style="margin:0">${emoji} ${title} <button class="icon-btn metric-drill" data-mk="${mk}" title="הצג ועריכת העסקאות">🔍</button></h3>${note?`<div class="hint" style="margin:2px 0 0">${note}</div>`:''}</div>
       <div style="text-align:left;line-height:1.15;white-space:nowrap"><div class="tnum" style="font-size:20px;font-weight:800;color:${color}">${money(latest)}</div><div class="hint" style="margin:0">ממוצע ${money(avg)}</div></div></div>
       ${sparkArea(trendCompl,vals,color)}</div>`; };
   const metricsHTML = (!state.month && trendCompl.length>=2) ? `
-    <div class="section-head"><h2>📈 מדדים מרכזיים לאורך זמן</h2><span class="rule"></span><span class="hint" style="margin:0">${trendCompl.length} חודשים · גרף קווי לכל מדד</span></div>
+    <div class="section-head"><h2>📈 מדדים מרכזיים לאורך זמן</h2><span class="rule"></span><span class="hint" style="margin:0">${trendCompl.length} חודשים · 🔍 לחיצה על הזכוכית — צפייה ועריכת העסקאות</span></div>
     <div class="panels">
-      ${metricCard('🏠','הוצאות הבית',homeVals,'#e0654a','סה״כ אחזקת בית — ללא משכנתא')}
-      ${metricCard('🛒','קניות ואוכל לבית',foodVals,'#f59e0b','מזון וסופר')}
-      ${metricCard('⚡','חשמל',elecVals,'#f97316','חשבון החשמל לפי חודש')}
-      ${metricCard('💧','מים',waterVals,'#0891b2','חשבון המים לפי חודש')}
+      ${metricCard('🏠','הוצאות הבית',homeVals,'#e0654a','סה״כ אחזקת בית — ללא משכנתא','home')}
+      ${metricCard('🛒','קניות ואוכל לבית',foodVals,'#f59e0b','מזון וסופר','food')}
+      ${metricCard('⚡','חשמל',elecVals,'#f97316','חשבון החשמל לפי חודש','elec')}
+      ${metricCard('💧','מים',waterVals,'#0891b2','חשבון דו-חודשי — נפרס לעלות חודשית','water')}
     </div>` : '';
   const cutsHTML=`
     <div class="section-head"><h2>📊 קטגוריות חשובות</h2><span class="rule"></span><span class="hint" style="margin:0">${scopeLabel} · מהות (ללא משכנתא/העברות/מזומן)</span></div>
     <div class="panels">
       ${!state.month&&trendCompl.length>=2&&keyCutSeries.length?`<div class="panel" style="grid-column:1/-1"><h3>📈 מגמת הקטגוריות המרכזיות (חודשים מלאים)</h3>${multiLineChart(trendCompl,keyCutSeries)}<div class="hint" style="margin-top:8px">מזון, מסעדות, ילדים, גינה, רכב ובריאות — לפי חודש. מוצגים רק חודשים עם פירוט אשראי מלא${partialMonths.length?` (חסרים: ${partialMonths.map(fmtMonth).join(', ')} — העלו את תדפיס האשראי)`:''}.</div></div>`:''}
-      <div class="panel"><h3>🥇 קטגוריות מובילות (${scopeLabel})</h3>${keyBars.length?barsHTML(keyBars,money):'<div class="empty">אין נתונים לחודש זה</div>'}</div>
-      <div class="panel"><h3>🏠 חשבונות בית קבועים — תשתיות (${scopeLabel})</h3>${utilBars.length?barsHTML(utilBars,money):'<div class="empty">אין נתונים לחודש זה</div>'}<div class="hint" style="margin-top:8px">חשמל · מים · גז · ארנונה · ועד · תקשורת.</div></div>
+      <div class="panel" data-drill="keycut"><h3>🥇 קטגוריות מובילות (${scopeLabel})</h3>${keyBars.length?barsHTML(keyBars,money,true):'<div class="empty">אין נתונים לחודש זה</div>'}</div>
+      <div class="panel" data-drill="util"><h3>🏠 חשבונות בית קבועים — תשתיות (${scopeLabel})</h3>${utilBars.length?barsHTML(utilBars,money,true):'<div class="empty">אין נתונים לחודש זה</div>'}<div class="hint" style="margin-top:8px">חשמל · מים · גז · ארנונה · ועד · תקשורת.</div></div>
     </div>
     ${!state.month&&trendCompl.length>=2?`
     <div class="section-head"><h2>📉 מגמות ארוכות טווח</h2><span class="rule"></span><span class="hint" style="margin:0">כל התקופה · ${trendCompl.length} חודשים מלאים</span></div>
@@ -2910,8 +2912,20 @@ views.analytics=async()=>{
     else if(kind==='src'){ const key=Object.keys(srcMeta).find(k=>srcMeta[k].label===label); list=expCash.filter(t=>outKind(t)===key); }
     else if(kind==='bucket'){ const b=label.indexOf('חיוני')===0?'חיוני':label.indexOf('מותרות')===0?'מותרות':'אחר'; list=scopedEss.filter(t=>bucketOf(t.main_name||'')===b); }
     else if(kind==='fixed'){ const wantFix=label.indexOf('קבוע')===0; list=purchScoped.filter(t=>isFixedMer((t.merchant||t.description||'—').trim())===wantFix); }
+    else if(kind==='keycut'){ const c=KEYCUTS.find(k=>k.name===label); list=c?scopedEss.filter(t=>c.f({main:t.main_name||'',sub:t.category_name||''})):[]; }
+    else if(kind==='util'){ const u=UTIL.find(x=>x.name===label); list=u?scopedEss.filter(t=>u.k.test(t.category_name||'')):[]; }
     else if(/· ללא סיווג$/.test(label)){ const mer=label.replace(/ · ללא סיווג$/,''); list=exp.filter(t=>!t.category_id && (t.merchant||t.description||'—').trim()===mer); }
     else { list=exp.filter(t=>(t.main_name||'ללא סיווג')===label); }
+    showTxDrill(`${title} · ${money((list||[]).reduce((s,t)=>s+t.amount,0))}`, list||[]);
+  });
+  // זכוכית מגדלת על המדדים המרכזיים — צפייה ועריכת העסקאות שמרכיבות כל מדד
+  el.querySelectorAll('.metric-drill').forEach(bn=>bn.onclick=(e)=>{ e.stopPropagation();
+    const mk=bn.dataset.mk; let list, title;
+    if(mk==='home'){ list=essExpAll.slice(); title='כל הוצאות הבית'; }
+    else if(mk==='food'){ list=essExpAll.filter(t=>t.main_name==='מזון'); title='קניות ואוכל לבית'; }
+    else if(mk==='elec'){ list=essExpAll.filter(t=>/חשמל/.test(t.category_name||'')); title='חשמל'; }
+    else if(mk==='water'){ list=essExpAll.filter(t=>/מים/.test(t.category_name||'')); title='מים'; }
+    else { list=[]; title=''; }
     showTxDrill(`${title} · ${money((list||[]).reduce((s,t)=>s+t.amount,0))}`, list||[]);
   });
   return el;
