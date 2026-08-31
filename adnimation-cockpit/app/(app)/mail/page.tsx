@@ -4,6 +4,9 @@ import {
 } from '@/lib/mail/service';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
+import { Figure } from '@/components/hud/figure';
+import { SearchBox } from '@/components/hud/search-box';
+import { filterByQuery } from '@/lib/search';
 import { Num } from '@/components/num';
 import { ThreadRow } from '@/components/mail/thread-row';
 import { fmtDateTime, fmtNumber } from '@/lib/utils';
@@ -24,14 +27,31 @@ export const dynamic = 'force-dynamic';
 export default async function MailPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; q?: string }>;
 }) {
   const sp = await searchParams;
   const view: MailView = MAIL_VIEWS.includes(sp.view as MailView)
     ? (sp.view as MailView)
     : 'important';
+  const q = sp.q ?? '';
 
-  const [rows, counts] = await Promise.all([listMail(view), mailCounts()]);
+  const [all, counts] = await Promise.all([listMail(view), mailCounts()]);
+
+  // The numbers open the list they count; the search narrows it. Both in the URL.
+  const to = (v: MailView) => {
+    const params = new URLSearchParams();
+    if (v !== 'important') params.set('view', v);
+    if (q) params.set('q', q);
+    const query = params.toString();
+    return query ? `/mail?${query}` : '/mail';
+  };
+  const rows = filterByQuery(all, q, (t) => [
+    t.subject,
+    t.snippet,
+    t.counterpartName,
+    t.counterpartEmail,
+    t.knownCompany,
+  ]);
 
   return (
     <div className="space-y-5">
@@ -55,13 +75,33 @@ export default async function MailPage({
         <HudCardHeader title="What is waiting on you" index="M01" />
 
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-4">
-          <Figure label="IMPORTANT & WAITING" value={fmtNumber(counts.important)} big tone={counts.important > 0 ? 'warn' : undefined} />
-          <Figure label="WAITING IN TOTAL" value={fmtNumber(counts.waiting)} big />
+          <Figure
+            label="IMPORTANT & WAITING"
+            value={fmtNumber(counts.important)}
+            big
+            tone={counts.important > 0 ? 'warn' : undefined}
+            href={to('important')}
+            active={view === 'important'}
+          />
+          <Figure
+            label="WAITING IN TOTAL"
+            value={fmtNumber(counts.waiting)}
+            big
+            href={to('waiting')}
+            active={view === 'waiting'}
+          />
           <Figure
             label="OLDEST UNANSWERED"
             value={counts.oldestWaitingDays === null ? '—' : `${counts.oldestWaitingDays}d`}
+            href={to('waiting')}
+            active={false}
           />
-          <Figure label="IN THE INBOX" value={fmtNumber(counts.total)} />
+          <Figure
+            label="IN THE INBOX"
+            value={fmtNumber(counts.total)}
+            href={to('recent')}
+            active={view === 'recent'}
+          />
         </div>
 
         <p className="border-t border-divider pt-3 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
@@ -80,7 +120,7 @@ export default async function MailPage({
         {MAIL_VIEWS.map((v) => (
           <Link
             key={v}
-            href={`/mail?view=${v}`}
+            href={to(v)}
             className={`px-3 py-1 font-semi text-[11px] uppercase tracking-[0.16em] ${
               v === view ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
             }`}
@@ -96,16 +136,24 @@ export default async function MailPage({
             title={MAIL_VIEW_LABEL[view]}
             index="M02"
             action={
-              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                <Num>{fmtNumber(rows.length)}</Num> {rows.length === 1 ? 'THREAD' : 'THREADS'}
-              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <SearchBox placeholder="Find a conversation" />
+                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                  <Num>{fmtNumber(rows.length)}</Num>
+                  {rows.length === all.length
+                    ? rows.length === 1 ? ' THREAD' : ' THREADS'
+                    : ` OF ${fmtNumber(all.length)}`}
+                </span>
+              </div>
             }
           />
         </div>
 
         {rows.length === 0 ? (
           <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
-            {counts.total === 0
+            {q
+              ? `Nothing in this view matches “${q}”.`
+              : counts.total === 0
               ? 'The mailbox has not been read yet. The sync runs every fifteen minutes.'
               : view === 'important'
                 ? 'Nothing important is waiting on you.'
@@ -123,27 +171,3 @@ export default async function MailPage({
   );
 }
 
-function Figure({
-  label,
-  value,
-  big = false,
-  tone,
-}: {
-  label: string;
-  value: string;
-  big?: boolean;
-  tone?: 'warn';
-}) {
-  return (
-    <div>
-      <span className="hud-label block text-[9px]">{label}</span>
-      <span
-        className={`font-cond leading-none ${big ? 'text-[30px]' : 'text-[22px]'} ${
-          tone === 'warn' ? 'text-sev-warning' : 'text-neutral-900'
-        }`}
-      >
-        <Num>{value}</Num>
-      </span>
-    </div>
-  );
-}

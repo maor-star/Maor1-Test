@@ -2,10 +2,15 @@ import { requireUser } from '@/lib/auth/session';
 import { agentsOverview, listAgents, seedAgents } from '@/lib/agents/module';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
+import { Figure } from '@/components/hud/figure';
+import { SearchBox } from '@/components/hud/search-box';
 import { Num } from '@/components/num';
+import { filterByQuery } from '@/lib/search';
 import { AgentCard } from '@/components/agents/agent-card';
 import { AgentControls } from '@/components/agents/agent-controls';
-import { AGENT_BOT, botStatuses } from '@/lib/agents/slack-bots';
+import Link from 'next/link';
+import { AGENT_BOT, botFor, botStatuses } from '@/lib/agents/slack-bots';
+import { isIrreversible } from '@/lib/agents/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,8 +24,18 @@ export const dynamic = 'force-dynamic';
  * screen that makes it easy to switch something on without noticing what it
  * can now do.
  */
-export default async function AgentsPage() {
+const SHOWS = ['all', 'on', 'off', 'irreversible'] as const;
+type Show = (typeof SHOWS)[number];
+
+export default async function AgentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ show?: string; q?: string }>;
+}) {
   const user = await requireUser();
+  const sp = await searchParams;
+  const show: Show = SHOWS.includes(sp.show as Show) ? (sp.show as Show) : 'all';
+  const q = sp.q ?? '';
 
   /*
    * Install whatever built-in agents are not here yet, on the way in.
@@ -32,8 +47,40 @@ export default async function AgentsPage() {
    * him asking where it was.
    */
   const installed = await seedAgents(user.email);
-  const [agents, overview] = await Promise.all([listAgents(), agentsOverview()]);
+  const [allAgents, overview] = await Promise.all([listAgents(), agentsOverview()]);
   const bots = botStatuses();
+
+  /*
+   * The strip at the top is the way in, not a read-out: clicking a number
+   * shows what it counted. The filter and the search compose, and both live in
+   * the URL, so a narrowed screen survives a reload and can be sent to someone.
+   */
+  const byShow = allAgents.filter((a) => {
+    if (show === 'on') return a.enabled;
+    if (show === 'off') return !a.enabled;
+    if (show === 'irreversible') return a.actions.some((x) => isIrreversible(x.type));
+    return true;
+  });
+  const agents = filterByQuery(byShow, q, (a) => [
+    a.name,
+    a.description,
+    a.rationale,
+    a.instructions,
+    a.triggerType,
+    botFor(a.name).username,
+    ...a.actions.map((x) => x.type),
+    ...a.conditions.map((c) => c.name),
+    a.enabled ? 'on enabled' : 'off disabled',
+  ]);
+
+  const link = (patch: { show?: Show; q?: string }) => {
+    const params = new URLSearchParams();
+    const merged = { show, q, ...patch };
+    if (merged.show && merged.show !== 'all') params.set('show', merged.show);
+    if (merged.q) params.set('q', merged.q);
+    const query = params.toString();
+    return query ? `/agents?${query}` : '/agents';
+  };
 
   return (
     <div className="space-y-5">
@@ -72,12 +119,26 @@ export default async function AgentsPage() {
         <HudCardHeader title="What is running" index="G01" action={<AgentControls killed={overview.killed} />} />
 
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-4">
-          <Figure label="AGENTS" value={overview.total} big />
-          <Figure label="SWITCHED ON" value={overview.enabled} big />
+          <Figure
+            label="AGENTS"
+            value={overview.total}
+            big
+            href={link({ show: 'all' })}
+            active={show === 'all'}
+          />
+          <Figure
+            label="SWITCHED ON"
+            value={overview.enabled}
+            big
+            href={link({ show: 'on' })}
+            active={show === 'on'}
+          />
           <Figure
             label="CAN DO SOMETHING IRREVERSIBLE"
             value={overview.irreversible}
             tone={overview.irreversible > 0 ? 'warn' : undefined}
+            href={link({ show: 'irreversible' })}
+            active={show === 'irreversible'}
           />
           <div>
             <span className="hud-label block text-[9px]">CLAUDE</span>
@@ -155,17 +216,34 @@ export default async function AgentsPage() {
             title="The agents"
             index="G03"
             action={
-              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                <Num>{agents.length}</Num> DEFINED
-              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <SearchBox placeholder="Find an agent" />
+                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                  <Num>{agents.length}</Num>
+                  {agents.length === allAgents.length ? ' DEFINED' : ` OF ${allAgents.length}`}
+                </span>
+              </div>
             }
           />
+          {show !== 'all' || q ? (
+            <p className="mt-2 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+              SHOWING {show === 'on' ? 'THE ONES THAT ARE ON' : show === 'off' ? 'THE ONES THAT ARE OFF' : show === 'irreversible' ? 'THE ONES THAT CAN DO SOMETHING IRREVERSIBLE' : 'ALL'}
+              {q ? ` MATCHING “${q}”` : ''} ·{' '}
+              <Link href="/agents" className="text-accent-700 underline">
+                SHOW EVERYTHING
+              </Link>
+            </p>
+          ) : null}
         </div>
 
-        {agents.length === 0 ? (
+        {agents.length === 0 && allAgents.length > 0 ? (
           <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
-            None yet. “Install the built-in agents” adds them all at level 1, with only the
-            contract reader switched on — the rest wait until you have seen what they would do.
+            Nothing here matches. <Link href="/agents" className="text-accent-700 underline">Show everything</Link>.
+          </p>
+        ) : agents.length === 0 ? (
+          <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+            None yet. They install themselves when this page opens — all at level 1 and all
+            switched off, so nothing runs until you have seen what it would do.
           </p>
         ) : (
           <ul>
@@ -175,31 +253,6 @@ export default async function AgentsPage() {
           </ul>
         )}
       </HudCard>
-    </div>
-  );
-}
-
-function Figure({
-  label,
-  value,
-  big = false,
-  tone,
-}: {
-  label: string;
-  value: number;
-  big?: boolean;
-  tone?: 'warn';
-}) {
-  return (
-    <div>
-      <span className="hud-label block text-[9px]">{label}</span>
-      <span
-        className={`font-cond leading-none ${big ? 'text-[30px]' : 'text-[22px]'} ${
-          tone === 'warn' ? 'text-sev-warning' : 'text-neutral-900'
-        }`}
-      >
-        <Num>{value}</Num>
-      </span>
     </div>
   );
 }

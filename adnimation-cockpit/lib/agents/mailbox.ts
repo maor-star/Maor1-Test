@@ -21,8 +21,15 @@
 /** Where sales and marketing mail is filed. */
 export const PROMO_LABEL = process.env.PROMO_LABEL ?? 'Sales & Marketing';
 
-/** Where a conversation the assistant answered is filed. */
-export const ANSWERED_LABEL = process.env.ANSWERED_LABEL ?? 'Claude Answered';
+/**
+ * Where the assistant's own work is filed, under one parent so it is one place
+ * in Gmail rather than two loose labels: what it answered, and what it only
+ * showed him. Nothing is answered and filed as "answered" unless a reply
+ * actually went out — the label is a record, not a category.
+ */
+export const CLAUDE_LABEL = process.env.CLAUDE_LABEL ?? 'Claude';
+export const ANSWERED_LABEL = process.env.ANSWERED_LABEL ?? 'Claude/Answered';
+export const FILED_LABEL = process.env.FILED_LABEL ?? 'Claude/Filed';
 
 export interface MailFacts {
   subject: string | null;

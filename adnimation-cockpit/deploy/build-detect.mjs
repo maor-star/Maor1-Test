@@ -59,6 +59,10 @@ const TARGETS = [
       ['const NEVER: [RegExp, string][] = [', 'const NEVER = ['],
       ['const SIMPLE: [RegExp, string][] = [', 'const SIMPLE = ['],
       ['export function triage(candidate: ReplyCandidate): Triage {', 'export function triage(candidate) {'],
+      [
+        'export function mayFile(triaged: Triage): { consider: boolean; why: string } {',
+        'export function mayFile(triaged) {',
+      ],
     ],
   },
   {

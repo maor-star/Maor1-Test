@@ -175,8 +175,9 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
     name: 'mail-answerer',
     description:
       'Answers the genuinely trivial mail — acknowledgements, scheduling, "who should I speak ' +
-      'to" — files what it answered under “Claude Answered”, and tells you in Slack what came ' +
-      'in and what went out.',
+      'to" — files what it answered under “Claude/Answered”. What is only information, with ' +
+      'nothing asked of you, it does not answer at all: it files that under “Claude/Filed” and ' +
+      'tells you in one line what it said. Everything else stays in your inbox.',
     rationale:
       'The only agent that puts words in your mouth to someone outside the company, so it is ' +
       'built to refuse. Two gates that must both pass: rules no model can argue past (nothing ' +
@@ -191,7 +192,8 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
     ],
     actions: [
       { type: 'draft_reply', config: {} },
-      { type: 'update_record', config: { label: 'Claude Answered', removeFromInbox: true } },
+      { type: 'update_record', config: { label: 'Claude/Answered', removeFromInbox: true } },
+      { type: 'update_record', config: { label: 'Claude/Filed', removeFromInbox: true } },
     ],
     autonomyLevel: 1,
     maxRunsPerHour: 6,

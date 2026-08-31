@@ -12,6 +12,7 @@ import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { SeatMap } from '@/components/seats/seat-map';
 import { SeatTable } from '@/components/seats/seat-table';
+import { filterByQuery } from '@/lib/search';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +36,7 @@ export default async function SeatsPage({
   searchParams,
 }: {
   params: Promise<{ side: string }>;
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; q?: string }>;
 }) {
   const { side } = await params;
   if (side !== 'demand' && side !== 'supply') notFound();
@@ -131,7 +132,12 @@ export default async function SeatsPage({
             <SeatMap seats={view.seats} side={side} />
           </HudCard>
 
-          <SeatTable seats={view.seats} side={side} index={side === 'demand' ? 'D03' : 'U03'} />
+          <SeatTable
+            seats={filterByQuery(view.seats, sp.q, (seat) => [seat.seat, seat.company])}
+            total={view.seats.length}
+            side={side}
+            index={side === 'demand' ? 'D03' : 'U03'}
+          />
         </>
       )}
 

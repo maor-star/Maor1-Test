@@ -22,7 +22,9 @@
  */
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
-import { ANSWERED_LABEL, PROMO_LABEL, isSpentAuthCode, looksPromotional } from './mailbox-rules.mjs';
+import {
+  ANSWERED_LABEL, CLAUDE_LABEL, FILED_LABEL, PROMO_LABEL, isSpentAuthCode, looksPromotional,
+} from './mailbox-rules.mjs';
 import { postAsBot } from './bot-post.mjs';
 import { agentState, briefVeto, mayAct } from './agent-brief.mjs';
 
@@ -158,7 +160,7 @@ async function ensureLabels() {
   const { labels } = await gmail('/labels');
   const existing = new Map((labels ?? []).map((l) => [l.name, l.id]));
 
-  for (const name of [PROMO_LABEL, ANSWERED_LABEL]) {
+  for (const name of [PROMO_LABEL, CLAUDE_LABEL, ANSWERED_LABEL, FILED_LABEL]) {
     if (existing.has(name)) {
       console.log(`  "${name}" already exists`);
       continue;
@@ -202,12 +204,12 @@ async function main() {
   const promoAgent = await agentState(sql, 'promo-filer');
   const codeAgent = await agentState(sql, 'code-cleaner');
   const force = process.env.FORCE === '1';
-  const mayFile = mayAct(promoAgent, { dry: DRY, force });
+  const mayFilePromo = mayAct(promoAgent, { dry: DRY, force });
   const mayTrash = mayAct(codeAgent, { dry: DRY, force });
   if (!DRY) {
-    console.log(`filing sales mail: ${mayFile.act ? 'on' : `off — ${mayFile.why}`}`);
+    console.log(`filing sales mail: ${mayFilePromo.act ? 'on' : `off — ${mayFilePromo.why}`}`);
     console.log(`clearing spent codes: ${mayTrash.act ? 'on' : `off — ${mayTrash.why}`}`);
-    if (!mayFile.act && !mayTrash.act) {
+    if (!mayFilePromo.act && !mayTrash.act) {
       await sql.end();
       process.exit(0);
     }
@@ -251,7 +253,7 @@ async function main() {
     }
 
     const promo = looksPromotional(facts);
-    if (promo.isPromo && (DRY || mayFile.act)) {
+    if (promo.isPromo && (DRY || mayFilePromo.act)) {
       const veto = await briefVeto({
         brief: promoAgent.brief,
         agent: 'promo-filer',

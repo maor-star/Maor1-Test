@@ -98,6 +98,29 @@ export function triage(candidate: ReplyCandidate): Triage {
   return { answerable: true, reason: `it is ${simple[0]}`, matched: simple };
 }
 
+/**
+ * The third outcome: nothing to answer, but worth seeing.
+ *
+ * Not every email is a question. A great deal of what arrives is information —
+ * a report, a notice, an update — where a reply would be noise and leaving it
+ * in the inbox is one more thing for him to open and close. Those get shown to
+ * him in Slack, in one line, and filed.
+ *
+ * Filing is only ever considered for mail the rule gate has already cleared of
+ * anything sensitive, and only where the reason it was not answered is that it
+ * was not a simple question — never because the thread has history, never
+ * because the last word is already his, and never because a NEVER rule fired.
+ */
+export function mayFile(triaged: Triage): { consider: boolean; why: string } {
+  if (triaged.answerable) return { consider: false, why: 'it is being answered' };
+  if (triaged.matched.length > 0) return { consider: false, why: `it is ${triaged.matched[0]}` };
+
+  const fileable = ['not obviously simple', 'too long to be a simple question'];
+  if (!fileable.includes(triaged.reason)) return { consider: false, why: triaged.reason };
+
+  return { consider: true, why: 'nothing sensitive, and nothing being asked of you' };
+}
+
 export const draftSchema = z.object({
   /** The model's own veto. It may refuse what the rules allowed, never the reverse. */
   shouldReply: z.boolean(),
@@ -106,6 +129,10 @@ export const draftSchema = z.object({
   /** Empty when it declined. */
   reply: z.string(),
   confidence: z.enum(['high', 'medium', 'low']),
+  /** True when nothing is being asked and nothing needs doing — information only. */
+  informational: z.boolean().optional(),
+  /** One line saying what it says, for the Slack note when it is only filed. */
+  summary: z.string().optional(),
 });
 
 export type Draft = z.infer<typeof draftSchema>;
@@ -131,7 +158,14 @@ in doubt, decline.
 
 When you do reply: two or three sentences, plain, no pleasantries beyond a
 greeting, no promises, no dates he has not given you, and never a figure. Write
-in the language the sender wrote in. Sign off as Maor.`;
+in the language the sender wrote in. Sign off as Maor.
+
+Separately, set "informational" true when the message is only telling him
+something — a report, a notice, a status update, a newsletter — and nothing is
+being asked of him and nothing needs doing. Set it false whenever there is a
+question, a request, a decision, a deadline, an invitation, or anything he
+would want to act on. In "summary", say in one line what it tells him; that
+line is all he will read.`;
 
 export async function draftReply(
   candidate: ReplyCandidate,
@@ -156,7 +190,8 @@ export async function draftReply(
       ? `Additional standing instructions from Maor, which override the above where they are stricter:\n${extraInstructions.trim()}`
       : '',
     '',
-    'Answer as JSON: {"shouldReply": boolean, "reasoning": "one line", "reply": "the text", "confidence": "high|medium|low"}',
+    'Answer as JSON: {"shouldReply": boolean, "reasoning": "one line", "reply": "the text", ' +
+      '"confidence": "high|medium|low", "informational": boolean, "summary": "one line saying what it says"}',
   ]
     .filter(Boolean)
     .join('\n');

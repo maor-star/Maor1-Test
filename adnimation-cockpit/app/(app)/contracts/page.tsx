@@ -7,6 +7,9 @@ import { ESCALATION_DAYS, RENEWAL_NOTICE_DAYS, STATUS_LABEL } from '@/lib/contra
 import { fmtMoney } from '@/lib/utils';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
+import { Figure } from '@/components/hud/figure';
+import { SearchBox } from '@/components/hud/search-box';
+import { filterByQuery } from '@/lib/search';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { ConfirmFiling, ContractActions } from '@/components/contracts/contract-actions';
@@ -31,12 +34,13 @@ export const dynamic = 'force-dynamic';
 export default async function ContractsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; q?: string }>;
 }) {
   const sp = await searchParams;
   const intakeView: IntakeView = CONTRACT_VIEWS.includes(sp.view as IntakeView)
     ? (sp.view as IntakeView)
     : 'classify';
+  const q = sp.q ?? '';
 
   const [board, departments, intake, counts, drive] = await Promise.all([
     contractBoard(),
@@ -47,6 +51,33 @@ export default async function ContractsPage({
   ]);
   const all = await listContracts();
   const tree = filingTree(all);
+
+  /*
+   * The numbers at the top are the way into the list they count, and the
+   * search narrows whichever list he is looking at. Both live in the URL, so a
+   * narrowed screen survives a reload.
+   */
+  const view = (v: IntakeView) => {
+    const params = new URLSearchParams();
+    if (v !== 'classify') params.set('view', v);
+    if (q) params.set('q', q);
+    const query = params.toString();
+    return query ? `/contracts?${query}` : '/contracts';
+  };
+  const rows = filterByQuery(intake, q, (c) => [
+    c.counterpartyName,
+    c.docType,
+    c.category,
+    c.statusLabel,
+    c.status,
+    c.notes,
+    c.drivePath,
+    c.source,
+    c.opportunityTitle,
+    c.pipelineClientName,
+    c.valueCents == null ? null : c.valueCents / 100,
+    c.receivedAt,
+  ]);
 
   return (
     <div className="space-y-5">
@@ -83,14 +114,34 @@ export default async function ContractsPage({
             value={counts.needsClassifying}
             big
             tone={counts.needsClassifying > 0 ? 'warn' : undefined}
+            href={view('classify')}
+            active={intakeView === 'classify'}
           />
-          <Figure label="WAITING ON YOU" value={counts.onYou} big />
-          <Figure label="WAITING ON THEM" value={counts.onThem} />
-          <Figure label="SIGNED" value={counts.signed} />
+          <Figure
+            label="WAITING ON YOU"
+            value={counts.onYou}
+            big
+            href={view('on_you')}
+            active={intakeView === 'on_you'}
+          />
+          <Figure
+            label="WAITING ON THEM"
+            value={counts.onThem}
+            href={view('on_them')}
+            active={intakeView === 'on_them'}
+          />
+          <Figure
+            label="SIGNED"
+            value={counts.signed}
+            href={view('signed')}
+            active={intakeView === 'signed'}
+          />
           <Figure
             label="NOT IN DRIVE"
             value={counts.notFiled}
             tone={counts.notFiled > 0 ? 'warn' : undefined}
+            href={view('all')}
+            active={intakeView === 'all'}
           />
         </div>
 
@@ -110,7 +161,7 @@ export default async function ContractsPage({
         {CONTRACT_VIEWS.map((v) => (
           <Link
             key={v}
-            href={`/contracts?view=${v}`}
+            href={view(v)}
             className={`px-3 py-1 font-semi text-[11px] uppercase tracking-[0.16em] ${
               v === intakeView ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
             }`}
@@ -127,22 +178,30 @@ export default async function ContractsPage({
             title={CONTRACT_VIEW_LABEL[intakeView]}
             index="C01"
             action={
-              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                <Num>{intake.length}</Num> {intake.length === 1 ? 'CONTRACT' : 'CONTRACTS'}
-              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <SearchBox placeholder="Find a contract" />
+                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                  <Num>{rows.length}</Num>
+                  {rows.length === intake.length
+                    ? ` ${intake.length === 1 ? 'CONTRACT' : 'CONTRACTS'}`
+                    : ` OF ${intake.length}`}
+                </span>
+              </div>
             }
           />
         </div>
 
-        {intake.length === 0 ? (
+        {rows.length === 0 ? (
           <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
-            {intakeView === 'classify'
-              ? 'Nothing waiting to be classified. Contracts arriving by mail or Slack land here.'
-              : 'Nothing in this view.'}
+            {q
+              ? `Nothing in this view matches “${q}”.`
+              : intakeView === 'classify'
+                ? 'Nothing waiting to be classified. Contracts arriving by mail or Slack land here.'
+                : 'Nothing in this view.'}
           </p>
         ) : (
           <ul>
-            {intake.map((c) => (
+            {rows.map((c) => (
               <ContractCard key={c.id} contract={c} />
             ))}
           </ul>
@@ -401,27 +460,3 @@ function FilingCard({
   );
 }
 
-function Figure({
-  label,
-  value,
-  big = false,
-  tone,
-}: {
-  label: string;
-  value: number;
-  big?: boolean;
-  tone?: 'warn';
-}) {
-  return (
-    <div>
-      <span className="hud-label block text-[9px]">{label}</span>
-      <span
-        className={`font-cond leading-none ${big ? 'text-[30px]' : 'text-[22px]'} ${
-          tone === 'warn' ? 'text-sev-warning' : 'text-neutral-900'
-        }`}
-      >
-        <Num>{value}</Num>
-      </span>
-    </div>
-  );
-}

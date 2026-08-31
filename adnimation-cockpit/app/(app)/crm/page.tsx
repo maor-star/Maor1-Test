@@ -9,6 +9,7 @@ import { ArchiveButton, EditCompany, EditContact } from '@/components/crm/record
 import { AddCrmRecord } from '@/components/crm/add-record';
 import { fmtDateTime, fmtNumber } from '@/lib/utils';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
+import { SearchBox } from '@/components/hud/search-box';
 import { PageHeader } from '@/components/hud/page-header';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
@@ -160,22 +161,9 @@ export default async function CrmPage({
           {sp.people ? <input type="hidden" name="people" value={sp.people} /> : null}
           {sp.source ? <input type="hidden" name="source" value={sp.source} /> : null}
           {sp.archived ? <input type="hidden" name="archived" value={sp.archived} /> : null}
-          <label className="sr-only" htmlFor="crm-search">
-            Search the CRM
-          </label>
-          <input
-            id="crm-search"
-            name="q"
-            defaultValue={sp.q ?? ''}
-            placeholder={view === 'companies' ? 'Company or domain' : 'Name, email or company'}
-            className="h-8 w-56 border border-divider bg-ground px-2 text-[14px] text-ink placeholder:text-neutral-500"
+          <SearchBox
+            placeholder={view === 'companies' ? 'Find a company' : 'Find a person'}
           />
-          <button
-            type="submit"
-            className="border border-divider px-3 py-1.5 font-semi text-[10px] uppercase tracking-[0.16em] text-neutral-600 hover:border-accent hover:text-accent"
-          >
-            Search
-          </button>
           {filtered ? (
             <Link
               href={`/crm?view=${view}`}

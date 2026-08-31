@@ -6,6 +6,9 @@ import {
 } from '@/lib/opportunities/module';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
+import { Figure } from '@/components/hud/figure';
+import { SearchBox } from '@/components/hud/search-box';
+import { filterByQuery } from '@/lib/search';
 import { Num } from '@/components/num';
 import { NewOpportunity } from '@/components/opportunities/new-opportunity';
 import { OpportunityCard } from '@/components/opportunities/opportunity-card';
@@ -27,12 +30,13 @@ export const dynamic = 'force-dynamic';
 export default async function OpportunitiesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; q?: string }>;
 }) {
   const sp = await searchParams;
   const view: OpportunityView = OPPORTUNITY_VIEWS.includes(sp.view as OpportunityView)
     ? (sp.view as OpportunityView)
     : 'open';
+  const q = sp.q ?? '';
 
   await requireUser();
   const gmailLabels = (process.env.GMAIL_OPPORTUNITY_LABEL ?? 'Opportunity')
@@ -40,10 +44,31 @@ export default async function OpportunitiesPage({
     .map((l) => l.trim())
     .filter(Boolean);
 
-  const [rows, counts, labelHealth] = await Promise.all([
+  const [all, counts, labelHealth] = await Promise.all([
     listOpportunities(view),
     opportunityCounts(),
     captureLabelHealth(gmailLabels).catch(() => []),
+  ]);
+
+  // The numbers at the top are the way into what they count; the search
+  // narrows whichever view is open. Both live in the URL.
+  const to = (v: OpportunityView) => {
+    const params = new URLSearchParams();
+    if (v !== 'open') params.set('view', v);
+    if (q) params.set('q', q);
+    const query = params.toString();
+    return query ? `/opportunities?${query}` : '/opportunities';
+  };
+  const rows = filterByQuery(all, q, (o) => [
+    o.title,
+    o.note,
+    o.counterparty,
+    o.kind,
+    o.status,
+    o.nextStep,
+    o.source,
+    o.sourceExcerpt,
+    o.valueCents == null ? null : o.valueCents / 100,
   ]);
 
   return (
@@ -62,15 +87,27 @@ export default async function OpportunitiesPage({
         <HudCardHeader title="On the table" index="O01" action={<NewOpportunity />} />
 
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-5">
-          <Figure label="OPEN" value={counts.open} big />
+          <Figure label="OPEN" value={counts.open} big href={to('open')} active={view === 'open'} />
           <Figure
             label="GONE COLD"
             value={counts.cold}
             big
             tone={counts.cold > 0 ? 'warn' : undefined}
+            href={to('cold')}
+            active={view === 'cold'}
           />
-          <Figure label="SUGGESTED" value={counts.suggested} />
-          <Figure label="PARKED" value={counts.parked} />
+          <Figure
+            label="SUGGESTED"
+            value={counts.suggested}
+            href={to('inbox')}
+            active={view === 'inbox'}
+          />
+          <Figure
+            label="PARKED"
+            value={counts.parked}
+            href={to('parked')}
+            active={view === 'parked'}
+          />
           <div>
             <span className="hud-label block text-[9px]">OPEN VALUE</span>
             <span className="font-cond text-[22px] leading-none text-neutral-900">
@@ -90,7 +127,7 @@ export default async function OpportunitiesPage({
         {OPPORTUNITY_VIEWS.map((v) => (
           <Link
             key={v}
-            href={`/opportunities?view=${v}`}
+            href={to(v)}
             className={`px-3 py-1 font-semi text-[11px] uppercase tracking-[0.16em] ${
               v === view ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
             }`}
@@ -108,16 +145,22 @@ export default async function OpportunitiesPage({
             title={VIEW_LABEL[view]}
             index="O02"
             action={
-              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                <Num>{rows.length}</Num> {rows.length === 1 ? 'ITEM' : 'ITEMS'}
-              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <SearchBox placeholder="Find an opportunity" />
+                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                  <Num>{rows.length}</Num>
+                  {rows.length === all.length ? (rows.length === 1 ? ' ITEM' : ' ITEMS') : ` OF ${all.length}`}
+                </span>
+              </div>
             }
           />
         </div>
 
         {rows.length === 0 ? (
           <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
-            {counts.open === 0 && counts.decided === 0 && counts.suggested === 0
+            {q
+              ? `Nothing in this view matches “${q}”.`
+              : counts.open === 0 && counts.decided === 0 && counts.suggested === 0
               ? 'Nothing here yet. Write one down above, paste a Slack message link, or press “scan mail now” to see what the mailbox suggests.'
               : 'Nothing in this view.'}
           </p>
@@ -133,27 +176,3 @@ export default async function OpportunitiesPage({
   );
 }
 
-function Figure({
-  label,
-  value,
-  big = false,
-  tone,
-}: {
-  label: string;
-  value: number;
-  big?: boolean;
-  tone?: 'warn';
-}) {
-  return (
-    <div>
-      <span className="hud-label block text-[9px]">{label}</span>
-      <span
-        className={`font-cond leading-none ${big ? 'text-[30px]' : 'text-[22px]'} ${
-          tone === 'warn' ? 'text-sev-warning' : 'text-neutral-900'
-        }`}
-      >
-        <Num>{value}</Num>
-      </span>
-    </div>
-  );
-}

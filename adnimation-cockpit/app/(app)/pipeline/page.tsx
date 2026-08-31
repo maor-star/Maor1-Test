@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
+import { SearchBox } from '@/components/hud/search-box';
 import { PageHeader } from '@/components/hud/page-header';
 import { Num } from '@/components/num';
 import { AddPipelineClient } from '@/components/pipeline/add-client';
@@ -138,22 +139,7 @@ export default async function PipelinePage({
           {stage ? <input type="hidden" name="stage" value={stage} /> : null}
           {clientType ? <input type="hidden" name="type" value={clientType} /> : null}
           {attention ? <input type="hidden" name="attention" value="1" /> : null}
-          <label className="sr-only" htmlFor="pipeline-search">
-            Search the pipeline
-          </label>
-          <input
-            id="pipeline-search"
-            name="q"
-            defaultValue={sp.q ?? ''}
-            placeholder="Client or domain"
-            className="h-8 w-52 border border-divider bg-ground px-2 text-[14px] text-ink placeholder:text-neutral-500"
-          />
-          <button
-            type="submit"
-            className="border border-divider px-3 py-1.5 font-semi text-[10px] uppercase tracking-[0.16em] text-neutral-600 hover:border-accent hover:text-accent"
-          >
-            Search
-          </button>
+          <SearchBox placeholder="Find a client" className="w-52" />
           {sp.q ? (
             <Link
               href={href({ q: undefined })}

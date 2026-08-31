@@ -8,6 +8,9 @@ import { DELEGATION_STALE_DAYS } from '@/lib/tasks/types';
 import { slackCanShareThreads } from '@/lib/integrations/slack';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
+import { Figure } from '@/components/hud/figure';
+import { SearchBox } from '@/components/hud/search-box';
+import { filterByQuery } from '@/lib/search';
 import { Num } from '@/components/num';
 import { CheckReplies } from '@/components/delegations/check-replies';
 import { DelegationCard } from '@/components/delegations/delegation-card';
@@ -25,19 +28,38 @@ export const dynamic = 'force-dynamic';
 export default async function DelegationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; q?: string }>;
 }) {
   const sp = await searchParams;
   const view: DelegationView = DELEGATION_VIEWS.includes(sp.view as DelegationView)
     ? (sp.view as DelegationView)
     : 'open';
+  const q = sp.q ?? '';
 
   const user = await requireUser();
-  const [rows, counts, team, sharedThreads] = await Promise.all([
+  const [all, counts, team, sharedThreads] = await Promise.all([
     listDelegations(view),
     delegationCounts(),
     delegatableTeam(user.email),
     slackCanShareThreads(),
+  ]);
+
+  // The numbers at the top open what they count; the search narrows the view.
+  const to = (v: DelegationView) => {
+    const params = new URLSearchParams();
+    if (v !== 'open') params.set('view', v);
+    if (q) params.set('q', q);
+    const query = params.toString();
+    return query ? `/delegations?${query}` : '/delegations';
+  };
+  const rows = filterByQuery(all, q, (d) => [
+    d.title,
+    d.note,
+    d.personName,
+    d.personEmail,
+    d.status,
+    d.priority,
+    d.dueDate,
   ]);
 
   const unreachable = team.filter((p) => !p.slackId);
@@ -58,11 +80,28 @@ export default async function DelegationsPage({
         <HudCardHeader title="Handed over" index="D01" action={<NewDelegation team={team} sharedThreads={sharedThreads} />} />
 
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-5">
-          <Figure label="OPEN" value={counts.open} big />
-          <Figure label="WAITING ON THEM" value={counts.waiting} big />
-          <Figure label="ANSWERED" value={counts.answered} />
-          <Figure label="STUCK" value={counts.stuck} tone={counts.stuck > 0 ? 'warn' : undefined} />
-          <Figure label="DONE" value={counts.done} />
+          <Figure label="OPEN" value={counts.open} big href={to('open')} active={view === 'open'} />
+          <Figure
+            label="WAITING ON THEM"
+            value={counts.waiting}
+            big
+            href={to('waiting')}
+            active={view === 'waiting'}
+          />
+          <Figure
+            label="ANSWERED"
+            value={counts.answered}
+            href={to('answered')}
+            active={view === 'answered'}
+          />
+          <Figure
+            label="STUCK"
+            value={counts.stuck}
+            tone={counts.stuck > 0 ? 'warn' : undefined}
+            href={to('stuck')}
+            active={view === 'stuck'}
+          />
+          <Figure label="DONE" value={counts.done} href={to('done')} active={view === 'done'} />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-divider pt-3">
@@ -94,7 +133,7 @@ export default async function DelegationsPage({
         {DELEGATION_VIEWS.map((v) => (
           <Link
             key={v}
-            href={`/delegations?view=${v}`}
+            href={to(v)}
             className={`px-3 py-1 font-semi text-[11px] uppercase tracking-[0.16em] ${
               v === view ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
             }`}
@@ -110,16 +149,22 @@ export default async function DelegationsPage({
             title={VIEW_LABEL[view]}
             index="D02"
             action={
-              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                <Num>{rows.length}</Num> {rows.length === 1 ? 'ITEM' : 'ITEMS'}
-              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <SearchBox placeholder="Find a hand-off" />
+                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                  <Num>{rows.length}</Num>
+                  {rows.length === all.length ? (rows.length === 1 ? ' ITEM' : ' ITEMS') : ` OF ${all.length}`}
+                </span>
+              </div>
             }
           />
         </div>
 
         {rows.length === 0 ? (
           <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
-            {counts.open === 0 && counts.done === 0
+            {q
+              ? `Nothing in this view matches “${q}”.`
+              : counts.open === 0 && counts.done === 0
               ? 'Nothing handed over yet. Use “hand something over” above — it goes to their Slack, and their reply comes back here.'
               : 'Nothing in this view.'}
           </p>
@@ -135,27 +180,3 @@ export default async function DelegationsPage({
   );
 }
 
-function Figure({
-  label,
-  value,
-  big = false,
-  tone,
-}: {
-  label: string;
-  value: number;
-  big?: boolean;
-  tone?: 'warn';
-}) {
-  return (
-    <div>
-      <span className="hud-label block text-[9px]">{label}</span>
-      <span
-        className={`font-cond leading-none ${big ? 'text-[30px]' : 'text-[22px]'} ${
-          tone === 'warn' ? 'text-sev-warning' : 'text-neutral-900'
-        }`}
-      >
-        <Num>{value}</Num>
-      </span>
-    </div>
-  );
-}

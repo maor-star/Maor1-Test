@@ -15,12 +15,15 @@
  *   2. The model's own veto, which may only narrow what the rules allowed.
  *   3. maySend, which is deliberately not the code that wanted to send.
  *
- * What it answers is filed under "Claude Answered" and taken out of the inbox,
- * and every reply is reported in Slack: what came in, and what went out.
+ * Three outcomes, not two. What it answers is filed under "Claude/Answered".
+ * What is only information — nothing asked, nothing to do — is filed under
+ * "Claude/Filed" with one line in Slack saying what it said, because not every
+ * email needs a reply and none of them need to sit in his inbox. Everything
+ * else stays exactly where it is, for him.
  */
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
-import { triage } from './autoreply-rules.mjs';
+import { mayFile, triage } from './autoreply-rules.mjs';
 import { postAsBot } from './bot-post.mjs';
 import { agentState, mayAct } from './agent-brief.mjs';
 
@@ -28,7 +31,8 @@ const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
 const MAILBOX = process.env.GMAIL_MAILBOX;
 const CLAUDE = process.env.ANTHROPIC_API_KEY;
-const ANSWERED_LABEL = process.env.ANSWERED_LABEL ?? 'Claude Answered';
+const ANSWERED_LABEL = process.env.ANSWERED_LABEL ?? 'Claude/Answered';
+const FILED_LABEL = process.env.FILED_LABEL ?? 'Claude/Filed';
 const DRY = process.env.DRY === '1';
 const MAX = Number(process.env.ANSWER_MAX ?? 25);
 /*
@@ -139,7 +143,14 @@ in doubt, decline.
 
 When you do reply: two or three sentences, plain, no pleasantries beyond a
 greeting, no promises, no dates he has not given you, and never a figure. Write
-in the language the sender wrote in. Sign off as Maor.`;
+in the language the sender wrote in. Sign off as Maor.
+
+Separately, set "informational" true when the message is only telling him
+something — a report, a notice, a status update, a newsletter — and nothing is
+being asked of him and nothing needs doing. Set it false whenever there is a
+question, a request, a decision, a deadline, an invitation, or anything he
+would want to act on. In "summary", say in one line what it tells him; that
+line is all he will read.`;
 
 async function draft(candidate) {
   const thread = candidate.messages
@@ -158,7 +169,8 @@ async function draft(candidate) {
       ? `Additional standing instructions from Maor, which override the above where they are stricter:\n${INSTRUCTIONS.trim()}`
       : '',
     '',
-    'Answer as JSON: {"shouldReply": boolean, "reasoning": "one line", "reply": "the text", "confidence": "high|medium|low"}',
+    'Answer as JSON: {"shouldReply": boolean, "reasoning": "one line", "reply": "the text", ' +
+      '"confidence": "high|medium|low", "informational": boolean, "summary": "one line saying what it says"}',
   ].filter(Boolean).join('\n');
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -236,7 +248,7 @@ async function send(candidate, replyText) {
 
 async function tellHim(lines) {
   if (lines.length === 0) return;
-  const text = [':envelope: *Mail answered on your behalf*', '', ...lines].join('\n');
+  const text = [':envelope: *Your mail, handled*', '', ...lines].join('\n');
   const sent = await postAsBot('mail', text);
   if (!sent.ok) console.error(`could not tell him in Slack: ${sent.reason}`);
 }
@@ -271,8 +283,14 @@ async function main() {
       answered_at timestamptz not null default now()
     )
   `.catch(() => {});
+  // Two outcomes share this table: what it answered, and what it only showed
+  // him. Both must be remembered, or the next run does it again.
+  await sql`
+    alter table mail_answers add column if not exists outcome text not null default 'answered'
+  `.catch(() => {});
 
   const answeredLabel = await labelId(ANSWERED_LABEL);
+  const filedLabel = await labelId(FILED_LABEL);
 
   const { messages } = await gmail(
     `/messages?maxResults=${MAX}&q=${encodeURIComponent('in:inbox -from:me')}`,
@@ -282,6 +300,7 @@ async function main() {
 
   const told = [];
   let answered = 0;
+  let filedOnly = 0;
   let declined = 0;
 
   for (const ref of refs) {
@@ -316,7 +335,15 @@ async function main() {
     };
 
     const triaged = triage(candidate);
-    if (!triaged.answerable) {
+
+    /*
+     * Not everything that arrives is a question. Where the rules cleared it of
+     * anything sensitive but it is not something to answer, it may still be
+     * worth showing him — one line in Slack, out of the inbox, filed. That is
+     * decided below, by the model, and only for the cases mayFile allows.
+     */
+    const filable = mayFile(triaged);
+    if (!triaged.answerable && !filable.consider) {
       declined += 1;
       console.log(`  left alone: ${subject}\n      ${triaged.reason}`);
       continue;
@@ -326,8 +353,39 @@ async function main() {
     const verdict = maySend(triaged, d);
 
     if (!verdict.send) {
-      declined += 1;
-      console.log(`  left alone: ${subject}\n      ${verdict.why}`);
+      /*
+       * The file-only path. It sends nothing, so it is judged less harshly
+       * than a reply — but it still takes something out of his inbox, so it
+       * needs the model to say plainly that nothing is being asked, and it
+       * never applies to mail the rules held back.
+       */
+      const justInformation = filable.consider && d.informational === true && d.confidence !== 'low';
+      if (!justInformation) {
+        declined += 1;
+        console.log(`  left alone: ${subject}\n      ${verdict.why}`);
+        continue;
+      }
+
+      const line = (d.summary ?? '').trim() || (message.snippet ?? '').slice(0, 200);
+      console.log(`  ${DRY ? 'WOULD FILE, NO REPLY' : 'filing, no reply'}: ${subject}`);
+      console.log(`      from ${from}`);
+      console.log(`      ${line}`);
+      if (DRY) continue;
+
+      if (filedLabel) {
+        await gmail(`/messages/${ref.id}/modify`, MODIFY, {
+          method: 'POST',
+          body: JSON.stringify({ addLabelIds: [filedLabel], removeLabelIds: ['INBOX'] }),
+        }).catch((e) => console.log(`      could not file it: ${e.message}`));
+      }
+      await sql`
+        insert into mail_answers (thread_id, subject, to_email, reply, outcome)
+        values (${message.threadId}, ${subject}, ${fromEmail}, ${line}, 'filed')
+        on conflict (thread_id) do nothing
+      `;
+
+      filedOnly += 1;
+      told.push(`*${subject}*\n> from ${from}\n> _no reply needed:_ ${line}`);
       continue;
     }
 
@@ -339,8 +397,8 @@ async function main() {
 
     await send(candidate, d.reply);
     await sql`
-      insert into mail_answers (thread_id, subject, to_email, reply)
-      values (${message.threadId}, ${subject}, ${fromEmail}, ${d.reply})
+      insert into mail_answers (thread_id, subject, to_email, reply, outcome)
+      values (${message.threadId}, ${subject}, ${fromEmail}, ${d.reply}, 'answered')
       on conflict (thread_id) do nothing
     `;
 
@@ -360,7 +418,8 @@ async function main() {
   await tellHim(told);
 
   console.log(
-    `${answered} answered, ${declined} left for you, in ${Math.round((Date.now() - started) / 1000)}s.`,
+    `${answered} answered, ${filedOnly} filed without a reply, ${declined} left for you, ` +
+      `in ${Math.round((Date.now() - started) / 1000)}s.`,
   );
 
   await sql.end();

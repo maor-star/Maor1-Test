@@ -90,3 +90,26 @@ export function triage(candidate) {
   return { answerable: true, reason: `it is ${simple[0]}`, matched: simple };
 }
 
+/**
+ * The third outcome: nothing to answer, but worth seeing.
+ *
+ * Not every email is a question. A great deal of what arrives is information —
+ * a report, a notice, an update — where a reply would be noise and leaving it
+ * in the inbox is one more thing for him to open and close. Those get shown to
+ * him in Slack, in one line, and filed.
+ *
+ * Filing is only ever considered for mail the rule gate has already cleared of
+ * anything sensitive, and only where the reason it was not answered is that it
+ * was not a simple question — never because the thread has history, never
+ * because the last word is already his, and never because a NEVER rule fired.
+ */
+export function mayFile(triaged) {
+  if (triaged.answerable) return { consider: false, why: 'it is being answered' };
+  if (triaged.matched.length > 0) return { consider: false, why: `it is ${triaged.matched[0]}` };
+
+  const fileable = ['not obviously simple', 'too long to be a simple question'];
+  if (!fileable.includes(triaged.reason)) return { consider: false, why: triaged.reason };
+
+  return { consider: true, why: 'nothing sensitive, and nothing being asked of you' };
+}
+

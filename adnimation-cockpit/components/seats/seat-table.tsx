@@ -1,4 +1,5 @@
 import { fmtMoney, fmtNumber } from '@/lib/utils';
+import { SearchBox } from '@/components/hud/search-box';
 import {
   SEAT_REVENUE_TARGET_CENTS, STATUS_LABEL, SUPPLY_SPEND_FLOOR_CENTS, type Seat,
 } from '@/lib/seats/service';
@@ -22,10 +23,13 @@ export function SeatTable({
   seats,
   side,
   index,
+  total,
 }: {
   seats: Seat[];
   side: 'demand' | 'supply';
   index: string;
+  /** How many there are before the search narrowed them. */
+  total?: number;
 }) {
   return (
     <HudCard className="gap-0 p-0">
@@ -34,14 +38,22 @@ export function SeatTable({
           title={side === 'demand' ? 'Demand seats' : 'Supply seats'}
           index={index}
           action={
-            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-              TARGET <Num>{fmtMoney(SEAT_REVENUE_TARGET_CENTS)}</Num>/DAY
-              {side === 'supply' ? (
-                <>
-                  {' '}· SPEND FLOOR <Num>{fmtMoney(SUPPLY_SPEND_FLOOR_CENTS)}</Num>/DAY
-                </>
-              ) : null}
-            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <SearchBox placeholder="Find a seat" />
+              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                {total !== undefined && total !== seats.length ? (
+                  <>
+                    <Num>{seats.length}</Num> OF <Num>{total}</Num> ·{' '}
+                  </>
+                ) : null}
+                TARGET <Num>{fmtMoney(SEAT_REVENUE_TARGET_CENTS)}</Num>/DAY
+                {side === 'supply' ? (
+                  <>
+                    {' '}· SPEND FLOOR <Num>{fmtMoney(SUPPLY_SPEND_FLOOR_CENTS)}</Num>/DAY
+                  </>
+                ) : null}
+              </span>
+            </div>
           }
         />
       </div>

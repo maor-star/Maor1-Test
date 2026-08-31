@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { maySend, triage, type Draft, type ReplyCandidate } from '@/lib/agents/autoreply';
+import { maySend, triage, type Draft, type ReplyCandidate, mayFile} from '@/lib/agents/autoreply';
 
 /**
  * The one agent that puts words in his mouth to people outside the company.
@@ -123,5 +123,63 @@ describe('auto-reply — the final gate', () => {
   it('always says why, whichever way it went', () => {
     expect(maySend(answerable, draft()).why.length).toBeGreaterThan(0);
     expect(maySend(answerable, draft({ shouldReply: false, reasoning: 'unsure' })).why).toBe('unsure');
+  });
+});
+
+/**
+ * The third outcome: shown to him, filed, not answered.
+ *
+ * This one moves mail out of his inbox without sending anything, so the cost
+ * of being wrong is that he does not see something — which is why it is only
+ * ever offered for mail the rules already cleared, and never for mail they
+ * held back.
+ */
+describe('mail that is only worth showing him', () => {
+  const facts = (over: Partial<ReplyCandidate> = {}): ReplyCandidate => ({
+    subject: 'Monthly platform report',
+    snippet: 'Your September numbers are attached.',
+    fromEmail: 'reports@vendor.com',
+    fromName: 'Vendor',
+    messages: [{ fromMe: false, text: 'Your September numbers are attached.' }],
+    knownCompany: null,
+    ...over,
+  });
+
+  it('offers to file information that is not a simple question', () => {
+    const t = triage(facts());
+    expect(t.answerable).toBe(false);
+    expect(mayFile(t).consider).toBe(true);
+  });
+
+  it('files nothing the rules held back — the NEVER list is not a soft rule', () => {
+    for (const subject of ['Invoice 4471', 'The MSA', 'Salary review', 'Urgent complaint']) {
+      const t = triage(facts({ subject, snippet: subject }));
+      expect(mayFile(t).consider, subject).toBe(false);
+    }
+  });
+
+  it('does not file a conversation with history, or one where he spoke last', () => {
+    const longThread = triage(
+      facts({
+        messages: Array.from({ length: 6 }, () => ({ fromMe: false, text: 'more' })),
+      }),
+    );
+    expect(mayFile(longThread).consider).toBe(false);
+
+    const hisWord = triage(facts({ messages: [{ fromMe: true, text: 'ok' }] }));
+    expect(mayFile(hisWord).consider).toBe(false);
+  });
+
+  it('does not file something it is already answering', () => {
+    const answerable = triage(
+      facts({ subject: 'Thanks!', snippet: 'Thank you, received.' }),
+    );
+    expect(answerable.answerable).toBe(true);
+    expect(mayFile(answerable).consider).toBe(false);
+  });
+
+  it('always says why not', () => {
+    expect(mayFile(triage(facts({ subject: 'Invoice', snippet: 'invoice' }))).why.length)
+      .toBeGreaterThan(0);
   });
 });

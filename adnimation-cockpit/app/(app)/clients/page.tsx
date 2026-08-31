@@ -5,6 +5,8 @@ import {
 import { PERIOD_LABEL, PERIOD_TAB, type Period } from '@/lib/revenue/periods';
 import { fmtMoney, fmtNumber } from '@/lib/utils';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
+import { SearchBox } from '@/components/hud/search-box';
+import { filterByQuery } from '@/lib/search';
 import { PageHeader } from '@/components/hud/page-header';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
@@ -22,7 +24,7 @@ export const dynamic = 'force-dynamic';
 export default async function ClientsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; q?: string }>;
 }) {
   const sp = await searchParams;
   const period: ClientPeriod = isClientPeriod(sp.period) ? sp.period : '30D';
@@ -31,6 +33,9 @@ export default async function ClientsPage({
   const top5 = concentration(book.clients, 5);
   const top10 = concentration(book.clients, 10);
   const falling = book.clients.filter((c) => c.trendPct !== null && c.trendPct < -0.3);
+  // The search narrows the full book; the summary above it stays the truth
+  // about the whole business, which is what those numbers are for.
+  const shown = filterByQuery(book.clients, sp.q, (c) => [c.name]);
 
   return (
     <div className="space-y-5">
@@ -109,14 +114,18 @@ export default async function ClientsPage({
             title="Every client, by profit"
             index="S03"
             action={
-              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                <Num>{book.clients.length}</Num> ACCOUNTS ·{' '}
-                <Num>{book.totals.tradingCount}</Num> TRADING
-              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <SearchBox placeholder="Find a client" />
+                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                  <Num>{shown.length}</Num>
+                  {shown.length === book.clients.length ? ' ACCOUNTS · ' : ` OF ${book.clients.length} · `}
+                  <Num>{book.totals.tradingCount}</Num> TRADING
+                </span>
+              </div>
             }
           />
         </div>
-        <ClientRows clients={book.clients} period={period} cumulative />
+        <ClientRows clients={shown} period={period} cumulative />
       </HudCard>
 
       <p className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">

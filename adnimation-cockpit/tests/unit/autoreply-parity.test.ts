@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { triage, type ReplyCandidate } from '@/lib/agents/autoreply';
+import { mayFile, triage, type ReplyCandidate } from '@/lib/agents/autoreply';
 // @ts-expect-error — the generated job copy is plain ESM with no types.
 import * as js from '@/deploy/autoreply-rules.mjs';
 
@@ -66,5 +66,16 @@ describe('the screen and the answering job refuse the same mail', () => {
     };
     expect(js.triage(odd).answerable).toBe(false);
     expect(triage(odd).answerable).toBe(false);
+  });
+});
+
+describe('autoreply parity — what may be filed without a reply', () => {
+  it('agrees, case for case, about what may be taken out of the inbox', () => {
+    for (const c of CASES) {
+      const ts = mayFile(triage(c));
+      const mjs = js.mayFile(js.triage(c));
+      expect(mjs.consider, c.subject ?? '').toBe(ts.consider);
+      expect(mjs.why, c.subject ?? '').toBe(ts.why);
+    }
   });
 });
