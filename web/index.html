@@ -519,7 +519,7 @@ function persistLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(db)); 
 function save(){
   db.updatedAt=Date.now();
   dirty=true; // יש שינוי מקומי שצריך להעלות
-  _hasCardDetail=null; _lumpMonths=null; // איפוס מטמון (ייתכן שהשתנו שורות פירוט/חיובים מרוכזים)
+  _hasCardDetail=null; _detailMonths=null; // איפוס מטמון (ייתכן שהשתנו שורות פירוט/חיובים מרוכזים)
   persistLocal();
   const s=document.getElementById('save-state');
   if(s && !authToken){ s.textContent='נשמר ✔'; clearTimeout(saveTimer); saveTimer=setTimeout(()=>s.textContent='נשמר בדפדפן',1500); }
@@ -897,15 +897,18 @@ function isCardDetail(t){ return !!detectIssuer(t.account); }
 // האם קיימים חיובי אשראי מרוכזים (חשבוניות) בנתונים
 var _hasCardDetail=null; // var (מונע TDZ כי save() ניגש אליו כבר ב-ensureDefaults שרץ קודם)
 function hasCardDetail(){ if(_hasCardDetail===null) _hasCardDetail=db.transactions.some(t=>t.kind==='expense'&&isCardDetail(t)); return _hasCardDetail; }
-// אינדקס «חברת אשראי|חודש» לכל חיוב מרוכז — כדי לדעת מתי פירוט אשראי כבר מכוסה ע"י חיוב מרוכז (למניעת ספירה כפולה)
-var _lumpMonths=null;
-function lumpMonths(){ if(_lumpMonths===null){ _lumpMonths=new Set(); db.transactions.forEach(t=>{ if(t.kind==='expense'&&isAggLump(t)){ const i=detectIssuer(t.merchant||t.description); if(i) _lumpMonths.add(i+'|'+String(t.tx_date).slice(0,7)); } }); } return _lumpMonths; }
-// עלות/תזרים: הפירוט (בית עסק אמיתי) + הוצאות רגילות תמיד נספרים.
-// חיוב מרוכז (חשבונית) לא נספר כשקיים פירוט — הפירוט הוא מקור האמת (מניעת כפילות).
+// אינדקס «חברת אשראי|חודש» של שורות הפירוט — כדי לדעת אילו חיובים מרוכזים כבר מיוצגים ע"י פירוט (מניעת כפילות)
+var _detailMonths=null;
+function detailMonths(){ if(_detailMonths===null){ _detailMonths=new Set(); db.transactions.forEach(t=>{ if(t.kind==='expense'&&isCardDetail(t)){ const i=detectIssuer(t.account); if(i) _detailMonths.add(i+'|'+String(t.tx_date).slice(0,7)); } }); } return _detailMonths; }
+function _prevYM(ym){ const p=String(ym).split('-').map(Number); const y=p[0],m=p[1]; if(!y||!m) return ''; return (m-1?y:y-1)+'-'+String(m-1||12).padStart(2,'0'); }
+// חיוב מרוכז «מכוסה» אם קיים פירוט לאותה חברה בחודש החיוב או בחודש שלפניו (חיוב מפרט בערך את קניות החודש הקודם).
+function lumpCovered(t){ const i=detectIssuer(t.merchant||t.description); if(!i) return false; const ym=String(t.tx_date).slice(0,7); const s=detailMonths(); return s.has(i+'|'+ym) || s.has(i+'|'+_prevYM(ym)); }
+// עלות/תזרים על בסיס מהות (accrual): פירוט האשראי (מקור האמת, לפי תאריך הקנייה) + הוצאות רגילות תמיד נספרים.
+// חיוב מרוכז נספר רק אם אין פירוט מקביל — חברה שיש לה פירוט (למשל אמריקן) לא סופרים את חיובה המרוכז (הוא כפילות של הפירוט);
+// חברה ללא פירוט (למשל ישראכרט) — החיוב המרוכז נספר כי הוא המידע היחיד.
 function countsInTotal(t){ if(t.kind!=='expense') return true;
-  // חיוב מרוכז + הוצאות רגילות תמיד נספרים בתזרים. פירוט אשראי נספר רק אם אין חיוב מרוכז של אותה חברה באותו חודש
-  // (אחרת נספור פעמיים — פעם בפירוט ופעם בחיוב המרוכז). כך חודש שיש בו רק חיוב מרוכז (בלי פירוט) עדיין מקבל את מלוא הסכום.
-  if(isCardDetail(t)){ const i=detectIssuer(t.account); return !lumpMonths().has(i+'|'+String(t.tx_date).slice(0,7)); }
+  if(isCardDetail(t)) return true;
+  if(isAggLump(t)) return !lumpCovered(t);
   return true;
 }
 // פילוח לפי מהות: פירוט האשראי (בית עסק אמיתי) + הוצאות רגילות. חיוב מרוכז אינו נספר (חסר מהות).
@@ -2580,14 +2583,10 @@ views.analytics=async()=>{
   const srcMeta={credit:{label:'💳 כרטיס אשראי',color:'#6366f1'},bank:{label:'🏦 חשבון בנק (הו״ק/העברות/משכנתא)',color:'#0ea5e9'},cash:{label:'💵 מזומן',color:'#16a34a'}};
   const srcMap={}; expCash.forEach(t=>{ const k=outKind(t); if(!srcMap[k])srcMap[k]={label:srcMeta[k].label,value:0,color:srcMeta[k].color}; srcMap[k].value+=t.amount; });
   const bySrc=Object.values(srcMap).sort((a,b)=>b.value-a.value);
-  // חיובי אשראי מרוכזים שלא פורטו (או פורטו חלקית) — הסכום «שנעלם» מהפילוח לפי קטגוריה.
-  // מחשבים לכל חברת-אשראי×חודש: חיוב מרוכז פחות הפירוט שכן קיים לאותו חודש (היתרה = לא-מפורט).
+  // חיובי אשראי מרוכזים שאינם מפורטים (חברה ללא תדפיס פירוט, כמו ישראכרט) — הסכום שלא ניתן לפצל לקטגוריות.
+  // אלו בדיוק החיובים שנספרים בתזרים (expCash כולל רק חיובים מרוכזים לא-מכוסים), ולכן הפילוח מתאזן במדויק.
   const mortSum=mortAll;
-  const lumpIM={}, detIM={};
-  rows.forEach(t=>{ if(t.kind!=='expense')return; const ym=String(t.tx_date).slice(0,7);
-    if(isAggLump(t)){ const i=detectIssuer(t.merchant||t.description); if(i){ const k=i+'|'+ym; lumpIM[k]=(lumpIM[k]||0)+t.amount; } }
-    else if(isCardDetail(t)){ const i=detectIssuer(t.account); if(i){ const k=i+'|'+ym; detIM[k]=(detIM[k]||0)+t.amount; } } });
-  let pendingSum=0; Object.keys(lumpIM).forEach(k=>{ pendingSum+=Math.max(0,lumpIM[k]-(detIM[k]||0)); });
+  const pendingSum=expCash.filter(t=>isAggLump(t)).reduce((s,t)=>s+t.amount,0);
   // העברות/מזומן/שיקים — נספרים בתזרים אך אינם משויכים לקטגוריה (לא ידוע ייעודם)
   const moveSum=expCash.filter(t=>isMoneyMove(t)).reduce((s,t)=>s+t.amount,0);
   const homeCost=totalExp;
