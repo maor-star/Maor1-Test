@@ -27,7 +27,8 @@ export async function agentState(sql, name) {
 
   // A row we cannot read is not permission to run either.
   const [row] = await sql`
-    select enabled, instructions, notify_slack from agents where name = ${name} limit 1
+    select enabled, instructions, notify_slack, run_every_minutes, last_ran_at
+    from agents where name = ${name} limit 1
   `.catch(() => []);
 
   return {
@@ -36,6 +37,9 @@ export async function agentState(sql, name) {
     // The per-agent Slack switch on the screen. Off means it works silently.
     notify: Boolean(row?.notify_slack),
     brief: (row?.instructions ?? '').trim(),
+    /** Minutes he asked it to wait between runs. Null: every timer firing. */
+    everyMinutes: row?.run_every_minutes ?? null,
+    lastRanAt: row?.last_ran_at ? new Date(row.last_ran_at) : null,
     killed,
   };
 }
@@ -44,13 +48,31 @@ export async function agentState(sql, name) {
  * May this job act now? `dry` runs are always allowed and change nothing.
  * FORCE=1 is for a run he has asked for by hand, and says so in the log.
  */
-export function mayAct(state, { dry = false, force = false } = {}) {
+export function mayAct(state, { dry = false, force = false, now = new Date() } = {}) {
   if (dry) return { act: false, dryRun: true, why: 'dry run — nothing will be touched' };
   if (state.killed) return { act: false, why: 'the global kill switch is on' };
   if (force) return { act: true, why: 'FORCE=1 — a run you asked for by hand' };
   if (!state.exists) return { act: false, why: 'this agent is not installed' };
   if (!state.enabled) return { act: false, why: 'this agent is switched off' };
+
+  /*
+   * His rhythm, from the screen. The timer fires more often than any agent
+   * needs so that changing this is a click rather than a deploy; a firing
+   * that arrives early costs one query and stops here.
+   */
+  if (state.everyMinutes && state.lastRanAt) {
+    const dueAt = new Date(state.lastRanAt.getTime() + state.everyMinutes * 60_000);
+    if (now < dueAt) {
+      return { act: false, why: `not due yet — set to every ${state.everyMinutes} minutes` };
+    }
+  }
+
   return { act: true };
+}
+
+/** Remember that it ran, so the interval above means something. */
+export async function markRan(sql, name, now = new Date()) {
+  await sql`update agents set last_ran_at = ${now} where name = ${name}`.catch(() => {});
 }
 
 /**

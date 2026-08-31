@@ -7,9 +7,10 @@ import { eq } from 'drizzle-orm';
 import { agents, db } from '@/lib/db';
 import {
   runById, seedAgents, setAgentEnabled, setAutonomy, setGlobalKill, setInstructions,
-  setNotifySlack,
+  setNotifySlack, setRunEvery,
 } from '@/lib/agents/module';
 import { jobFor, runJob } from '@/lib/agents/job-preview';
+import { setProfile, startTraining } from '@/lib/agents/learning';
 
 /**
  * The agents screen's controls.
@@ -167,4 +168,59 @@ export async function killSwitchAction(formData: FormData): Promise<AgentActionR
   await setGlobalKill(on, user.email);
   revalidatePath('/agents');
   return { ok: true, message: on ? 'Everything stopped.' : 'Agents may run again.' };
+}
+
+/** How often it runs — his to set, without a deploy. */
+export async function setScheduleAction(formData: FormData): Promise<AgentActionResult> {
+  const user = await requireUser();
+  const id = idSchema.safeParse(String(formData.get('id') ?? ''));
+  if (!id.success) return { ok: false, error: 'Not an agent' };
+
+  const raw = String(formData.get('minutes') ?? '');
+  const minutes = raw === '' || raw === 'null' ? null : Number(raw);
+  if (minutes !== null && !Number.isFinite(minutes)) return { ok: false, error: 'Not an interval' };
+
+  const result = await setRunEvery(id.data, minutes, user.email);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath('/agents');
+  return { ok: true, message: 'Saved.' };
+}
+
+/** Read a year of his mail and learn how he writes. Runs in the background. */
+export async function trainAgentAction(formData: FormData): Promise<AgentActionResult> {
+  const user = await requireUser();
+  const id = idSchema.safeParse(String(formData.get('id') ?? ''));
+  if (!id.success) return { ok: false, error: 'Not an agent' };
+
+  const [row] = await db.select().from(agents).where(eq(agents.id, id.data)).limit(1);
+  if (!row) return { ok: false, error: 'No such agent' };
+
+  const days = Number(formData.get('days') ?? 365);
+  const result = await startTraining(row.name, user.email, {
+    days: Number.isFinite(days) && days > 0 && days <= 730 ? days : 365,
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath('/agents');
+  return {
+    ok: true,
+    message: 'Reading your mail. It takes a few minutes — this page will show what it learned.',
+  };
+}
+
+/** Correct what it learned, in his own words. */
+export async function setProfileAction(formData: FormData): Promise<AgentActionResult> {
+  const user = await requireUser();
+  const id = idSchema.safeParse(String(formData.get('id') ?? ''));
+  if (!id.success) return { ok: false, error: 'Not an agent' };
+
+  const [row] = await db.select().from(agents).where(eq(agents.id, id.data)).limit(1);
+  if (!row) return { ok: false, error: 'No such agent' };
+
+  const result = await setProfile(row.name, String(formData.get('profile') ?? ''), user.email);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath('/agents');
+  return { ok: true, message: 'Saved. It is yours now, so training will leave it alone.' };
 }

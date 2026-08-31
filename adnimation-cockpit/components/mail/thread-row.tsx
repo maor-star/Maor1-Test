@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { dismissThreadAction, replyAction } from '@/app/actions/mail';
+import { dismissThreadAction, taskFromMailAction, replyAction } from '@/app/actions/mail';
 import { captureMailAction } from '@/app/actions/opportunities';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
@@ -24,6 +25,7 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [captured, setCaptured] = useState(false);
+  const [taskId, setTaskId] = useState<string | null>(null);
   const [replying, setReplying] = useState(false);
   const [sent, setSent] = useState(false);
   const router = useRouter();
@@ -154,6 +156,43 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
         >
           {captured ? 'SAVED AS OPPORTUNITY ✓' : '→ OPPORTUNITY'}
         </Button>
+
+        {/*
+          The other thing a conversation turns into. Mail that means work is
+          the mail that gets forgotten — read, meant to act on, and gone down
+          the inbox by the afternoon. One click makes a task carrying the
+          subject, the sender and a link back to the thread.
+        */}
+        <Button
+          type="button"
+          size="xs"
+          variant="ghost"
+          disabled={pending || taskId !== null}
+          onClick={() =>
+            startTransition(async () => {
+              const data = new FormData();
+              data.set('threadId', t.threadId);
+              const result = await taskFromMailAction(data);
+              setError(result.ok ? null : (result.error ?? 'That did not work'));
+              if (result.ok && result.id) {
+                setTaskId(result.id);
+                router.refresh();
+              }
+            })
+          }
+          title="Make a task out of this conversation"
+        >
+          {taskId ? 'TASK MADE ✓' : '→ TASK'}
+        </Button>
+
+        {taskId ? (
+          <Link
+            href={`/tasks?q=${encodeURIComponent(t.subject ?? '')}`}
+            className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+          >
+            Open it ↗
+          </Link>
+        ) : null}
 
         {error ? <span className="text-2xs text-destructive">{error}</span> : null}
       </div>

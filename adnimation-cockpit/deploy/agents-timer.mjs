@@ -24,21 +24,23 @@ const JOBS = [
     name: 'mail-answer',
     script: 'mail-answer.mjs',
     description: 'Answer the trivial mail, file what only needs showing',
-    every: '2h',
+    // The timer fires often and cheaply; how often the agent actually runs is
+    // set on the screen and read at the top of every run.
+    every: '30min',
     boot: '10min',
   },
   {
     name: 'mailbox-tidy',
     script: 'mailbox-tidy.mjs',
     description: 'File the sales mail and clear spent one-time codes',
-    every: '3h',
+    every: '1h',
     boot: '15min',
   },
   {
     name: 'invoice-forward',
     script: 'invoice-forward.mjs',
     description: 'Send invoices on to finance',
-    every: '4h',
+    every: '1h',
     boot: '20min',
   },
 ];

@@ -23,7 +23,7 @@ import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { assertInternalRecipients, looksLikeInvoice } from './internal-mail.mjs';
 import { postAsBot } from './bot-post.mjs';
-import { agentState, briefVeto, mayAct } from './agent-brief.mjs';
+import { agentState, briefVeto, markRan, mayAct } from './agent-brief.mjs';
 
 const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -221,6 +221,7 @@ async function main() {
     await sql.end();
     process.exit(0);
   }
+  if (!DRY) await markRan(sql, 'invoice-forwarder');
   if (gate.why) console.log(gate.why);
   console.log(
     state.brief

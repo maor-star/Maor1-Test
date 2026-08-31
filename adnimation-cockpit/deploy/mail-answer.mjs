@@ -28,7 +28,7 @@ import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { mayFile, triage } from './autoreply-rules.mjs';
 import { postAsBot } from './bot-post.mjs';
-import { agentState, mayAct } from './agent-brief.mjs';
+import { agentState, markRan, mayAct } from './agent-brief.mjs';
 
 const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -44,6 +44,15 @@ const MAX = Number(process.env.ANSWER_MAX ?? 25);
  * override for a run by hand.
  */
 let INSTRUCTIONS = process.env.ANSWER_INSTRUCTIONS ?? '';
+
+/**
+ * How he writes, read off a year of his own replies by mail-learn.mjs.
+ *
+ * Kept separate from his instructions all the way into the prompt: this says
+ * how to sound, his instructions say what to do. Where they disagree, his
+ * instructions win, because he wrote them on purpose and this was inferred.
+ */
+let STYLE = '';
 
 if (!DB || !RAW_KEY || !MAILBOX) {
   console.error('DATABASE_URL, GOOGLE_SERVICE_ACCOUNT_KEY and GMAIL_MAILBOX are required.');
@@ -168,8 +177,11 @@ async function draft(candidate) {
     'The thread, oldest first:',
     thread,
     '',
+    STYLE.trim()
+      ? `How he writes, learned from a year of his own replies. Match this voice:\n${STYLE.trim()}`
+      : '',
     INSTRUCTIONS.trim()
-      ? `Additional standing instructions from Maor, which override the above where they are stricter:\n${INSTRUCTIONS.trim()}`
+      ? `Additional standing instructions from Maor, which override everything above where they are stricter:\n${INSTRUCTIONS.trim()}`
       : '',
     '',
     'Answer as JSON: {"shouldReply": boolean, "reasoning": "one line", "reply": "the text", ' +
@@ -278,11 +290,22 @@ async function main() {
     await sql.end();
     process.exit(0);
   }
+  if (!DRY) await markRan(sql, 'mail-answerer');
   if (state.brief && !process.env.ANSWER_INSTRUCTIONS) {
     INSTRUCTIONS = state.brief;
     console.log(`using the brief you wrote it (${state.brief.length} chars).`);
   } else if (!state.brief) {
     console.log('no brief written for it yet — the built-in rules alone decide.');
+  }
+
+  const [learned] = await sql`
+    select profile, threads_read from agent_learning where agent_name = 'mail-answerer'
+  `.catch(() => []);
+  if (learned?.profile) {
+    STYLE = learned.profile;
+    console.log(`writing in your voice, learned from ${learned.threads_read} of your replies.`);
+  } else {
+    console.log('not trained on your mail yet — drafts will be correct but generic.');
   }
 
   await sql`

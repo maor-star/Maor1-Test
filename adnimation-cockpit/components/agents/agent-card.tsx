@@ -3,13 +3,16 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  runAgentAction, setAutonomyAction, setInstructionsAction, setNotifyAction, toggleAgentAction,
+  runAgentAction, setAutonomyAction, setInstructionsAction, setNotifyAction, setProfileAction,
+  setScheduleAction, toggleAgentAction, trainAgentAction,
 } from '@/app/actions/agents';
 import { Button } from '@/components/ui/button';
 import { Label, Select, Textarea } from '@/components/ui/input';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
-import { AUTONOMY_LABEL, PROMOTION_MIN_RUNS, isIrreversible } from '@/lib/agents/types';
+import {
+  AUTONOMY_LABEL, PROMOTION_MIN_RUNS, RUN_INTERVALS, isIrreversible,
+} from '@/lib/agents/types';
 import { botFor } from '@/lib/agents/slack-bots';
 import type { AgentListItem } from '@/lib/agents/module';
 import { fmtDateTime } from '@/lib/utils';
@@ -53,6 +56,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
   const [message, setMessage] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [teaching, setTeaching] = useState(false);
+  const [editingVoice, setEditingVoice] = useState(false);
   const router = useRouter();
 
   const irreversible = a.actions.filter((x) => isIrreversible(x.type));
@@ -191,6 +195,23 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
           {a.notifySlack ? `SLACK: ${botFor(a.name).username.toUpperCase()}` : 'SLACK: OFF'}
         </Button>
 
+        {a.name === 'mail-answerer' ? (
+          <Button
+            type="button"
+            size="xs"
+            variant={a.learning?.profile ? 'outline' : 'ghost'}
+            disabled={pending || a.learning?.running}
+            title="Read a year of your own replies and learn how you write"
+            onClick={() => run(trainAgentAction, withId({ days: '365' }))}
+          >
+            {a.learning?.running
+              ? 'READING YOUR MAIL…'
+              : a.learning?.profile
+                ? 'TRAIN AGAIN'
+                : 'LEARN HOW YOU WRITE'}
+          </Button>
+        ) : null}
+
         <Button
           type="button"
           size="xs"
@@ -217,6 +238,34 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
             </option>
           ))}
         </Select>
+
+        {/*
+          How often it runs. The timers fire often and cheaply; this decides
+          whether a firing does anything, so changing an agent's rhythm is a
+          click here rather than a deploy.
+        */}
+        <label className="sr-only" htmlFor={`every-${a.id}`}>
+          How often it runs
+        </label>
+        <Select
+          id={`every-${a.id}`}
+          value={a.runEveryMinutes ?? 'null'}
+          disabled={pending}
+          className="h-7 min-w-0 max-w-[16rem] text-[12px]"
+          onChange={(e) => run(setScheduleAction, withId({ minutes: e.target.value }))}
+        >
+          {RUN_INTERVALS.map((i) => (
+            <option key={String(i.minutes)} value={i.minutes ?? 'null'}>
+              {i.label}
+            </option>
+          ))}
+        </Select>
+
+        {a.lastRanAt ? (
+          <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+            LAST RAN <Num>{fmtDateTime(a.lastRanAt)}</Num>
+          </span>
+        ) : null}
 
         {!canPromote && a.autonomyLevel === 1 ? (
           <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
@@ -249,6 +298,89 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
           >
             {preview}
           </pre>
+        </div>
+      ) : null}
+
+      {/*
+        What it learned, and what it read. Shown next to the brief rather than
+        merged into it: one he wrote, the other was inferred from a year of his
+        replies, and he needs to be able to tell which is which before he
+        trusts a draft.
+      */}
+      {a.learning && (a.learning.profile || a.learning.error || a.learning.running) ? (
+        <div className="mt-2 border border-divider">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-divider px-2 py-1">
+            <span className="hud-label text-[9px]">
+              HOW YOU WRITE
+              {a.learning.editedByHim ? ' · YOUR WORDS' : ''}
+              {a.learning.threadsRead > 0 ? (
+                <>
+                  {' '}· FROM <Num>{a.learning.threadsRead}</Num> OF YOUR REPLIES
+                </>
+              ) : null}
+              {a.learning.learnedAt ? (
+                <>
+                  {' '}· <Num>{fmtDateTime(a.learning.learnedAt)}</Num>
+                </>
+              ) : null}
+            </span>
+            {a.learning.profile ? (
+              <button
+                type="button"
+                onClick={() => setEditingVoice((v) => !v)}
+                className="font-semi text-[10px] tracking-[0.14em] text-neutral-500 hover:text-accent"
+              >
+                {editingVoice ? 'CLOSE' : 'CORRECT IT'}
+              </button>
+            ) : null}
+          </div>
+
+          {a.learning.running ? (
+            <p className="px-2 py-2 text-[13px] text-neutral-600">
+              Reading your mail. It takes a few minutes — reload to see what it learned.
+            </p>
+          ) : a.learning.error ? (
+            <p className="px-2 py-2 text-[13px] text-sev-warning">{a.learning.error}</p>
+          ) : editingVoice ? (
+            <form
+              className="p-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const data = new FormData(e.currentTarget);
+                data.set('id', a.id);
+                run(setProfileAction, data);
+                setEditingVoice(false);
+              }}
+            >
+              <Textarea
+                name="profile"
+                rows={10}
+                defaultValue={a.learning.profile ?? ''}
+                className="w-full"
+              />
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button type="submit" size="sm" disabled={pending}>
+                  SAVE
+                </Button>
+                <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+                  ONCE YOU EDIT THIS IT IS YOURS — TRAINING WILL LEAVE IT ALONE. CLEAR IT TO LET IT
+                  LEARN AGAIN.
+                </span>
+              </div>
+            </form>
+          ) : (
+            <>
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap px-2 py-2 text-[13px] leading-relaxed text-neutral-700">
+                {a.learning.profile}
+              </pre>
+              {a.learning.facts.medianLength ? (
+                <p className="border-t border-divider px-2 py-1 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+                  YOUR TYPICAL REPLY IS <Num>{a.learning.facts.medianLength}</Num> CHARACTERS ·{' '}
+                  <Num>{a.learning.facts.hebrewShare ?? 0}%</Num> HAVE HEBREW IN THEM
+                </p>
+              ) : null}
+            </>
+          )}
         </div>
       ) : null}
 

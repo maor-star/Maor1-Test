@@ -1,5 +1,6 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db, mailThreads } from '@/lib/db';
+import { createTask } from '@/lib/tasks/mutations';
 
 /**
  * The mailbox, as the cockpit reads it.
@@ -207,4 +208,49 @@ export async function dismissThread(threadId: string, undo = false) {
     .update(mailThreads)
     .set({ dismissedAt: undo ? null : new Date() })
     .where(eq(mailThreads.threadId, threadId));
+}
+
+/**
+ * One thread, as a task would want it.
+ *
+ * The mail screen already holds everything a task needs — the subject, who it
+ * is from, the link back — so making a task out of a conversation needs
+ * nothing from Gmail and cannot fail because a token expired.
+ */
+export async function taskFromThread(
+  threadId: string,
+  actor: string,
+): Promise<{ ok: true; id: string; title: string } | { ok: false; error: string }> {
+  const [row] = await db
+    .select()
+    .from(mailThreads)
+    .where(eq(mailThreads.threadId, threadId))
+    .limit(1);
+  if (!row) return { ok: false, error: 'That conversation is not in the mirror yet' };
+
+  const who = row.counterpartName ?? row.counterpartEmail ?? 'unknown sender';
+  const title = (row.subject ?? '').trim() || `Mail from ${who}`;
+
+  const task = await createTask(
+    {
+      title: title.slice(0, 300),
+      description: [
+        `From ${who}${row.counterpartEmail && row.counterpartName ? ` <${row.counterpartEmail}>` : ''}`,
+        row.snippet ?? '',
+        '',
+        `https://mail.google.com/mail/u/0/#inbox/${threadId}`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      priority: 'P2',
+      status: 'open',
+      tags: [],
+      blockedPeople: [],
+      source: 'email',
+      sourceRef: threadId,
+    },
+    actor,
+  );
+
+  return { ok: true, id: task.id, title };
 }

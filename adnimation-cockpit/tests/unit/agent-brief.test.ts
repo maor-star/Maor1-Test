@@ -40,6 +40,8 @@ describe('the agent gate', () => {
       enabled: true,
       notify: true,
       brief: 'be careful',
+      everyMinutes: null,
+      lastRanAt: null,
       killed: false,
     });
   });
@@ -70,6 +72,26 @@ describe('the agent gate', () => {
     const gate = mayAct({ exists: false, enabled: false, killed: true }, { dry: true });
     expect(gate.act).toBe(false);
     expect(gate.dryRun).toBe(true);
+  });
+
+  it('waits for the interval he set, and runs once it has passed', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    const base = { exists: true, enabled: true, killed: false, everyMinutes: 120 };
+
+    const early = mayAct(
+      { ...base, lastRanAt: new Date('2026-08-31T11:00:00Z') },
+      { now },
+    );
+    expect(early.act).toBe(false);
+    expect(early.why).toContain('120');
+
+    expect(mayAct({ ...base, lastRanAt: new Date('2026-08-31T09:00:00Z') }, { now }).act).toBe(true);
+    // Never run before means run now, not never.
+    expect(mayAct({ ...base, lastRanAt: null }, { now }).act).toBe(true);
+    // No interval set is "whenever the timer fires", which is what it did before.
+    expect(
+      mayAct({ ...base, everyMinutes: null, lastRanAt: new Date('2026-08-31T11:59:00Z') }, { now }).act,
+    ).toBe(true);
   });
 
   it('lets a hand-run through with FORCE, but never past the kill switch', () => {

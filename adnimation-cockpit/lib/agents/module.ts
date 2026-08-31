@@ -4,6 +4,8 @@ import { writeAudit } from '@/lib/audit';
 import { claudeStatus } from '@/lib/integrations/claude';
 import { SEED_AGENTS } from './definitions';
 import { notifyRun } from './notify';
+import { RUN_INTERVALS } from './types';
+import { getLearning, type Learning } from './learning';
 import { globalKill, runAgent, setGlobalKill, type Runtime } from './runtime';
 import {
   isIrreversible, validateAgentConfig, type AgentInput, type AgentRecord,
@@ -34,7 +36,11 @@ function toRecord(r: Row): AgentRecord {
 export interface AgentListItem extends AgentRecord {
   rationale: string | null;
   notifySlack: boolean;
+  /** Minimum minutes between runs. Null runs whenever its timer fires. */
+  runEveryMinutes: number | null;
+  lastRanAt: Date | null;
   instructions: string | null;
+  learning: Learning | null;
   instructionsUpdatedAt: Date | null;
   lastRun: { startedAt: Date; outcome: string | null; haltReason: string | null } | null;
   runsToday: number;
@@ -43,6 +49,13 @@ export interface AgentListItem extends AgentRecord {
 export async function listAgents(): Promise<AgentListItem[]> {
   const rows = await db.select().from(agents).orderBy(agents.name);
   const rationales = new Map(SEED_AGENTS.map((a) => [a.name, a.rationale]));
+
+  // One query for all of them rather than one per card.
+  const learning = new Map(
+    (await Promise.all(rows.map(async (r) => [r.name, await getLearning(r.name)] as const)))
+      .filter((pair): pair is readonly [string, NonNullable<Awaited<ReturnType<typeof getLearning>>>] =>
+        pair[1] !== null),
+  );
 
   return Promise.all(
     rows.map(async (r) => {
@@ -66,7 +79,10 @@ export async function listAgents(): Promise<AgentListItem[]> {
         ...toRecord(r),
         rationale: rationales.get(r.name) ?? null,
         notifySlack: r.notifySlack,
+        runEveryMinutes: r.runEveryMinutes,
+        lastRanAt: r.lastRanAt,
         instructions: r.instructions,
+        learning: learning.get(r.name) ?? null,
         instructionsUpdatedAt: r.instructionsUpdatedAt,
         lastRun: last ?? null,
         runsToday: today?.n ?? 0,
@@ -267,6 +283,30 @@ export async function setAutonomy(
   return { ok: true };
 }
 
+export async function setRunEvery(
+  id: string,
+  minutes: number | null,
+  actor: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (minutes !== null && !RUN_INTERVALS.some((i) => i.minutes === minutes)) {
+    return { ok: false, error: 'Not one of the intervals' };
+  }
+
+  const [before] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+  if (!before) return { ok: false, error: 'No such agent' };
+
+  await db.update(agents).set({ runEveryMinutes: minutes }).where(eq(agents.id, id));
+  await writeAudit({
+    actor,
+    action: 'agent.schedule',
+    entityType: 'agent',
+    entityId: id,
+    before: { runEveryMinutes: before.runEveryMinutes },
+    after: { runEveryMinutes: minutes },
+  });
+  return { ok: true };
+}
+
 /**
  * The evaluators and performers the runtime knows.
  *
@@ -313,5 +353,7 @@ export async function runById(
 }
 
 export { recentRuns } from './runtime';
-export { AUTONOMY_LABEL, IRREVERSIBLE_ACTIONS, PROMOTION_MIN_RUNS, isIrreversible } from './types';
+export {
+  AUTONOMY_LABEL, IRREVERSIBLE_ACTIONS, PROMOTION_MIN_RUNS, RUN_INTERVALS, isIrreversible,
+} from './types';
 export type { AgentInput, AgentRecord };

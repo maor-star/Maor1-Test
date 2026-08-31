@@ -174,3 +174,24 @@ export function validateAgentConfig(
 
   return { ok: true };
 }
+
+/**
+ * How often an agent may run.
+ *
+ * The timers on the box fire often and cheaply; this is what decides whether a
+ * firing does anything. Keeping the rhythm in the database rather than in a
+ * systemd unit means he can change it on the screen, and that switching an
+ * agent to hourly does not need a deploy.
+ *
+ * Null means "whenever its timer fires", which is what the jobs did before
+ * this existed and is still right for the ones that are cheap and idempotent.
+ */
+export const RUN_INTERVALS: { minutes: number | null; label: string }[] = [
+  { minutes: 30, label: 'Every 30 minutes' },
+  { minutes: 60, label: 'Every hour' },
+  { minutes: 120, label: 'Every 2 hours' },
+  { minutes: 240, label: 'Every 4 hours' },
+  { minutes: 480, label: 'Every 8 hours' },
+  { minutes: 1440, label: 'Once a day' },
+  { minutes: null, label: 'Whenever its timer fires' },
+];

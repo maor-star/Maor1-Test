@@ -533,6 +533,25 @@ export type NewOpportunity = typeof opportunities.$inferInsert;
  * an irreversible agent, and agent_runs carries triggers making it insert-only,
  * so the run log cannot be rewritten even by us.
  */
+/**
+ * What an agent learned from his own mail, kept apart from what he told it.
+ *
+ * Retraining must never overwrite an instruction he wrote, and correcting an
+ * instruction must never need a retrain — so the two live in different places
+ * and meet only in the prompt.
+ */
+export const agentLearning = pgTable('agent_learning', {
+  agentName: text('agent_name').primaryKey(),
+  profile: text('profile'),
+  examples: jsonb('examples').notNull().default([]),
+  facts: jsonb('facts').notNull().default({}),
+  threadsRead: integer('threads_read').notNull().default(0),
+  startedAt: timestamptz('started_at'),
+  learnedAt: timestamptz('learned_at'),
+  error: text('error'),
+  editedByHim: boolean('edited_by_him').notNull().default(false),
+});
+
 export const agents = pgTable('agents', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   name: text('name').notNull().unique(),
@@ -551,6 +570,9 @@ export const agents = pgTable('agents', {
   /** What he has taught this agent, in his own words. */
   instructions: text('instructions'),
   instructionsUpdatedAt: timestamptz('instructions_updated_at'),
+  /** Minimum minutes between real runs. Null runs whenever the timer fires. */
+  runEveryMinutes: integer('run_every_minutes'),
+  lastRanAt: timestamptz('last_ran_at'),
   createdAt: timestamptz('created_at').notNull().defaultNow(),
   lastLevelChangeAt: timestamptz('last_level_change_at'),
 });

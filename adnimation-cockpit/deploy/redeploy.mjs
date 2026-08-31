@@ -86,6 +86,8 @@ async function main() {
     'bot-post.mjs', 'slack-bots.mjs',
     // The switches and the briefs, as the jobs see them.
     'agent-brief.mjs',
+    // Learning how he writes, from a year of his own replies.
+    'mail-learn.mjs',
   ];
 
   /*
