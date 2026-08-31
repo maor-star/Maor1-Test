@@ -17,6 +17,7 @@
 import { createHash, createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { counterpartyFrom, looksLikeContract, versionFromName } from './contract-intake.mjs';
+import { filingFolder } from './contract-folders.mjs';
 
 const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -138,16 +139,37 @@ async function markSeen(source, ref, fileName, fileHash, contractId) {
  * it, and reimplementing the SQL is the lesser evil against making the app
  * depend on a job or the job boot the whole app.
  */
+/**
+ * One live contract per counterparty.
+ *
+ * This used to skip contracts already signed, so the next document from a
+ * counterparty we had signed with started a second record — which is how
+ * Taboola and Verve each appeared twice. A new document for someone we already
+ * have a contract with is a new VERSION of that contract, not a new contract:
+ * an amendment, a renewal, a countersigned copy coming back.
+ *
+ * When the existing one is signed, a new document arriving means there is
+ * something to deal with again, so it reopens for review. Its signed versions
+ * stay in its history — nothing about what was agreed is lost.
+ */
 async function record({ counterparty, docType, source, ref, url, receivedAt, fileName, hash, mime, size }) {
   const [open] = await sql`
-    select id from contracts
+    select id, status from contracts
     where archived_at is null
-      and lower(counterparty_name) = ${counterparty.toLowerCase()}
-      and status <> 'signed'
+      and normalise_counterparty(counterparty_name) = normalise_counterparty(${counterparty})
     order by created_at desc limit 1
   `;
 
   let contractId = open?.id;
+
+  if (contractId && open.status === 'signed') {
+    await sql`
+      update contracts
+      set status = 'in_review', status_changed_at = now()
+      where id = ${contractId}
+    `;
+  }
+
   if (!contractId) {
     const [created] = await sql`
       insert into contracts
@@ -296,9 +318,11 @@ async function fileToDrive(versionId, counterparty, attachment, bytes) {
   const token = await googleToken(DRIVE);
   if (!token) return;
 
-  // Relative to the root folder id, NOT including its name — prefixing the
-  // root's own name resolved everything one level too deep.
-  const segments = ['_Unclassified', counterparty.replace(/[/\\]/g, '-')];
+  // One place decides where a contract lives, shared with the app and the
+  // backfill — a second copy of these rules is how a category added later
+  // ended up missing from a job.
+  const target = filingFolder(counterparty, null, 'unclassified');
+  const segments = target.segments;
   const root = process.env.DRIVE_CONTRACTS_ROOT_ID;
   if (!root) return;
 
@@ -358,7 +382,7 @@ async function fileToDrive(versionId, counterparty, attachment, bytes) {
     await sql`
       update contract_versions
       set drive_file_id = ${uploaded.id},
-          drive_path = ${'/Adnimation Contracts/' + segments.join('/')},
+          drive_path = ${target.path},
           uploaded_at = now()
       where id = ${versionId}
     `;
@@ -441,6 +465,111 @@ async function fromSlack() {
   return { scanned, recorded };
 }
 
+/** Trash a Drive file, so a removed version does not leave a copy behind. */
+async function trashDriveFile(fileId) {
+  const t = await googleToken(DRIVE);
+  if (!t) return false;
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true`,
+    {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trashed: true }),
+    },
+  );
+  return res.ok;
+}
+
+/**
+ * Fold any duplicate contracts into one, every run.
+ *
+ * Prevention above stops new ones appearing, but names arrive spelled
+ * differently — "Altshul" and "Altshul Ltd" are one counterparty — and there
+ * are already duplicates from before the rule changed. The keeper is the one
+ * that knows most: a classified contract beats an unclassified one, and among
+ * equals the oldest, so the record with the history wins.
+ *
+ * Versions move across; one that collides on its hash is the same bytes the
+ * keeper already holds, so its row goes — and its Drive file with it, or the
+ * merge would leave an unreferenced copy sitting in the folder for ever.
+ * Trashed, not deleted, like every other file this system removes.
+ *
+ * The losing contract is archived, never deleted, with an audit row saying
+ * what it was folded into.
+ */
+async function mergeDuplicates() {
+  const groups = await sql`
+    select normalise_counterparty(counterparty_name) as key,
+           array_agg(id order by
+             (category_confirmed) desc,
+             (status <> 'unclassified') desc,
+             created_at asc) as ids,
+           count(*) as n
+    from contracts
+    where archived_at is null
+    group by 1
+    having count(*) > 1
+  `;
+
+  let merged = 0;
+
+  for (const group of groups) {
+    const [keep, ...rest] = group.ids;
+
+    for (const loser of rest) {
+      // A version whose hash the keeper already holds is the same document.
+      await sql`
+        update contract_versions v
+        set contract_id = ${keep}
+        where v.contract_id = ${loser}
+          and not exists (
+            select 1 from contract_versions k
+            where k.contract_id = ${keep} and k.file_hash = v.file_hash
+          )
+      `;
+      // Whatever is left on the loser is a byte-for-byte copy of something the
+      // keeper holds. Its Drive file has to go too, or the folder keeps a
+      // second copy that nothing points at.
+      const orphans = await sql`
+        select drive_file_id from contract_versions
+        where contract_id = ${loser} and drive_file_id is not null
+      `;
+      for (const orphan of orphans) await trashDriveFile(orphan.drive_file_id);
+
+      await sql`delete from contract_versions where contract_id = ${loser}`;
+
+      // Carry across anything the keeper does not have.
+      await sql`
+        update contracts k set
+          category = case when k.category_confirmed then k.category else l.category end,
+          category_confirmed = k.category_confirmed or l.category_confirmed,
+          opportunity_id = coalesce(k.opportunity_id, l.opportunity_id),
+          pipeline_client_id = coalesce(k.pipeline_client_id, l.pipeline_client_id),
+          value_cents = coalesce(k.value_cents, l.value_cents),
+          notes = coalesce(k.notes, l.notes),
+          source_url = coalesce(k.source_url, l.source_url),
+          received_at = least(coalesce(k.received_at, l.received_at), coalesce(l.received_at, k.received_at))
+        from contracts l
+        where k.id = ${keep} and l.id = ${loser}
+      `;
+
+      await sql`update contract_intake_seen set contract_id = ${keep} where contract_id = ${loser}`;
+      await sql`update contracts set archived_at = now() where id = ${loser}`;
+
+      await sql`
+        insert into audit_log (actor, action, entity_type, entity_id, before, after)
+        values ('contract-sync', 'contract.merge', 'contract', ${loser},
+                ${sql.json({ archivedAt: null })}, ${sql.json({ mergedInto: keep })})
+      `;
+
+      merged += 1;
+      console.log(`  merged a duplicate of ${group.key} into ${keep}`);
+    }
+  }
+
+  return merged;
+}
+
 async function main() {
   const started = Date.now();
 
@@ -452,6 +581,8 @@ async function main() {
     console.error(`slack intake failed: ${e.message}`);
     return { scanned: 0, recorded: 0 };
   });
+
+  const merged = await mergeDuplicates();
 
   const [counts] = await sql`
     select
@@ -467,6 +598,7 @@ async function main() {
     `looked at ${mail.scanned} mail attachments and ${slack.scanned} Slack files in ` +
       `${Math.round((Date.now() - started) / 1000)}s. ` +
       `Recorded ${mail.recorded + slack.recorded} new contract versions. ` +
+      (merged > 0 ? `Merged ${merged} duplicate contracts. ` : '') +
       `${counts.unclassified} of ${counts.total} contracts await classifying; ` +
       `${unfiled.n} versions are not in Drive yet.`,
   );

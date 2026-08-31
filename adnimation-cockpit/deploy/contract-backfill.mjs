@@ -29,6 +29,12 @@
  */
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
+// Generated from lib/contracts/drive.ts. The job had its own copy of these and
+// it silently lacked the categories added later, which crashed the moment a
+// contract was classified as one of them.
+import {
+  CATEGORY_FOLDER, STAGE_FOLDER, filingFolder, safeFolderName, stageForStatus,
+} from './contract-folders.mjs';
 
 const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -84,24 +90,6 @@ async function token(scope) {
 const GMAIL = 'https://www.googleapis.com/auth/gmail.readonly';
 const DRIVE = 'https://www.googleapis.com/auth/drive';
 
-const safe = (name) =>
-  name.replace(/[/\\]/g, '-').replace(/[\x00-\x1f\x7f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120) ||
-  '_Unclassified';
-
-const CATEGORY_FOLDER = { demand: 'Demand', supply: 'Supply', general: 'General' };
-const STAGE_FOLDER = {
-  unclassified: 'Needs classifying',
-  in_review: 'In review',
-  out_for_signature: 'Out for signature',
-  awaiting_my_signature: 'Awaiting my signature',
-  signed: 'Signed',
-};
-const stageFor = (status) =>
-  status === 'signed' ? 'signed'
-  : status === 'awaiting_my_signature' ? 'awaiting_my_signature'
-  : status === 'out_for_signature' || status === 'negotiation' ? 'out_for_signature'
-  : status === 'unclassified' ? 'unclassified'
-  : 'in_review';
 
 /** Resolve a folder path under the root, creating what is missing. */
 const folderCache = new Map();
@@ -216,18 +204,19 @@ async function verify() {
     const real = await actualPath(v.drive_file_id);
     if (real === null) { console.log(`  ? ${v.file_name}: not readable`); continue; }
 
-    const category = v.category_confirmed ? v.category : null;
-    const segments = category
-      ? [CATEGORY_FOLDER[category], safe(v.counterparty_name), STAGE_FOLDER[stageFor(v.status)]]
-      : ['_Unclassified', safe(v.counterparty_name)];
-    const want = `/Adnimation Contracts/${segments.join('/')}`;
+    const target = filingFolder(
+      v.counterparty_name,
+      v.category_confirmed ? v.category : null,
+      stageForStatus(v.status),
+    );
+    const want = target.path;
 
     if (real === want) continue;
 
     wrong += 1;
     console.log(`  ${v.file_name}\n      is at ${real}\n      wants ${want}`);
 
-    const folderId = await ensureFolder(segments);
+    const folderId = await ensureFolder(target.segments);
     if (await moveInto(v.drive_file_id, folderId)) {
       await sql`update contract_versions set drive_path = ${want} where id = ${v.id}`;
       await sql`
@@ -310,14 +299,15 @@ async function refile() {
 
   let moved = 0;
   for (const v of rows) {
-    const category = v.category_confirmed ? v.category : null;
-    const segments = category
-      ? [CATEGORY_FOLDER[category], safe(v.counterparty_name), STAGE_FOLDER[stageFor(v.status)]]
-      : ['_Unclassified', safe(v.counterparty_name)];
-    const path = `/Adnimation Contracts/${segments.join('/')}`;
+    const target = filingFolder(
+      v.counterparty_name,
+      v.category_confirmed ? v.category : null,
+      stageForStatus(v.status),
+    );
+    const path = target.path;
     if (v.drive_path === path) continue;
 
-    const folderId = await ensureFolder(segments);
+    const folderId = await ensureFolder(target.segments);
     if (await moveInto(v.drive_file_id, folderId)) {
       await sql`update contract_versions set drive_path = ${path} where id = ${v.id}`;
       await sql`
@@ -397,16 +387,17 @@ async function main() {
 
       const bytes = Buffer.from(body.data, 'base64');
 
-      const category = v.category_confirmed ? v.category : null;
-      const segments = category
-        ? [CATEGORY_FOLDER[category], safe(v.counterparty_name), STAGE_FOLDER[stageFor(v.status)]]
-        : ['_Unclassified', safe(v.counterparty_name)];
-
-      const folderId = await ensureFolder(segments);
+      const target = filingFolder(
+        v.counterparty_name,
+        v.category_confirmed ? v.category : null,
+        stageForStatus(v.status),
+      );
+      const folderId = await ensureFolder(target.segments);
 
       const ext = (v.file_name.split('.').pop() ?? 'pdf').toLowerCase();
       const date = new Date(v.received_at).toISOString().slice(0, 10);
-      const name = `${safe(v.counterparty_name)} - ${(v.doc_type || 'Agreement').slice(0, 60).trim()} - v${v.version_no} - ${date}.${ext}`;
+      const name = `${safeFolderName(v.counterparty_name)} - ${(v.doc_type || 'Agreement').slice(0, 60).trim()} - v${v.version_no} - ${date}.${ext}`;
+      const segments = target.segments;
 
       const dt = await token(DRIVE);
       const boundary = `cockpit${Date.now()}`;
@@ -434,7 +425,7 @@ async function main() {
 
       if (!uploaded?.id) { skipped += 1; continue; }
 
-      const path = `/Adnimation Contracts/${segments.join('/')}`;
+      const path = target.path;
       await sql`
         update contract_versions
         set drive_file_id = ${uploaded.id}, drive_path = ${path}, uploaded_at = now()

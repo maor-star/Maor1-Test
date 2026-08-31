@@ -46,6 +46,27 @@ const TARGETS = [
       [/export function counterpartyFrom\(opts: \{[\s\S]*?\n\}\): string \| null \{/, 'export function counterpartyFrom(opts) {'],
     ],
   },
+  {
+    src: new URL('../lib/contracts/drive.ts', import.meta.url),
+    out: new URL('./contract-folders.mjs', import.meta.url),
+    from: 'lib/contracts/drive.ts',
+    test: 'tests/unit/contract-folders-parity.test.ts',
+    rewrites: [
+      [/export type ContractCategory =[^;]+;\n/, ''],
+      [/export type FilingStage =[\s\S]*?;\n/, ''],
+      [/export interface FilingTarget \{[\s\S]*?\n\}\n\n/, ''],
+      ['export const CONTRACT_CATEGORIES: readonly ContractCategory[] = [', 'export const CONTRACT_CATEGORIES = ['],
+      // `as const` is TypeScript-only and would be a syntax error at run time.
+      [/\n\] as const;/g, '\n];'],
+      ['export const CATEGORY_FOLDER: Record<ContractCategory, string> = {', 'export const CATEGORY_FOLDER = {'],
+      ['export const STAGE_FOLDER: Record<FilingStage, string> = {', 'export const STAGE_FOLDER = {'],
+      ['export function stageForStatus(status: string): FilingStage {', 'export function stageForStatus(status) {'],
+      ['export function safeFolderName(name: string): string {', 'export function safeFolderName(name) {'],
+      [/export function filingFolder\(\n  counterparty: string,\n  category: ContractCategory \| null,\n  stage: FilingStage = 'signed',\n\): FilingTarget \{/, "export function filingFolder(counterparty, category, stage = 'signed') {"],
+      [/export function versionedFileName\(opts: \{[\s\S]*?\n\}\): string \{/, 'export function versionedFileName(opts) {'],
+      [/export function categoriseCounterparty\(signals: \{[\s\S]*?\n\}\): ContractCategory \| null \{/, 'export function categoriseCounterparty(signals) {'],
+    ],
+  },
 ];
 
 const header = (from, test) => `/**
@@ -66,7 +87,11 @@ for (const target of TARGETS) {
 
   // Anything left with a type annotation would be a syntax error at run time,
   // and a job that crashes on the timer is worse than one that fails to build.
-  if (/:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput)\b/.test(body)) {
+  if (
+    /:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget)\b/.test(
+      body,
+    )
+  ) {
     console.error(`${target.from}: a type annotation survived the strip — update its rewrites`);
     process.exit(1);
   }
