@@ -15,6 +15,32 @@ import type { AgentListItem } from '@/lib/agents/module';
 import { fmtDateTime } from '@/lib/utils';
 
 /**
+ * What a brief for this particular agent might say.
+ *
+ * A blank box with a generic example gets a generic brief. The corrections
+ * that matter are the ones only he knows, so the placeholder asks for those,
+ * in the terms of the job that agent actually does.
+ */
+const BRIEF_HINTS: Record<string, string> = {
+  'mail-answerer':
+    'Write it as you would tell a new assistant:\n' +
+    '· Never answer anyone from Google or Taboola — those come to me.\n' +
+    '· Two sentences, no pleasantries, and never a date I have not given you.\n' +
+    '· If they ask for a deck, point them at me rather than sending anything.\n' +
+    '· If you are anything less than certain, leave it and tell me why.',
+  'invoice-forwarder':
+    '· Anything from Elki is a report, never an invoice.\n' +
+    '· Gym and personal receipts are mine, not the company’s — leave them.\n' +
+    '· Anything above $10,000 comes to me first.',
+  'promo-filer':
+    '· Never file anything from a publisher I already work with.\n' +
+    '· Newsletters I actually read: Adexchanger, Digiday. Leave those.',
+  'contract-reader':
+    '· Always tell me the termination notice period and the payment terms first.\n' +
+    '· Flag any exclusivity or auto-renewal clause, however it is worded.',
+};
+
+/**
  * One agent, and the controls that keep it in its box.
  *
  * The autonomy select is the most consequential thing on the page, so it says
@@ -220,11 +246,12 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
             rows={6}
             defaultValue={a.instructions ?? ''}
             placeholder={
+              BRIEF_HINTS[a.name] ??
               'Write it as you would tell a new assistant. For example:\n' +
-              '· Anything from Elki is never an invoice, it is a report.\n' +
-              '· Gym and personal receipts are mine, not the company’s — leave them.\n' +
-              '· Keep drafts to three sentences, no pleasantries.\n' +
-              '· If you are not sure, do nothing and tell me why.'
+                '· Anything from Elki is never an invoice, it is a report.\n' +
+                '· Gym and personal receipts are mine, not the company’s — leave them.\n' +
+                '· Keep drafts to three sentences, no pleasantries.\n' +
+                '· If you are not sure, do nothing and tell me why.'
             }
             className="w-full"
           />
