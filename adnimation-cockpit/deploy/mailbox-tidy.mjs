@@ -23,6 +23,7 @@
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { ANSWERED_LABEL, PROMO_LABEL, isSpentAuthCode, looksPromotional } from './mailbox-rules.mjs';
+import { postAsBot } from './bot-post.mjs';
 
 const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -194,6 +195,7 @@ async function main() {
 
   let filed = 0;
   let trashed = 0;
+  const did = [];
 
   for (const ref of refs) {
     const message = await gmail(`/messages/${ref.id}?format=metadata` +
@@ -222,6 +224,7 @@ async function main() {
       if (!DRY) {
         await gmail(`/messages/${ref.id}/trash`, MODIFY, { method: 'POST', body: '{}' });
         trashed += 1;
+        did.push(`• trashed a spent code: ${subject}`);
       }
       continue;
     }
@@ -239,9 +242,15 @@ async function main() {
           body: JSON.stringify({ addLabelIds: [labelId], removeLabelIds: ['INBOX'] }),
         });
         filed += 1;
+        did.push(`• filed to ${PROMO_LABEL}: ${subject}`);
       }
       continue;
     }
+  }
+
+  if (!DRY && did.length > 0) {
+    const said = await postAsBot('mail', [':envelope: *Inbox tidied*', '', ...did].join('\n'));
+    if (!said.ok) console.error(`could not tell him in Slack: ${said.reason}`);
   }
 
   console.log(

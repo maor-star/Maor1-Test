@@ -10,6 +10,7 @@ import { Label, Select, Textarea } from '@/components/ui/input';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { AUTONOMY_LABEL, PROMOTION_MIN_RUNS, isIrreversible } from '@/lib/agents/types';
+import { botFor } from '@/lib/agents/slack-bots';
 import type { AgentListItem } from '@/lib/agents/module';
 import { fmtDateTime } from '@/lib/utils';
 
@@ -147,12 +148,12 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
           disabled={pending}
           title={
             a.notifySlack
-              ? 'Telling you in Slack after every run. Click to silence.'
-              : 'Silent unless it halts. Click to have it report in Slack.'
+              ? `${botFor(a.name).username} tells you in Slack after every run. Click to silence.`
+              : `Silent unless it halts. Click to have ${botFor(a.name).username} report in Slack.`
           }
           onClick={() => run(setNotifyAction, withId({ on: a.notifySlack ? '0' : '1' }))}
         >
-          {a.notifySlack ? 'SLACK: ON' : 'SLACK: OFF'}
+          {a.notifySlack ? `SLACK: ${botFor(a.name).username.toUpperCase()}` : 'SLACK: OFF'}
         </Button>
 
         <Button

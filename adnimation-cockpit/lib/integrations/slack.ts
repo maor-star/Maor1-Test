@@ -50,6 +50,9 @@ class RealSlackAdapter implements SlackAdapter {
         text: message.text, // notification fallback
         blocks: buildBlocks(message),
         unfurl_links: false,
+        // Only sent when asked for: an unset username leaves the app's own.
+        ...(message.username ? { username: message.username } : {}),
+        ...(message.icon ? { icon_emoji: message.icon } : {}),
       }),
     });
 
@@ -293,8 +296,11 @@ export async function slackCanShareThreads(): Promise<boolean> {
   }
 }
 
-export function createSlackAdapter(): SlackAdapter {
-  const token = process.env.SLACK_BOT_TOKEN;
+/**
+ * The Slack client. Pass a token to post as one of the per-subject bots; with
+ * none it uses the shared cockpit bot.
+ */
+export function createSlackAdapter(token = process.env.SLACK_BOT_TOKEN): SlackAdapter {
   if (process.env.USE_FAKE_INTEGRATIONS === '1' || !token) return new FakeSlackAdapter();
   return new RealSlackAdapter(token);
 }

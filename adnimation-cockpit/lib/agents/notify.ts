@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { agents, db } from '@/lib/db';
 import { createSlackAdapter } from '@/lib/integrations/slack';
-import { resolveBot } from './slack-bots';
+import { postingIdentity, resolveBot } from './slack-bots';
 import type { RunReport } from './types';
 
 /**
@@ -64,19 +64,25 @@ export async function notifyRun(
   const target = process.env.SLACK_CEO_USER_ID;
   if (!target) return { sent: false, reason: 'no Slack destination configured' };
 
-  // Which bot speaks for this agent. Where it has its own token it really is
-  // that bot; otherwise the shared one posts under its name.
+  // Which bot speaks for this agent, and with whose token. Its own app where
+  // it has one; otherwise its carrier's, under its own name and icon.
   const bot = resolveBot(agentName);
   if (!bot.token) return { sent: false, reason: 'no Slack token configured' };
+  const as = postingIdentity(bot);
 
-  const result = await createSlackAdapter()
+  const provenance =
+    bot.posture === 'own'
+      ? ''
+      : bot.posture === 'carried'
+        ? ` · via ${bot.via?.username ?? 'another bot'}`
+        : ' · posted by the shared bot';
+
+  const result = await createSlackAdapter(bot.token)
     .postMessage({
       target,
       text,
-      contextLines: [
-        `${bot.identity.username} · ${agentName} · ${report.outcome}` +
-          (bot.ownToken ? '' : ' · posted by the shared bot'),
-      ],
+      contextLines: [`${bot.identity.username} · ${agentName} · ${report.outcome}${provenance}`],
+      ...(as ? { username: as.username, icon: as.icon } : {}),
     })
     .catch((e: unknown) => ({
       ok: false as const,

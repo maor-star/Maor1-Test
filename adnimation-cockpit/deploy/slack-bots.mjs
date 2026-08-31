@@ -1,4 +1,14 @@
 /**
+ * GENERATED FROM lib/agents/slack-bots.ts — do not edit by hand.
+ *
+ * The jobs run as plain ESM outside the compiled app, so they need a
+ * JavaScript copy of these rules. tests/unit/slack-bots-parity.test.ts
+ * feeds both this file and the TypeScript original the same inputs and fails
+ * if they ever disagree, so an edit to one without the other cannot ship.
+ *
+ * Regenerate with: node deploy/build-detect.mjs
+ */
+/**
  * A separate Slack bot per kind of work.
  *
  * One bot posting about invoices, contracts, revenue and mail is one stream he
@@ -24,19 +34,7 @@
  * Rainmaker, both low-volume.
  */
 
-export interface BotIdentity {
-  key: string;
-  /** Shown as the sender in Slack. Matches the app name where it has one. */
-  username: string;
-  icon: string;
-  /** Env var holding this bot's own token, when it has one. */
-  tokenEnv: string;
-  purpose: string;
-  /** The bot whose token this one borrows when it has no app of its own. */
-  carrier?: string;
-}
-
-export const BOTS: BotIdentity[] = [
+export const BOTS = [
   {
     key: 'mail',
     username: 'Mailroom',
@@ -77,7 +75,7 @@ export const BOTS: BotIdentity[] = [
 ];
 
 /** Which bot speaks for which agent. */
-export const AGENT_BOT: Record<string, string> = {
+export const AGENT_BOT = {
   'contract-reader': 'contracts',
   'contract-redliner': 'contracts',
   'contract-chaser': 'contracts',
@@ -101,16 +99,12 @@ export const AGENT_BOT: Record<string, string> = {
   'commitment-tracker': 'work',
 };
 
-export function botFor(agentName: string): BotIdentity {
+export function botFor(agentName) {
   const key = AGENT_BOT[agentName] ?? 'work';
-  return BOTS.find((b) => b.key === key) ?? BOTS[BOTS.length - 1]!;
+  return BOTS.find((b) => b.key === key) ?? BOTS[BOTS.length - 1];
 }
 
-export type EnvLike = Record<string, string | undefined>;
-
-export type BotStatus = BotIdentity & { hasOwnToken: boolean; postsAs: string | null };
-
-export function botStatuses(env: EnvLike = process.env): BotStatus[] {
+export function botStatuses(env = process.env) {
   return BOTS.map((bot) => {
     const hasOwnToken = Boolean(env[bot.tokenEnv]);
     const carrier = bot.carrier ? BOTS.find((b) => b.key === bot.carrier) : undefined;
@@ -126,17 +120,8 @@ export function botStatuses(env: EnvLike = process.env): BotStatus[] {
  * shared bot arrives as the shared bot whatever we asked Slack to call it, so
  * the name is only reliable for `own` and `carried`.
  */
-export function resolveBotByKey(
-  key: string,
-  env: EnvLike = process.env,
-): {
-  token: string | null;
-  identity: BotIdentity;
-  ownToken: boolean;
-  posture: 'own' | 'carried' | 'shared' | 'none';
-  via: BotIdentity | null;
-} {
-  const identity = BOTS.find((b) => b.key === key) ?? BOTS[BOTS.length - 1]!;
+export function resolveBotByKey(key, env = process.env) {
+  const identity = BOTS.find((b) => b.key === key) ?? BOTS[BOTS.length - 1];
 
   const own = env[identity.tokenEnv];
   if (own) return { token: own, identity, ownToken: true, posture: 'own', via: null };
@@ -154,7 +139,7 @@ export function resolveBotByKey(
 }
 
 /** The same, for the bot that speaks for an agent. */
-export function resolveBot(agentName: string, env: EnvLike = process.env) {
+export function resolveBot(agentName, env = process.env) {
   return resolveBotByKey(botFor(agentName).key, env);
 }
 
@@ -166,10 +151,7 @@ export function resolveBot(agentName: string, env: EnvLike = process.env) {
  * refused, and a notification that fails to send is worse than one that arrives
  * under the wrong name.
  */
-export function postingIdentity(resolved: {
-  identity: BotIdentity;
-  posture: string;
-}): { username: string; icon: string } | null {
+export function postingIdentity(resolved) {
   if (resolved.posture !== 'own' && resolved.posture !== 'carried') return null;
   return { username: resolved.identity.username, icon: resolved.identity.icon };
 }

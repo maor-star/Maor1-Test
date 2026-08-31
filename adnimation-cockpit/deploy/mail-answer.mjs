@@ -21,13 +21,12 @@
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { triage } from './autoreply-rules.mjs';
+import { postAsBot } from './bot-post.mjs';
 
 const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
 const MAILBOX = process.env.GMAIL_MAILBOX;
 const CLAUDE = process.env.ANTHROPIC_API_KEY;
-const SLACK = process.env.SLACK_BOT_TOKEN_MAIL ?? process.env.SLACK_BOT_TOKEN;
-const CEO = process.env.SLACK_CEO_USER_ID;
 const ANSWERED_LABEL = process.env.ANSWERED_LABEL ?? 'Claude Answered';
 const DRY = process.env.DRY === '1';
 const MAX = Number(process.env.ANSWER_MAX ?? 25);
@@ -230,19 +229,10 @@ async function send(candidate, replyText) {
 }
 
 async function tellHim(lines) {
-  if (!SLACK || !CEO || lines.length === 0) return;
-  const text = [`:envelope: *Mail answered on your behalf*`, '', ...lines].join('\n');
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${SLACK}`, 'Content-Type': 'application/json; charset=utf-8' },
-    body: JSON.stringify({
-      channel: CEO,
-      text,
-      // Ignored unless chat:write.customize is granted; harmless either way.
-      username: 'Cockpit Mail',
-      icon_emoji: ':envelope:',
-    }),
-  }).catch(() => {});
+  if (lines.length === 0) return;
+  const text = [':envelope: *Mail answered on your behalf*', '', ...lines].join('\n');
+  const sent = await postAsBot('mail', text);
+  if (!sent.ok) console.error(`could not tell him in Slack: ${sent.reason}`);
 }
 
 async function main() {

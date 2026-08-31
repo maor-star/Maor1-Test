@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/hud/page-header';
 import { Num } from '@/components/num';
 import { AgentCard } from '@/components/agents/agent-card';
 import { AgentControls } from '@/components/agents/agent-controls';
+import { AGENT_BOT, botStatuses } from '@/lib/agents/slack-bots';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,7 @@ export const dynamic = 'force-dynamic';
 export default async function AgentsPage() {
   await requireUser();
   const [agents, overview] = await Promise.all([listAgents(), agentsOverview()]);
+  const bots = botStatuses();
 
   return (
     <div className="space-y-5">
@@ -80,8 +82,60 @@ export default async function AgentsPage() {
       <HudCard className="gap-0 p-0">
         <div className="p-[18px] pb-3">
           <HudCardHeader
-            title="The agents"
+            title="Who speaks in Slack"
             index="G02"
+            action={
+              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                <Num>{bots.filter((b) => b.hasOwnToken).length}</Num> OF{' '}
+                <Num>{bots.length}</Num> HAVE THEIR OWN APP
+              </span>
+            }
+          />
+        </div>
+
+        <ul className="border-t border-divider">
+          {bots.map((bot) => (
+            <li
+              key={bot.key}
+              className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-divider px-[18px] py-3 last:border-b-0"
+            >
+              <span className="font-cond text-[16px] leading-none text-neutral-900">
+                {bot.username}
+              </span>
+              <span className="font-semi text-[11px] text-neutral-500">{bot.purpose}</span>
+              <span className="ms-auto font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                <Num>{Object.values(AGENT_BOT).filter((k) => k === bot.key).length}</Num> AGENTS
+              </span>
+              {/*
+                Three postures, named rather than blurred: its own app, another
+                app's token under this name, or nothing configured. Only the
+                first is genuinely a separate bot he can mute on its own.
+              */}
+              <span
+                className={`font-semi text-[10px] tracking-[0.12em] ${
+                  bot.hasOwnToken
+                    ? 'text-sev-ok'
+                    : bot.postsAs
+                      ? 'text-neutral-500'
+                      : 'text-sev-warning'
+                }`}
+              >
+                {bot.hasOwnToken
+                  ? 'OWN APP'
+                  : bot.postsAs
+                    ? `VIA ${bot.postsAs.toUpperCase()}`
+                    : `NEEDS ${bot.tokenEnv}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </HudCard>
+
+      <HudCard className="gap-0 p-0">
+        <div className="p-[18px] pb-3">
+          <HudCardHeader
+            title="The agents"
+            index="G03"
             action={
               <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
                 <Num>{agents.length}</Num> DEFINED

@@ -93,6 +93,23 @@ const TARGETS = [
     ],
   },
   {
+    src: new URL('../lib/agents/slack-bots.ts', import.meta.url),
+    out: new URL('./slack-bots.mjs', import.meta.url),
+    from: 'lib/agents/slack-bots.ts',
+    test: 'tests/unit/slack-bots-parity.test.ts',
+    rewrites: [
+      ['export const BOTS: BotIdentity[] = [', 'export const BOTS = ['],
+      ['export const AGENT_BOT: Record<string, string> = {', 'export const AGENT_BOT = {'],
+      ['export function botFor(agentName: string): BotIdentity {', 'export function botFor(agentName) {'],
+      ['export function botStatuses(env: EnvLike = process.env): BotStatus[] {', 'export function botStatuses(env = process.env) {'],
+      [/export function resolveBotByKey\(\n  key: string,\n  env: EnvLike = process\.env,\n\): \{[\s\S]*?\n\} \{/, 'export function resolveBotByKey(key, env = process.env) {'],
+      ['export function resolveBot(agentName: string, env: EnvLike = process.env) {', 'export function resolveBot(agentName, env = process.env) {'],
+      [/export function postingIdentity\(resolved: \{[\s\S]*?\n\}\): \{ username: string; icon: string \} \| null \{/, 'export function postingIdentity(resolved) {'],
+      // The non-null assertion is TypeScript-only.
+      [/BOTS\[BOTS\.length - 1\]!/g, 'BOTS[BOTS.length - 1]'],
+    ],
+  },
+  {
     src: new URL('../lib/contracts/drive.ts', import.meta.url),
     out: new URL('./contract-folders.mjs', import.meta.url),
     from: 'lib/contracts/drive.ts',
@@ -165,7 +182,7 @@ for (const target of TARGETS) {
   // Anything left with a type annotation would be a syntax error at run time,
   // and a job that crashes on the timer is worse than one that fails to build.
   if (
-    /:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget|InvoiceInput|InvoiceGuess|MailFacts|PromoGuess|CodeGuess|ReplyCandidate|Triage|Draft)\b/.test(
+    /:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget|InvoiceInput|InvoiceGuess|MailFacts|PromoGuess|CodeGuess|ReplyCandidate|Triage|Draft|BotIdentity|BotStatus|EnvLike)\b/.test(
       body,
     )
   ) {

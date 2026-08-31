@@ -11,6 +11,12 @@ export interface SlackMessage {
   contextLines?: string[];
   /** Link back to the originating entity in the cockpit. */
   backlinkUrl?: string;
+  /**
+   * Post under this name and icon rather than the app's own. Needs the
+   * `chat:write.customize` scope; without it Slack ignores both.
+   */
+  username?: string;
+  icon?: string;
 }
 
 export interface SlackPostResult {

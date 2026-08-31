@@ -22,6 +22,7 @@
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { assertInternalRecipients, looksLikeInvoice } from './internal-mail.mjs';
+import { postAsBot } from './bot-post.mjs';
 
 const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -214,6 +215,7 @@ async function main() {
 
   let found = 0;
   let sent = 0;
+  const forwarded = [];
 
   for (const ref of refs.slice(0, MAX)) {
     const message = await gmail(`/messages/${ref.id}?format=full`);
@@ -253,6 +255,7 @@ async function main() {
       on conflict (message_id) do nothing
     `;
     sent += 1;
+    forwarded.push(`• ${subject} — from ${from}`);
 
     // Recorded before archiving, so a failure here can never cause a second
     // forward on the next run.
@@ -294,6 +297,16 @@ async function main() {
     `${found} looked like invoices, ${DRY ? '0 sent (dry run)' : `${sent} forwarded to ${to}`}, ` +
       `in ${Math.round((Date.now() - started) / 1000)}s.`,
   );
+
+  // Only when something actually moved: a job that reports "nothing happened"
+  // every run is a job he stops reading.
+  if (!DRY && forwarded.length > 0) {
+    const said = await postAsBot(
+      'money',
+      [`:bar_chart: *Invoices sent on to ${to}*`, '', ...forwarded].join('\n'),
+    );
+    if (!said.ok) console.error(`could not tell him in Slack: ${said.reason}`);
+  }
 
   await sql.end();
   process.exit(0);
