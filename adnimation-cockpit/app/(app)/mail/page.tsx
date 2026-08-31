@@ -61,7 +61,7 @@ export default async function MailPage({
             label="OLDEST UNANSWERED"
             value={counts.oldestWaitingDays === null ? '—' : `${counts.oldestWaitingDays}d`}
           />
-          <Figure label="THREADS HELD" value={fmtNumber(counts.total)} />
+          <Figure label="IN THE INBOX" value={fmtNumber(counts.total)} />
         </div>
 
         <p className="border-t border-divider pt-3 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
@@ -69,6 +69,12 @@ export default async function MailPage({
           TEAM — NOT GMAIL&apos;S GUESS. REPLYING HAPPENS IN GMAIL; THE COCKPIT ONLY READS.
         </p>
       </HudCard>
+
+      <p className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+        THIS IS YOUR INBOX. <Num>{fmtNumber(counts.mirrored - counts.total)}</Num> MORE
+        CONVERSATIONS WERE ROUTED PAST IT BY YOUR OWN GMAIL RULES — THEY ARE UNDER “FILTERED PAST
+        THE INBOX” AND ARE STILL READ FOR OPPORTUNITIES.
+      </p>
 
       <nav className="flex flex-wrap border border-divider">
         {MAIL_VIEWS.map((v) => (

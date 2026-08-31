@@ -228,9 +228,38 @@ async function main() {
 
   console.log(`${threads.length} threads matching "${QUERY}"`);
 
-  // Second pass: everything he has labelled, however old, by label id.
   const seenIds = new Set(threads.map((t) => t.id));
   let capturedCount = 0;
+
+  /*
+   * The inbox, in full and in its own pass.
+   *
+   * The mail screen shows the inbox only, and the recency pass is capped and
+   * ordered by date — so a conversation sitting in his inbox from six weeks
+   * ago would be missing from the one screen that is supposed to be complete.
+   * The inbox is small precisely because he processes it, so fetching all of
+   * it costs nothing.
+   */
+  {
+    let inboxPage = '';
+    let found = 0;
+    do {
+      const page = await api(
+        `/threads?maxResults=100&labelIds=INBOX${inboxPage ? `&pageToken=${inboxPage}` : ''}`,
+      );
+      for (const ref of page.threads ?? []) {
+        found += 1;
+        if (seenIds.has(ref.id)) continue;
+        seenIds.add(ref.id);
+        threads.push(ref);
+        capturedCount += 1;
+      }
+      inboxPage = page.nextPageToken ?? '';
+    } while (inboxPage && found < CAPTURE_MAX);
+    console.log(`inbox: ${found} threads, ${capturedCount} of them outside the window`);
+  }
+
+  // And everything he has labelled, however old, by label id.
 
   for (const name of CAPTURE_LABELS) {
     const labelId = [...labels.entries()].find(

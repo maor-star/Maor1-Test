@@ -12,14 +12,15 @@ import { db, mailThreads } from '@/lib/db';
  * So the default view is not "mail". It is "the last word was theirs".
  */
 
-export const MAIL_VIEWS = ['waiting', 'important', 'recent', 'handled'] as const;
+export const MAIL_VIEWS = ['waiting', 'important', 'recent', 'handled', 'filtered'] as const;
 export type MailView = (typeof MAIL_VIEWS)[number];
 
 export const MAIL_VIEW_LABEL: Record<MailView, string> = {
   waiting: 'NEEDS A REPLY',
   important: 'IMPORTANT & WAITING',
-  recent: 'EVERYTHING RECENT',
+  recent: 'WHOLE INBOX',
   handled: 'MARKED HANDLED',
+  filtered: 'FILTERED PAST THE INBOX',
 };
 
 export interface MailRow {
@@ -80,8 +81,21 @@ export async function listMail(view: MailView = 'waiting', limit = 100): Promise
           ? sql`${mailThreads.dismissedAt} is not null`
           : undefined;
 
-  // Every view is the inbox. Filtered mail is filtered on purpose.
-  const where = scoped ? and(inInbox, scoped) : inInbox;
+  /*
+   * Every view is the inbox — filtered mail is filtered on purpose, and his
+   * rules are his triage.
+   *
+   * `filtered` is the one exception: the mail his rules routed away, still
+   * unanswered. It is not the default and never counted as waiting, but it is
+   * reachable, because "I know it skipped my inbox and I still want to see
+   * what is unanswered" is a real question.
+   */
+  const where =
+    view === 'filtered'
+      ? and(sql`not (${mailThreads.labels} @> array['INBOX'])`, waiting)
+      : scoped
+        ? and(inInbox, scoped)
+        : inInbox;
 
   const rows = await db
     .select()
