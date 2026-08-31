@@ -3,7 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
 import { Input, Select } from '@/components/ui/input';
-import { PRIORITY_META, STATUS_LABEL, TASK_PRIORITIES, TASK_STATUSES } from '@/lib/tasks/types';
+import {
+  PRIORITY_META, SORT_LABEL, STATUS_LABEL, TASK_PRIORITIES, TASK_SORTS, TASK_STATUSES,
+} from '@/lib/tasks/types';
 
 interface Current {
   layer: string;
@@ -11,6 +13,7 @@ interface Current {
   priority: string;
   status: string;
   dept: string;
+  sort: string;
   view: string;
 }
 
@@ -73,6 +76,21 @@ export function TaskFilters({
           <option value="">Open</option>
           {TASK_STATUSES.map((s) => (
             <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+          ))}
+        </Select>
+      </div>
+
+      {/*
+        Order. Heat stays the default — the top of the list is what to do next
+        — but "what came in today" and "what has been sitting here longest" are
+        different questions, and the second is how something gets noticed
+        before it is embarrassing.
+      */}
+      <div>
+        <label className="block text-2xs text-muted-foreground" htmlFor="sort">Order</label>
+        <Select id="sort" value={current.sort} onChange={(e) => push({ sort: e.target.value })}>
+          {TASK_SORTS.map((s) => (
+            <option key={s} value={s}>{SORT_LABEL[s]}</option>
           ))}
         </Select>
       </div>

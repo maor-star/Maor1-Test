@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, ilike, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import { db, departments, people, tasks } from '@/lib/db';
-import type { TaskPriority, TaskStatus } from './types';
+import type { TaskPriority, TaskSort, TaskStatus } from './types';
 
 export interface TaskRow {
   id: string;
@@ -71,7 +71,30 @@ export interface TaskFilter {
   /** Include tasks whose snooze window has not expired. Default: hide them. */
   includeSnoozed?: boolean;
   includeDone?: boolean;
+  sort?: TaskSort;
   limit?: number;
+}
+
+/**
+ * Ordering, with a tiebreak that never leaves rows in an arbitrary order.
+ *
+ * Two tasks with the same heat, or no due date at all, would otherwise come
+ * back in whatever order the planner chose — which changes between page loads
+ * and reads as the list shuffling itself while he is looking at it.
+ */
+function ordering(sort: TaskSort = 'heat') {
+  switch (sort) {
+    case 'newest':
+      return [desc(tasks.createdAt)];
+    case 'oldest':
+      return [asc(tasks.createdAt)];
+    case 'due':
+      // Nulls last: a task with no date is not the most urgent thing he owns.
+      return [sql`${tasks.dueDate} asc nulls last`, desc(tasks.heatScore)];
+    case 'heat':
+    default:
+      return [desc(tasks.heatScore), sql`${tasks.dueDate} asc nulls last`, desc(tasks.createdAt)];
+  }
 }
 
 export async function listTasks(filter: TaskFilter = {}): Promise<TaskRow[]> {
@@ -93,7 +116,7 @@ export async function listTasks(filter: TaskFilter = {}): Promise<TaskRow[]> {
 
   return baseQuery()
     .where(and(...conditions))
-    .orderBy(desc(tasks.heatScore), asc(tasks.dueDate))
+    .orderBy(...ordering(filter.sort))
     .limit(filter.limit ?? 500) as Promise<TaskRow[]>;
 }
 

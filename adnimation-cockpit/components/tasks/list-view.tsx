@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { TaskRow } from '@/lib/tasks/queries';
 import { daysOverdue } from '@/lib/scoring/heat-score';
 import { isZombie } from '@/lib/tasks/mutations';
-import { fmtMoney } from '@/lib/utils';
+import { fmtDate, fmtMoney } from '@/lib/utils';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { HeatBar, OverdueChip, PriorityBadge, StatusBadge, TaskTitleLink } from '@/components/task-bits';
@@ -39,6 +39,9 @@ export function TaskListView({
             <th>Department</th>
             <th>Owner</th>
             <th>Due</th>
+            {/* Sorting by newest or oldest is only legible if the date is on
+                the row — otherwise the list reorders and says nothing. */}
+            <th>Added</th>
             <th>Impact</th>
             <th>Heat</th>
             <th className="text-end">Actions</th>
@@ -73,6 +76,9 @@ export function TaskListView({
                   ) : (
                     <span className="text-neutral-500">—</span>
                   )}
+                </td>
+                <td>
+                  <Num className="text-2xs text-neutral-500">{fmtDate(t.createdAt)}</Num>
                 </td>
                 <td>
                   <Num className="text-neutral-500">{fmtMoney(t.moneyImpactCents)}</Num>

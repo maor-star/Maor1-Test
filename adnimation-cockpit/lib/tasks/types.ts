@@ -12,6 +12,24 @@ export const PRIORITY_META: Record<TaskPriority, { label: string; sla: string }>
 };
 
 export const TASK_STATUSES = ['open', 'in_progress', 'blocked', 'delegated', 'done'] as const;
+
+/**
+ * What the list is ordered by.
+ *
+ * Heat is the default and stays the default: it is the whole point of the heat
+ * score that the top of the list is what to do next. But "what came in today"
+ * and "what has been sitting here longest" are different questions, and the
+ * second one is how a task gets noticed before it is embarrassing.
+ */
+export const TASK_SORTS = ['heat', 'newest', 'oldest', 'due'] as const;
+export type TaskSort = (typeof TASK_SORTS)[number];
+
+export const SORT_LABEL: Record<TaskSort, string> = {
+  heat: 'Hottest first',
+  newest: 'Newest first',
+  oldest: 'Oldest first',
+  due: 'Due soonest',
+};
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export const STATUS_LABEL: Record<TaskStatus, string> = {

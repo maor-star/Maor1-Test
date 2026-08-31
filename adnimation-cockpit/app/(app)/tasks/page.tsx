@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { listDepartments, listPeople, listTasks, type TaskRow } from '@/lib/tasks/queries';
-import { TASK_PRIORITIES, TASK_STATUSES, type TaskPriority, type TaskStatus } from '@/lib/tasks/types';
+import {
+  TASK_PRIORITIES, TASK_SORTS, TASK_STATUSES, type TaskPriority, type TaskSort, type TaskStatus,
+} from '@/lib/tasks/types';
 import { todayInTz } from '@/lib/utils';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
@@ -28,6 +30,7 @@ interface SearchParams {
   priority?: string;
   status?: string;
   dept?: string;
+  sort?: string;
 }
 
 /** Spec 6.1.1 / 6.4 — my tasks and the ClickUp mirror, in three views. */
@@ -51,6 +54,10 @@ export default async function TasksPage({
     ? [sp.status as TaskStatus]
     : undefined;
 
+  const sort: TaskSort = TASK_SORTS.includes(sp.sort as TaskSort)
+    ? (sp.sort as TaskSort)
+    : 'heat';
+
   const [rows, departments, people] = await Promise.all([
     listTasks({
       layer,
@@ -59,6 +66,7 @@ export default async function TasksPage({
       status,
       deptId: sp.dept || undefined,
       includeDone: status?.includes('done') ?? false,
+      sort,
     }),
     listDepartments(),
     listPeople(),
@@ -102,6 +110,7 @@ export default async function TasksPage({
           priority: sp.priority ?? '',
           status: sp.status ?? '',
           dept: sp.dept ?? '',
+          sort,
           view,
         }}
       />
