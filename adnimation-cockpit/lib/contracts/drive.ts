@@ -101,7 +101,13 @@ export function safeFolderName(name: string): string {
 }
 
 export interface FilingTarget {
-  /** Folder names from the root down, ready to create or resolve one by one. */
+  /**
+   * Folder names BELOW the configured root, ready to resolve one by one.
+   *
+   * Deliberately without the root's own name. The root is a folder id in the
+   * environment, and including its name here made every path resolve one level
+   * too deep — a second "Adnimation Contracts" inside the first.
+   */
   segments: string[];
   /** Human-readable path, for display and for the audit row. */
   path: string;
@@ -117,9 +123,9 @@ export function filingFolder(
   // Supply, so it waits in _Unclassified rather than being guessed into one.
   const classified = category !== null;
   const segments = classified
-    ? [DRIVE_ROOT, CATEGORY_FOLDER[category], safeFolderName(counterparty), STAGE_FOLDER[stage]]
-    : [DRIVE_ROOT, UNCLASSIFIED_FOLDER, safeFolderName(counterparty)];
-  return { segments, path: `/${segments.join('/')}`, classified };
+    ? [CATEGORY_FOLDER[category], safeFolderName(counterparty), STAGE_FOLDER[stage]]
+    : [UNCLASSIFIED_FOLDER, safeFolderName(counterparty)];
+  return { segments, path: `/${[DRIVE_ROOT, ...segments].join('/')}`, classified };
 }
 
 /**

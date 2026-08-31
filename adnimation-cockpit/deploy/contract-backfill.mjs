@@ -19,6 +19,13 @@
  *
  * PRUNE=1 does only that clearing, over the whole tree, for the folders left
  * behind by everything filed before this existed.
+ *
+ * VERIFY=1 reads where each file actually is in Drive and compares it with
+ * where we recorded it, repairing any that disagree. The two drifted once
+ * already — a path that included the root folder's own name resolved one level
+ * too deep and built a second "Adnimation Contracts" inside the first, while
+ * the database recorded the path we meant. Comparing the record against itself
+ * would never have found that.
  */
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
@@ -169,6 +176,77 @@ async function moveInto(fileId, folderId) {
  * once they have gone — clearing "_Unclassified/Taboola" is what makes
  * "_Unclassified" clearable.
  */
+/** The real path of a file in Drive, walked up from its parents. */
+async function actualPath(fileId) {
+  const t = await token(DRIVE);
+  const names = [];
+  let id = fileId;
+
+  for (let hop = 0; hop < 12; hop += 1) {
+    const meta = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${id}?fields=name,parents&supportsAllDrives=true`,
+      { headers: { Authorization: `Bearer ${t}` } },
+    ).then((r) => (r.ok ? r.json() : null));
+    if (!meta) return null;
+
+    if (hop > 0) names.unshift(meta.name);
+    const parent = meta.parents?.[0];
+    if (!parent) break;
+    if (parent === ROOT) { names.unshift('Adnimation Contracts'); break; }
+    id = parent;
+  }
+
+  return `/${names.join('/')}`;
+}
+
+async function verify() {
+  const started = Date.now();
+  const rows = await sql`
+    select v.id, v.drive_file_id, v.drive_path, v.file_name,
+           c.counterparty_name, c.category, c.category_confirmed, c.status
+    from contract_versions v
+    join contracts c on c.id = v.contract_id
+    where v.drive_file_id is not null and c.archived_at is null
+  `;
+
+  let wrong = 0;
+  let repaired = 0;
+
+  for (const v of rows) {
+    const real = await actualPath(v.drive_file_id);
+    if (real === null) { console.log(`  ? ${v.file_name}: not readable`); continue; }
+
+    const category = v.category_confirmed ? v.category : null;
+    const segments = category
+      ? [CATEGORY_FOLDER[category], safe(v.counterparty_name), STAGE_FOLDER[stageFor(v.status)]]
+      : ['_Unclassified', safe(v.counterparty_name)];
+    const want = `/Adnimation Contracts/${segments.join('/')}`;
+
+    if (real === want) continue;
+
+    wrong += 1;
+    console.log(`  ${v.file_name}\n      is at ${real}\n      wants ${want}`);
+
+    const folderId = await ensureFolder(segments);
+    if (await moveInto(v.drive_file_id, folderId)) {
+      await sql`update contract_versions set drive_path = ${want} where id = ${v.id}`;
+      await sql`
+        update contracts set drive_path = ${want}
+        where id = (select contract_id from contract_versions where id = ${v.id})
+      `;
+      repaired += 1;
+    }
+  }
+
+  console.log(
+    `checked ${rows.length}, ${wrong} in the wrong place, ${repaired} repaired, ` +
+      `in ${Math.round((Date.now() - started) / 1000)}s.`,
+  );
+  await pruneTree();
+  await sql.end();
+  process.exit(0);
+}
+
 async function pruneTree() {
   const started = Date.now();
   const t = await token(DRIVE);
@@ -261,6 +339,7 @@ async function refile() {
 }
 
 async function main() {
+  if (process.env.VERIFY === '1') return verify();
   if (process.env.PRUNE === '1') {
     await pruneTree();
     await sql.end();

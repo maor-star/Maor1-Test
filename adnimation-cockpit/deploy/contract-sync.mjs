@@ -296,7 +296,9 @@ async function fileToDrive(versionId, counterparty, attachment, bytes) {
   const token = await googleToken(DRIVE);
   if (!token) return;
 
-  const segments = ['Adnimation Contracts', '_Unclassified', counterparty.replace(/[/\\]/g, '-')];
+  // Relative to the root folder id, NOT including its name — prefixing the
+  // root's own name resolved everything one level too deep.
+  const segments = ['_Unclassified', counterparty.replace(/[/\\]/g, '-')];
   const root = process.env.DRIVE_CONTRACTS_ROOT_ID;
   if (!root) return;
 
@@ -356,7 +358,7 @@ async function fileToDrive(versionId, counterparty, attachment, bytes) {
     await sql`
       update contract_versions
       set drive_file_id = ${uploaded.id},
-          drive_path = ${'/' + segments.join('/')},
+          drive_path = ${'/Adnimation Contracts/' + segments.join('/')},
           uploaded_at = now()
       where id = ${versionId}
     `;
