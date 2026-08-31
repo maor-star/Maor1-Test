@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   archiveContractAction, classifyAction, refileAction, setContractStatusAction,
-  setWaitingOnAction, suggestLinksAction,
+  setWaitingOnAction, suggestLinksAction, undoAction,
 } from '@/app/actions/contract-intake';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
@@ -317,12 +317,33 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
           </Button>
         ) : null}
 
+        {/*
+          Undo, because every control here is one click and several of them
+          move files in Drive. "Be careful" is not a feature.
+        */}
+        <Button
+          type="button"
+          size="xs"
+          variant="ghost"
+          disabled={pending}
+          title="Put it back the way it was before the last change"
+          onClick={() => {
+            const data = new FormData();
+            data.set('id', c.id);
+            run(undoAction, data);
+          }}
+        >
+          UNDO
+        </Button>
+
+        {/* Archive is the one that makes a row disappear, so it asks first. */}
         <Button
           type="button"
           size="xs"
           variant="ghost"
           disabled={pending}
           onClick={() => {
+            if (!confirm(`Archive the ${c.counterpartyName} contract? It leaves every list.`)) return;
             const data = new FormData();
             data.set('id', c.id);
             run(archiveContractAction, data);

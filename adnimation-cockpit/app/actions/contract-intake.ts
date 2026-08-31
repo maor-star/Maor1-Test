@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
 import {
-  archiveContract, classifyContract, fileContract, setWaitingOn, suggestLinks,
+  archiveContract, classifyContract, fileContract, setWaitingOn, suggestLinks, undoLastChange,
 } from '@/lib/contracts/intake-module';
 import { CONTRACT_STATUSES } from '@/lib/contracts/status';
 
@@ -115,7 +115,7 @@ export async function setContractStatusAction(
  * rather than another status to pick.
  */
 export async function setWaitingOnAction(formData: FormData): Promise<ContractActionResult> {
-  await requireUser();
+  const user = await requireUser();
 
   const parsed = z
     .object({ id: z.string().uuid(), who: z.enum(['you', 'them', 'auto']) })
@@ -128,6 +128,7 @@ export async function setWaitingOnAction(formData: FormData): Promise<ContractAc
   const result = await setWaitingOn(
     parsed.data.id,
     parsed.data.who === 'auto' ? null : parsed.data.who,
+    user.email,
   );
   if (!result.ok) return { ok: false, error: result.error };
 
@@ -145,14 +146,32 @@ export async function refileAction(formData: FormData): Promise<ContractActionRe
 }
 
 export async function archiveContractAction(formData: FormData): Promise<ContractActionResult> {
-  await requireUser();
+  const user = await requireUser();
   const id = z.string().uuid().safeParse(String(formData.get('id') ?? ''));
   if (!id.success) return { ok: false, error: 'Not a contract' };
 
-  const result = await archiveContract(id.data);
+  const result = await archiveContract(id.data, user.email);
   if (!result.ok) return { ok: false, error: result.error };
   refresh();
   return { ok: true };
+}
+
+/**
+ * Put a contract back the way it was before the last change.
+ *
+ * Every control on the card is a single click and several of them move files
+ * in Drive. An accidental click has to be recoverable.
+ */
+export async function undoAction(formData: FormData): Promise<ContractActionResult> {
+  const user = await requireUser();
+  const id = z.string().uuid().safeParse(String(formData.get('id') ?? ''));
+  if (!id.success) return { ok: false, error: 'Not a contract' };
+
+  const result = await undoLastChange(id.data, user.email);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  refresh();
+  return { ok: true, warning: `Undid: ${result.restored}` };
 }
 
 /** Candidates to link a contract to, matched on the counterparty. */

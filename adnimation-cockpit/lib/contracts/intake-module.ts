@@ -1,8 +1,9 @@
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import {
-  contractIntakeSeen, contractVersions, contracts, db, opportunities, pipelineClients,
+  auditLog, contractIntakeSeen, contractVersions, contracts, db, opportunities, pipelineClients,
 } from '@/lib/db';
 import { ensureFolderPath, moveFile, pruneEmptyFolders, uploadFile } from '@/lib/integrations/drive';
+import { writeAudit } from '@/lib/audit';
 import { filingFolder, stageForStatus, versionedFileName, type ContractCategory } from './drive';
 import { BOARD_STATUSES, STATUS_LABEL, WAITING_ON, type ContractStatus } from './status';
 import { versionFromName } from './intake';
@@ -270,6 +271,38 @@ export async function classifyContract(
 
   const statusChanged = status !== existing.status;
 
+  // CLAUDE.md §10 — every mutation touching a contract writes an audit row.
+  // Without it there is no answer to "what did that click just do", which is
+  // the first thing anyone asks after clicking the wrong thing.
+  await writeAudit({
+    actor,
+    action: 'contract.classify',
+    entityType: 'contract',
+    entityId: id,
+    before: {
+      counterpartyName: existing.counterpartyName,
+      category: existing.category,
+      categoryConfirmed: existing.categoryConfirmed,
+      docType: existing.docType,
+      status: existing.status,
+      notes: existing.notes,
+      opportunityId: existing.opportunityId,
+      pipelineClientId: existing.pipelineClientId,
+    },
+    after: {
+      counterpartyName: counterparty,
+      category: category ?? 'general',
+      categoryConfirmed: input.category !== undefined ? true : existing.categoryConfirmed,
+      docType: input.docType ?? existing.docType,
+      status,
+      notes: input.notes !== undefined ? input.notes : existing.notes,
+      opportunityId:
+        input.opportunityId !== undefined ? input.opportunityId : existing.opportunityId,
+      pipelineClientId:
+        input.pipelineClientId !== undefined ? input.pipelineClientId : existing.pipelineClientId,
+    },
+  });
+
   await db
     .update(contracts)
     .set({
@@ -499,25 +532,128 @@ export async function recordArrival(input: {
 export async function setWaitingOn(
   id: string,
   who: 'you' | 'them' | null,
+  actor = 'ceo',
 ): Promise<{ ok: boolean; error?: string }> {
   try {
+    const [before] = await db.select().from(contracts).where(eq(contracts.id, id)).limit(1);
     await db
       .update(contracts)
       .set({ waitingOnOverride: who })
       .where(eq(contracts.id, id));
+    await writeAudit({
+      actor,
+      action: 'contract.waiting_on',
+      entityType: 'contract',
+      entityId: id,
+      before: { waitingOnOverride: before?.waitingOnOverride ?? null },
+      after: { waitingOnOverride: who },
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not update it' };
   }
 }
 
-export async function archiveContract(id: string): Promise<{ ok: boolean; error?: string }> {
+export async function archiveContract(
+  id: string,
+  actor = 'ceo',
+): Promise<{ ok: boolean; error?: string }> {
   try {
+    const [before] = await db.select().from(contracts).where(eq(contracts.id, id)).limit(1);
     await db.update(contracts).set({ archivedAt: new Date() }).where(eq(contracts.id, id));
+    await writeAudit({
+      actor,
+      action: 'contract.archive',
+      entityType: 'contract',
+      entityId: id,
+      before: { archivedAt: null, counterpartyName: before?.counterpartyName },
+      after: { archivedAt: new Date().toISOString() },
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not archive it' };
   }
+}
+
+/**
+ * Put a contract back the way it was before the last change.
+ *
+ * Every control on the card is one click and several of them move files in
+ * Drive, so an accidental click has to be recoverable — otherwise the only
+ * honest advice is "be careful", which is not a feature. This reads the most
+ * recent audit row for the contract and restores what it recorded as `before`.
+ *
+ * The undo is itself audited, so the history stays a history rather than
+ * becoming a way to erase one.
+ */
+export async function undoLastChange(
+  id: string,
+  actor: string,
+): Promise<{ ok: boolean; error?: string; restored?: string }> {
+  const [entry] = await db
+    .select()
+    .from(auditLog)
+    .where(and(eq(auditLog.entityType, 'contract'), eq(auditLog.entityId, id)))
+    .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
+    .limit(1);
+
+  if (!entry) return { ok: false, error: 'Nothing recorded to undo' };
+  if (entry.action === 'contract.undo') {
+    return { ok: false, error: 'That was already undone' };
+  }
+
+  const before = entry.before as Record<string, unknown> | null;
+  if (!before) return { ok: false, error: 'Nothing recorded to undo' };
+
+  const patch: Record<string, unknown> = {};
+  if ('counterpartyName' in before && typeof before.counterpartyName === 'string') {
+    patch.counterpartyName = before.counterpartyName;
+  }
+  if ('category' in before) patch.category = before.category ?? 'general';
+  if ('categoryConfirmed' in before) patch.categoryConfirmed = Boolean(before.categoryConfirmed);
+  if ('docType' in before && typeof before.docType === 'string') patch.docType = before.docType;
+  if ('status' in before && typeof before.status === 'string') {
+    patch.status = before.status;
+    patch.statusChangedAt = new Date();
+  }
+  if ('notes' in before) patch.notes = (before.notes as string | null) ?? null;
+  if ('opportunityId' in before) patch.opportunityId = (before.opportunityId as string | null) ?? null;
+  if ('pipelineClientId' in before) {
+    patch.pipelineClientId = (before.pipelineClientId as string | null) ?? null;
+  }
+  if ('waitingOnOverride' in before) {
+    patch.waitingOnOverride = (before.waitingOnOverride as string | null) ?? null;
+  }
+  if ('archivedAt' in before) patch.archivedAt = before.archivedAt ? new Date(String(before.archivedAt)) : null;
+
+  if (Object.keys(patch).length === 0) return { ok: false, error: 'Nothing to restore' };
+
+  await db.update(contracts).set(patch).where(eq(contracts.id, id));
+
+  await writeAudit({
+    actor,
+    action: 'contract.undo',
+    entityType: 'contract',
+    entityId: id,
+    before: entry.after,
+    after: patch,
+  });
+
+  // Filing follows the restored state, so the file goes back where it was.
+  await fileContract(id, actor).catch(() => ({ ok: false }));
+
+  return { ok: true, restored: entry.action };
+}
+
+/** The last thing that happened to a contract, for the card to show. */
+export async function lastChange(id: string) {
+  const [entry] = await db
+    .select()
+    .from(auditLog)
+    .where(and(eq(auditLog.entityType, 'contract'), eq(auditLog.entityId, id)))
+    .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
+    .limit(1);
+  return entry ?? null;
 }
 
 /** What the intake has seen but nobody has decided on. */
