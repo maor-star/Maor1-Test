@@ -8,6 +8,7 @@ import {
   undoLastChange,
 } from '@/lib/contracts/intake-module';
 import { CONTRACT_STATUSES } from '@/lib/contracts/status';
+import { summariseContract } from '@/lib/contracts/summarise';
 
 /**
  * What the contracts board can do.
@@ -207,6 +208,20 @@ export async function createLinkAction(
         ? 'Opportunity created and linked.'
         : 'Deal created in the pipeline and linked.',
   };
+}
+
+/**
+ * Read the contract and say what it commits us to.
+ *
+ * Not persisted: a summary is a reading aid, and a stale one describing an
+ * older version is worse than none. It is regenerated on demand against the
+ * newest version in Drive.
+ */
+export async function summariseAction(contractId: string) {
+  await requireUser();
+  const parsed = z.string().uuid().safeParse(contractId);
+  if (!parsed.success) return { ok: false as const, error: 'Not a contract' };
+  return summariseContract(parsed.data);
 }
 
 /** Candidates to link a contract to, matched on the counterparty. */

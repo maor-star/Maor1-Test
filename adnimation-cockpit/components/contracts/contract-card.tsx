@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   archiveContractAction, classifyAction, createLinkAction, refileAction, setContractStatusAction,
-  setWaitingOnAction, suggestLinksAction, undoAction,
+  setWaitingOnAction, suggestLinksAction, summariseAction, undoAction,
 } from '@/app/actions/contract-intake';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { Num } from '@/components/num';
 import { BOARD_STATUSES, STATUS_LABEL } from '@/lib/contracts/status';
 import { CONTRACT_CATEGORIES } from '@/lib/contracts/drive';
 import type { ContractRow } from '@/lib/contracts/intake-module';
+import type { ContractSummary } from '@/lib/contracts/summarise';
 import { fmtDateTime, fmtMoney } from '@/lib/utils';
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -40,6 +41,11 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
     deals: { id: string; name: string; stage: string }[];
   } | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [summary, setSummary] = useState<
+    { summary: ContractSummary; versionNo?: number; fileName?: string } | null
+  >(null);
+  const [summarising, setSummarising] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -290,6 +296,37 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
           </Button>
         ) : null}
 
+        {c.versions.some((v) => v.driveFileId) ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={summarising}
+            title="Read it and list what it commits us to"
+            onClick={() => {
+              if (summary) { setSummary(null); return; }
+              setSummarising(true);
+              setSummaryError(null);
+              summariseAction(c.id)
+                .then((r) => {
+                  if (r.ok && 'summary' in r && r.summary) {
+                    setSummary({
+                      summary: r.summary,
+                      ...('versionNo' in r ? { versionNo: r.versionNo } : {}),
+                      ...('fileName' in r ? { fileName: r.fileName } : {}),
+                    });
+                  } else {
+                    setSummaryError(('error' in r && r.error) || 'Could not read it');
+                  }
+                })
+                .catch(() => setSummaryError('Could not read it'))
+                .finally(() => setSummarising(false));
+            }}
+          >
+            {summarising ? 'READING IT…' : summary ? 'HIDE SUMMARY' : 'WHAT DOES IT SAY?'}
+          </Button>
+        ) : null}
+
         {c.sourceUrl ? (
           <a
             href={c.sourceUrl}
@@ -355,6 +392,62 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
         {message ? <span className="text-2xs text-destructive">{message}</span> : null}
         {warning ? <span className="text-2xs text-sev-warning">{warning}</span> : null}
       </div>
+
+      {summaryError ? (
+        <p className="mt-2 border border-sev-warning/40 bg-sev-warning/10 px-3 py-2 font-semi text-[11px] text-sev-warning">
+          {summaryError}
+        </p>
+      ) : null}
+
+      {summary ? (
+        <div className="mt-2 border border-divider p-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-divider pb-2">
+            <span className="hud-label text-[9px]">
+              WHAT THIS CONTRACT SAYS
+              {summary.versionNo ? (
+                <>
+                  {' '}· V<Num>{summary.versionNo}</Num>
+                </>
+              ) : null}
+            </span>
+            {/*
+              Said plainly. A summary that is trusted as the contract is worse
+              than no summary, and this one is read by a model from the newest
+              version in Drive.
+            */}
+            <span className="font-semi text-[9px] tracking-[0.1em] text-neutral-500">
+              READ BY CLAUDE · NOT LEGAL ADVICE · CHECK ANYTHING YOU ACT ON
+            </span>
+          </div>
+
+          <p className="mt-2 text-[14px] text-neutral-900">{summary.summary.whatItIs}</p>
+          <p className="mt-0.5 text-[13px] text-neutral-600">{summary.summary.parties}</p>
+
+          {summary.summary.watchOut.length > 0 ? (
+            <div className="mt-3 border-s-2 border-sev-warning ps-2">
+              <span className="hud-label text-[9px] text-sev-warning">WORTH ARGUING ABOUT</span>
+              <ul className="mt-1 space-y-1">
+                {summary.summary.watchOut.map((w) => (
+                  <li key={w.clause} className="text-[13px] text-neutral-700">
+                    <span className="font-semi">{w.clause}</span> — {w.why}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <SummaryList label="WE PROVIDE" items={summary.summary.weProvide} />
+            <SummaryList label="THEY PROVIDE" items={summary.summary.theyProvide} />
+            <SummaryList label="COMMERCIALS" items={summary.summary.commercials} />
+            <SummaryList label="TERM" items={[summary.summary.term]} />
+            <SummaryList label="HOW IT ENDS" items={[summary.summary.termination]} />
+            {summary.summary.missing.length > 0 ? (
+              <SummaryList label="NOT SETTLED" items={summary.summary.missing} />
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {open ? (
         <form
@@ -514,5 +607,22 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
         </form>
       ) : null}
     </li>
+  );
+}
+
+function SummaryList({ label, items }: { label: string; items: string[] }) {
+  const real = items.filter((i) => i && i.trim() !== '');
+  if (real.length === 0) return null;
+  return (
+    <div>
+      <span className="hud-label block text-[9px]">{label}</span>
+      <ul className="mt-1 space-y-0.5">
+        {real.map((item) => (
+          <li key={item} className="text-[13px] leading-snug text-neutral-700">
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { completeTaskAction, snoozeTaskAction } from '@/app/actions/tasks';
+import { archiveTaskAction, completeTaskAction, snoozeTaskAction } from '@/app/actions/tasks';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -49,6 +49,23 @@ export function QuickTaskActions({ taskId, isMine }: { taskId: string; isMine: b
         title="Snooze a week — counts toward the Zombie rule"
       >
         SNOOZE
+      </Button>
+      {/*
+        Removing a task he never wanted. It archives rather than deletes —
+        nothing in this system deletes (CLAUDE.md §2) — but from every screen
+        it is gone, which is what "delete" means to the person clicking it.
+      */}
+      <Button
+        size="xs"
+        variant="ghost"
+        disabled={pending}
+        onClick={() => {
+          if (!window.confirm('Remove this task? It leaves every view.')) return;
+          run(archiveTaskAction);
+        }}
+        title="Remove it from every view"
+      >
+        DELETE
       </Button>
     </span>
   );

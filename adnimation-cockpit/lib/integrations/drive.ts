@@ -248,6 +248,85 @@ export async function uploadFile(opts: {
 }
 
 /**
+ * Fetch a file's bytes, converting where Claude cannot read the format.
+ *
+ * A PDF goes to Claude as-is — it reads pages natively. A Word document does
+ * not, so Drive converts it: a copy is made as a Google Doc, exported as text,
+ * and the copy trashed. Doing the conversion in Drive rather than parsing
+ * .docx here means one less format parser to be wrong about, and Drive is
+ * already where the file lives.
+ */
+export async function fetchForReading(
+  fileId: string,
+): Promise<
+  | { ok: true; kind: 'pdf'; base64: string }
+  | { ok: true; kind: 'text'; text: string }
+  | { ok: false; error: string }
+> {
+  const auth = await token();
+  if ('error' in auth) return { ok: false, error: auth.error };
+
+  const meta = (await api(
+    `/files/${fileId}?fields=mimeType,name,size&supportsAllDrives=true`,
+    {},
+    auth.token,
+  ).catch(() => null)) as { mimeType?: string; name?: string; size?: string } | null;
+  if (!meta?.mimeType) return { ok: false, error: 'Could not read the file' };
+
+  if (meta.mimeType === 'application/pdf') {
+    const res = await fetch(`${API}/files/${fileId}?alt=media&supportsAllDrives=true`, {
+      headers: { Authorization: `Bearer ${auth.token}` },
+    });
+    if (!res.ok) return { ok: false, error: `Could not download it: http_${res.status}` };
+    return { ok: true, kind: 'pdf', base64: Buffer.from(await res.arrayBuffer()).toString('base64') };
+  }
+
+  // Already a Google Doc: export straight to text.
+  if (meta.mimeType === 'application/vnd.google-apps.document') {
+    const res = await fetch(
+      `${API}/files/${fileId}/export?mimeType=text/plain&supportsAllDrives=true`,
+      { headers: { Authorization: `Bearer ${auth.token}` } },
+    );
+    if (!res.ok) return { ok: false, error: `Could not export it: http_${res.status}` };
+    return { ok: true, kind: 'text', text: await res.text() };
+  }
+
+  // Anything else Drive can convert — Word, RTF, ODT.
+  const converted = (await api(
+    `/files/${fileId}/copy?fields=id&supportsAllDrives=true`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        name: `.cockpit-read-${Date.now()}`,
+        mimeType: 'application/vnd.google-apps.document',
+      }),
+    },
+    auth.token,
+  ).catch(() => null)) as { id?: string } | null;
+
+  if (!converted?.id) {
+    return { ok: false, error: `Drive cannot convert ${meta.mimeType} for reading` };
+  }
+
+  try {
+    const res = await fetch(
+      `${API}/files/${converted.id}/export?mimeType=text/plain&supportsAllDrives=true`,
+      { headers: { Authorization: `Bearer ${auth.token}` } },
+    );
+    if (!res.ok) return { ok: false, error: `Could not export it: http_${res.status}` };
+    return { ok: true, kind: 'text', text: await res.text() };
+  } finally {
+    // The conversion is scratch. Trash it whatever happened, or the folder
+    // fills with copies nobody asked for.
+    await fetch(`${API}/files/${converted.id}?supportsAllDrives=true`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trashed: true }),
+    }).catch(() => {});
+  }
+}
+
+/**
  * Remove folders left empty after a file moved out.
  *
  * Classifying a contract moves its versions from `_Unclassified/<Counterparty>`

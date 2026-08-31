@@ -18,7 +18,7 @@ export const NAV = [
   { href: '/seats/demand', label: 'DEMAND', num: '11', ready: true },
   { href: '/seats/supply', label: 'SUPPLY', num: '12', ready: true },
   { href: '/trading', label: 'TRADING', num: '13', ready: true },
-  { href: '/agents', label: 'AGENTS', num: '14', ready: false },
+  { href: '/agents', label: 'AGENTS', num: '14', ready: true },
 ] as const;
 
 export type NavItem = (typeof NAV)[number];

@@ -527,3 +527,43 @@ export const opportunities = pgTable(
 
 export type Opportunity = typeof opportunities.$inferSelect;
 export type NewOpportunity = typeof opportunities.$inferInsert;
+
+/**
+ * The agent engine — CLAUDE.md §6. The table's own CHECK forbids level 4 for
+ * an irreversible agent, and agent_runs carries triggers making it insert-only,
+ * so the run log cannot be rewritten even by us.
+ */
+export const agents = pgTable('agents', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  name: text('name').notNull().unique(),
+  description: text('description'),
+  triggerType: text('trigger_type').notNull(),
+  triggerConfig: jsonb('trigger_config').notNull().default({}),
+  conditions: jsonb('conditions').notNull().default([]),
+  actions: jsonb('actions').notNull().default([]),
+  autonomyLevel: smallint('autonomy_level').notNull().default(1),
+  hasIrreversibleAction: boolean('has_irreversible_action').notNull().default(false),
+  maxRunsPerHour: integer('max_runs_per_hour').notNull().default(10),
+  enabled: boolean('enabled').notNull().default(true),
+  runCount: integer('run_count').notNull().default(0),
+  createdAt: timestamptz('created_at').notNull().defaultNow(),
+  lastLevelChangeAt: timestamptz('last_level_change_at'),
+});
+
+export const agentRuns = pgTable('agent_runs', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  agentId: uuid('agent_id').notNull(),
+  triggeredBy: text('triggered_by').notNull(),
+  dryRun: boolean('dry_run').notNull().default(false),
+  startedAt: timestamptz('started_at').notNull().defaultNow(),
+  finishedAt: timestamptz('finished_at'),
+  conditionsEvaluated: jsonb('conditions_evaluated').notNull().default([]),
+  actionsTaken: jsonb('actions_taken').notNull().default([]),
+  recipients: text('recipients').array().notNull().default([]),
+  outcome: text('outcome'),
+  haltReason: text('halt_reason'),
+  error: text('error'),
+});
+
+export type Agent = typeof agents.$inferSelect;
+export type AgentRun = typeof agentRuns.$inferSelect;
