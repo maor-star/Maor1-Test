@@ -78,7 +78,7 @@ async function main() {
     // database from the checked-in snapshot. All three have to travel.
     'revenue-sync.mjs', 'revenue-source.mjs', 'revenue-seed.mjs',
     // opportunity-sweep imports the generated copy of the detection rules.
-    'opportunity-sweep.mjs', 'opportunity-detect.mjs',
+    'opportunity-sweep.mjs', 'opportunity-detect.mjs', 'slack-capture.mjs',
   ]) {
     if (existsSync(`deploy/${job}`)) sh('cp', ['-a', `deploy/${job}`, '/tmp/cockpit-bundle/jobs/']);
   }

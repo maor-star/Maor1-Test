@@ -3,7 +3,8 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  archiveOpportunityAction, decideSuggestionAction, setStatusAction, updateOpportunityAction,
+  archiveOpportunityAction, decideSuggestionAction, promoteAction, setStatusAction,
+  updateOpportunityAction,
 } from '@/app/actions/opportunities';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
@@ -12,8 +13,10 @@ import { Num } from '@/components/num';
 // From the pure rules, never from the module: that one owns the database
 // connection, and importing it here would pull the driver into the browser.
 import {
-  KIND_LABEL, OPPORTUNITY_KINDS, STATUS_LABEL, type OpportunityListItem,
+  KIND_LABEL, KIND_TO_CLIENT_TYPE, OPPORTUNITY_KINDS, STATUS_LABEL,
+  type OpportunityListItem,
 } from '@/lib/opportunities/rules';
+import { CLIENT_TYPES, CLIENT_TYPE_LABEL, OPEN_STAGES, STAGE_LABEL } from '@/lib/pipeline/types';
 import { fmtDateTime, fmtMoney } from '@/lib/utils';
 
 /** The statuses he sets himself; `suggested` is only ever set by the detector. */
@@ -29,6 +32,7 @@ export function OpportunityCard({ opportunity }: { opportunity: OpportunityListI
   const o = opportunity;
   const [editing, setEditing] = useState(false);
   const [deciding, setDeciding] = useState(false);
+  const [promoting, setPromoting] = useState(false);
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const router = useRouter();
@@ -40,6 +44,7 @@ export function OpportunityCard({ opportunity }: { opportunity: OpportunityListI
       if (result.ok) {
         setEditing(false);
         setDeciding(false);
+        setPromoting(false);
         router.refresh();
       }
     });
@@ -197,6 +202,27 @@ export function OpportunityCard({ opportunity }: { opportunity: OpportunityListI
           </>
         )}
 
+        {!suggestion && o.pipelineClientId === null && o.status !== 'lost' ? (
+          <Button
+            type="button"
+            size="xs"
+            disabled={pending}
+            onClick={() => setPromoting((v) => !v)}
+            title="It is a real deal now — move it into the pipeline"
+          >
+            → PIPELINE
+          </Button>
+        ) : null}
+
+        {o.pipelineClientId ? (
+          <a
+            href="/pipeline"
+            className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+          >
+            In the pipeline ↗
+          </a>
+        ) : null}
+
         {o.sourceUrl ? (
           <a
             href={o.sourceUrl}
@@ -248,6 +274,55 @@ export function OpportunityCard({ opportunity }: { opportunity: OpportunityListI
           <Button type="button" size="sm" variant="ghost" onClick={() => setDeciding(false)}>
             CANCEL
           </Button>
+        </form>
+      ) : null}
+
+      {promoting ? (
+        <form
+          className="mt-2 flex flex-wrap items-end gap-2 border border-divider p-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            data.set('id', o.id);
+            run(promoteAction, data);
+          }}
+        >
+          <div>
+            <Label htmlFor={`stage-${o.id}`}>Starting stage</Label>
+            <Select id={`stage-${o.id}`} name="stage" defaultValue="lead" className="h-8 text-[12px]">
+              {OPEN_STAGES.map((st) => (
+                <option key={st} value={st}>
+                  {STAGE_LABEL[st]}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor={`ct-${o.id}`}>Which side</Label>
+            <Select
+              id={`ct-${o.id}`}
+              name="clientType"
+              defaultValue={KIND_TO_CLIENT_TYPE[o.kind]}
+              className="h-8 text-[12px]"
+            >
+              {CLIENT_TYPES.map((ct) => (
+                <option key={ct} value={ct}>
+                  {CLIENT_TYPE_LABEL[ct]}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <Button type="submit" size="sm" disabled={pending}>
+            {pending ? 'MOVING…' : 'MOVE IT'}
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setPromoting(false)}>
+            CANCEL
+          </Button>
+          <span className="pb-1.5 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+            {o.counterparty
+              ? `CREATES “${o.counterparty}” IN THE PIPELINE`
+              : 'ADD A COUNTERPARTY FIRST — THE PIPELINE NEEDS A NAME'}
+          </span>
         </form>
       ) : null}
 

@@ -63,6 +63,24 @@ export const VIEW_LABEL: Record<OpportunityView, string> = {
   all: 'EVERYTHING',
 };
 
+/**
+ * How an opportunity's kind maps onto the pipeline's client types, for when it
+ * matures into a deal. The pipeline splits the business by side; several kinds
+ * of opportunity are not a side of the business at all, and land on `other`
+ * rather than being forced into one.
+ */
+export const KIND_TO_CLIENT_TYPE: Record<OpportunityKind, string> = {
+  supply: 'supply',
+  demand: 'demand',
+  partnership: 'other',
+  product: 'other',
+  upsell: 'other',
+  cost: 'vendor',
+  hiring: 'other',
+  investment: 'other',
+  other: 'other',
+};
+
 export const OPPORTUNITY_SOURCES = ['manual', 'mail', 'slack'] as const;
 export type OpportunitySource = (typeof OPPORTUNITY_SOURCES)[number];
 
@@ -90,6 +108,9 @@ export interface OpportunityRow {
   lastTouchedAt: Date;
   decidedAt: Date | null;
   decidedNote: string | null;
+  /** Set once it has matured into a pipeline deal. */
+  pipelineClientId: string | null;
+  promotedAt: Date | null;
 }
 
 export interface OpportunityState {

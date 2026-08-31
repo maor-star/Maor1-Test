@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  COLD_AFTER_DAYS, classify, inView, parseMoneyToCents, rank,
-  opportunityInputSchema, type OpportunityRow,
+  COLD_AFTER_DAYS, KIND_TO_CLIENT_TYPE, OPPORTUNITY_KINDS, classify, inView,
+  parseMoneyToCents, rank, opportunityInputSchema, type OpportunityRow,
 } from '@/lib/opportunities/rules';
+import { CLIENT_TYPES } from '@/lib/pipeline/types';
 import { detectOpportunity, type DetectionInput } from '@/lib/opportunities/detect';
 
 const NOW = new Date('2026-08-30T12:00:00Z');
@@ -14,6 +15,7 @@ function row(over: Partial<OpportunityRow> = {}): OpportunityRow {
     note: null, valueCents: null, counterparty: 'Markito', nextStep: null, nextStepDate: null,
     revisitOn: null, source: 'manual', sourceUrl: null, sourceExcerpt: null, sourceAt: null,
     createdAt: daysAgo(30), lastTouchedAt: daysAgo(30), decidedAt: null, decidedNote: null,
+    pipelineClientId: null, promotedAt: null,
     ...over,
   };
 }
@@ -243,5 +245,42 @@ describe('opportunities — reading the mail', () => {
 
   it('says nothing about empty mail', () => {
     expect(detectOpportunity(mail({ subject: null, snippet: null })).isOpportunity).toBe(false);
+  });
+});
+
+/**
+ * Maturing into the pipeline.
+ *
+ * The two modules have separate vocabularies, and the mapping between them is
+ * where a promotion can quietly land a deal on the wrong side of the business.
+ */
+describe('opportunities — maturing into a deal', () => {
+  it('maps every kind onto a client type the pipeline recognises', () => {
+    for (const kind of OPPORTUNITY_KINDS) {
+      expect(CLIENT_TYPES).toContain(KIND_TO_CLIENT_TYPE[kind]);
+    }
+  });
+
+  it('keeps the two sides of the business on their own side', () => {
+    expect(KIND_TO_CLIENT_TYPE.supply).toBe('supply');
+    expect(KIND_TO_CLIENT_TYPE.demand).toBe('demand');
+  });
+
+  it('does not force a non-sales opportunity onto a side', () => {
+    // Hiring is a real opportunity and not a demand or supply deal; calling it
+    // one would corrupt every pipeline figure split by side.
+    expect(KIND_TO_CLIENT_TYPE.hiring).toBe('other');
+    expect(KIND_TO_CLIENT_TYPE.investment).toBe('other');
+  });
+
+  it('treats a promoted one as decided, so it leaves the open list', () => {
+    const promoted = row({
+      status: 'won',
+      pipelineClientId: '3f1a0c4e-0000-4000-8000-000000000001',
+      promotedAt: NOW,
+    });
+    expect(inView(promoted, 'open', NOW)).toBe(false);
+    expect(inView(promoted, 'closed', NOW)).toBe(true);
+    expect(classify(promoted, NOW).cold).toBe(false);
   });
 });

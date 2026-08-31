@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
 import {
   archiveOpportunity, captureMailThread, createOpportunity, decideSuggestion,
-  setOpportunityStatus, suggestFromMail, updateOpportunity,
+  promoteToPipeline, setOpportunityStatus, suggestFromMail, updateOpportunity,
 } from '@/lib/opportunities/module';
 import { captureSlackPermalink } from '@/lib/opportunities/slack-capture';
 import { OPPORTUNITY_STATUSES, opportunityInputSchema } from '@/lib/opportunities/rules';
@@ -137,6 +137,41 @@ export async function decideSuggestionAction(formData: FormData): Promise<Action
 
   refresh();
   return { ok: true };
+}
+
+/**
+ * Move a matured opportunity into the pipeline.
+ *
+ * Revalidates both screens: the deal has to appear in one and the opportunity
+ * has to stop looking open in the other, or the two disagree until a reload.
+ */
+export async function promoteAction(
+  formData: FormData,
+): Promise<ActionResult & { clientId?: string }> {
+  const user = await requireUser();
+
+  const parsed = z
+    .object({
+      id: z.string().uuid(),
+      stage: z.string().trim().max(40).optional(),
+      clientType: z.string().trim().max(40).optional(),
+    })
+    .safeParse({
+      id: String(formData.get('id') ?? ''),
+      stage: String(formData.get('stage') ?? '') || undefined,
+      clientType: String(formData.get('clientType') ?? '') || undefined,
+    });
+  if (!parsed.success) return { ok: false, error: 'Not an opportunity' };
+
+  const result = await promoteToPipeline(parsed.data.id, user.email, {
+    ...(parsed.data.stage ? { stage: parsed.data.stage } : {}),
+    ...(parsed.data.clientType ? { clientType: parsed.data.clientType } : {}),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+
+  refresh();
+  revalidatePath('/pipeline');
+  return { ok: true, clientId: result.clientId };
 }
 
 /** Capture a mail thread from the mail screen, in one click. */

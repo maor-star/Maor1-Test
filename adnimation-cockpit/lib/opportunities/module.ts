@@ -1,5 +1,6 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
-import { db, mailThreads, opportunities } from '@/lib/db';
+import { db, mailThreads, opportunities, pipelineClients } from '@/lib/db';
+import { KIND_TO_CLIENT_TYPE } from './rules';
 import {
   LIVE_STATUSES, classify, inView, rank, type OpportunityListItem,
   type OpportunityInput, type OpportunityKind, type OpportunityRow,
@@ -43,6 +44,8 @@ function toRow(r: DbRow): OpportunityRow {
     lastTouchedAt: r.lastTouchedAt,
     decidedAt: r.decidedAt,
     decidedNote: r.decidedNote,
+    pipelineClientId: r.pipelineClientId,
+    promotedAt: r.promotedAt,
   };
 }
 
@@ -343,6 +346,84 @@ export async function suggestFromMail(
   }
 
   return { scanned: threads.length, proposed };
+}
+
+/**
+ * An opportunity that has matured into a real deal.
+ *
+ * This is the crossing between the two modules: an opportunity is something
+ * worth doing that nobody has committed to, a pipeline client is a deal being
+ * worked with a stage and a next step. Promotion moves it across and links
+ * both ways, so the opportunity does not look abandoned and the deal does not
+ * look like it appeared from nowhere.
+ *
+ * The opportunity is marked `won` — it did what it was for. It stays in the
+ * decided view with a link to the deal rather than disappearing, because the
+ * question "which of the things I noticed actually turned into business" is
+ * the whole reason to keep the list.
+ */
+export async function promoteToPipeline(
+  id: string,
+  actor: string,
+  overrides: { stage?: string; clientType?: string; nextStep?: string; nextStepDate?: string } = {},
+): Promise<{ ok: true; clientId: string } | { ok: false; error: string }> {
+  const [row] = await db
+    .select()
+    .from(opportunities)
+    .where(eq(opportunities.id, id))
+    .limit(1);
+
+  if (!row) return { ok: false, error: 'No such opportunity' };
+  if (row.pipelineClientId) {
+    return { ok: false, error: 'This is already in the pipeline' };
+  }
+
+  // The pipeline is a list of counterparties, so it needs a name for one. The
+  // opportunity's title is a note to himself ("talk to Markito about their
+  // second site") and makes a poor client name, so the counterparty wins where
+  // there is one.
+  const name = (row.counterparty ?? row.title).trim().slice(0, 200);
+  if (name === '') return { ok: false, error: 'Give it a counterparty first — the pipeline needs a name' };
+
+  try {
+    const [created] = await db
+      .insert(pipelineClients)
+      .values({
+        name,
+        clientType: overrides.clientType ?? KIND_TO_CLIENT_TYPE[row.kind as keyof typeof KIND_TO_CLIENT_TYPE] ?? 'other',
+        // Something he has decided is a real deal is past a cold lead, but
+        // calling it qualified is his judgement, not ours.
+        stage: overrides.stage ?? 'lead',
+        temperature: 'warm',
+        valueCents: row.valueCents,
+        nextStep: overrides.nextStep ?? row.nextStep,
+        nextStepDate: overrides.nextStepDate ?? row.nextStepDate,
+        source: `opportunity:${row.source}`,
+        notes: [row.note, row.sourceExcerpt ? `From ${row.source}: ${row.sourceExcerpt}` : null]
+          .filter(Boolean)
+          .join('\n\n') || null,
+        opportunityId: row.id,
+      })
+      .returning({ id: pipelineClients.id });
+
+    if (!created) return { ok: false, error: 'Could not create the deal' };
+
+    await db
+      .update(opportunities)
+      .set({
+        pipelineClientId: created.id,
+        promotedAt: new Date(),
+        status: 'won',
+        decidedAt: new Date(),
+        decidedNote: `Promoted to the pipeline by ${actor}`,
+        lastTouchedAt: new Date(),
+      })
+      .where(eq(opportunities.id, id));
+
+    return { ok: true, clientId: created.id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not promote it' };
+  }
 }
 
 /** Accepting a suggestion makes it his; declining archives it for good. */

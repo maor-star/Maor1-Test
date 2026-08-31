@@ -130,6 +130,18 @@ function parseAddress(raw) {
   return { name: null, email: bare.includes('@') ? bare : null };
 }
 
+/**
+ * Gmail returns label IDs, not names — 'Label_8231773…' rather than
+ * 'Opportunity'. The names are what he sees and what he can be asked to use,
+ * so they are resolved once per run and stored instead of the ids.
+ */
+async function labelNames() {
+  const res = await api('/labels');
+  const byId = new Map();
+  for (const l of res.labels ?? []) byId.set(l.id, l.name);
+  return byId;
+}
+
 const header = (headers, name) =>
   headers.find((h) => h.name.toLowerCase() === name)?.value ?? null;
 
@@ -156,6 +168,9 @@ async function main() {
   console.log(
     `known: ${byEmail.size} addresses, ${byDomain.size} company domains`,
   );
+
+  const labels = await labelNames();
+  console.log(`${labels.size} labels in the mailbox`);
 
   const query = encodeURIComponent(QUERY);
   const threads = [];
@@ -209,8 +224,12 @@ async function main() {
       }
     }
 
-    const labels = new Set();
-    for (const m of messages) for (const l of m.labelIds ?? []) labels.add(l);
+    // Stored as names, so a label he applies in Gmail is something the rest of
+    // the system can actually match on.
+    const threadLabels = new Set();
+    for (const m of messages) {
+      for (const id of m.labelIds ?? []) threadLabels.add(labels.get(id) ?? id);
+    }
 
     const domain = (counterpart.email ?? '').split('@')[1]?.replace(/^www\./, '') ?? '';
     const knownCompany = byEmail.get(counterpart.email ?? '') ?? byDomain.get(domain) ?? null;
@@ -226,12 +245,12 @@ async function main() {
       last_message_at: new Date(Number(last.internalDate ?? Date.now())),
       first_message_at: new Date(Number(first.internalDate ?? Date.now())),
       last_from_me: lastFromMe,
-      unread: labels.has('UNREAD'),
-      starred: labels.has('STARRED'),
-      gmail_important: labels.has('IMPORTANT'),
+      unread: threadLabels.has('UNREAD'),
+      starred: threadLabels.has('STARRED'),
+      gmail_important: threadLabels.has('IMPORTANT'),
       known_contact: knownCompany !== null,
       known_company: knownCompany,
-      labels: [...labels],
+      labels: [...threadLabels],
       synced_at: new Date(),
     });
   }

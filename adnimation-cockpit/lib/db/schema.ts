@@ -334,6 +334,8 @@ export const pipelineClients = pgTable(
     notes: text('notes'),
     lastContactAt: timestamptz('last_contact_at'),
     hubspotCompanyId: text('hubspot_company_id'),
+    /** Where the deal came from, when it was promoted out of opportunities. */
+    opportunityId: uuid('opportunity_id'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
     archivedAt: timestamptz('archived_at'),
@@ -477,6 +479,10 @@ export const opportunities = pgTable(
     decidedAt: timestamptz('decided_at'),
     decidedNote: text('decided_note'),
     archivedAt: timestamptz('archived_at'),
+
+    /** Set once it has matured into a real deal — see promoteToPipeline. */
+    pipelineClientId: uuid('pipeline_client_id'),
+    promotedAt: timestamptz('promoted_at'),
   },
   (t) => [index('idx_opportunities_live_drz').on(t.lastTouchedAt)],
 );

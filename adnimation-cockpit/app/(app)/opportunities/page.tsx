@@ -10,6 +10,7 @@ import { Num } from '@/components/num';
 import { NewOpportunity } from '@/components/opportunities/new-opportunity';
 import { OpportunityCard } from '@/components/opportunities/opportunity-card';
 import { SweepMail } from '@/components/opportunities/sweep-mail';
+import { HowToCapture } from '@/components/opportunities/how-to-capture';
 import { fmtMoney } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -69,13 +70,12 @@ export default async function OpportunitiesPage({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-divider pt-3">
-          <p className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-            MAIL IS READ FOR CANDIDATES · SLACK IS CAPTURED BY MESSAGE LINK
-          </p>
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-divider pt-3">
           <SweepMail />
         </div>
       </HudCard>
+
+      <HowToCapture gmailLabel={process.env.GMAIL_OPPORTUNITY_LABEL ?? 'Opportunity'} />
 
       <nav className="flex flex-wrap border border-divider">
         {OPPORTUNITY_VIEWS.map((v) => (
