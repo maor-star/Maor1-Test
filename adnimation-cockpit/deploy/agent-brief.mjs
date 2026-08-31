@@ -9,7 +9,7 @@
  *
  * Two things come back:
  *
- *   state   whether it may run at all — the kill switch, then the agent's own
+ *   state   whether it may run at all, and whether it may speak in Slack — the kill switch, then the agent's own
  *           switch. A dry run is always allowed: seeing what it would do is
  *           how he decides whether to switch it on.
  *   brief   what he has taught it, in his words.
@@ -27,12 +27,14 @@ export async function agentState(sql, name) {
 
   // A row we cannot read is not permission to run either.
   const [row] = await sql`
-    select enabled, instructions from agents where name = ${name} limit 1
+    select enabled, instructions, notify_slack from agents where name = ${name} limit 1
   `.catch(() => []);
 
   return {
     exists: Boolean(row),
     enabled: Boolean(row?.enabled),
+    // The per-agent Slack switch on the screen. Off means it works silently.
+    notify: Boolean(row?.notify_slack),
     brief: (row?.instructions ?? '').trim(),
     killed,
   };

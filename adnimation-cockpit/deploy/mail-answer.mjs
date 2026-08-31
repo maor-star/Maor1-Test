@@ -17,9 +17,12 @@
  *
  * Three outcomes, not two. What it answers is filed under "Claude/Answered".
  * What is only information — nothing asked, nothing to do — is filed under
- * "Claude/Filed" with one line in Slack saying what it said, because not every
- * email needs a reply and none of them need to sit in his inbox. Everything
- * else stays exactly where it is, for him.
+ * "Claude/Filed" without a word, because not every email needs a reply and
+ * none of them need to sit in his inbox. Everything else stays exactly where
+ * it is, for him.
+ *
+ * One Slack message per run, and only about what was answered: what came in,
+ * and what went out. A run that answered nothing says nothing.
  */
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
@@ -246,9 +249,17 @@ async function send(candidate, replyText) {
   });
 }
 
-async function tellHim(lines) {
+async function tellHim(lines, notify) {
   if (lines.length === 0) return;
-  const text = [':envelope: *Your mail, handled*', '', ...lines].join('\n');
+  if (!notify) {
+    console.log('slack notifications are off for this agent, so nothing was sent.');
+    return;
+  }
+  const text = [
+    `:envelope: *${lines.length === 1 ? 'A mail was' : `${lines.length} mails were`} answered for you*`,
+    '',
+    ...lines,
+  ].join('\n');
   const sent = await postAsBot('mail', text);
   if (!sent.ok) console.error(`could not tell him in Slack: ${sent.reason}`);
 }
@@ -384,8 +395,13 @@ async function main() {
         on conflict (thread_id) do nothing
       `;
 
+      /*
+       * Filed, and deliberately not reported. He asked for a message about
+       * what was answered and nothing else — what needed no reply is in
+       * Claude/Filed if he wants it, and one more line here is one more thing
+       * to skim past on the way to the message that mattered.
+       */
       filedOnly += 1;
-      told.push(`*${subject}*\n> from ${from}\n> _no reply needed:_ ${line}`);
       continue;
     }
 
@@ -415,7 +431,7 @@ async function main() {
     );
   }
 
-  await tellHim(told);
+  await tellHim(told, state.notify);
 
   console.log(
     `${answered} answered, ${filedOnly} filed without a reply, ${declined} left for you, ` +

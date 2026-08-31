@@ -51,6 +51,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
   const a = agent;
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [teaching, setTeaching] = useState(false);
   const router = useRouter();
 
@@ -65,10 +66,18 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
     return true;
   });
 
-  const run = (action: (f: FormData) => Promise<{ ok: boolean; error?: string; message?: string }>, data: FormData) =>
+  const run = (
+    action: (
+      f: FormData,
+    ) => Promise<{ ok: boolean; error?: string; message?: string; preview?: string }>,
+    data: FormData,
+  ) =>
     startTransition(async () => {
       const result = await action(data);
       setMessage(result.ok ? (result.message ?? null) : (result.error ?? 'That did not work'));
+      // A dry run's whole value is the detail, so it stays on screen until he
+      // closes it rather than flashing past in a status line.
+      setPreview(result.preview ?? null);
       router.refresh();
     });
 
@@ -150,7 +159,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
           size="xs"
           variant="outline"
           disabled={pending}
-          title="Run it against real data with every side effect stubbed"
+          title="Run it against your real mail, message by message, sending and filing nothing"
           onClick={() => run(runAgentAction, withId({ dryRun: '1' }))}
         >
           DRY RUN
@@ -219,6 +228,29 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
           <span className="font-semi text-[10px] tracking-[0.1em] text-accent-700">{message}</span>
         ) : null}
       </div>
+
+      {preview ? (
+        <div className="mt-2 border border-divider">
+          <div className="flex items-center justify-between gap-3 border-b border-divider px-2 py-1">
+            <span className="hud-label text-[9px]">
+              WHAT IT WOULD HAVE DONE — NOTHING WAS TOUCHED
+            </span>
+            <button
+              type="button"
+              onClick={() => setPreview(null)}
+              className="font-semi text-[10px] tracking-[0.14em] text-neutral-500 hover:text-accent"
+            >
+              CLOSE
+            </button>
+          </div>
+          <pre
+            dir="ltr"
+            className="max-h-80 overflow-auto whitespace-pre-wrap px-2 py-2 text-start text-[12px] leading-relaxed text-neutral-700"
+          >
+            {preview}
+          </pre>
+        </div>
+      ) : null}
 
       {a.instructions && !teaching ? (
         <p className="mt-2 border-s-2 border-accent bg-accent/5 py-1 ps-2 text-[13px] whitespace-pre-wrap text-neutral-700">

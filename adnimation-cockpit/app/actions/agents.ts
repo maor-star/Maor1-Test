@@ -3,10 +3,13 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
+import { eq } from 'drizzle-orm';
+import { agents, db } from '@/lib/db';
 import {
   runById, seedAgents, setAgentEnabled, setAutonomy, setGlobalKill, setInstructions,
   setNotifySlack,
 } from '@/lib/agents/module';
+import { jobFor, runJob } from '@/lib/agents/job-preview';
 
 /**
  * The agents screen's controls.
@@ -20,6 +23,8 @@ export interface AgentActionResult {
   ok: boolean;
   error?: string;
   message?: string;
+  /** What a dry run would have done, message by message. */
+  preview?: string;
 }
 
 const idSchema = z.string().uuid();
@@ -80,6 +85,32 @@ export async function runAgentAction(formData: FormData): Promise<AgentActionRes
   if (!id.success) return { ok: false, error: 'Not an agent' };
 
   const dryRun = String(formData.get('dryRun') ?? '1') === '1';
+  const [row] = await db.select().from(agents).where(eq(agents.id, id.data)).limit(1);
+
+  /*
+   * Some agents do their work in a job, because the job is what can reach the
+   * mailbox. For those, both buttons run that job — DRY=1 for a dry run, for
+   * real otherwise — and hand back what it printed, message by message with
+   * the reason for each. Running the engine over them instead produced
+   * "conditions not met" for conditions that decide nothing, which is worse
+   * than useless: it reads like a refusal.
+   */
+  if (row && jobFor(row.name)) {
+    const result = await runJob(row.name, { dry: dryRun });
+    const preview = [result.output, result.ok ? '' : `\n(${result.reason})`]
+      .filter(Boolean)
+      .join('');
+    revalidatePath('/agents');
+    return {
+      ok: result.ok,
+      ...(result.ok ? {} : { error: result.reason ?? 'It failed' }),
+      ...(preview ? { preview } : {}),
+      message: dryRun
+        ? 'Dry run — nothing was touched. What it would have done is below.'
+        : 'It ran. What it did is below.',
+    };
+  }
+
   const report = await runById(id.data, { dryRun, triggeredBy: user.email });
 
   revalidatePath('/agents');

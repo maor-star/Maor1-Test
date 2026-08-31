@@ -12,8 +12,12 @@ import type { RunReport } from './types';
  * an agent running unobserved — which is worse than one that never told him at
  * all, because he thinks he is watching it.
  *
- * A halt is worth saying even when the agent is quiet about successes: an
- * agent that stopped is the case he most needs to know about, and it is rare.
+ * Only work speaks. An agent that halted, found nothing, or was switched off
+ * says nothing at all: he asked for a message about what was done and nothing
+ * else, and he is right — a stream of "stopped: this agent is switched off" is
+ * how a channel becomes noise and the one message that mattered gets skimmed
+ * past. A halt or a failure is on the agents screen, in the run log, which is
+ * where he looks when something is not happening.
  */
 
 export interface NotifyOptions {
@@ -21,7 +25,7 @@ export interface NotifyOptions {
   force?: boolean;
 }
 
-function describe(agentName: string, report: RunReport): string | null {
+export function reportLine(agentName: string, report: RunReport): string | null {
   const did = report.actions.filter((a) => a.performed);
 
   switch (report.outcome) {
@@ -32,15 +36,11 @@ function describe(agentName: string, report: RunReport): string | null {
         `:robot_face: *${agentName}* did ${did.length === 1 ? 'this' : 'these'}:\n` +
         did.map((a) => `• ${a.detail}`).join('\n')
       );
+    // Nothing happened is not news, and neither is a reason it did not.
     case 'halted':
-      return `:pause_button: *${agentName}* stopped: ${report.haltReason ?? 'no reason given'}`;
     case 'failed':
-      return `:warning: *${agentName}* failed: ${report.error ?? 'no error given'}`;
     case 'dry_run':
-      return (
-        `:mag: *${agentName}* dry run — it would have:\n` +
-        (report.actions.map((a) => `• ${a.detail}`).join('\n') || '• nothing')
-      );
+      return null;
   }
 }
 
@@ -53,12 +53,9 @@ export async function notifyRun(
   const [agent] = await db.select().from(agents).where(eq(agents.id, agentId)).limit(1);
   const wants = agent?.notifySlack ?? false;
 
-  // A halt or a failure goes out regardless: it is rare, and it is the thing
-  // he most needs to hear.
-  const important = report.outcome === 'halted' || report.outcome === 'failed';
-  if (!wants && !options.force && !important) return { sent: false, reason: 'notifications off' };
+  if (!wants && !options.force) return { sent: false, reason: 'notifications off' };
 
-  const text = describe(agentName, report);
+  const text = reportLine(agentName, report);
   if (!text) return { sent: false, reason: 'nothing worth saying' };
 
   const target = process.env.SLACK_CEO_USER_ID;

@@ -29,10 +29,27 @@ afterEach(() => {
 describe('the agent gate', () => {
   it('reads the switch and the brief from the agent’s own row', async () => {
     const state = await agentState(
-      fakeSql({ flag: [{ value: 'false' }], agent: [{ enabled: true, instructions: '  be careful  ' }] }),
+      fakeSql({
+        flag: [{ value: 'false' }],
+        agent: [{ enabled: true, instructions: '  be careful  ', notify_slack: true }],
+      }),
       'mail-answerer',
     );
-    expect(state).toEqual({ exists: true, enabled: true, brief: 'be careful', killed: false });
+    expect(state).toEqual({
+      exists: true,
+      enabled: true,
+      notify: true,
+      brief: 'be careful',
+      killed: false,
+    });
+  });
+
+  it('reads the Slack switch too, so an agent set to work silently does', async () => {
+    const state = await agentState(
+      fakeSql({ flag: [{ value: 'false' }], agent: [{ enabled: true, notify_slack: false }] }),
+      'mail-answerer',
+    );
+    expect(state.notify).toBe(false);
   });
 
   it('treats an unreadable kill switch as a stop, not as permission', async () => {
