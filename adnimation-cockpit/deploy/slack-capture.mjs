@@ -127,6 +127,23 @@ async function main() {
       // A one or two character message is a test or a typo, not an opportunity.
       if (text.length < 3) continue;
 
+      /*
+       * The same message forwarded twice is one opportunity.
+       *
+       * source_ref dedupes redeliveries of a single Slack message, but
+       * forwarding the same thing again is a different message with a
+       * different ts — and lands as a second identical row. Matching on the
+       * text is what actually catches that.
+       */
+      const [duplicate] = await sql`
+        select id from opportunities
+        where source = 'slack'
+          and source_excerpt = ${text.slice(0, 4000)}
+          and archived_at is null
+        limit 1
+      `;
+      if (duplicate) continue;
+
       const inserted = await sql`
         insert into opportunities
           (title, kind, status, counterparty, source, source_ref, source_url,

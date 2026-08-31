@@ -173,6 +173,39 @@ async function main() {
   // A capture label that does not work is almost always a name that is not
   // quite what anyone assumed — nested under a parent, or with a stray space.
   // Printing the list is faster than guessing.
+  // Trace a single label end to end: which threads Gmail says carry it, and
+  // what the mirror holds for each. A label that is fetched but not stored is
+  // invisible otherwise.
+  if (process.env.MAIL_SYNC_TRACE_LABEL) {
+    const wanted = process.env.MAIL_SYNC_TRACE_LABEL;
+    const labels = await labelNames();
+    const labelId = [...labels.entries()].find(
+      ([, n]) => n.trim().toLowerCase() === wanted.trim().toLowerCase(),
+    )?.[0];
+    if (!labelId) {
+      console.log(`no label named ${JSON.stringify(wanted)}`);
+      await sql.end();
+      process.exit(0);
+    }
+    const page = await api(`/threads?maxResults=100&labelIds=${encodeURIComponent(labelId)}`);
+    for (const ref of page.threads ?? []) {
+      const t = await api(
+        `/threads/${ref.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,
+      );
+      const msgs = t.messages ?? [];
+      const ids = new Set();
+      for (const m of msgs) for (const l of m.labelIds ?? []) ids.add(labels.get(l) ?? l);
+      const [row] = await sql`select thread_id, labels from mail_threads where thread_id = ${ref.id}`;
+      console.log(
+        `thread ${ref.id}: ${msgs.length} messages\n` +
+          `  gmail labels: ${[...ids].join(', ')}\n` +
+          `  in mirror: ${row ? `yes, labels = ${JSON.stringify(row.labels)}` : 'NO ROW'}`,
+      );
+    }
+    await sql.end();
+    process.exit(0);
+  }
+
   if (process.env.MAIL_SYNC_LIST_LABELS === '1') {
     console.log(`mailbox: ${MAILBOX}`);
     const labels = await labelNames();
@@ -295,7 +328,24 @@ async function main() {
       `/threads/${ref.id}?format=metadata` +
         '&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Subject&metadataHeaders=Date',
     );
-    const messages = thread.messages ?? [];
+    const all = thread.messages ?? [];
+    if (all.length === 0) continue;
+
+    /*
+     * Only the messages that are actually live.
+     *
+     * A long conversation usually has a message or two in the trash, and
+     * treating the thread as the sum of everything it ever held was wrong
+     * twice over: the aggregated labels included TRASH, so the prune below
+     * deleted the whole conversation — which is how a correctly labelled
+     * twenty-message thread vanished from the mirror moments after being
+     * fetched — and a trashed final message would have decided who the thread
+     * was waiting on.
+     */
+    const isDead = (m) => (m.labelIds ?? []).some((id) => id === 'TRASH' || id === 'SPAM');
+    const messages = all.filter((m) => !isDead(m));
+
+    // Every message gone means the conversation is gone.
     if (messages.length === 0) continue;
 
     const last = messages[messages.length - 1];
@@ -327,8 +377,6 @@ async function main() {
       }
     }
 
-    // Stored as names, so a label he applies in Gmail is something the rest of
-    // the system can actually match on.
     const threadLabels = new Set();
     for (const m of messages) {
       for (const id of m.labelIds ?? []) threadLabels.add(labels.get(id) ?? id);
@@ -389,13 +437,17 @@ async function main() {
   await sql`update mail_threads set dismissed_at = null where last_from_me = true`;
 
   /*
-   * Drop anything that has since moved to trash or spam.
+   * Drop anything wholly moved to trash or spam.
    *
    * This is a mirror of Gmail, not a record of its own, and the query no
    * longer returns those — so without this they would sit here for ever,
    * counted as waiting on him. Cache eviction, not deletion of anything the
    * cockpit owns: an opportunity captured from such a thread keeps its own row
    * and its link.
+   *
+   * The labels stored above now come only from live messages, so a thread
+   * reaching this condition really is entirely gone — a conversation with one
+   * trashed message among twenty is not.
    */
   const pruned = await sql`
     delete from mail_threads
