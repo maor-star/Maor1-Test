@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import {
-  COLD_AFTER_DAYS, OPPORTUNITY_VIEWS, VIEW_LABEL, listOpportunities, opportunityCounts,
-  type OpportunityView,
+  COLD_AFTER_DAYS, OPPORTUNITY_VIEWS, VIEW_LABEL, captureLabelHealth, listOpportunities,
+  opportunityCounts, type OpportunityView,
 } from '@/lib/opportunities/module';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
@@ -35,7 +35,16 @@ export default async function OpportunitiesPage({
     : 'open';
 
   await requireUser();
-  const [rows, counts] = await Promise.all([listOpportunities(view), opportunityCounts()]);
+  const gmailLabels = (process.env.GMAIL_OPPORTUNITY_LABEL ?? 'Opportunity,הזדמנות')
+    .split(',')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const [rows, counts, labelHealth] = await Promise.all([
+    listOpportunities(view),
+    opportunityCounts(),
+    captureLabelHealth(gmailLabels).catch(() => []),
+  ]);
 
   return (
     <div className="space-y-5">
@@ -75,12 +84,7 @@ export default async function OpportunitiesPage({
         </div>
       </HudCard>
 
-      <HowToCapture
-        gmailLabels={(process.env.GMAIL_OPPORTUNITY_LABEL ?? 'Opportunity,הזדמנות')
-          .split(',')
-          .map((l) => l.trim())
-          .filter(Boolean)}
-      />
+      <HowToCapture gmailLabels={gmailLabels} labelHealth={labelHealth} />
 
       <nav className="flex flex-wrap border border-divider">
         {OPPORTUNITY_VIEWS.map((v) => (

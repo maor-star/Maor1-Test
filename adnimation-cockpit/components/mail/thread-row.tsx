@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { dismissThreadAction } from '@/app/actions/mail';
+import { dismissThreadAction, replyAction } from '@/app/actions/mail';
 import { captureMailAction } from '@/app/actions/opportunities';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/input';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import type { MailRow } from '@/lib/mail/service';
@@ -23,6 +24,8 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [captured, setCaptured] = useState(false);
+  const [replying, setReplying] = useState(false);
+  const [sent, setSent] = useState(false);
   const router = useRouter();
 
   const dismissed = t.dismissedAt !== null;
@@ -80,6 +83,17 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
+        {!t.lastFromMe && !sent ? (
+          <Button type="button" size="xs" onClick={() => setReplying((v) => !v)}>
+            {replying ? 'CLOSE' : 'REPLY'}
+          </Button>
+        ) : null}
+        {sent ? (
+          <span className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700">
+            SENT ✓
+          </span>
+        ) : null}
+
         <a
           href={t.url}
           target="_blank"
@@ -143,6 +157,44 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
 
         {error ? <span className="text-2xs text-destructive">{error}</span> : null}
       </div>
+
+      {replying ? (
+        <form
+          className="mt-2 flex flex-wrap items-end gap-2 border border-divider p-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            data.set('threadId', t.threadId);
+            startTransition(async () => {
+              const result = await replyAction(data);
+              setError(result.ok ? null : (result.error ?? 'Could not send it'));
+              if (result.ok) {
+                setSent(true);
+                setReplying(false);
+                router.refresh();
+              }
+            });
+          }}
+        >
+          <label className="sr-only" htmlFor={`reply-${t.threadId}`}>
+            Reply
+          </label>
+          <Textarea
+            id={`reply-${t.threadId}`}
+            name="text"
+            rows={3}
+            required
+            placeholder={`Reply to ${t.counterpartName || t.counterpartEmail || 'them'}`}
+            className="min-w-0 flex-1"
+          />
+          <Button type="submit" size="sm" disabled={pending}>
+            {pending ? 'SENDING…' : 'SEND'}
+          </Button>
+          <span className="pb-1.5 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+            GOES OUT FROM YOUR ADDRESS, IN THIS THREAD
+          </span>
+        </form>
+      ) : null}
     </li>
   );
 }

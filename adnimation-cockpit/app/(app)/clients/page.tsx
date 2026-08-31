@@ -35,7 +35,7 @@ export default async function ClientsPage({
   return (
     <div className="space-y-5">
       <PageHeader
-        kicker="CLIENTS / 08"
+        kicker="CLIENTS / 09"
         title="Clients"
         action={
           <nav className="flex flex-wrap border border-divider">

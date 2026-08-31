@@ -44,6 +44,27 @@ const MAX_THREADS = Number(process.env.MAIL_SYNC_MAX ?? 300);
 const QUERY =
   process.env.MAIL_SYNC_QUERY ?? `newer_than:${DAYS}d -in:chats -in:spam -in:trash`;
 
+/*
+ * Labels he applies by hand to mean "this is an opportunity".
+ *
+ * These are fetched in a second pass with NO date limit and by label id rather
+ * than by search text. Both details matter and both were bugs:
+ *
+ *  - The main pass keeps only the most recent MAIL_SYNC_MAX threads, which in
+ *    his mailbox reaches back about a fortnight. He labelled an older
+ *    conversation and it was simply never mirrored, so the capture had nothing
+ *    to work from. A thread he deliberately labelled is not subject to a
+ *    recency window — he chose it.
+ *  - `q=label:Name` goes through Gmail's search index and returns nothing for
+ *    a freshly applied label. Listing by labelIds is an exact lookup and is
+ *    true the moment he clicks.
+ */
+const CAPTURE_LABELS = (process.env.GMAIL_OPPORTUNITY_LABEL ?? 'Opportunity,הזדמנות')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+const CAPTURE_MAX = Number(process.env.MAIL_SYNC_CAPTURE_MAX ?? 200);
+
 if (!RAW_KEY || !MAILBOX || !DB) {
   console.error('GOOGLE_SERVICE_ACCOUNT_KEY, GMAIL_MAILBOX and DATABASE_URL are all required.');
   process.exit(1);
@@ -149,6 +170,27 @@ async function main() {
   const started = Date.now();
   await accessToken();
 
+  // A capture label that does not work is almost always a name that is not
+  // quite what anyone assumed — nested under a parent, or with a stray space.
+  // Printing the list is faster than guessing.
+  if (process.env.MAIL_SYNC_LIST_LABELS === '1') {
+    console.log(`mailbox: ${MAILBOX}`);
+    const labels = await labelNames();
+    const filter = process.env.MAIL_SYNC_LABEL_FILTER;
+    for (const [id, name] of labels) {
+      if (filter && !name.toLowerCase().includes(filter.toLowerCase())) continue;
+      // labels.get is authoritative about how many threads carry a label —
+      // unlike a q=label: search, which goes through the search index.
+      const detail = await api(`/labels/${encodeURIComponent(id)}`);
+      console.log(
+        `[${JSON.stringify(name)}] id=${id} threads=${detail.threadsTotal ?? '?'} ` +
+          `messages=${detail.messagesTotal ?? '?'}`,
+      );
+    }
+    await sql.end();
+    process.exit(0);
+  }
+
   // Everyone the company deals with, so "important" means something.
   const [contacts, companies, colleagues] = await Promise.all([
     sql`select lower(email) as email, company_name from crm_contacts
@@ -186,8 +228,40 @@ async function main() {
 
   console.log(`${threads.length} threads matching "${QUERY}"`);
 
+  // Second pass: everything he has labelled, however old, by label id.
+  const seenIds = new Set(threads.map((t) => t.id));
+  let capturedCount = 0;
+
+  for (const name of CAPTURE_LABELS) {
+    const labelId = [...labels.entries()].find(
+      ([, n]) => n.trim().toLowerCase() === name.trim().toLowerCase(),
+    )?.[0];
+    if (!labelId) continue;
+
+    let capturePage = '';
+    let found = 0;
+    do {
+      const page = await api(
+        `/threads?maxResults=100&labelIds=${encodeURIComponent(labelId)}` +
+          `${capturePage ? `&pageToken=${capturePage}` : ''}`,
+      );
+      for (const ref of page.threads ?? []) {
+        found += 1;
+        if (seenIds.has(ref.id)) continue;
+        seenIds.add(ref.id);
+        threads.push(ref);
+        capturedCount += 1;
+      }
+      capturePage = page.nextPageToken ?? '';
+    } while (capturePage && found < CAPTURE_MAX);
+
+    console.log(`label "${name}": ${found} threads, ${capturedCount} of them outside the window`);
+  }
+
   const rows = [];
-  for (const ref of threads.slice(0, MAX_THREADS)) {
+  // MAX_THREADS caps the recency pass; the labelled ones are already deduped
+  // above and must all be kept, so the cap is raised by however many there are.
+  for (const ref of threads.slice(0, MAX_THREADS + capturedCount)) {
     const thread = await api(
       `/threads/${ref.id}?format=metadata` +
         '&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Subject&metadataHeaders=Date',

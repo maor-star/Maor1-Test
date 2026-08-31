@@ -52,6 +52,17 @@ const daysSince = (d: Date, now: Date) =>
  * flag counts only when it agrees with a starred thread — on its own, in a
  * mailbox of 151,000 messages, it is noise.
  */
+/**
+ * The inbox, as Gmail defines it.
+ *
+ * His filters route most mail straight past the inbox into labels, and that
+ * routing IS his triage — a screen that shows everything mirrored shows him
+ * the mail he has already decided not to look at. The mirror stays wide
+ * because the opportunity detector reads it; the screen narrows to what
+ * actually landed in front of him.
+ */
+const inInbox = sql`${mailThreads.labels} @> array['INBOX']`;
+
 const isImportant = sql`(
   ${mailThreads.knownContact} = true
   or (${mailThreads.gmailImportant} = true and ${mailThreads.starred} = true)
@@ -60,7 +71,7 @@ const isImportant = sql`(
 export async function listMail(view: MailView = 'waiting', limit = 100): Promise<MailRow[]> {
   const waiting = and(eq(mailThreads.lastFromMe, false), isNull(mailThreads.dismissedAt));
 
-  const where =
+  const scoped =
     view === 'waiting'
       ? waiting
       : view === 'important'
@@ -68,6 +79,9 @@ export async function listMail(view: MailView = 'waiting', limit = 100): Promise
         : view === 'handled'
           ? sql`${mailThreads.dismissedAt} is not null`
           : undefined;
+
+  // Every view is the inbox. Filtered mail is filtered on purpose.
+  const where = scoped ? and(inInbox, scoped) : inInbox;
 
   const rows = await db
     .select()
@@ -103,6 +117,8 @@ export interface MailCounts {
   total: number;
   oldestWaitingDays: number | null;
   lastSyncedAt: Date | null;
+  /** Threads held in the mirror overall, including the filtered-away ones. */
+  mirrored: number;
 }
 
 export async function mailCounts(now = new Date()): Promise<MailCounts> {
@@ -116,8 +132,11 @@ export async function mailCounts(now = new Date()): Promise<MailCounts> {
       )::int`,
       oldest: sql<Date | null>`min(last_message_at) filter (where last_from_me = false and dismissed_at is null)`,
       syncedAt: sql<Date | null>`max(synced_at)`,
+      /** Everything mirrored, inbox or not — what the detector reads. */
+      mirrored: sql<number>`(select count(*)::int from mail_threads)`,
     })
-    .from(mailThreads);
+    .from(mailThreads)
+    .where(inInbox);
 
   return {
     total: row?.total ?? 0,
@@ -125,6 +144,7 @@ export async function mailCounts(now = new Date()): Promise<MailCounts> {
     important: row?.important ?? 0,
     oldestWaitingDays: row?.oldest ? daysSince(new Date(row.oldest), now) : null,
     lastSyncedAt: row?.syncedAt ?? null,
+    mirrored: row?.mirrored ?? 0,
   };
 }
 
@@ -133,7 +153,9 @@ export async function mailNeedingReply(limit = 5): Promise<MailRow[]> {
   const rows = await db
     .select()
     .from(mailThreads)
-    .where(and(eq(mailThreads.lastFromMe, false), isNull(mailThreads.dismissedAt), isImportant))
+    .where(
+      and(inInbox, eq(mailThreads.lastFromMe, false), isNull(mailThreads.dismissedAt), isImportant),
+    )
     .orderBy(mailThreads.lastMessageAt)
     .limit(limit);
 

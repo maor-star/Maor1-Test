@@ -426,6 +426,41 @@ export async function promoteToPipeline(
   }
 }
 
+/**
+ * Whether the Gmail capture label is actually doing anything.
+ *
+ * A label that exists but has been applied to nothing looks identical, from
+ * the cockpit, to a label that works — both produce no opportunities. That is
+ * exactly what happened the first time: the label was created and never
+ * applied, and the screen had no way to say so. Counting the mirrored threads
+ * that carry it turns a silent nothing into a visible nothing.
+ */
+export async function captureLabelHealth(labels: string[]): Promise<{
+  label: string;
+  threadsCarrying: number;
+  captured: number;
+}[]> {
+  const out = [];
+  for (const label of labels) {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(mailThreads)
+      .where(sql`${mailThreads.labels} @> array[${label}]::text[]`);
+
+    const [caught] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(opportunities)
+      .where(eq(opportunities.createdBy, 'gmail-label'));
+
+    out.push({
+      label,
+      threadsCarrying: row?.n ?? 0,
+      captured: caught?.n ?? 0,
+    });
+  }
+  return out;
+}
+
 /** Accepting a suggestion makes it his; declining archives it for good. */
 export async function decideSuggestion(
   id: string,
