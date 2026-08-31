@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { spawn } from 'node:child_process';
-import { agentLearning, db } from '@/lib/db';
+import { agentJobRuns, agentLearning, db } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 
 /**
@@ -149,3 +149,41 @@ export async function startTraining(
   });
   return { ok: true };
 }
+
+/**
+ * What a job printed, run by run.
+ *
+ * Both paths write here — the button and the timer — so "what did it do at
+ * four this morning" and "what would it do right now" are the same question
+ * asked of the same place.
+ */
+export interface JobRun {
+  id: number;
+  dry: boolean;
+  startedAt: Date;
+  finishedAt: Date | null;
+  ok: boolean | null;
+  output: string;
+  summary: Record<string, unknown>;
+}
+
+export async function recentJobRuns(agentName: string, limit = 8): Promise<JobRun[]> {
+  const rows = await db
+    .select()
+    .from(agentJobRuns)
+    .where(eq(agentJobRuns.agentName, agentName))
+    .orderBy(desc(agentJobRuns.startedAt))
+    .limit(limit);
+
+  return rows.map((r) => ({
+    id: r.id,
+    dry: r.dry,
+    startedAt: r.startedAt,
+    finishedAt: r.finishedAt,
+    ok: r.ok,
+    output: r.output,
+    summary: (r.summary ?? {}) as Record<string, unknown>,
+  }));
+}
+
+export { summarise } from './summarise-run';

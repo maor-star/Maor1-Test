@@ -534,6 +534,28 @@ export type NewOpportunity = typeof opportunities.$inferInsert;
  * so the run log cannot be rewritten even by us.
  */
 /**
+ * Every run of an agent's job, with everything it printed.
+ *
+ * A dry run whose output lives only in the tab that started it cannot be
+ * looked at the morning after; a timed run that printed into a journal on the
+ * box may as well not have printed at all. Insert-only, like agent_runs.
+ */
+export const agentJobRuns = pgTable(
+  'agent_job_runs',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    agentName: text('agent_name').notNull(),
+    dry: boolean('dry').notNull(),
+    startedAt: timestamptz('started_at').notNull().defaultNow(),
+    finishedAt: timestamptz('finished_at'),
+    ok: boolean('ok'),
+    output: text('output').notNull().default(''),
+    summary: jsonb('summary').notNull().default({}),
+  },
+  (t) => [index('idx_agent_job_runs_agent').on(t.agentName, t.startedAt)],
+);
+
+/**
  * What an agent learned from his own mail, kept apart from what he told it.
  *
  * Retraining must never overwrite an instruction he wrote, and correcting an

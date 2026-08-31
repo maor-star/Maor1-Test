@@ -23,7 +23,9 @@ import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { assertInternalRecipients, looksLikeInvoice } from './internal-mail.mjs';
 import { postAsBot } from './bot-post.mjs';
-import { agentState, briefVeto, markRan, mayAct } from './agent-brief.mjs';
+import {
+  agentState, briefVeto, markRan, mayAct, recordRun, startLog,
+} from './agent-brief.mjs';
 
 const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -189,6 +191,7 @@ async function forward(message, fromName, subject) {
 
 async function main() {
   const started = Date.now();
+  const log = startLog();
 
   /*
    * The inbox only.
@@ -218,6 +221,12 @@ async function main() {
   const gate = mayAct(state, { dry: DRY, force: process.env.FORCE === '1' });
   if (!gate.act && !DRY) {
     console.log(`forwarding nothing: ${gate.why}.`);
+    await recordRun(sql, 'invoice-forwarder', {
+      dry: DRY,
+      output: log.text(),
+      summary: { skipped: gate.why },
+      startedAt: new Date(started),
+    });
     await sql.end();
     process.exit(0);
   }
@@ -342,6 +351,13 @@ async function main() {
     );
     if (!said.ok) console.error(`could not tell him in Slack: ${said.reason}`);
   }
+
+  await recordRun(sql, 'invoice-forwarder', {
+    dry: DRY,
+    output: log.text(),
+    summary: { found, sent, held },
+    startedAt: new Date(started),
+  });
 
   await sql.end();
   process.exit(0);

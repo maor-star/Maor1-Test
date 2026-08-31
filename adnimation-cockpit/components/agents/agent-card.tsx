@@ -14,6 +14,7 @@ import {
   AUTONOMY_LABEL, PROMOTION_MIN_RUNS, RUN_INTERVALS, isIrreversible,
 } from '@/lib/agents/types';
 import { botFor } from '@/lib/agents/slack-bots';
+import { summarise } from '@/lib/agents/summarise-run';
 import type { AgentListItem } from '@/lib/agents/module';
 import { fmtDateTime } from '@/lib/utils';
 
@@ -57,6 +58,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
   const [preview, setPreview] = useState<string | null>(null);
   const [teaching, setTeaching] = useState(false);
   const [editingVoice, setEditingVoice] = useState(false);
+  const [openRun, setOpenRun] = useState<number | null>(null);
   const router = useRouter();
 
   const irreversible = a.actions.filter((x) => isIrreversible(x.type));
@@ -166,7 +168,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
           title="Run it against your real mail, message by message, sending and filing nothing"
           onClick={() => run(runAgentAction, withId({ dryRun: '1' }))}
         >
-          DRY RUN
+          {pending ? 'READING YOUR MAIL…' : 'DRY RUN'}
         </Button>
 
         {/*
@@ -298,6 +300,57 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
           >
             {preview}
           </pre>
+        </div>
+      ) : null}
+
+      {/*
+        Every run it has had, and what it printed.
+        
+        The dry run he pressed an hour ago, and the run the timer did at four
+        this morning, are the same question — what did it do with each mail —
+        so they are in one list, newest first, and each one opens.
+      */}
+      {a.jobRuns.length > 0 ? (
+        <div className="mt-2 border border-divider">
+          <div className="border-b border-divider px-2 py-1">
+            <span className="hud-label text-[9px]">
+              WHAT IT DID, RUN BY RUN — <Num>{a.jobRuns.length}</Num> MOST RECENT
+            </span>
+          </div>
+          <ul>
+            {a.jobRuns.map((r) => (
+              <li key={r.id} className="border-b border-divider last:border-b-0">
+                <button
+                  type="button"
+                  onClick={() => setOpenRun((v) => (v === r.id ? null : r.id))}
+                  className="flex w-full flex-wrap items-baseline gap-x-3 gap-y-1 px-2 py-1.5 text-start hover:bg-accent/5"
+                >
+                  <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                    <Num>{fmtDateTime(r.startedAt)}</Num>
+                  </span>
+                  <span
+                    className={`font-semi text-[10px] tracking-[0.12em] ${
+                      r.dry ? 'text-neutral-500' : 'text-accent-700'
+                    }`}
+                  >
+                    {r.dry ? 'DRY RUN' : 'FOR REAL'}
+                  </span>
+                  <span className="text-[12px] text-neutral-600">{summarise(r)}</span>
+                  <span className="ms-auto font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                    {openRun === r.id ? 'CLOSE' : 'OPEN'}
+                  </span>
+                </button>
+                {openRun === r.id ? (
+                  <pre
+                    dir="ltr"
+                    className="max-h-96 overflow-auto whitespace-pre-wrap border-t border-divider px-2 py-2 text-start text-[12px] leading-relaxed text-neutral-700"
+                  >
+                    {r.output || 'It printed nothing.'}
+                  </pre>
+                ) : null}
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 

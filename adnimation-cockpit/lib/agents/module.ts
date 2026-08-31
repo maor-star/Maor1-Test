@@ -5,7 +5,7 @@ import { claudeStatus } from '@/lib/integrations/claude';
 import { SEED_AGENTS } from './definitions';
 import { notifyRun } from './notify';
 import { RUN_INTERVALS } from './types';
-import { getLearning, type Learning } from './learning';
+import { getLearning, recentJobRuns, type JobRun, type Learning } from './learning';
 import { globalKill, runAgent, setGlobalKill, type Runtime } from './runtime';
 import {
   isIrreversible, validateAgentConfig, type AgentInput, type AgentRecord,
@@ -41,6 +41,7 @@ export interface AgentListItem extends AgentRecord {
   lastRanAt: Date | null;
   instructions: string | null;
   learning: Learning | null;
+  jobRuns: JobRun[];
   instructionsUpdatedAt: Date | null;
   lastRun: { startedAt: Date; outcome: string | null; haltReason: string | null } | null;
   runsToday: number;
@@ -49,6 +50,10 @@ export interface AgentListItem extends AgentRecord {
 export async function listAgents(): Promise<AgentListItem[]> {
   const rows = await db.select().from(agents).orderBy(agents.name);
   const rationales = new Map(SEED_AGENTS.map((a) => [a.name, a.rationale]));
+
+  const jobRuns = new Map(
+    await Promise.all(rows.map(async (r) => [r.name, await recentJobRuns(r.name, 8)] as const)),
+  );
 
   // One query for all of them rather than one per card.
   const learning = new Map(
@@ -83,6 +88,7 @@ export async function listAgents(): Promise<AgentListItem[]> {
         lastRanAt: r.lastRanAt,
         instructions: r.instructions,
         learning: learning.get(r.name) ?? null,
+        jobRuns: jobRuns.get(r.name) ?? [],
         instructionsUpdatedAt: r.instructionsUpdatedAt,
         lastRun: last ?? null,
         runsToday: today?.n ?? 0,

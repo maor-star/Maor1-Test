@@ -26,7 +26,9 @@ import {
   ANSWERED_LABEL, CLAUDE_LABEL, FILED_LABEL, PROMO_LABEL, isSpentAuthCode, looksPromotional,
 } from './mailbox-rules.mjs';
 import { postAsBot } from './bot-post.mjs';
-import { agentState, briefVeto, markRan, mayAct } from './agent-brief.mjs';
+import {
+  agentState, briefVeto, markRan, mayAct, recordRun, startLog,
+} from './agent-brief.mjs';
 
 const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -179,6 +181,7 @@ async function ensureLabels() {
 
 async function main() {
   const started = Date.now();
+  const log = startLog();
 
   if (process.env.ENSURE_LABELS === '1') {
     await ensureLabels();
@@ -210,6 +213,12 @@ async function main() {
     console.log(`filing sales mail: ${mayFilePromo.act ? 'on' : `off — ${mayFilePromo.why}`}`);
     console.log(`clearing spent codes: ${mayTrash.act ? 'on' : `off — ${mayTrash.why}`}`);
     if (!mayFilePromo.act && !mayTrash.act) {
+      await recordRun(sql, 'promo-filer', {
+        dry: DRY,
+        output: log.text(),
+        summary: { skipped: mayFilePromo.why },
+        startedAt: new Date(started),
+      });
       await sql.end();
       process.exit(0);
     }
@@ -297,6 +306,13 @@ async function main() {
         `${held} held back by your brief, ` +
         `in ${Math.round((Date.now() - started) / 1000)}s.`,
   );
+
+  await recordRun(sql, 'promo-filer', {
+    dry: DRY,
+    output: log.text(),
+    summary: { filed, trashed, held },
+    startedAt: new Date(started),
+  });
 
   await sql.end();
   process.exit(0);

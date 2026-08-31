@@ -128,3 +128,44 @@ export async function briefVeto({ brief, agent, what, item, apiKey = process.env
     return { go: false, why: `could not check it against your brief (${e.message})` };
   }
 }
+
+/**
+ * Keep everything a job printed, and file it under the run.
+ *
+ * Jobs are started two ways — a button on the screen and a timer on the box —
+ * and until now only the first showed him anything, and only in the tab that
+ * started it. Teeing the console into a buffer means one recording path for
+ * both, with no job having to learn to report itself.
+ */
+export function startLog() {
+  const lines = [];
+  const keep = (stream) => (...args) => {
+    lines.push(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' '));
+    stream(...args);
+  };
+  const originals = { log: console.log, error: console.error };
+  console.log = keep(originals.log);
+  console.error = keep(originals.error);
+
+  return {
+    text: () => lines.join('\n'),
+    stop: () => {
+      console.log = originals.log;
+      console.error = originals.error;
+    },
+  };
+}
+
+/**
+ * One row per run, insert-only. Never throws: a run that did its work and
+ * failed to write its diary still did its work.
+ */
+export async function recordRun(sql, name, { dry, output, summary = {}, ok = true, startedAt }) {
+  await sql`
+    insert into agent_job_runs (agent_name, dry, started_at, finished_at, ok, output, summary)
+    values (
+      ${name}, ${Boolean(dry)}, ${startedAt ?? new Date()}, now(), ${ok},
+      ${(output ?? '').slice(0, 100_000)}, ${sql.json(summary)}
+    )
+  `.catch((e) => console.error(`could not record the run: ${e.message}`));
+}

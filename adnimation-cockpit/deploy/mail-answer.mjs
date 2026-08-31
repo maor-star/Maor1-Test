@@ -28,7 +28,7 @@ import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { mayFile, triage } from './autoreply-rules.mjs';
 import { postAsBot } from './bot-post.mjs';
-import { agentState, markRan, mayAct } from './agent-brief.mjs';
+import { agentState, markRan, mayAct, recordRun, startLog } from './agent-brief.mjs';
 
 const DB = process.env.DATABASE_URL;
 const RAW_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -278,6 +278,7 @@ async function tellHim(lines, notify) {
 
 async function main() {
   const started = Date.now();
+  const log = startLog();
 
   /*
    * The switch on the screen decides whether this runs. A job that reads only
@@ -287,6 +288,12 @@ async function main() {
   const gate = mayAct(state, { dry: DRY, force: process.env.FORCE === '1' });
   if (!gate.act && !DRY) {
     console.log(`not answering anything: ${gate.why}.`);
+    await recordRun(sql, 'mail-answerer', {
+      dry: DRY,
+      output: log.text(),
+      summary: { skipped: gate.why },
+      startedAt: new Date(started),
+    });
     await sql.end();
     process.exit(0);
   }
@@ -379,7 +386,9 @@ async function main() {
     const filable = mayFile(triaged);
     if (!triaged.answerable && !filable.consider) {
       declined += 1;
-      console.log(`  left alone: ${subject}\n      ${triaged.reason}`);
+      console.log(`  LEFT FOR YOU: ${subject}`);
+      console.log(`      from ${from}`);
+      console.log(`      because: ${triaged.reason}`);
       continue;
     }
 
@@ -396,14 +405,17 @@ async function main() {
       const justInformation = filable.consider && d.informational === true && d.confidence !== 'low';
       if (!justInformation) {
         declined += 1;
-        console.log(`  left alone: ${subject}\n      ${verdict.why}`);
+        console.log(`  LEFT FOR YOU: ${subject}`);
+        console.log(`      from ${from}`);
+        console.log(`      because: ${verdict.why}`);
         continue;
       }
 
       const line = (d.summary ?? '').trim() || (message.snippet ?? '').slice(0, 200);
-      console.log(`  ${DRY ? 'WOULD FILE, NO REPLY' : 'filing, no reply'}: ${subject}`);
+      console.log(`  ${DRY ? 'WOULD FILE, NO REPLY' : 'FILED, NO REPLY'}: ${subject}`);
       console.log(`      from ${from}`);
-      console.log(`      ${line}`);
+      console.log(`      what it says: ${line}`);
+      console.log('      nothing is being asked of you, so it would not answer');
       if (DRY) continue;
 
       if (filedLabel) {
@@ -428,9 +440,16 @@ async function main() {
       continue;
     }
 
-    console.log(`  ${DRY ? 'WOULD ANSWER' : 'answering'}: ${subject}`);
+    const theyWrote = (candidate.messages.at(-1)?.text ?? message.snippet ?? '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    console.log(`  ${DRY ? 'WOULD ANSWER' : 'ANSWERED'}: ${subject}`);
     console.log(`      from ${from}`);
-    console.log(`      "${d.reply.replace(/\n+/g, ' ').slice(0, 200)}"`);
+    console.log(`      they wrote: ${theyWrote.slice(0, 400)}`);
+    console.log(`      because: ${triaged.reason}`);
+    // The whole reply, never truncated: deciding whether to trust this agent
+    // means reading what it would actually send, not the first line of it.
+    console.log(`      the reply:\n${d.reply.split('\n').map((l) => `        ${l}`).join('\n')}`);
 
     if (DRY) continue;
 
@@ -460,6 +479,13 @@ async function main() {
     `${answered} answered, ${filedOnly} filed without a reply, ${declined} left for you, ` +
       `in ${Math.round((Date.now() - started) / 1000)}s.`,
   );
+
+  await recordRun(sql, 'mail-answerer', {
+    dry: DRY,
+    output: log.text(),
+    summary: { read: refs.length, answered, filed: filedOnly, left: declined },
+    startedAt: new Date(started),
+  });
 
   await sql.end();
   process.exit(0);
