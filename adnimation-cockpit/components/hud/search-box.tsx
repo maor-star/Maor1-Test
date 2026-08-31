@@ -19,10 +19,18 @@ export function SearchBox({
   placeholder = 'Type to find',
   param = 'q',
   className = '',
+  /**
+   * `lg` is for the screens he searches rather than skims — tasks and the
+   * pipeline, where the box sits at the top of the page and is the first thing
+   * he reaches for. Everywhere else it is one control among several in a card
+   * header, and a large box there would shout over the numbers beside it.
+   */
+  size = 'sm',
 }: {
   placeholder?: string;
   param?: string;
   className?: string;
+  size?: 'sm' | 'lg';
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -79,12 +87,16 @@ export function SearchBox({
             box.current?.blur();
           }
         }}
-        className="h-8 w-full border border-divider bg-ground ps-2 pe-14 text-[13px] text-ink placeholder:text-neutral-500 sm:w-64"
+        className={
+          size === 'lg'
+            ? 'h-11 w-full border border-divider bg-ground ps-3 pe-16 text-[16px] text-ink placeholder:text-neutral-500'
+            : 'h-8 w-full border border-divider bg-ground ps-2 pe-14 text-[13px] text-ink placeholder:text-neutral-500 sm:w-64'
+        }
       />
       <span
-        className={`pointer-events-none absolute inset-y-0 end-2 flex items-center font-semi text-[9px] tracking-[0.14em] ${
-          pending ? 'text-accent-700' : 'text-neutral-500'
-        }`}
+        className={`pointer-events-none absolute inset-y-0 flex items-center font-semi tracking-[0.14em] ${
+          size === 'lg' ? 'end-3 text-[10px]' : 'end-2 text-[9px]'
+        } ${pending ? 'text-accent-700' : 'text-neutral-500'}`}
       >
         {pending ? 'FINDING' : value ? 'ESC' : '/'}
       </span>

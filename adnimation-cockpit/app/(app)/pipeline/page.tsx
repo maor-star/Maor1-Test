@@ -5,7 +5,10 @@ import { PageHeader } from '@/components/hud/page-header';
 import { Num } from '@/components/num';
 import { AddPipelineClient } from '@/components/pipeline/add-client';
 import { PipelineClientRow } from '@/components/pipeline/client-row';
-import { buildBoard, listOwners, listPipeline, recentTouches } from '@/lib/pipeline/service';
+import {
+  PIPELINE_SORTS, PIPELINE_SORT_LABEL, buildBoard, listOwners, listPipeline, recentTouches,
+  type PipelineSort,
+} from '@/lib/pipeline/service';
 import {
   CLIENT_TYPES, CLIENT_TYPE_LABEL, QUIET_DAYS, STAGES, STAGE_LABEL,
   type ClientType, type Stage,
@@ -19,6 +22,7 @@ interface SearchParams {
   type?: string;
   q?: string;
   attention?: string;
+  sort?: string;
 }
 
 /**
@@ -40,9 +44,12 @@ export default async function PipelinePage({
     ? (sp.type as ClientType)
     : undefined;
   const attention = sp.attention === '1';
+  const sort: PipelineSort = PIPELINE_SORTS.includes(sp.sort as PipelineSort)
+    ? (sp.sort as PipelineSort)
+    : 'newest';
 
   const [rows, owners] = await Promise.all([
-    listPipeline({ stage, clientType, q: sp.q, attention }),
+    listPipeline({ stage, clientType, q: sp.q, attention, sort }),
     listOwners(),
   ]);
   const board = buildBoard(rows);
@@ -52,7 +59,9 @@ export default async function PipelinePage({
   // means narrowing it repeatedly, not starting over each time.
   const href = (patch: Partial<SearchParams>) => {
     const next = new URLSearchParams();
-    const merged = { stage: sp.stage, type: sp.type, q: sp.q, attention: sp.attention, ...patch };
+    const merged = {
+      stage: sp.stage, type: sp.type, q: sp.q, attention: sp.attention, sort: sp.sort, ...patch,
+    };
     for (const [k, v] of Object.entries(merged)) if (v) next.set(k, v);
     const qs = next.toString();
     return qs ? `/pipeline?${qs}` : '/pipeline';
@@ -69,6 +78,13 @@ export default async function PipelinePage({
           </span>
         }
       />
+
+      {/*
+        The search, where he reaches for it: at the top, big enough to type
+        into without aiming. The stage and type filters sit further down,
+        because they are chosen occasionally and this is used constantly.
+      */}
+      <SearchBox size="lg" placeholder="Find a client — name or domain" className="max-w-xl" />
 
       <HudCard>
         <HudCardHeader
@@ -135,11 +151,15 @@ export default async function PipelinePage({
           NEEDS ATTENTION
         </FilterLink>
 
-        <form action="/pipeline" className="flex flex-wrap items-center gap-2">
-          {stage ? <input type="hidden" name="stage" value={stage} /> : null}
-          {clientType ? <input type="hidden" name="type" value={clientType} /> : null}
-          {attention ? <input type="hidden" name="attention" value="1" /> : null}
-          <SearchBox placeholder="Find a client" className="w-52" />
+        <nav className="flex flex-wrap border border-divider">
+          {PIPELINE_SORTS.map((s) => (
+            <FilterLink key={s} href={href({ sort: s })} active={sort === s}>
+              {PIPELINE_SORT_LABEL[s]}
+            </FilterLink>
+          ))}
+        </nav>
+
+        <div className="flex flex-wrap items-center gap-2">
           {sp.q ? (
             <Link
               href={href({ q: undefined })}
@@ -148,7 +168,7 @@ export default async function PipelinePage({
               Clear
             </Link>
           ) : null}
-        </form>
+        </div>
       </div>
 
       {board.byStage.length === 0 ? (

@@ -57,7 +57,13 @@ describe('ordering the task list', () => {
     ]);
   });
 
-  it('still leads with the hottest by default', async () => {
+  it('leads with the newest when nothing is chosen', async () => {
+    // He opens this screen after something has happened; what he is looking
+    // for is nearly always what just arrived.
+    expect((await listTasks({ search: TAG })).map((t) => t.title)[0]).toBe(`${TAG} newest`);
+  });
+
+  it('still leads with the hottest when he asks for heat', async () => {
     // The P0 has the highest heat score, whatever its age.
     expect((await titles('heat'))[0]).toBe(`${TAG} middle`);
   });

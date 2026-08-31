@@ -90,7 +90,7 @@ export interface TaskFilter {
  * back in whatever order the planner chose — which changes between page loads
  * and reads as the list shuffling itself while he is looking at it.
  */
-function ordering(sort: TaskSort = 'heat') {
+function ordering(sort: TaskSort = 'newest') {
   switch (sort) {
     case 'newest':
       return [desc(tasks.createdAt)];

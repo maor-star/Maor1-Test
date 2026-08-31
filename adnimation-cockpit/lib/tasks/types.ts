@@ -16,10 +16,10 @@ export const TASK_STATUSES = ['open', 'in_progress', 'blocked', 'delegated', 'do
 /**
  * What the list is ordered by.
  *
- * Heat is the default and stays the default: it is the whole point of the heat
- * score that the top of the list is what to do next. But "what came in today"
- * and "what has been sitting here longest" are different questions, and the
- * second one is how a task gets noticed before it is embarrassing.
+ * Newest is the default: he opens the list after something has happened, and
+ * what he is looking for is nearly always what just arrived. Heat — what to do
+ * next — is one click away and the score is still on every row, and the daily
+ * brief asks for heat by name, because that view is triage.
  */
 export const TASK_SORTS = ['heat', 'newest', 'oldest', 'due'] as const;
 export type TaskSort = (typeof TASK_SORTS)[number];
@@ -99,3 +99,14 @@ export const ZOMBIE_SNOOZE_THRESHOLD = 3;
 export const DELEGATION_STALE_DAYS = 3;
 /** Spec 6.3 — the CEO owning a task this long suggests handing it over. */
 export const CEO_OWNERSHIP_HANDOVER_DAYS = 21;
+
+/**
+ * A task snoozed this many times is not being deferred, it is being avoided.
+ *
+ * Lives here rather than beside the mutation that counts it, because the list
+ * row that draws the badge is a client component and must not pull the
+ * database in with it.
+ */
+export function isZombie(snoozeCount: number): boolean {
+  return snoozeCount >= ZOMBIE_SNOOZE_THRESHOLD;
+}

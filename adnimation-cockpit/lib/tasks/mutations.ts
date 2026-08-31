@@ -2,7 +2,10 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db, taskComments, tasks } from '@/lib/db';
 import { computeHeat } from './heat';
 import { writeAudit } from '@/lib/audit';
-import { type TaskInput, type TaskPatch, ZOMBIE_SNOOZE_THRESHOLD } from './types';
+import { isZombie, type TaskInput, type TaskPatch } from './types';
+
+// Re-exported because half the callers reach for it through here.
+export { isZombie };
 
 export { computeHeat };
 
@@ -125,10 +128,6 @@ export async function snoozeTask(id: string, until: Date, actor: string) {
     after: { until, snoozeCount: row.snoozeCount, zombie: isZombie(row.snoozeCount) },
   });
   return row;
-}
-
-export function isZombie(snoozeCount: number): boolean {
-  return snoozeCount >= ZOMBIE_SNOOZE_THRESHOLD;
 }
 
 /** Nothing is ever deleted (CLAUDE.md §2) — archive only. */

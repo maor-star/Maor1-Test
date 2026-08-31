@@ -6,6 +6,7 @@ import {
 import { todayInTz } from '@/lib/utils';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
+import { SearchBox } from '@/components/hud/search-box';
 import { TaskListView } from '@/components/tasks/list-view';
 import { TaskBoardView } from '@/components/tasks/board-view';
 import { TaskCalendarView } from '@/components/tasks/calendar-view';
@@ -54,9 +55,17 @@ export default async function TasksPage({
     ? [sp.status as TaskStatus]
     : undefined;
 
+  /*
+   * Newest first, by default.
+   *
+   * Heat answers "what should I do next", which is the right question for a
+   * list he works through — but he opens this screen after something has
+   * happened, and what he is looking for is almost always what just arrived.
+   * The heat order is one click away and the score is still on every row.
+   */
   const sort: TaskSort = TASK_SORTS.includes(sp.sort as TaskSort)
     ? (sp.sort as TaskSort)
-    : 'heat';
+    : 'newest';
 
   const [rows, departments, people] = await Promise.all([
     listTasks({
@@ -102,6 +111,13 @@ export default async function TasksPage({
         }
       />
 
+      {/*
+        The search, where he reaches for it: at the top, big enough to type
+        into without aiming. The rest of the filters sit below, because they
+        are chosen occasionally and this is used constantly.
+      */}
+      <SearchBox size="lg" placeholder="Find a task — title or description" className="max-w-xl" />
+
       <TaskFilters
         departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
         current={{
@@ -123,7 +139,12 @@ export default async function TasksPage({
         />
       </HudCard>
 
-      <TaskViewSwitch view={view} rows={rows} people={people.map((p) => ({ id: p.id, label: p.name }))} />
+      <TaskViewSwitch
+        view={view}
+        rows={rows}
+        people={people.map((p) => ({ id: p.id, label: p.name }))}
+        departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
+      />
     </div>
   );
 }
@@ -132,12 +153,14 @@ function TaskViewSwitch({
   view,
   rows,
   people,
+  departments,
 }: {
   view: View;
   rows: TaskRow[];
   people: { id: string; label: string }[];
+  departments: { id: string; label: string }[];
 }) {
   if (view === 'board') return <TaskBoardView rows={rows} />;
   if (view === 'calendar') return <TaskCalendarView rows={rows} today={todayInTz()} />;
-  return <TaskListView rows={rows} people={people} />;
+  return <TaskListView rows={rows} people={people} departments={departments} />;
 }

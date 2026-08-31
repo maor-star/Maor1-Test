@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
-import { Input, Select } from '@/components/ui/input';
+import { Select } from '@/components/ui/input';
 import {
   PRIORITY_META, SORT_LABEL, STATUS_LABEL, TASK_PRIORITIES, TASK_SORTS, TASK_STATUSES,
 } from '@/lib/tasks/types';
@@ -37,20 +37,14 @@ export function TaskFilters({
     [current, router],
   );
 
+  /*
+   * The search moved to the top of the page, where it is used constantly and
+   * is now big enough to hit. What is left here is chosen occasionally, so it
+   * stays a compact row — and every control writes the URL, which is what
+   * keeps a narrowed screen shareable and reload-proof.
+   */
   return (
-    <form
-      className="flex flex-wrap items-end gap-2 rounded-lg border p-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const q = new FormData(e.currentTarget).get('q');
-        push({ q: String(q ?? '') });
-      }}
-    >
-      <div>
-        <label className="block text-2xs text-muted-foreground" htmlFor="q">Search</label>
-        <Input id="q" name="q" defaultValue={current.q} placeholder="Title or description" className="w-56" />
-      </div>
-
+    <div className="flex flex-wrap items-end gap-2 rounded-lg border p-2">
       <div>
         <label className="block text-2xs text-muted-foreground" htmlFor="layer">Layer</label>
         <Select id="layer" value={current.layer} onChange={(e) => push({ layer: e.target.value })}>
@@ -104,6 +98,6 @@ export function TaskFilters({
           ))}
         </Select>
       </div>
-    </form>
+    </div>
   );
 }

@@ -1,22 +1,24 @@
 import Link from 'next/link';
 import type { TaskRow } from '@/lib/tasks/queries';
-import { daysOverdue } from '@/lib/scoring/heat-score';
-import { isZombie } from '@/lib/tasks/mutations';
-import { fmtDate, fmtMoney } from '@/lib/utils';
-import { Tag } from '@/components/hud/tag';
+import { TaskListRow } from '@/components/tasks/list-row';
 import { Num } from '@/components/num';
-import { HeatBar, OverdueChip, PriorityBadge, StatusBadge, TaskTitleLink } from '@/components/task-bits';
-import { QuickTaskActions } from '@/components/quick-task-actions';
-import { ClickUpStatus } from '@/components/tasks/clickup-status';
-import { DelegateButton } from '@/components/tasks/delegate-button';
 
-/** Spec 6.4 — the list view, sorted by heat. Every row carries its actions. */
+/** Kept in step with the header row: the inline editor spans the whole table. */
+const COLUMNS = 10;
+
+/**
+ * Spec 6.4 — the list view. Every row carries its actions, and now its whole
+ * task: EDIT opens the editor in place rather than sending him to a page and
+ * losing the list he was working through.
+ */
 export function TaskListView({
   rows,
   people,
+  departments,
 }: {
   rows: TaskRow[];
   people: { id: string; label: string }[];
+  departments: { id: string; label: string }[];
 }) {
   if (rows.length === 0) {
     return (
@@ -48,63 +50,16 @@ export function TaskListView({
           </tr>
         </thead>
         <tbody>
-          {rows.map((t) => {
-            const late = daysOverdue(t.dueDate, now);
-            return (
-              <tr key={t.id}>
-                <td>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <TaskTitleLink id={t.id} title={t.title} clickupUrl={t.clickupUrl} />
-                    {isZombie(t.snoozeCount) ? (
-                      <Tag tone="watch" title={`Snoozed ${t.snoozeCount} times`}>Zombie</Tag>
-                    ) : null}
-                    {t.tags.map((tag) => (
-                      <Tag key={tag} tone="outline">{tag}</Tag>
-                    ))}
-                  </div>
-                </td>
-                <td><PriorityBadge priority={t.priority} /></td>
-                <td><StatusBadge status={t.status} /></td>
-                <td className="text-neutral-500">{t.deptNameHe ?? '—'}</td>
-                <td className="text-neutral-500">{t.ownerName ?? 'Unowned'}</td>
-                <td>
-                  {t.dueDate ? (
-                    <span className="flex items-center gap-1">
-                      <Num className="text-2xs">{t.dueDate}</Num>
-                      <OverdueChip days={late} />
-                    </span>
-                  ) : (
-                    <span className="text-neutral-500">—</span>
-                  )}
-                </td>
-                <td>
-                  <Num className="text-2xs text-neutral-500">{fmtDate(t.createdAt)}</Num>
-                </td>
-                <td>
-                  <Num className="text-neutral-500">{fmtMoney(t.moneyImpactCents)}</Num>
-                </td>
-                <td><HeatBar score={t.heatScore} /></td>
-                <td className="text-left">
-                  <div className="flex flex-wrap items-center justify-end gap-1">
-                    {/* A mirrored task is closed in ClickUp, not here — see
-                        app/actions/clickup-tasks.ts for why the write goes
-                        there first. */}
-                    {t.clickupUrl ? <ClickUpStatus taskId={t.id} status={t.status} compact /> : null}
-                    <QuickTaskActions taskId={t.id} isMine={t.layer === 'mine'} />
-                    {t.layer === 'mine' ? (
-                      <DelegateButton
-                        sourceEntityId={t.id}
-                        defaultTitle={t.title}
-                        defaultPriority={t.priority}
-                        defaultDueDate={t.dueDate}
-                        people={people}
-                      />
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
+          {rows.map((t) => (
+            <TaskListRow
+              key={t.id}
+              task={t}
+              people={people}
+              departments={departments}
+              now={now}
+              columns={COLUMNS}
+            />
+          ))}
         </tbody>
       </table>
       <div className="border-t border-divider px-3 py-2 font-semi text-[11px] tracking-[0.1em] text-neutral-500">

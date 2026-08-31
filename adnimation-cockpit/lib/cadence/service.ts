@@ -34,7 +34,9 @@ export async function loadCadence(now = new Date()): Promise<CadenceView> {
   const today = todayInTz(now);
 
   const [tasks, contracts, delegations, anomalies] = await Promise.all([
-    settled('Tasks', () => listTasks({ includeDone: false, limit: 200 })),
+    // The brief is triage, so it wants the hottest first whatever the task
+    // screen is defaulting to today.
+    settled('Tasks', () => listTasks({ includeDone: false, limit: 200, sort: 'heat' })),
     settled('Contracts', () => contractRecords(now)),
     settled('Delegations', () => listOpenDelegations()),
     settled('Revenue', async () => (await loadRevenueView(today)).summary?.anomalies ?? []),

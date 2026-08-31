@@ -27,6 +27,47 @@ export interface PipelineFilter {
   q?: string;
   /** Only the ones that need attention: overdue next step, or gone quiet. */
   attention?: boolean;
+  sort?: PipelineSort;
+}
+
+/**
+ * What the list is ordered by.
+ *
+ * Newest first is the default: he opens this screen after something has
+ * happened, and what he is looking for is nearly always the conversation that
+ * just started. "Next step first" is the order for working the list top to
+ * bottom, and it is one click away.
+ *
+ * Every order ends in a tiebreak, so two clients that compare equal do not
+ * swap places between page loads.
+ */
+export const PIPELINE_SORTS = ['newest', 'oldest', 'next_step', 'value'] as const;
+export type PipelineSort = (typeof PIPELINE_SORTS)[number];
+
+export const PIPELINE_SORT_LABEL: Record<PipelineSort, string> = {
+  newest: 'Newest first',
+  oldest: 'Oldest first',
+  next_step: 'Next step first',
+  value: 'Biggest first',
+};
+
+function ordering(sort: PipelineSort = 'newest') {
+  switch (sort) {
+    case 'oldest':
+      return [asc(pipelineClients.createdAt)];
+    case 'next_step':
+      // Nulls last: a client with no next step is not the most urgent thing on
+      // the page, however overdue the ones with dates are.
+      return [
+        sql`${pipelineClients.nextStepDate} asc nulls last`,
+        desc(pipelineClients.valueCents),
+      ];
+    case 'value':
+      return [sql`${pipelineClients.valueCents} desc nulls last`, desc(pipelineClients.createdAt)];
+    case 'newest':
+    default:
+      return [desc(pipelineClients.createdAt)];
+  }
 }
 
 export async function listPipeline(filter: PipelineFilter = {}): Promise<PipelineRow[]> {
@@ -63,7 +104,7 @@ export async function listPipeline(filter: PipelineFilter = {}): Promise<Pipelin
     .from(pipelineClients)
     .leftJoin(people, eq(pipelineClients.ownerPersonId, people.id))
     .where(and(...where))
-    .orderBy(asc(pipelineClients.nextStepDate), desc(pipelineClients.valueCents));
+    .orderBy(...ordering(filter.sort));
 
   const mapped: PipelineRow[] = rows.map((r) => ({
     id: r.id,
