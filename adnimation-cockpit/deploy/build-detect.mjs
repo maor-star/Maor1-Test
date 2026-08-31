@@ -47,6 +47,21 @@ const TARGETS = [
     ],
   },
   {
+    src: new URL('../lib/agents/autoreply.ts', import.meta.url),
+    out: new URL('./autoreply-rules.mjs', import.meta.url),
+    from: 'lib/agents/autoreply.ts',
+    test: 'tests/unit/autoreply-parity.test.ts',
+    rewrites: [
+      // The job does its own Claude call, so the drafting half is not needed.
+      [/import \{ z \} from 'zod';\n/, ''],
+      [/import \{ ask \}[^;]+;\n/, ''],
+      [/export const draftSchema[\s\S]*$/, ''],
+      ['const NEVER: [RegExp, string][] = [', 'const NEVER = ['],
+      ['const SIMPLE: [RegExp, string][] = [', 'const SIMPLE = ['],
+      ['export function triage(candidate: ReplyCandidate): Triage {', 'export function triage(candidate) {'],
+    ],
+  },
+  {
     src: new URL('../lib/agents/mailbox.ts', import.meta.url),
     out: new URL('./mailbox-rules.mjs', import.meta.url),
     from: 'lib/agents/mailbox.ts',
@@ -150,7 +165,7 @@ for (const target of TARGETS) {
   // Anything left with a type annotation would be a syntax error at run time,
   // and a job that crashes on the timer is worse than one that fails to build.
   if (
-    /:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget|InvoiceInput|InvoiceGuess|MailFacts|PromoGuess|CodeGuess)\b/.test(
+    /:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget|InvoiceInput|InvoiceGuess|MailFacts|PromoGuess|CodeGuess|ReplyCandidate|Triage|Draft)\b/.test(
       body,
     )
   ) {

@@ -59,7 +59,7 @@ const QUERY =
  *    a freshly applied label. Listing by labelIds is an exact lookup and is
  *    true the moment he clicks.
  */
-const CAPTURE_LABELS = (process.env.GMAIL_OPPORTUNITY_LABEL ?? 'Opportunity,הזדמנות')
+const CAPTURE_LABELS = (process.env.GMAIL_OPPORTUNITY_LABEL ?? 'Opportunity')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);

@@ -35,7 +35,7 @@ export default async function OpportunitiesPage({
     : 'open';
 
   await requireUser();
-  const gmailLabels = (process.env.GMAIL_OPPORTUNITY_LABEL ?? 'Opportunity,הזדמנות')
+  const gmailLabels = (process.env.GMAIL_OPPORTUNITY_LABEL ?? 'Opportunity')
     .split(',')
     .map((l) => l.trim())
     .filter(Boolean);

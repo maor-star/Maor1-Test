@@ -172,9 +172,35 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
     enabled: false,
   },
   {
+    name: 'mail-answerer',
+    description:
+      'Answers the genuinely trivial mail — acknowledgements, scheduling, "who should I speak ' +
+      'to" — files what it answered under “Claude Answered”, and tells you in Slack what came ' +
+      'in and what went out.',
+    rationale:
+      'The only agent that puts words in your mouth to someone outside the company, so it is ' +
+      'built to refuse. Two gates that must both pass: rules no model can argue past (nothing ' +
+      'about money, contracts, legal, staff or any commitment), then the model’s own veto, which ' +
+      'may only narrow what the rules allowed. Declining costs you one email; a wrong reply ' +
+      'commits you in writing to someone who will hold you to it.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 */2 * * *' },
+    conditions: [
+      { name: 'Claude is connected', check: 'claude_configured', config: {} },
+      { name: 'It is genuinely simple', check: 'mail_is_simple', config: {} },
+    ],
+    actions: [
+      { type: 'draft_reply', config: {} },
+      { type: 'update_record', config: { label: 'Claude Answered', removeFromInbox: true } },
+    ],
+    autonomyLevel: 1,
+    maxRunsPerHour: 6,
+    enabled: false,
+  },
+  {
     name: 'promo-filer',
     description:
-      'Files sales and marketing mail under “קידום מכירות” and takes it out of the inbox, so ' +
+      'Files sales and marketing mail under “Sales & Marketing” and takes it out of the inbox, so ' +
       'what is left is what still needs you.',
     rationale:
       'Filed, never deleted, and it will not touch anyone the company deals with, anyone you ' +
@@ -183,7 +209,7 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
     triggerType: 'schedule',
     triggerConfig: { cron: '0 */3 * * *' },
     conditions: [{ name: 'It really is marketing', check: 'looks_promotional', config: {} }],
-    actions: [{ type: 'update_record', config: { label: 'קידום מכירות', removeFromInbox: true } }],
+    actions: [{ type: 'update_record', config: { label: 'Sales & Marketing', removeFromInbox: true } }],
     autonomyLevel: 1,
     maxRunsPerHour: 8,
     enabled: false,

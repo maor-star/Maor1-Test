@@ -20,8 +20,19 @@
  * throwing out means the trash, which Gmail keeps for thirty days.
  */
 
-/** The label sales and marketing mail is filed under. */
-export const PROMO_LABEL = process.env.PROMO_LABEL ?? 'קידום מכירות';
+/*
+ * Label names are English, always.
+ *
+ * Gmail search, filters and the API all take the name as a literal string, and
+ * a right-to-left name in a left-to-right query is a class of bug nobody wants
+ * to debug at the point where mail is disappearing from an inbox.
+ */
+
+/** Where sales and marketing mail is filed. */
+export const PROMO_LABEL = process.env.PROMO_LABEL ?? 'Sales & Marketing';
+
+/** Where a conversation the assistant answered is filed. */
+export const ANSWERED_LABEL = process.env.ANSWERED_LABEL ?? 'Claude Answered';
 
 /* -------------------------------------------------------------------------
  * Sales and marketing
