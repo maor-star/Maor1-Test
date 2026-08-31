@@ -36,6 +36,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
     opportunities: { id: string; title: string; counterparty: string | null }[];
     deals: { id: string; name: string; stage: string }[];
   } | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -123,17 +124,75 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
 
           {c.notes ? <p className="mt-1 text-[13px] text-neutral-600">{c.notes}</p> : null}
 
+          {/*
+            Classifying a contract you cannot read is guesswork, so every
+            version is openable from here: read it inline without leaving the
+            page, or open it in Drive if he wants the full viewer.
+          */}
           {c.versions.length > 0 ? (
             <ul className="mt-1.5 space-y-0.5">
               {c.versions.map((v) => (
-                <li key={v.id} className="text-[12px] text-neutral-500">
-                  <span className="font-semi text-accent-700">v{v.versionNo}</span> {v.fileName}
-                  {v.uploadedAt === null ? (
-                    <span className="text-sev-warning"> · not in Drive</span>
-                  ) : null}
+                <li key={v.id} className="flex flex-wrap items-center gap-2 text-[12px] text-neutral-500">
+                  <span className="font-semi text-accent-700">v{v.versionNo}</span>
+                  <span className="min-w-0 break-all">{v.fileName}</span>
+                  {v.driveFileId ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreview((current) =>
+                            current === v.driveFileId ? null : v.driveFileId,
+                          )
+                        }
+                        className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+                      >
+                        {preview === v.driveFileId ? 'Hide' : 'Read it'}
+                      </button>
+                      <a
+                        href={`https://drive.google.com/file/d/${v.driveFileId}/view`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+                      >
+                        Drive ↗
+                      </a>
+                    </>
+                  ) : (
+                    <span className="text-sev-warning">not in Drive yet</span>
+                  )}
                 </li>
               ))}
             </ul>
+          ) : null}
+
+          {preview ? (
+            <div className="mt-2 border border-divider">
+              <div className="flex items-center justify-between border-b border-divider px-2 py-1">
+                <span className="hud-label text-[9px]">READING THE DOCUMENT</span>
+                <button
+                  type="button"
+                  onClick={() => setPreview(null)}
+                  className="font-semi text-[10px] uppercase tracking-[0.14em] text-neutral-500 hover:text-accent"
+                >
+                  Close
+                </button>
+              </div>
+              {/*
+                Drive's own viewer, so a PDF and a Word document both render
+                and neither has to be converted here. It needs his Google
+                session, which he has — the file is in his own Drive.
+              */}
+              <iframe
+                src={`https://drive.google.com/file/d/${preview}/preview`}
+                title="Contract"
+                className="h-[70vh] w-full bg-white"
+                allow="autoplay"
+              />
+              <p className="border-t border-divider px-2 py-1 font-semi text-[9px] tracking-[0.1em] text-neutral-500">
+                IF THIS IS BLANK, OPEN IT WITH “DRIVE ↗” — THE VIEWER NEEDS YOU SIGNED IN TO THE
+                SAME GOOGLE ACCOUNT.
+              </p>
+            </div>
           ) : null}
         </div>
 
