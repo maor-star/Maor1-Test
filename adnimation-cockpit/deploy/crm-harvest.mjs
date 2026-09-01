@@ -317,8 +317,43 @@ async function companyFor(found, email, now) {
   return id;
 }
 
+/**
+ * Archive the rows a tightened rule would no longer add.
+ *
+ * The filter is being sharpened against his real mailbox, and each round leaves
+ * behind whatever the previous one let through — booking references, campaign
+ * ids, per-message aliases. Archived, never deleted (CLAUDE.md §2): the row
+ * disappears from every screen and survives if the rule was wrong.
+ */
+async function tidy(now) {
+  const rows = await sql`
+    select hubspot_id, email from crm_contacts
+     where source = 'mail' and archived_at is null and edited_at is null and email is not null
+  `;
+
+  let archived = 0;
+  for (const row of rows) {
+    if (isHarvestable({ email: row.email }).ok) continue;
+    archived += 1;
+    console.log(`  ${DRY ? 'WOULD ARCHIVE' : 'archived'} ${row.email}: not a person after all`);
+    if (!DRY) {
+      await sql`
+        update crm_contacts set archived_at = ${now}, synced_at = ${now}
+         where hubspot_id = ${row.hubspot_id}
+      `;
+    }
+  }
+  console.log(`${archived} rows no longer pass the rule.`);
+}
+
 async function main() {
   const started = Date.now();
+
+  if (process.env.TIDY === '1') {
+    await tidy(new Date());
+    await sql.end();
+    process.exit(0);
+  }
   console.log(`reading the last ${DAYS} days for people${DRY ? ' (dry run)' : ''}…`);
 
   const candidates = await collect();

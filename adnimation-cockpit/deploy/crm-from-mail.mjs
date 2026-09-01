@@ -53,6 +53,15 @@ const NOT_A_PERSON = [
   /@(mail|email|em|mailer|mailing|send|sender|news|alerts?|notifications?|noreply|updates?|smtp|bounces?|ma)\./i,
   /@(.*\.)?(mailchimp|sendgrid|mailgun|beehiiv|substack|hubspot|salesforce|intercom|zendesk|calendly|sendinblue|klaviyo|constantcontact)\./i,
   /@(.*\.)?(microsoftonline|accountprotection)\.com$/i,
+  /*
+   * Machine-generated addresses that read like nothing at all: a booking
+   * reference, a campaign id, a per-message alias. People do not have six
+   * digits in a row in their address, and no signature will ever make one of
+   * these worth calling.
+   */
+  /[0-9]{6,}/,
+  /^[^@]{26,}@/,
+  /@(support|property|reservations?|booking)\./i,
 ];
 
 /** Free mailboxes: a person, but their domain is not a company. */

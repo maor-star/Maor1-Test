@@ -34,6 +34,10 @@ describe('who is worth a CRM record', () => {
     'databeat@mail.beehiiv.com',
     'msonlineservicesteam@microsoftonline.com',
     'publisher-policy-noreply@google.com',
+    // Machine addresses that got through the second version and into the CRM.
+    '6098587006-jjjd.6thw.9bcr.8ep6@property.booking.com',
+    '24-24585605686_172314932ca79483@support.booking.com',
+    'yeynawine@193862610.mailchimpapp.com',
     'no-reply@stripe.com',
     'noreply@linkedin.com',
     'do-not-reply@aws.amazon.com',
@@ -56,6 +60,9 @@ describe('who is worth a CRM record', () => {
       'jstover@fusemedia.com',
       'nayana.k@dollarbirdinc.com',
       'korren6@gmail.com',
+      // A long name with a hyphen is still a person, and must survive the
+      // length and digit rules aimed at reference numbers.
+      'jean-philippe.deschamps@publicismedia.fr',
     ]) {
       expect(isHarvestable({ email }).ok, email).toBe(true);
     }
