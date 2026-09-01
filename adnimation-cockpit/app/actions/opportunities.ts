@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
 import {
-  archiveOpportunity, captureMailThread, createOpportunity, decideSuggestion,
+  archiveOpportunity, captureMailThread, createOpportunity, decideSuggestion, getOpportunity,
   promoteToPipeline, setOpportunityStatus, suggestFromMail, updateOpportunity,
 } from '@/lib/opportunities/module';
 import { captureSlackPermalink } from '@/lib/opportunities/slack-capture';
@@ -232,4 +232,21 @@ export async function sweepMailAction(): Promise<ActionResult & { proposed?: num
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not scan the mail' };
   }
+}
+
+/**
+ * One opportunity, whole.
+ *
+ * The home screen lists three fields of it; editing needs all of them. Asked
+ * for when he opens the editor rather than carried by every strip that shows
+ * a title.
+ */
+export async function opportunityForEditAction(id: string) {
+  await requireUser();
+  const parsed = z.string().uuid().safeParse(id);
+  if (!parsed.success) return { ok: false as const, error: 'Not an opportunity' };
+
+  const row = await getOpportunity(parsed.data);
+  if (!row) return { ok: false as const, error: 'No such opportunity' };
+  return { ok: true as const, opportunity: row };
 }

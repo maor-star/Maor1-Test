@@ -164,6 +164,21 @@ export function OpportunityCard({ opportunity }: { opportunity: OpportunityListI
             >
               NOT AN OPPORTUNITY
             </Button>
+
+            {/*
+              A suggestion arrives named after the email it came from, which is
+              a subject line and not what the opportunity is. Renaming it was
+              only possible after accepting it — so the pile filled with
+              "Re: FW: quick question".
+            */}
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={() => setEditing((v) => !v)}
+            >
+              {editing ? 'CLOSE' : 'NAME IT'}
+            </Button>
           </>
         ) : (
           <>
@@ -333,13 +348,15 @@ export function OpportunityCard({ opportunity }: { opportunity: OpportunityListI
             e.preventDefault();
             const data = new FormData(e.currentTarget);
             data.set('id', o.id);
+            // A suggestion keeps its status while being named: naming it is
+            // not the same as deciding it is real.
             data.set('status', o.status);
             run(updateOpportunityAction, data);
           }}
         >
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             <div className="sm:col-span-2">
-              <Label htmlFor={`t-${o.id}`}>The opportunity</Label>
+              <Label htmlFor={`t-${o.id}`}>Name</Label>
               <Input id={`t-${o.id}`} name="title" defaultValue={o.title} required />
             </div>
             <div>

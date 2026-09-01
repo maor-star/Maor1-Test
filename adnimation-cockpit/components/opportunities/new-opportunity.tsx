@@ -71,7 +71,7 @@ export function NewOpportunity() {
           </div>
 
           <div>
-            <Label htmlFor="op-slack-title">What is the opportunity (optional)</Label>
+            <Label htmlFor="op-slack-title">Name it (optional)</Label>
             <Input id="op-slack-title" name="title" placeholder="Taken from the message if blank" />
           </div>
 
@@ -113,7 +113,7 @@ export function NewOpportunity() {
       >
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           <div className="sm:col-span-2">
-            <Label htmlFor="op-title">The opportunity</Label>
+            <Label htmlFor="op-title">Name it</Label>
             <Input
               id="op-title"
               name="title"

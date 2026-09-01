@@ -14,6 +14,9 @@ import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { DeltaPct } from '@/components/revenue/delta';
 import { Sparkline } from '@/components/revenue/sparkline';
+import { InlineTaskEditor } from '@/components/tasks/inline-task-editor';
+import { InlineOpportunityEditor } from '@/components/opportunities/inline-opportunity-editor';
+import { listDepartments, listPeople } from '@/lib/tasks/queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -198,7 +201,13 @@ async function TopSeatsCard({ side }: { side: 'demand' | 'supply' }) {
 
 /** What needs doing now — overdue and burning work, from the ClickUp mirror. */
 async function UrgentCard() {
-  const { rows, overdue, burning, total } = await urgentWork(8);
+  const [{ rows, overdue, burning, total }, departments, people] = await Promise.all([
+    urgentWork(8),
+    listDepartments(),
+    listPeople(),
+  ]);
+  const deptOptions = departments.map((d) => ({ id: d.id, label: d.nameHe }));
+  const peopleOptions = people.map((p) => ({ id: p.id, label: p.name }));
 
   return (
     <HudCard className="gap-0 p-0">
@@ -247,6 +256,16 @@ async function UrgentCard() {
                       <span className="ms-1">D LATE</span>
                     </Tag>
                   ) : null}
+                  {/*
+                    Every field, from the screen he opened to see what needed
+                    doing. Walking into the task to move a due date means
+                    losing the list that told him to.
+                  */}
+                  <InlineTaskEditor
+                    taskId={t.id}
+                    departments={deptOptions}
+                    people={peopleOptions}
+                  />
                 </span>
               </div>
             </li>
@@ -519,6 +538,9 @@ async function SlippingAwayCard() {
                 <span className="font-cond text-[15px] leading-none text-sev-warning">
                   <Num>{o.state.daysQuiet}d</Num>
                 </span>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <InlineOpportunityEditor id={o.id} />
               </div>
               <p className="hud-label mt-1 whitespace-normal text-[9px]">
                 {o.counterparty ? `${o.counterparty} · ` : ''}

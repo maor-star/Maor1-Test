@@ -84,6 +84,24 @@ export interface OpportunityCounts {
   openValueCents: number;
 }
 
+/**
+ * One opportunity, whole — what the card needs wherever it is opened.
+ *
+ * Classified here rather than by the caller, so an opportunity opened from the
+ * home screen shows the same "gone cold" state as the same row on its own
+ * page. Two places deciding that separately is two places to get it wrong.
+ */
+export async function getOpportunity(
+  id: string,
+  now = new Date(),
+): Promise<OpportunityListItem | null> {
+  const [row] = await db.select().from(opportunities).where(eq(opportunities.id, id)).limit(1);
+  if (!row) return null;
+
+  const mapped = toRow(row);
+  return { ...mapped, state: classify(mapped, now), detectReasons: [] };
+}
+
 export async function opportunityCounts(now = new Date()): Promise<OpportunityCounts> {
   const rows = await db
     .select()

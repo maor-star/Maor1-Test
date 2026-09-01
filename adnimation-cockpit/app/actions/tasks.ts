@@ -8,6 +8,7 @@ import {
   addComment, archiveTask, completeTask, createTask, snoozeTask, updateTask,
 } from '@/lib/tasks/mutations';
 import { commentInputSchema, taskInputSchema, taskPatchSchema } from '@/lib/tasks/types';
+import { getTask } from '@/lib/tasks/queries';
 
 export interface ActionResult {
   ok: boolean;
@@ -147,4 +148,38 @@ export async function addCommentAction(formData: FormData): Promise<ActionResult
   await addComment(parsed.data.taskId, parsed.data.body, user.email);
   revalidatePath(`/tasks/${parsed.data.taskId}`);
   return { ok: true };
+}
+
+/**
+ * One task, in the shape the editor wants.
+ *
+ * The strips on the home screen carry four fields per row, which is right for
+ * scanning and useless for editing. Rather than widening every query that
+ * feeds them, the editor asks for the task when he opens it — one row, once,
+ * and only when he actually wants to change something.
+ */
+export async function taskForEditAction(id: string) {
+  await requireUser();
+  const parsed = z.string().uuid().safeParse(id);
+  if (!parsed.success) return { ok: false as const, error: 'Not a task' };
+
+  const task = await getTask(parsed.data);
+  if (!task) return { ok: false as const, error: 'No such task' };
+
+  return {
+    ok: true as const,
+    task: {
+      id: task.id,
+      layer: task.layer,
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      status: task.status,
+      dueDate: task.dueDate,
+      deptId: task.deptId,
+      ownerPersonId: task.ownerPersonId,
+      tags: task.tags,
+      moneyImpactCents: task.moneyImpactCents,
+    },
+  };
 }
