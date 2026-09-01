@@ -1,5 +1,6 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
-import { db, mailThreads, opportunities, pipelineClients } from '@/lib/db';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { contracts, db, mailThreads, opportunities, pipelineClients } from '@/lib/db';
+import { WAITING_ON, type ContractStatus } from '@/lib/contracts/status';
 import { KIND_TO_CLIENT_TYPE } from './rules';
 import {
   LIVE_STATUSES, classify, inView, rank, type OpportunityListItem,
@@ -82,6 +83,45 @@ export interface OpportunityCounts {
   decided: number;
   /** What the open ones add up to, for the ones he has sized. */
   openValueCents: number;
+}
+
+/**
+ * The contracts pointing at these opportunities.
+ *
+ * Linking happens on the contract — it is where he is standing when he
+ * notices the two belong together — and until now it showed nowhere else, so
+ * from the opportunity's side the link he had just made was invisible. Read
+ * for the whole list at once.
+ */
+export async function contractsForOpportunities(
+  ids: string[],
+): Promise<Map<string, { id: string; counterparty: string; status: string; waitingOn: string }[]>> {
+  const out = new Map<string, { id: string; counterparty: string; status: string; waitingOn: string }[]>();
+  if (ids.length === 0) return out;
+
+  const rows = await db
+    .select({
+      id: contracts.id,
+      opportunityId: contracts.opportunityId,
+      counterparty: contracts.counterpartyName,
+      status: contracts.status,
+      waitingOnOverride: contracts.waitingOnOverride,
+    })
+    .from(contracts)
+    .where(and(inArray(contracts.opportunityId, ids), isNull(contracts.archivedAt)));
+
+  for (const row of rows) {
+    if (!row.opportunityId) continue;
+    const held = out.get(row.opportunityId) ?? [];
+    held.push({
+      id: row.id,
+      counterparty: row.counterparty,
+      status: row.status,
+      waitingOn: row.waitingOnOverride ?? WAITING_ON[row.status as ContractStatus] ?? 'nobody',
+    });
+    out.set(row.opportunityId, held);
+  }
+  return out;
 }
 
 /**

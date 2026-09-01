@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
 import {
-  archiveOpportunity, captureMailThread, createOpportunity, decideSuggestion, getOpportunity,
+  archiveOpportunity, captureMailThread, contractsForOpportunities, createOpportunity,
+  decideSuggestion, getOpportunity,
   promoteToPipeline, setOpportunityStatus, suggestFromMail, updateOpportunity,
 } from '@/lib/opportunities/module';
 import { captureSlackPermalink } from '@/lib/opportunities/slack-capture';
@@ -248,5 +249,7 @@ export async function opportunityForEditAction(id: string) {
 
   const row = await getOpportunity(parsed.data);
   if (!row) return { ok: false as const, error: 'No such opportunity' };
-  return { ok: true as const, opportunity: row };
+
+  const linked = await contractsForOpportunities([row.id]);
+  return { ok: true as const, opportunity: row, contracts: linked.get(row.id) ?? [] };
 }

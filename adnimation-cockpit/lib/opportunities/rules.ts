@@ -14,13 +14,17 @@ import { z } from 'zod';
  */
 
 export const OPPORTUNITY_KINDS = [
-  'supply', 'demand', 'partnership', 'product', 'upsell', 'cost', 'hiring', 'investment', 'other',
+  'supply', 'demand', 'mutual', 'partnership', 'product', 'upsell', 'cost', 'hiring',
+  'investment', 'other',
 ] as const;
 export type OpportunityKind = (typeof OPPORTUNITY_KINDS)[number];
 
 export const KIND_LABEL: Record<OpportunityKind, string> = {
   supply: 'NEW SUPPLY',
   demand: 'NEW DEMAND',
+  // The same partner on both sides: they send us supply and buy demand. It is
+  // the arrangement he most wants, and it was the one kind he could not file.
+  mutual: 'MUTUAL — DEMAND AND SUPPLY',
   partnership: 'PARTNERSHIP',
   product: 'PRODUCT',
   upsell: 'UPSELL / EXISTING',
@@ -72,6 +76,9 @@ export const VIEW_LABEL: Record<OpportunityView, string> = {
 export const KIND_TO_CLIENT_TYPE: Record<OpportunityKind, string> = {
   supply: 'supply',
   demand: 'demand',
+  // The pipeline splits by side and has no both; demand is where the money
+  // starts with these, so that is the honest half to open with.
+  mutual: 'demand',
   partnership: 'other',
   product: 'other',
   upsell: 'other',

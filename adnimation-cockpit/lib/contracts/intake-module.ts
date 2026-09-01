@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import {
   auditLog, contractIntakeSeen, contractVersions, contracts, db, opportunities, pipelineClients,
 } from '@/lib/db';
@@ -200,37 +200,50 @@ export async function contractCounts(now = new Date()): Promise<ContractCounts> 
  */
 export async function suggestLinks(counterparty: string) {
   const needle = counterparty.trim().toLowerCase();
-  if (needle === '') return { opportunities: [], deals: [] };
-
   const like = `%${needle}%`;
+
+  /*
+   * Matches first, then everything else.
+   *
+   * This used to return only the opportunities whose name contained the
+   * counterparty's, which is right when the names line up and useless when
+   * they do not — and when the list came back empty there was nothing to pick,
+   * so linking a contract to the opportunity it obviously belonged to was
+   * impossible. The match still sorts to the top; the rest of the live list
+   * follows, so there is always something to choose.
+   */
+  /*
+   * Matches first, then recency. With nothing typed there is nothing to match,
+   * so that ordering is dropped entirely rather than passed as a constant —
+   * Postgres reads a bare number in ORDER BY as a column position and refuses
+   * anything else constant.
+   */
+  const opportunityOrder = needle === ''
+    ? [desc(opportunities.lastTouchedAt)]
+    : [
+        sql`case when lower(${opportunities.counterparty}) like ${like} or lower(${opportunities.title}) like ${like} then 0 else 1 end`,
+        desc(opportunities.lastTouchedAt),
+      ];
+  const dealOrder = needle === ''
+    ? [desc(pipelineClients.updatedAt)]
+    : [
+        sql`case when lower(${pipelineClients.name}) like ${like} or lower(coalesce(${pipelineClients.domain}, '')) like ${like} then 0 else 1 end`,
+        desc(pipelineClients.updatedAt),
+      ];
 
   const [ops, deals] = await Promise.all([
     db
       .select({ id: opportunities.id, title: opportunities.title, counterparty: opportunities.counterparty })
       .from(opportunities)
-      .where(
-        and(
-          isNull(opportunities.archivedAt),
-          or(
-            sql`lower(${opportunities.counterparty}) like ${like}`,
-            sql`lower(${opportunities.title}) like ${like}`,
-          ),
-        ),
-      )
-      .limit(5),
+      .where(and(isNull(opportunities.archivedAt), ne(opportunities.status, 'lost')))
+      .orderBy(...opportunityOrder)
+      .limit(40),
     db
       .select({ id: pipelineClients.id, name: pipelineClients.name, stage: pipelineClients.stage })
       .from(pipelineClients)
-      .where(
-        and(
-          isNull(pipelineClients.archivedAt),
-          or(
-            sql`lower(${pipelineClients.name}) like ${like}`,
-            sql`lower(coalesce(${pipelineClients.domain}, '')) like ${like}`,
-          ),
-        ),
-      )
-      .limit(5),
+      .where(isNull(pipelineClients.archivedAt))
+      .orderBy(...dealOrder)
+      .limit(40),
   ]);
 
   return { opportunities: ops, deals };

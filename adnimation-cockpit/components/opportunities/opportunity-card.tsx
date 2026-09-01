@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -28,7 +30,14 @@ const SETTABLE = ['new', 'exploring', 'parked', 'won', 'lost'] as const;
  * Editing is inline rather than a page of its own: the whole point of this
  * module is that updating something takes less effort than ignoring it.
  */
-export function OpportunityCard({ opportunity }: { opportunity: OpportunityListItem }) {
+export function OpportunityCard({
+  opportunity,
+  contracts = [],
+}: {
+  opportunity: OpportunityListItem;
+  /** Contracts pointing at this opportunity, so the link is visible from here too. */
+  contracts?: { id: string; counterparty: string; status: string; waitingOn: string }[];
+}) {
   const o = opportunity;
   const [editing, setEditing] = useState(false);
   const [deciding, setDeciding] = useState(false);
@@ -104,6 +113,32 @@ export function OpportunityCard({ opportunity }: { opportunity: OpportunityListI
           </p>
 
           {o.note ? <p className="mt-1 text-[13px] text-neutral-600">{o.note}</p> : null}
+
+          {/*
+            The contracts pointing at this one. Linking happens on the contract
+            — that is where he is standing when he notices the two belong
+            together — and until now it showed nowhere else, so from here the
+            link he had just made was invisible.
+          */}
+          {contracts.length > 0 ? (
+            <p className="hud-label mt-1 whitespace-normal text-[9px] text-accent-700">
+              {contracts.length === 1 ? 'CONTRACT' : 'CONTRACTS'}:{' '}
+              {contracts
+                .map(
+                  (c) =>
+                    `${c.counterparty} — ${c.status.replace(/_/g, ' ')}` +
+                    (c.waitingOn === 'you'
+                      ? ' (waiting on you)'
+                      : c.waitingOn === 'them'
+                        ? ' (waiting on them)'
+                        : ''),
+                )
+                .join(' · ')}{' '}
+              <Link href="/contracts?view=all" className="underline">
+                OPEN
+              </Link>
+            </p>
+          ) : null}
 
           {o.sourceExcerpt ? (
             <p className="mt-1.5 border-s-2 border-accent ps-2 text-[13px] text-neutral-700">

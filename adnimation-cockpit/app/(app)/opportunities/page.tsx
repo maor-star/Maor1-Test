@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth/session';
 import {
-  COLD_AFTER_DAYS, OPPORTUNITY_VIEWS, VIEW_LABEL, captureLabelHealth, listOpportunities,
-  opportunityCounts, type OpportunityView,
+  COLD_AFTER_DAYS, OPPORTUNITY_VIEWS, VIEW_LABEL, captureLabelHealth,
+  contractsForOpportunities, listOpportunities, opportunityCounts, type OpportunityView,
 } from '@/lib/opportunities/module';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
@@ -59,6 +59,8 @@ export default async function OpportunitiesPage({
     const query = params.toString();
     return query ? `/opportunities?${query}` : '/opportunities';
   };
+  const linkedContracts = await contractsForOpportunities(all.map((o) => o.id));
+
   const rows = filterByQuery(all, q, (o) => [
     o.title,
     o.note,
@@ -167,7 +169,11 @@ export default async function OpportunitiesPage({
         ) : (
           <ul>
             {rows.map((o) => (
-              <OpportunityCard key={o.id} opportunity={o} />
+              <OpportunityCard
+                key={o.id}
+                opportunity={o}
+                contracts={linkedContracts.get(o.id) ?? []}
+              />
             ))}
           </ul>
         )}

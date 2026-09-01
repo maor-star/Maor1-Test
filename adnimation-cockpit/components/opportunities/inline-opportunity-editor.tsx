@@ -18,6 +18,9 @@ export function InlineOpportunityEditor({ id }: { id: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [row, setRow] = useState<OpportunityListItem | null>(null);
+  const [contracts, setContracts] = useState<
+    { id: string; counterparty: string; status: string; waitingOn: string }[]
+  >([]);
 
   const toggle = () => {
     if (open) {
@@ -29,7 +32,10 @@ export function InlineOpportunityEditor({ id }: { id: string }) {
     setLoading(true);
     opportunityForEditAction(id)
       .then((r) => {
-        if (r.ok) setRow(r.opportunity);
+        if (r.ok) {
+          setRow(r.opportunity);
+          setContracts(r.contracts);
+        }
         else setError(r.error ?? 'Could not open it');
       })
       .catch(() => setError('Could not open it'))
@@ -50,7 +56,7 @@ export function InlineOpportunityEditor({ id }: { id: string }) {
             <p className="px-2 py-2 text-[13px] text-sev-warning">{error}</p>
           ) : row ? (
             <ul className="px-2">
-              <OpportunityCard opportunity={row} />
+              <OpportunityCard opportunity={row} contracts={contracts} />
             </ul>
           ) : null}
         </div>
