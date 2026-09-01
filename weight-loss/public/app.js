@@ -956,7 +956,7 @@ async function viewArticles(el) {
         ${posts.map((p) => `
           <a class="article bp ${p.image_url ? 'has-figure' : ''}" href="#/articles/${encodeURIComponent(p.slug)}">
             ${corners()}
-            ${p.image_url ? `<span class="card-figure"><img src="/api/posts/${p.id}/image" alt="" loading="lazy" /></span>` : ''}
+            ${p.image_url ? `<span class="card-figure"><img src="${postImage(p)}" alt="" loading="lazy" /></span>` : ''}
             <span class="tag tag-accent">${esc(p.category)}</span>
             <h3>${esc(p.title)}</h3>
             <p>${esc(p.excerpt)}</p>
@@ -1055,7 +1055,7 @@ async function viewArticle(el, slug) {
     </div>
     ${post.image_url ? `
       <figure class="article-figure">
-        <img src="/api/posts/${post.id}/image" alt="" />
+        <img src="${postImage(post)}" alt="" />
         <span class="watermark">מאור · הדרך הקלה לרדת במשקל</span>
       </figure>` : (ARTICLE_FIGURES[post.slug] ? ARTICLE_FIGURES[post.slug]() : '')}
     <div class="sec measure">
@@ -1214,6 +1214,15 @@ async function viewSettings(el) {
  * A member's face, or their initial when they have not uploaded one. Both render at
  * the same size, so a group of mixed members still lines up.
  */
+/**
+ * The image endpoint is addressed by the post's id, which does not change when its
+ * picture is replaced, so a browser holding yesterday's copy kept showing it for a day.
+ * The stored filename changes on every replacement, so it is the version tag: a new
+ * picture is a new URL, and the hard caching behind it stays correct.
+ */
+const postImage = (post, kind = 'image') =>
+  `/api/posts/${post.id}/${kind}?v=${encodeURIComponent(post.image_url || '')}`;
+
 function avatar(member, size = 'md') {
   const initial = (member.full_name || '?').trim().charAt(0);
   return member.has_photo
@@ -1463,7 +1472,7 @@ async function viewHome(el) {
       ${posts.slice(0, 3).map((p) => `
         <a class="article bp ${p.image_url ? 'has-figure' : ''}" href="#/articles/${encodeURIComponent(p.slug)}">
           ${corners()}
-          ${p.image_url ? `<span class="card-figure"><img src="/api/posts/${p.id}/image" alt="" loading="lazy" /></span>` : ''}
+          ${p.image_url ? `<span class="card-figure"><img src="${postImage(p)}" alt="" loading="lazy" /></span>` : ''}
           <span class="tag tag-accent">${esc(p.category)}</span>
           <h3>${esc(p.title)}</h3>
           <p>${esc(p.excerpt)}</p>

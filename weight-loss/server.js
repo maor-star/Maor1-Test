@@ -100,9 +100,11 @@ function renderIndexWith(tags, title) {
 app.get('/', asyncRoute((req, res) => {
   const origin = `${req.protocol}://${req.get('host')}`;
   const post = db.prepare(
-    'SELECT id FROM posts WHERE image_url IS NOT NULL ORDER BY published_at DESC, id DESC LIMIT 1'
+    'SELECT id, image_url FROM posts WHERE image_url IS NOT NULL ORDER BY published_at DESC, id DESC LIMIT 1'
   ).get();
-  const image = post ? `${origin}/api/posts/${post.id}/preview` : null;
+  const image = post
+    ? `${origin}/api/posts/${post.id}/preview?v=${encodeURIComponent(post.image_url)}`
+    : null;
   const description = 'קבוצה שיורדת אחוזי שומן ובונה מסת שריר. שלושה יעדים יומיים, שקילה אחת בשבוע, ומאמרים שמסבירים את המנגנון.';
 
   res.type('html').send(renderIndexWith(`
@@ -130,7 +132,9 @@ app.get('/a/:slug', asyncRoute((req, res) => {
 
   const origin = `${req.protocol}://${req.get('host')}`;
   const url = `${origin}/a/${encodeURIComponent(post.slug)}`;
-  const image = post.image_url ? `${origin}/api/posts/${post.id}/preview` : null;
+  const image = post.image_url
+    ? `${origin}/api/posts/${post.id}/preview?v=${encodeURIComponent(post.image_url)}`
+    : null;
 
   res.type('html').send(renderIndexWith(`
   <meta property="og:site_name" content="הדרך הקלה לירידה במשקל" />
