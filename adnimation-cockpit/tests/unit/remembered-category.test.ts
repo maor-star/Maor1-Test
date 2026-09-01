@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { eq, like } from 'drizzle-orm';
+import { like } from 'drizzle-orm';
 import { contracts, db } from '@/lib/db';
 import { rememberedCategory } from '@/lib/contracts/remembered';
 

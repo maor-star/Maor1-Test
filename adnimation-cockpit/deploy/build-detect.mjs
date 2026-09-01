@@ -97,6 +97,22 @@ const TARGETS = [
     ],
   },
   {
+    src: new URL('../lib/crm/from-mail.ts', import.meta.url),
+    out: new URL('./crm-from-mail.mjs', import.meta.url),
+    from: 'lib/crm/from-mail.ts',
+    test: 'tests/unit/crm-from-mail-parity.test.ts',
+    rewrites: [
+      ['const NOT_A_PERSON = [', 'const NOT_A_PERSON = ['],
+      ['export function domainOf(email: string): string | null {', 'export function domainOf(email) {'],
+      [/export function isHarvestable\(\n  candidate: HarvestCandidate,\n  ownDomains: string\[\] = \['adnimation\.com'\],\n\): \{ ok: boolean; why: string \} \{/, "export function isHarvestable(candidate, ownDomains = ['adnimation.com']) {"],
+      ['export function isCompanyDomain(email: string): boolean {', 'export function isCompanyDomain(email) {'],
+      ['export function signatureBlock(body: string, lines = 18): string {', 'export function signatureBlock(body, lines = 18) {'],
+      [/export function fieldsToFill<T extends Record<string, unknown>>\(\n  existing: T,\n  found: Partial<T>,\n\): Partial<T> \{/, 'export function fieldsToFill(existing, found) {'],
+      ['  const patch: Partial<T> = {};', '  const patch = {};'],
+      [/  for \(const \[key, value\] of Object\.entries\(found\) as \[keyof T, T\[keyof T\]\]\[\]\) \{/, '  for (const [key, value] of Object.entries(found)) {'],
+    ],
+  },
+  {
     src: new URL('../lib/sync/mirror-skip.ts', import.meta.url),
     out: new URL('./mirror-skip.mjs', import.meta.url),
     from: 'lib/sync/mirror-skip.ts',
@@ -198,7 +214,7 @@ for (const target of TARGETS) {
   // Anything left with a type annotation would be a syntax error at run time,
   // and a job that crashes on the timer is worse than one that fails to build.
   if (
-    /:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget|InvoiceInput|InvoiceGuess|MailFacts|PromoGuess|CodeGuess|ReplyCandidate|Triage|Draft|BotIdentity|BotStatus|EnvLike)\b/.test(
+    /:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget|InvoiceInput|InvoiceGuess|MailFacts|PromoGuess|CodeGuess|ReplyCandidate|Triage|Draft|BotIdentity|BotStatus|EnvLike|HarvestCandidate|HarvestedContact)\b/.test(
       body,
     )
   ) {

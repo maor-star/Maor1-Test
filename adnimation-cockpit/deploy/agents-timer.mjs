@@ -37,6 +37,13 @@ const JOBS = [
     boot: '15min',
   },
   {
+    name: 'crm-harvest',
+    script: 'crm-harvest.mjs',
+    description: 'Read new mail for contacts and keep the CRM current',
+    every: '6h',
+    boot: '25min',
+  },
+  {
     name: 'invoice-forward',
     script: 'invoice-forward.mjs',
     description: 'Send invoices on to finance',
