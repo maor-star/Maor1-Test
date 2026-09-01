@@ -38,6 +38,10 @@ describe('who is worth a CRM record', () => {
     '6098587006-jjjd.6thw.9bcr.8ep6@property.booking.com',
     '24-24585605686_172314932ca79483@support.booking.com',
     'yeynawine@193862610.mailchimpapp.com',
+    // A department, not a person: it came in as a Digital Turbine "contact".
+    'marketing@digitalturbine.com',
+    'partners@vendor.com',
+    'events@conference.com',
     'no-reply@stripe.com',
     'noreply@linkedin.com',
     'do-not-reply@aws.amazon.com',

@@ -42,6 +42,7 @@ const NOT_A_PERSON = [
   /^[^@]*(notification|alert|reminder|digest|newsletter|bulletin|announce)[^@]*@/i,
   /^[^@]*(invoice|billing|receipt|statement|payment|renewal|confirmation|subscription)[^@]*@/i,
   /^(info|support|help|helpdesk|hello|contact|sales|accounts?|admin|team|office|service)@/i,
+  /^(marketing|press|media|pr|partners?|partnerships?|bizdev|events?|community|webinars?|feedback|care|welcome|orders?|shop|store)@/i,
   /^(security|abuse|privacy|legal|compliance|policy|dmarc|dpo)@/i,
   /^[^@]*(servicemessage|service-message|servicedesk|customercare|customerservice)[^@]*@/i,
   /^(jobs|careers|recruiting|recruitment|hr|talent)@/i,

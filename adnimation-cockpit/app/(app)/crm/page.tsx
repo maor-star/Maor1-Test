@@ -7,9 +7,10 @@ import { contactName } from '@/lib/integrations/hubspot';
 import { companySuggestions } from '@/lib/crm/mutations';
 import { ArchiveButton, EditCompany, EditContact } from '@/components/crm/record-forms';
 import { AddCrmRecord } from '@/components/crm/add-record';
-import { fmtDateTime, fmtNumber } from '@/lib/utils';
+import { fmtDate, fmtDateTime, fmtNumber } from '@/lib/utils';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { SearchBox } from '@/components/hud/search-box';
+import { conversationsFor } from '@/lib/crm/conversations';
 import { PageHeader } from '@/components/hud/page-header';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
@@ -200,6 +201,10 @@ async function Companies({
 }) {
   const { rows, total, page } = await listCompanies(filter);
   const contacts = await contactsForCompanies(rows.map((r) => r.hubspotId));
+  const talk = await conversationsFor(
+    [...contacts.values()].flat().map((p) => p.email ?? '').filter(Boolean),
+    1,
+  );
 
   return (
     <HudCard className="gap-0 p-0">
@@ -261,6 +266,23 @@ async function Companies({
                           {[p.jobTitle, p.email, p.phone].filter(Boolean).join(' · ') ||
                             'NO CONTACT DETAILS'}
                         </p>
+                        {(() => {
+                          const said = p.email ? talk.get(p.email.toLowerCase()) : undefined;
+                          if (!said) return null;
+                          const last = said.recent[0];
+                          return (
+                            <p className="truncate text-[11px] text-neutral-500">
+                              <Num>{said.total}</Num>{' '}
+                              {said.total === 1 ? 'conversation' : 'conversations'}
+                              {last ? (
+                                <>
+                                  {' '}· last <Num>{fmtDate(last.lastMessageAt)}</Num>:{' '}
+                                  {last.subject || '(no subject)'}
+                                </>
+                              ) : null}
+                            </p>
+                          );
+                        })()}
                       </li>
                     ))}
                   </ul>
@@ -297,6 +319,15 @@ async function Contacts({
   companies: string[];
 }) {
   const { rows, total, page } = await listContacts(filter);
+
+  /*
+   * What he has actually said to each of them.
+   *
+   * A name and a phone number is not why he opens this screen — he opens it
+   * before picking up the phone, and what he needs is the last thing they
+   * said to each other. One query for the page, not one per row.
+   */
+  const talk = await conversationsFor(rows.map((p) => p.email ?? '').filter(Boolean));
 
   return (
     <HudCard className="gap-0 p-0">
@@ -350,6 +381,45 @@ async function Contacts({
                 <ArchiveButton id={p.hubspotId} kind="contact" archived={p.archivedAt !== null} />
               </div>
             </div>
+
+            {(() => {
+              const said = p.email ? talk.get(p.email.toLowerCase()) : undefined;
+              if (!said || said.recent.length === 0) return null;
+              return (
+                <div className="mt-2 border-s-2 border-divider ps-2">
+                  <span className="hud-label text-[9px]">
+                    WHAT YOU TALKED ABOUT · <Num>{said.total}</Num>{' '}
+                    {said.total === 1 ? 'CONVERSATION' : 'CONVERSATIONS'}
+                  </span>
+                  <ul className="mt-1 space-y-1">
+                    {said.recent.map((t) => (
+                      <li key={t.threadId} className="min-w-0 text-[12px]">
+                        <a
+                          href={t.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-semi text-neutral-800 hover:text-accent"
+                        >
+                          {t.subject || '(no subject)'}
+                        </a>
+                        <span className="text-neutral-500">
+                          {' '}· <Num>{fmtDate(t.lastMessageAt)}</Num>
+                          {t.messageCount > 1 ? (
+                            <>
+                              {' '}· <Num>{t.messageCount}</Num> messages
+                            </>
+                          ) : null}
+                          {t.lastFromMe ? ' · you answered' : ' · waiting on you'}
+                        </span>
+                        {t.snippet ? (
+                          <p className="truncate text-neutral-500">{t.snippet.slice(0, 140)}</p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
 
             <div className="mt-2">
               <EditContact contact={p} vocab={vocab} companies={companies} />
