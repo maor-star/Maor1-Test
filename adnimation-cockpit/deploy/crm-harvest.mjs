@@ -134,13 +134,24 @@ async function collect() {
     for (const ref of refs) {
       if (found.size >= MAX) break;
 
-      const message = await gmail(`/messages/${ref.id}?format=full`).catch(() => null);
-      if (!message) continue;
+      /*
+       * Two passes over each message: the headers alone are enough to decide
+       * whether this sender is worth reading, and most of them are not. A
+       * year of mail is thousands of messages; fetching every body to throw
+       * nearly all of them away is twenty minutes of nothing.
+       */
+      const head = await gmail(
+        `/messages/${ref.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`,
+      ).catch(() => null);
+      if (!head) continue;
 
-      const hs = message.payload?.headers ?? [];
-      const from = parseFrom(header(hs, 'from') ?? '');
+      const from = parseFrom(header(head.payload?.headers ?? [], 'from') ?? '');
       if (!from.email || found.has(from.email)) continue;
       if (!isHarvestable({ email: from.email }).ok) continue;
+
+      const message = await gmail(`/messages/${ref.id}?format=full`).catch(() => null);
+      if (!message) continue;
+      const hs = message.payload?.headers ?? [];
 
       const block = signatureBlock(plainText(message.payload).join('\n') || message.snippet || '');
       found.set(from.email, {
@@ -179,12 +190,20 @@ guess is not. In particular:
 · country and city only when the signature says so — an address line, not a
   time zone or a phone prefix.
 
-Also judge, for each one, whether a PERSON actually wrote this or whether it is
-automated mail — a receipt, an alert, a newsletter, a system notice, a bulk
-send from a platform. Set "isPerson" false for those. Address patterns have
-already caught the obvious ones; you are catching what looks like a name and
-is not. A CRM full of senders nobody can call is worse than a small one, so
-when a message reads as machine-generated, say so.`;
+Also judge, for each one, whether the ADDRESS belongs to a human being — not
+whether this particular message was typed by hand. A real person sends calendar
+invites, one-line replies and forwards with no signature; those are still that
+person's mailbox and still belong in a CRM.
+
+Set "isPerson" false only when the mailbox itself is not a person's: a role
+account, a platform sender, a service that mails on somebody's behalf, a
+notification or billing address. If the address looks like a name — first.last,
+an initial and a surname, a personal free mailbox — it is a person, whatever
+this one message happens to contain.
+
+When you genuinely cannot tell, say true. The address patterns have already
+removed the obvious machines, and dropping a real contact is the more expensive
+mistake: he will never know the person was missed.`;
 
 async function readSignatures(batch) {
   const prompt = [

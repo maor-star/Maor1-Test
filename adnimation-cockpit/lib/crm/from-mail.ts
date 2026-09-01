@@ -33,13 +33,14 @@ const NOT_A_PERSON = [
   /^[^@]*(invoice|billing|receipt|statement|payment|renewal|confirmation|subscription)[^@]*@/i,
   /^(info|support|help|helpdesk|hello|contact|sales|accounts?|admin|team|office|service)@/i,
   /^(security|abuse|privacy|legal|compliance|policy|dmarc|dpo)@/i,
+  /^[^@]*(servicemessage|service-message|servicedesk|customercare|customerservice)[^@]*@/i,
   /^(jobs|careers|recruiting|recruitment|hr|talent)@/i,
   /^(wordpress|webmaster|hostmaster|root|cron|backup|monitor|status)@/i,
   /^[^@]*(bot|daemon|automated|autoresponder|system)[^@]*@/i,
   // Plus-addressed machine mail: invoice+statements@…
   /^[^@]*\+[^@]*@/,
   // The sending infrastructure of bulk mail, whoever it is sent on behalf of.
-  /@(mail|email|em|mailer|mailing|news|alerts?|notifications?|noreply|updates?|smtp|bounces?)\./i,
+  /@(mail|email|em|mailer|mailing|send|sender|news|alerts?|notifications?|noreply|updates?|smtp|bounces?|ma)\./i,
   /@(.*\.)?(mailchimp|sendgrid|mailgun|beehiiv|substack|hubspot|salesforce|intercom|zendesk|calendly|sendinblue|klaviyo|constantcontact)\./i,
   /@(.*\.)?(microsoftonline|accountprotection)\.com$/i,
 ];
