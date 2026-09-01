@@ -335,6 +335,8 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
   text-underline-offset: 3px; text-decoration-thickness: 1px;
 }
 .article-body a:hover { text-decoration-thickness: 2px; }
+/* A link on the words of a heading keeps the heading's colour, not the link's. */
+.article-body h4 a, .article-body h5 a { color: inherit; }
 .article-body h4 { margin: var(--space-4) 0 0; font-size: 19px; }
 /* The level under a sub-heading: it groups a few paragraphs without competing with the
    section title above it, so it is smaller and carries the accent instead of the size. */

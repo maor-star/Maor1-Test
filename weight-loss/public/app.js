@@ -1041,9 +1041,11 @@ async function viewArticle(el, slug) {
   const blocks = post.content.split('\n\n').map((block) => {
     const line = block.trim();
     const heading = /^\*\*(.+)\*\*$/.exec(line);
-    if (heading) return `<h4>${esc(heading[1])}</h4>`;
+    // Headings run through the same inline pass, so a link can sit on the words of a
+    // section title rather than only in the paragraphs under it.
+    if (heading) return `<h4>${inline(heading[1])}</h4>`;
     const sub = /^\*([^*]+)\*$/.exec(line);
-    if (sub) return `<h5>${esc(sub[1])}</h5>`;
+    if (sub) return `<h5>${inline(sub[1])}</h5>`;
     return `<p>${inline(line)}</p>`;
   }).join('');
 
