@@ -177,7 +177,14 @@ guess is not. In particular:
 · Split the name into first and last as the signature gives it. Hebrew names
   stay in Hebrew.
 · country and city only when the signature says so — an address line, not a
-  time zone or a phone prefix.`;
+  time zone or a phone prefix.
+
+Also judge, for each one, whether a PERSON actually wrote this or whether it is
+automated mail — a receipt, an alert, a newsletter, a system notice, a bulk
+send from a platform. Set "isPerson" false for those. Address patterns have
+already caught the obvious ones; you are catching what looks like a name and
+is not. A CRM full of senders nobody can call is worse than a small one, so
+when a message reads as machine-generated, say so.`;
 
 async function readSignatures(batch) {
   const prompt = [
@@ -189,8 +196,9 @@ async function readSignatures(batch) {
       )
       .join('\n\n'),
     '',
-    'Answer as JSON: {"contacts":[{"email":"…","firstName":null,"lastName":null,' +
-      '"jobTitle":null,"phone":null,"companyName":null,"country":null,"city":null}]}',
+    'Answer as JSON: {"contacts":[{"email":"…","isPerson":true,"firstName":null,' +
+      '"lastName":null,"jobTitle":null,"phone":null,"companyName":null,"country":null,' +
+      '"city":null}]}',
     'One entry per message, in the same order, with the same email.',
   ].join('\n');
 
@@ -304,6 +312,7 @@ async function main() {
   let created = 0;
   let enriched = 0;
   let untouched = 0;
+  let machines = 0;
   const now = new Date();
 
   for (let i = 0; i < candidates.length; i += BATCH) {
@@ -318,6 +327,18 @@ async function main() {
 
     for (const candidate of batch) {
       const found = byEmail.get(candidate.email) ?? {};
+
+      /*
+       * The model's own veto, over what the address patterns allowed. It can
+       * only ever narrow: it never adds somebody the rules refused. A missing
+       * answer counts as a person, because the rules already had their say and
+       * a failed batch must not quietly empty the CRM.
+       */
+      if (found.isPerson === false) {
+        machines += 1;
+        console.log(`  skipped ${candidate.email}: automated mail, not a person`);
+        continue;
+      }
       const [existing] = await sql`
         select hubspot_id, first_name, last_name, phone, job_title, company_name, company_id,
                edited_at, last_activity_at
@@ -422,7 +443,7 @@ async function main() {
 
   console.log(
     `${created} added, ${enriched} filled in, ${untouched} left alone, ` +
-      `in ${Math.round((Date.now() - started) / 1000)}s.`,
+      `${machines} were automated mail, in ${Math.round((Date.now() - started) / 1000)}s.`,
   );
 
   await sql.end();

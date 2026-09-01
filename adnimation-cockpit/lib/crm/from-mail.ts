@@ -17,15 +17,31 @@
  *    sync leaves it (lib/crm/mutations.ts).
  */
 
-/** Addresses that are never a person worth a CRM record. */
+/**
+ * Addresses that are never a person worth a CRM record.
+ *
+ * Anchoring these to the start of the address was the first mistake: real
+ * senders look like `admanager-noreply@google.com` and
+ * `defendercloudnoreply@microsoft.com`, where the tell is in the middle. So
+ * the words are matched anywhere in the local part, and the bulk-mail
+ * subdomains — mail.x.com, em.x.com — are matched on the domain.
+ */
 const NOT_A_PERSON = [
-  /^(no-?reply|do-?not-?reply|noreply)/i,
-  /^(info|support|help|hello|contact|sales|billing|accounts?|invoices?|admin|team)@/i,
-  /^(notifications?|alerts?|updates?|news|newsletter|digest|mailer|bounce|postmaster)/i,
-  /^(security|abuse|privacy|legal|compliance)@/i,
-  /^(jobs|careers|recruiting|hr)@/i,
-  /@(.*\.)?(mailchimp|sendgrid|mailgun|hubspot|salesforce|intercom|zendesk|calendly)\./i,
-  /^[a-z0-9._-]*(bot|daemon|automated|system)[a-z0-9._-]*@/i,
+  // Anywhere in the local part: the giveaway is rarely at the front.
+  /^[^@]*(no-?reply|donotreply|do-not-reply|unsubscribe|mailer-daemon|postmaster)[^@]*@/i,
+  /^[^@]*(notification|alert|reminder|digest|newsletter|bulletin|announce)[^@]*@/i,
+  /^[^@]*(invoice|billing|receipt|statement|payment|renewal|confirmation|subscription)[^@]*@/i,
+  /^(info|support|help|helpdesk|hello|contact|sales|accounts?|admin|team|office|service)@/i,
+  /^(security|abuse|privacy|legal|compliance|policy|dmarc|dpo)@/i,
+  /^(jobs|careers|recruiting|recruitment|hr|talent)@/i,
+  /^(wordpress|webmaster|hostmaster|root|cron|backup|monitor|status)@/i,
+  /^[^@]*(bot|daemon|automated|autoresponder|system)[^@]*@/i,
+  // Plus-addressed machine mail: invoice+statements@…
+  /^[^@]*\+[^@]*@/,
+  // The sending infrastructure of bulk mail, whoever it is sent on behalf of.
+  /@(mail|email|em|mailer|mailing|news|alerts?|notifications?|noreply|updates?|smtp|bounces?)\./i,
+  /@(.*\.)?(mailchimp|sendgrid|mailgun|beehiiv|substack|hubspot|salesforce|intercom|zendesk|calendly|sendinblue|klaviyo|constantcontact)\./i,
+  /@(.*\.)?(microsoftonline|accountprotection)\.com$/i,
 ];
 
 /** Free mailboxes: a person, but their domain is not a company. */

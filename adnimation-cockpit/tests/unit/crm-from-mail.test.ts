@@ -22,6 +22,18 @@ describe('who is worth a CRM record', () => {
   });
 
   it.each([
+    // Every one of these actually arrived in his mailbox, and every one got
+    // through the first version of this rule because the giveaway was not at
+    // the front of the address.
+    'admanager-noreply@google.com',
+    'defendercloudnoreply@microsoft.com',
+    'confirmations@altshul.co.il',
+    'renewals@godaddy.com',
+    'invoice+statements@mail.anthropic.com',
+    'wordpress@yahasim.com',
+    'databeat@mail.beehiiv.com',
+    'msonlineservicesteam@microsoftonline.com',
+    'publisher-policy-noreply@google.com',
     'no-reply@stripe.com',
     'noreply@linkedin.com',
     'do-not-reply@aws.amazon.com',
@@ -35,6 +47,18 @@ describe('who is worth a CRM record', () => {
     'someone@em.mailchimp.com',
   ])('leaves %s alone', (email) => {
     expect(isHarvestable({ email }).ok).toBe(false);
+  });
+
+  it('still keeps the real people who wrote in the same fortnight', () => {
+    for (const email of [
+      'akkerman@digitalturbine.com',
+      'zenda.laqui@verve.com',
+      'jstover@fusemedia.com',
+      'nayana.k@dollarbirdinc.com',
+      'korren6@gmail.com',
+    ]) {
+      expect(isHarvestable({ email }).ok, email).toBe(true);
+    }
   });
 
   it('rejects anything that is not an address at all', () => {
