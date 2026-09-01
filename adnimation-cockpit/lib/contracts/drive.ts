@@ -22,7 +22,8 @@ export const DRIVE_ROOT = 'Adnimation Contracts';
  * it carries its own question — is it still outstanding — so it keeps its own
  * pile rather than being buried among signed contracts.
  */
-export type ContractCategory = 'demand' | 'supply' | 'mutual' | 'quote' | 'general';
+export type ContractCategory =
+  | 'demand' | 'supply' | 'mutual' | 'quote' | 'consulting' | 'general';
 
 /**
  * Every category, in the order they are offered.
@@ -32,7 +33,7 @@ export type ContractCategory = 'demand' | 'supply' | 'mutual' | 'quote' | 'gener
  * added — a category you cannot pick may as well not exist.
  */
 export const CONTRACT_CATEGORIES: readonly ContractCategory[] = [
-  'demand', 'supply', 'mutual', 'quote', 'general',
+  'demand', 'supply', 'mutual', 'quote', 'consulting', 'general',
 ] as const;
 
 export const CATEGORY_FOLDER: Record<ContractCategory, string> = {
@@ -40,6 +41,7 @@ export const CATEGORY_FOLDER: Record<ContractCategory, string> = {
   supply: 'Supply',
   mutual: 'Mutual',
   quote: 'Quotes',
+  consulting: 'Consulting',
   general: 'General',
 };
 

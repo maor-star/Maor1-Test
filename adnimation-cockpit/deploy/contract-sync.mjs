@@ -171,15 +171,44 @@ async function record({ counterparty, docType, source, ref, url, receivedAt, fil
   }
 
   if (!contractId) {
+    /*
+     * How this counterparty was filed last time.
+     *
+     * He classifies Taboola once; the next Taboola document should not arrive
+     * as the same unanswered question. Only a classification he CONFIRMED
+     * counts — an auto-filed one must never teach the next, or a single wrong
+     * guess compounds quietly across every document that company sends. It
+     * still lands in the classify view saying what it assumed, so a wrong
+     * guess is one click to correct.
+     */
+    const [remembered] = await sql`
+      select category, counterparty_name
+        from contracts
+       where normalise_counterparty(counterparty_name) = normalise_counterparty(${counterparty})
+         and category_confirmed = true
+         and archived_at is null
+         and category <> 'general'
+       order by status_changed_at desc
+       limit 1
+    `;
+
+    const note = remembered
+      ? `Filed as ${remembered.category} because that is how ` +
+        `${remembered.counterparty_name} was classified last time.`
+      : null;
+
     const [created] = await sql`
       insert into contracts
         (counterparty_name, category, category_confirmed, doc_type, status,
-         source, source_ref, source_url, received_at)
-      values (${counterparty}, 'general', false, ${docType}, 'unclassified',
-              ${source}, ${ref}, ${url}, ${receivedAt})
+         source, source_ref, source_url, received_at, notes)
+      values (${counterparty}, ${remembered?.category ?? 'general'}, false, ${docType},
+              'unclassified', ${source}, ${ref}, ${url}, ${receivedAt}, ${note})
       returning id
     `;
     contractId = created.id;
+    if (remembered) {
+      console.log(`      remembered: ${counterparty} was filed as ${remembered.category} before`);
+    }
   }
 
   const [held] = await sql`

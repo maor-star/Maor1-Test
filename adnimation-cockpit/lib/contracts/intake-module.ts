@@ -7,6 +7,7 @@ import { writeAudit } from '@/lib/audit';
 import { filingFolder, stageForStatus, versionedFileName, type ContractCategory } from './drive';
 import { BOARD_STATUSES, STATUS_LABEL, WAITING_ON, type ContractStatus } from './status';
 import { versionFromName } from './intake';
+import { rememberedCategory } from './remembered';
 
 /**
  * The contracts desk: what arrived, what it is, where it was filed, and what
@@ -519,11 +520,23 @@ export async function recordArrival(input: {
     let contractId = open?.id;
 
     if (!contractId) {
+      /*
+       * How this counterparty was filed last time.
+       *
+       * He classifies Taboola once; the next Taboola document should not
+       * arrive as the same unanswered question. Only a classification he
+       * confirmed counts, so one wrong guess cannot compound across every
+       * document a company ever sends — and the contract still lands in the
+       * classify view, saying what it assumed, so a wrong one is a click to
+       * correct rather than something that happened silently.
+       */
+      const remembered = await rememberedCategory(input.counterpartyName);
+
       const [created] = await db
         .insert(contracts)
         .values({
           counterpartyName: input.counterpartyName,
-          category: 'general',
+          category: remembered?.category ?? 'general',
           categoryConfirmed: false,
           docType: input.docType,
           status: 'unclassified',
@@ -531,6 +544,13 @@ export async function recordArrival(input: {
           sourceRef: input.sourceRef,
           sourceUrl: input.sourceUrl,
           receivedAt: input.receivedAt,
+          ...(remembered
+            ? {
+                notes:
+                  `Filed as ${remembered.category} because that is how ` +
+                  `${remembered.fromCounterparty} was classified last time.`,
+              }
+            : {}),
         })
         .returning({ id: contracts.id });
       if (!created) return { ok: false, error: 'Could not record it' };

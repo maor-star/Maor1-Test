@@ -1,53 +1,64 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SKIP, shouldMirror, skipList } from '@/lib/sync/mirror-skip';
+import { DEFAULT_KEEP, DEFAULT_SKIP_PAIR, keepList, shouldMirror, skipPair } from '@/lib/sync/mirror-skip';
 
 /**
- * Whose tasks reach his list.
+ * Whose ClickUp tasks reach his list.
  *
- * The failure that matters here is the quiet one: a rule that hides a task he
- * is on. Everything below is a case where a simpler rule — "skip if the first
- * assignee is on the list" — would have dropped work he needs to see.
+ * The first version of this rule skipped anything assigned only to Mor, and it
+ * was wrong: most of what sits under her name is work he wrote and delegated,
+ * which is exactly what he wants to watch. Every case below is one where a
+ * looser rule would hide work that is his.
  */
-const SKIP = ['mor@adnimation.com', 'treves@adnimation.com'];
+const MOR = 'mor@adnimation.com';
+const TOMER = 'treves@adnimation.com';
+const MAOR = 'maor@adnimation.com';
+const PAIR = [MOR, TOMER];
 
 describe('whose ClickUp tasks are mirrored', () => {
-  it('keeps his own', () => {
-    expect(shouldMirror(['maor@adnimation.com'], SKIP)).toBe(true);
+  it('keeps a task assigned to one of them alone — that is usually his work, handed over', () => {
+    expect(shouldMirror([MOR], PAIR)).toBe(true);
+    expect(shouldMirror([TOMER], PAIR)).toBe(true);
   });
 
-  it('drops one that is only theirs', () => {
-    expect(shouldMirror(['mor@adnimation.com'], SKIP)).toBe(false);
-    expect(shouldMirror(['treves@adnimation.com'], SKIP)).toBe(false);
-    expect(shouldMirror(['mor@adnimation.com', 'treves@adnimation.com'], SKIP)).toBe(false);
+  it('skips the ones they run between them', () => {
+    expect(shouldMirror([MOR, TOMER], PAIR)).toBe(false);
+    expect(shouldMirror([TOMER, MOR], PAIR)).toBe(false);
   });
 
-  it('keeps one he shares with them, whoever ClickUp lists first', () => {
-    expect(shouldMirror(['mor@adnimation.com', 'maor@adnimation.com'], SKIP)).toBe(true);
-    expect(shouldMirror(['maor@adnimation.com', 'mor@adnimation.com'], SKIP)).toBe(true);
+  it('keeps a task he is on, whoever else is tagged', () => {
+    expect(shouldMirror([MOR, TOMER, MAOR], PAIR)).toBe(true);
+    expect(shouldMirror([MAOR, MOR, TOMER], PAIR)).toBe(true);
   });
 
-  it('keeps one assigned to nobody — it belongs to no one, so it is not theirs', () => {
-    expect(shouldMirror([], SKIP)).toBe(true);
+  it('keeps his own, and anyone else on the team', () => {
+    expect(shouldMirror([MAOR], PAIR)).toBe(true);
+    expect(shouldMirror(['amir@adnimation.com'], PAIR)).toBe(true);
+    expect(shouldMirror(['mohd@adnimation.com', MOR], PAIR)).toBe(true);
   });
 
-  it('keeps anyone else on the team', () => {
-    expect(shouldMirror(['amir@adnimation.com'], SKIP)).toBe(true);
-    expect(shouldMirror(['mohd@adnimation.com'], SKIP)).toBe(true);
+  it('keeps one assigned to nobody', () => {
+    expect(shouldMirror([], PAIR)).toBe(true);
   });
 
-  it('does not care about case or stray spacing', () => {
-    expect(shouldMirror([' MOR@Adnimation.com '], SKIP)).toBe(false);
-    expect(shouldMirror(['mor@adnimation.com'], [' Mor@ADNIMATION.com '])).toBe(false);
+  it('ignores case and stray spacing on both sides', () => {
+    expect(shouldMirror([' MOR@Adnimation.com ', 'TREVES@adnimation.com'], PAIR)).toBe(false);
+    expect(shouldMirror([MOR, TOMER], [' Mor@ADNIMATION.com ', ' Treves@adnimation.COM '])).toBe(false);
   });
 
-  it('mirrors everything when the list is empty', () => {
-    expect(shouldMirror(['mor@adnimation.com'], [])).toBe(true);
+  it('refuses to act on a pair of one — that is the mistake this replaced', () => {
+    // A single name would skip everything that person touches.
+    expect(shouldMirror([MOR], [MOR])).toBe(true);
+    expect(shouldMirror([MOR, TOMER], [MOR])).toBe(true);
   });
 
-  it('reads the list from the environment, and falls back to the two he named', () => {
-    expect(skipList(undefined)).toEqual(DEFAULT_SKIP);
-    expect(skipList('a@x.com, B@X.com ,')).toEqual(['a@x.com', 'b@x.com']);
-    // An explicitly empty setting means "mirror everyone", not "use the default".
-    expect(skipList('')).toEqual([]);
+  it('reads both lists from the environment, and falls back to the people he named', () => {
+    expect(skipPair(undefined)).toEqual(DEFAULT_SKIP_PAIR);
+    expect(keepList(undefined)).toEqual(DEFAULT_KEEP);
+    expect(skipPair('A@x.com, b@X.com ,')).toEqual(['a@x.com', 'b@x.com']);
+    expect(keepList('')).toEqual([]);
+  });
+
+  it('mirrors everything when the pair is cleared', () => {
+    expect(shouldMirror([MOR, TOMER], [])).toBe(true);
   });
 });

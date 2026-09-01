@@ -214,14 +214,19 @@ export async function createLinkAction(
  * Read the contract and say what it commits us to.
  *
  * Not persisted: a summary is a reading aid, and a stale one describing an
- * older version is worse than none. It is regenerated on demand against the
- * newest version in Drive.
+ * older version is worse than none. It is regenerated on demand — against the
+ * newest version in Drive, or against one named document, because a contract
+ * is often several files and the question is usually about one of them.
  */
-export async function summariseAction(contractId: string) {
+export async function summariseAction(contractId: string, versionId?: string) {
   await requireUser();
   const parsed = z.string().uuid().safeParse(contractId);
   if (!parsed.success) return { ok: false as const, error: 'Not a contract' };
-  return summariseContract(parsed.data);
+
+  const version = versionId ? z.string().uuid().safeParse(versionId) : null;
+  if (version && !version.success) return { ok: false as const, error: 'Not a document' };
+
+  return summariseContract(parsed.data, version?.data);
 }
 
 /** Candidates to link a contract to, matched on the counterparty. */

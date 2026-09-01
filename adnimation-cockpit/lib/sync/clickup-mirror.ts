@@ -5,7 +5,7 @@ import { recordFailure, recordSuccess } from '@/lib/integrations/health';
 import { computeHeat } from '@/lib/tasks/heat';
 import { deptForList } from './departments';
 import { toMirrorRow, type MirrorRow } from './clickup-map';
-import { shouldMirror, skipList } from './mirror-skip';
+import { shouldMirror } from './mirror-skip';
 
 /**
  * Spec 6.1.2 — the company layer mirrors ClickUp, which stays the system of
@@ -56,15 +56,15 @@ export async function syncClickUpTasks(
   }
 
   /*
-   * Other people's work never enters the mirror.
+   * The pair's own work never enters the mirror. See lib/sync/mirror-skip.ts
+   * for why this is only ever the pair, and never one of them alone.
    *
-   * Filtering it on the way in rather than on the way out matters: a row that
-   * exists is a row that shows up in a count, a search, or the next screen
-   * somebody builds against this table.
+   * Filtering on the way in rather than on the way out matters: a row that
+   * exists shows up in a count, a search, and the next screen somebody builds
+   * against this table.
    */
-  const skip = skipList();
   const all = fetched.map(toMirrorRow);
-  const rows = all.filter((r) => shouldMirror(r.assigneeEmails, skip));
+  const rows = all.filter((r) => shouldMirror(r.assigneeEmails));
   const theirs = all.length - rows.length;
 
   const open = rows.filter((r) => !r.finished);
@@ -72,7 +72,7 @@ export async function syncClickUpTasks(
 
   // Anything already mirrored that is now somebody else's — the list changed,
   // or a task was reassigned — goes, so the rule applies to what is here too.
-  const notHis = all.filter((r) => !shouldMirror(r.assigneeEmails, skip)).map((r) => r.clickupId);
+  const notHis = all.filter((r) => !shouldMirror(r.assigneeEmails)).map((r) => r.clickupId);
   const dropped = await dropNotHis(notHis);
 
   const [ownerByEmail, deptIdByCode] = await Promise.all([

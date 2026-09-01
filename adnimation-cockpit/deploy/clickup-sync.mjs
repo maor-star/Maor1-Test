@@ -12,8 +12,8 @@
  *
  *  - the mirror shows OPEN work; a task ClickUp has closed is marked done and
  *    kept for thirty days, so one closed by mistake can be reopened;
- *  - a task whose every assignee is on TASK_MIRROR_SKIP is not his and is not
- *    mirrored at all;
+ *  - a task tagged with everyone on TASK_MIRROR_SKIP_PAIR, and not with him,
+ *    is theirs and is not mirrored at all;
  *  - the fields he has taken over on a task (its pinned_fields) are his, and
  *    are not overwritten from ClickUp;
  *  - the department is the ClickUp list the task sits in, unless he has said
@@ -22,7 +22,7 @@
  *    the app, which puts it in ClickUp first.
  */
 import postgres from 'postgres';
-import { shouldMirror, skipList } from './mirror-skip.mjs';
+import { shouldMirror } from './mirror-skip.mjs';
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
 const TEAM = process.env.CLICKUP_TEAM_ID;
@@ -122,19 +122,16 @@ async function main() {
     let upserted = 0;
     const finished = [];
     const notHis = [];
-    const skip = skipList();
 
     for (const t of raw) {
       /*
-       * Other people's work never enters the mirror. Filtered on the way in,
-       * not on the way out: a row that exists shows up in a count, a search,
-       * or the next screen built against this table.
-       *
-       * Only when everyone on it is somebody he does not track — a task he
-       * shares stays, and an unassigned one is nobody's to hide.
+       * The pair's own work never enters the mirror — only tasks where BOTH
+       * Mor and Tomer are tagged and he is not. One of them alone is usually
+       * work he wrote and handed over, which is exactly what he wants to see.
+       * See mirror-skip.mjs.
        */
       const assignees = (t.assignees ?? []).map((a) => a.email).filter(Boolean);
-      if (!shouldMirror(assignees, skip)) {
+      if (!shouldMirror(assignees)) {
         notHis.push(String(t.id));
         continue;
       }
@@ -238,7 +235,7 @@ async function main() {
 
     const [{ count }] = await sql`select count(*)::int as count from tasks where layer = 'company'`;
     console.log(
-      `open mirrored: ${upserted}; someone else's: ${notHis.length} (${dropped} removed); ` +
+      `open mirrored: ${upserted}; theirs: ${notHis.length} (${dropped} removed); ` +
         `closed: ${removed}; long-done cleared: ${swept.length}; ` +
         `mirror now holds ${count} company tasks`,
     );

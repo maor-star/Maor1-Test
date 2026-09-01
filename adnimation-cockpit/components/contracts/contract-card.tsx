@@ -16,11 +16,23 @@ import type { ContractRow } from '@/lib/contracts/intake-module';
 import type { ContractSummary } from '@/lib/contracts/summarise';
 import { fmtDateTime, fmtMoney } from '@/lib/utils';
 
+/** English only, everywhere: one label per category and no second language. */
 const CATEGORY_LABEL: Record<string, string> = {
+  demand: 'DEMAND',
+  supply: 'SUPPLY',
+  mutual: 'MUTUAL — BOTH DEMAND AND SUPPLY',
+  quote: 'QUOTE',
+  consulting: 'CONSULTING',
+  general: 'GENERAL',
+};
+
+/** The short form, for the tag on a classified contract. */
+const CATEGORY_TAG: Record<string, string> = {
   demand: 'DEMAND',
   supply: 'SUPPLY',
   mutual: 'MUTUAL',
   quote: 'QUOTE',
+  consulting: 'CONSULTING',
   general: 'GENERAL',
 };
 
@@ -92,7 +104,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
               {c.statusLabel}
             </Tag>
             {c.categoryConfirmed ? (
-              <Tag tone="accent">{CATEGORY_LABEL[c.category ?? 'general']}</Tag>
+              <Tag tone="accent">{CATEGORY_TAG[c.category ?? 'general']}</Tag>
             ) : (
               <Tag tone="warning">NO CATEGORY YET</Tag>
             )}
@@ -157,6 +169,38 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
                         className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
                       >
                         {preview === v.driveFileId ? 'Hide' : 'Read it'}
+                      </button>
+                      {/*
+                        A summary per document. Several files arrive at once —
+                        the agreement, an addendum, a redraft — and "summarise
+                        the contract" answered a question about only the newest
+                        of them.
+                      */}
+                      <button
+                        type="button"
+                        disabled={summarising}
+                        onClick={() => {
+                          setSummarising(true);
+                          setSummaryError(null);
+                          setSummary(null);
+                          summariseAction(c.id, v.id)
+                            .then((r) => {
+                              if (r.ok && 'summary' in r && r.summary) {
+                                setSummary({
+                                  summary: r.summary,
+                                  ...('versionNo' in r ? { versionNo: r.versionNo } : {}),
+                                  ...('fileName' in r ? { fileName: r.fileName } : {}),
+                                });
+                              } else {
+                                setSummaryError(('error' in r && r.error) || 'Could not read it');
+                              }
+                            })
+                            .catch(() => setSummaryError('Could not read it'))
+                            .finally(() => setSummarising(false));
+                        }}
+                        className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent disabled:opacity-50"
+                      >
+                        {summarising ? 'Reading…' : 'Summarise it'}
                       </button>
                       <a
                         href={`https://drive.google.com/file/d/${v.driveFileId}/view`}
@@ -484,8 +528,6 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
                 {CONTRACT_CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
                     {CATEGORY_LABEL[cat] ?? cat}
-                    {cat === 'mutual' ? ' — BOTH DEMAND AND SUPPLY' : ''}
-                    {cat === 'quote' ? ' — הצעת מחיר' : ''}
                   </option>
                 ))}
               </Select>

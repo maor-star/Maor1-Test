@@ -40,7 +40,7 @@ export const DRIVE_ROOT = 'Adnimation Contracts';
  * added — a category you cannot pick may as well not exist.
  */
 export const CONTRACT_CATEGORIES = [
-  'demand', 'supply', 'mutual', 'quote', 'general',
+  'demand', 'supply', 'mutual', 'quote', 'consulting', 'general',
 ];
 
 export const CATEGORY_FOLDER = {
@@ -48,6 +48,7 @@ export const CATEGORY_FOLDER = {
   supply: 'Supply',
   mutual: 'Mutual',
   quote: 'Quotes',
+  consulting: 'Consulting',
   general: 'General',
 };
 

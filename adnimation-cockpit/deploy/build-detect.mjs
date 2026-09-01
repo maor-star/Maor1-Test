@@ -102,8 +102,10 @@ const TARGETS = [
     from: 'lib/sync/mirror-skip.ts',
     test: 'tests/unit/mirror-skip-parity.test.ts',
     rewrites: [
-      ['export function skipList(raw: string | undefined = process.env.TASK_MIRROR_SKIP): string[] {', 'export function skipList(raw = process.env.TASK_MIRROR_SKIP) {'],
-      ['export function shouldMirror(assigneeEmails: string[], skip: string[] = skipList()): boolean {', 'export function shouldMirror(assigneeEmails, skip = skipList()) {'],
+      ['export function skipPair(raw: string | undefined = process.env.TASK_MIRROR_SKIP_PAIR): string[] {', 'export function skipPair(raw = process.env.TASK_MIRROR_SKIP_PAIR) {'],
+      ['export function keepList(raw: string | undefined = process.env.TASK_MIRROR_KEEP): string[] {', 'export function keepList(raw = process.env.TASK_MIRROR_KEEP) {'],
+      [/export function shouldMirror\(\n  assigneeEmails: string\[\],\n  pair: string\[\] = skipPair\(\),\n  keep: string\[\] = keepList\(\),\n\): boolean \{/, 'export function shouldMirror(assigneeEmails, pair = skipPair(), keep = keepList()) {'],
+      ['const parse = (raw: string) =>', 'const parse = (raw) =>'],
     ],
   },
   {

@@ -73,9 +73,23 @@ export interface SummaryResult {
   /** Which version was read, so a summary is never mistaken for a newer one. */
   versionNo?: number;
   fileName?: string;
+  versionId?: string;
 }
 
-export async function summariseContract(contractId: string): Promise<SummaryResult> {
+/**
+ * Summarise one contract — by default its newest version, or a named one.
+ *
+ * A "contract" here is often several documents: the agreement, an addendum, a
+ * revised draft that came back a week later. Summarising only the newest was
+ * right for "what am I about to sign" and useless for "what changed", and for
+ * the case he actually hits — three files arriving at once, none of which he
+ * has read. So every version can be read on its own, and the result says which
+ * one it was.
+ */
+export async function summariseContract(
+  contractId: string,
+  versionId?: string,
+): Promise<SummaryResult> {
   const [contract] = await db
     .select()
     .from(contracts)
@@ -83,19 +97,26 @@ export async function summariseContract(contractId: string): Promise<SummaryResu
     .limit(1);
   if (!contract) return { ok: false, error: 'No such contract' };
 
-  // The newest version is the one that matters; summarising v1 of a contract
-  // now on v3 would describe terms that have already been renegotiated.
   const versions = await db
     .select()
     .from(contractVersions)
     .where(eq(contractVersions.contractId, contractId));
 
-  const latest = versions
-    .filter((v) => v.driveFileId)
-    .sort((a, b) => b.versionNo - a.versionNo)[0];
+  const readable = versions.filter((v) => v.driveFileId);
+
+  // Named: exactly that document. Unnamed: the newest, because summarising v1
+  // of a contract now on v3 describes terms already renegotiated.
+  const latest = versionId
+    ? readable.find((v) => v.id === versionId)
+    : readable.sort((a, b) => b.versionNo - a.versionNo)[0];
 
   if (!latest?.driveFileId) {
-    return { ok: false, error: 'No version of this contract is in Drive yet' };
+    return {
+      ok: false,
+      error: versionId
+        ? 'That document is not in Drive'
+        : 'No version of this contract is in Drive yet',
+    };
   }
 
   const file = await fetchForReading(latest.driveFileId);
@@ -130,5 +151,6 @@ export async function summariseContract(contractId: string): Promise<SummaryResu
     summary: result.parsed,
     versionNo: latest.versionNo,
     fileName: latest.fileName,
+    versionId: latest.id,
   };
 }
