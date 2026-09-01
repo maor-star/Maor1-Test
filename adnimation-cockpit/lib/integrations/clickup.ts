@@ -399,11 +399,14 @@ export class FakeClickUpAdapter implements ClickUpAdapter {
     return { ok: true };
   }
 
-  async listAttachments(): Promise<ClickUpAttachment[]> {
+  async listAttachments(_taskId: string): Promise<ClickUpAttachment[]> {
     return this.attachments;
   }
 
-  async readAttachment(): Promise<{ body: Buffer; mimeType: string; name: string } | null> {
+  async readAttachment(
+    _taskId: string,
+    _attachmentId: string,
+  ): Promise<{ body: Buffer; mimeType: string; name: string } | null> {
     return null;
   }
 }

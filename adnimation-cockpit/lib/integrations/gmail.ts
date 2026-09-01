@@ -48,6 +48,20 @@ export function walkParts(part: MimePart | undefined, out: MimePart[] = []): Mim
  */
 const TOO_SMALL_TO_MEAN_ANYTHING = 8_000;
 
+/**
+ * The same file, quoted down a thread, is one file.
+ *
+ * Matching on the name alone was not enough: a mail client rewrites the
+ * filename as it forwards — "A + B.pdf" comes back as "A   B.pdf" — and the
+ * list then showed the same agreement four times. The byte count does not get
+ * rewritten, and two genuinely different files of identical type and identical
+ * size in one conversation is not a thing that happens.
+ */
+export function dedupeKey(part: MimePart): string {
+  const size = part.body?.size ?? 0;
+  return size > 0 ? `${part.mimeType ?? ''}:${size}` : `name:${part.filename ?? ''}`;
+}
+
 export function worthShowing(part: MimePart): boolean {
   const size = part.body?.size ?? 0;
   const isImage = (part.mimeType ?? '').startsWith('image/');
@@ -161,9 +175,7 @@ class RealGmailAdapter implements GmailAdapter {
         if (!worthShowing(part)) continue;
         const id = part.body?.attachmentId;
         if (!id) continue;
-        // The same file forwarded down a thread appears once per message; he
-        // wants the file, not the count of how often it was quoted.
-        const key = `${part.filename}:${part.body?.size ?? 0}`;
+        const key = dedupeKey(part);
         if (seen.has(key)) continue;
         seen.add(key);
         out.push({
@@ -175,7 +187,16 @@ class RealGmailAdapter implements GmailAdapter {
         });
       }
     }
-    return out;
+    /*
+     * Documents first.
+     *
+     * A thread that carries two signed agreements also carries eight copies of
+     * everyone's signature logo, and a list that opens on the logos is a list
+     * he stops opening.
+     */
+    return out.sort(
+      (a, b) => Number(a.mimeType.startsWith('image/')) - Number(b.mimeType.startsWith('image/')),
+    );
   }
 
   async readAttachment(
@@ -275,11 +296,14 @@ export class FakeGmailAdapter implements GmailAdapter {
   /** Tests set these; an unconfigured mailbox simply has no files to show. */
   attachments: AttachmentRef[] = [];
 
-  async listThreadAttachments(): Promise<AttachmentRef[]> {
+  async listThreadAttachments(_threadId: string): Promise<AttachmentRef[]> {
     return this.attachments;
   }
 
-  async readAttachment(): Promise<{ body: Buffer; mimeType: string; name: string } | null> {
+  async readAttachment(
+    _messageId: string,
+    _attachmentId: string,
+  ): Promise<{ body: Buffer; mimeType: string; name: string } | null> {
     return null;
   }
 }

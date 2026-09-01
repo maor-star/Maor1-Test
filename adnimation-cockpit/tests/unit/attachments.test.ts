@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClickUpAdapter } from '@/lib/integrations/clickup';
-import { FakeGmailAdapter, walkParts, worthShowing, type MimePart } from '@/lib/integrations/gmail';
+import {
+  FakeGmailAdapter, dedupeKey, walkParts, worthShowing, type MimePart,
+} from '@/lib/integrations/gmail';
 
 /**
  * Attachments, at the seam that actually breaks.
@@ -73,5 +75,32 @@ describe('which MIME parts are files', () => {
 
   it('never hides a document for being small — a one-page PDF is still the point', () => {
     expect(worthShowing(attachment({ body: { attachmentId: 'a', size: 900 } }))).toBe(true);
+  });
+});
+
+
+describe('the same file, quoted down a thread', () => {
+  const part = (filename: string, size: number, mimeType = 'application/pdf'): MimePart => ({
+    filename, mimeType, body: { attachmentId: 'a', size },
+  });
+
+  it('matches a file whose name a mail client rewrote in the forward', () => {
+    // Real case: "All In Consulting + Admination SSP Agreement.pdf" came back
+    // from the reply with the plus turned into spaces, and the list showed the
+    // same agreement four times.
+    expect(dedupeKey(part('A + B.pdf', 683_149))).toBe(dedupeKey(part('A   B.pdf', 683_149)));
+  });
+
+  it('keeps two genuinely different files apart', () => {
+    expect(dedupeKey(part('one.pdf', 683_149))).not.toBe(dedupeKey(part('two.pdf', 619_513)));
+  });
+
+  it('falls back to the name when Gmail reports no size', () => {
+    expect(dedupeKey(part('one.pdf', 0))).toBe('name:one.pdf');
+    expect(dedupeKey(part('one.pdf', 0))).not.toBe(dedupeKey(part('two.pdf', 0)));
+  });
+
+  it('does not confuse a PDF with an image of the same size', () => {
+    expect(dedupeKey(part('a.pdf', 1000))).not.toBe(dedupeKey(part('a.png', 1000, 'image/png')));
   });
 });
