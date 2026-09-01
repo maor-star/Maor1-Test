@@ -1056,7 +1056,7 @@ async function viewArticle(el, slug) {
     ${post.image_url ? `
       <figure class="article-figure">
         <img src="/api/posts/${post.id}/image" alt="" />
-        ${post.image_has_mark ? '' : '<span class="watermark">מאור · הדרך הקלה לרדת במשקל</span>'}
+        <span class="watermark">מאור · הדרך הקלה לרדת במשקל</span>
       </figure>` : (ARTICLE_FIGURES[post.slug] ? ARTICLE_FIGURES[post.slug]() : '')}
     <div class="sec measure">
       <span class="tag tag-accent" style="justify-self:start">${esc(post.category)}</span>
