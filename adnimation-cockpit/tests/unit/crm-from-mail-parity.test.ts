@@ -45,7 +45,7 @@ describe('crm harvest parity', () => {
   });
 
   it('agrees about what may be written', () => {
-    const existing = { jobTitle: 'CEO', phone: null, companyName: '' };
+    const existing: Record<string, string | null> = { jobTitle: 'CEO', phone: null, companyName: '' };
     const found = { jobTitle: 'Chief Executive', phone: '+972-50-1', companyName: 'Taboola' };
     expect(js.fieldsToFill(existing, found)).toEqual(fieldsToFill(existing, found));
   });

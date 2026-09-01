@@ -39,6 +39,13 @@ const BRIEF_HINTS: Record<string, string> = {
   'promo-filer':
     '· Never file anything from a publisher I already work with.\n' +
     '· Newsletters I actually read: Adexchanger, Digiday. Leave those.',
+  'contract-redliner':
+    'Your standing positions, in your words. For example:\n' +
+    '· Payment terms: Net 45 or better. Never beyond Net 60.\n' +
+    '· No auto-renewal unless the notice period is 30 days or less.\n' +
+    '· Liability capped at 12 months of fees. Never uncapped.\n' +
+    '· No exclusivity without a revenue commitment in writing.\n' +
+    '· Israeli law and Tel Aviv courts where we can get it.',
   'contract-reader':
     '· Always tell me the termination notice period and the payment terms first.\n' +
     '· Flag any exclusivity or auto-renewal clause, however it is worded.',

@@ -112,7 +112,7 @@ describe('finding the signature', () => {
 
 describe('what gets written', () => {
   it('fills what is empty and never overwrites what is there', () => {
-    const existing = { jobTitle: 'CEO', phone: null, companyName: '' };
+    const existing: Record<string, string | null> = { jobTitle: 'CEO', phone: null, companyName: '' };
     const patch = fieldsToFill(existing, {
       jobTitle: 'Chief Executive',
       phone: '+972-50-1234567',
@@ -122,7 +122,9 @@ describe('what gets written', () => {
   });
 
   it('ignores empty findings rather than blanking a field with them', () => {
-    expect(fieldsToFill({ phone: '+1' }, { phone: null })).toEqual({});
-    expect(fieldsToFill({ phone: null }, { phone: '' })).toEqual({});
+    const held: Record<string, string | null> = { phone: '+1' };
+    const empty: Record<string, string | null> = { phone: null };
+    expect(fieldsToFill(held, { phone: null })).toEqual({});
+    expect(fieldsToFill(empty, { phone: '' })).toEqual({});
   });
 });

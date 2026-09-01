@@ -12,6 +12,7 @@ import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { BOARD_STATUSES, STATUS_LABEL } from '@/lib/contracts/status';
 import { CONTRACT_CATEGORIES } from '@/lib/contracts/drive';
+import { ContractReply } from '@/components/contracts/contract-reply';
 import type { ContractRow } from '@/lib/contracts/intake-module';
 import type { ContractSummary } from '@/lib/contracts/summarise';
 import { fmtDateTime, fmtMoney } from '@/lib/utils';
@@ -202,6 +203,12 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
                       >
                         {summarising ? 'Reading…' : 'Summarise it'}
                       </button>
+                      <ContractReply
+                        contractId={c.id}
+                        versionId={v.id}
+                        fileName={v.fileName}
+                        counterparty={c.counterpartyName}
+                      />
                       <a
                         href={`https://drive.google.com/file/d/${v.driveFileId}/view`}
                         target="_blank"

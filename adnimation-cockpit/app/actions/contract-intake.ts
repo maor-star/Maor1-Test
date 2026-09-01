@@ -9,6 +9,7 @@ import {
 } from '@/lib/contracts/intake-module';
 import { CONTRACT_STATUSES } from '@/lib/contracts/status';
 import { summariseContract } from '@/lib/contracts/summarise';
+import { redlineContract } from '@/lib/contracts/redline';
 
 /**
  * What the contracts board can do.
@@ -233,4 +234,23 @@ export async function summariseAction(contractId: string, versionId?: string) {
 export async function suggestLinksAction(counterparty: string) {
   await requireUser();
   return suggestLinks(counterparty);
+}
+
+/**
+ * Prepare the reply to a contract: what to change, and the covering email.
+ *
+ * Per document, because an email often carries three at once and each is
+ * answered on its own terms. Nothing is sent and nothing is rewritten — §6.1
+ * makes sending an external document irreversible, so the send stays a click
+ * he makes with the draft in front of him.
+ */
+export async function redlineAction(contractId: string, versionId?: string) {
+  await requireUser();
+  const parsed = z.string().uuid().safeParse(contractId);
+  if (!parsed.success) return { ok: false as const, error: 'Not a contract' };
+
+  const version = versionId ? z.string().uuid().safeParse(versionId) : null;
+  if (version && !version.success) return { ok: false as const, error: 'Not a document' };
+
+  return redlineContract(parsed.data, version?.data);
 }

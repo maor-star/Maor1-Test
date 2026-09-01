@@ -41,8 +41,10 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
   {
     name: 'contract-redliner',
     description:
-      'Compares an arriving contract against the terms we normally accept and drafts the ' +
-      'changes to ask for.',
+      'Compares an arriving contract against the terms we normally accept, drafts the changes ' +
+      'to ask for, and writes the covering email. Its brief is where your standing positions ' +
+      'live — payment terms, notice periods, what you never agree to — and the same brief ' +
+      'drives the “answer this one” button on every contract, whether this agent is on or off.',
     rationale:
       'The "fixes" half of what he asked for. It proposes redlines as a note on the contract; ' +
       'it does not edit the document, because an agent editing a legal document unsupervised ' +
