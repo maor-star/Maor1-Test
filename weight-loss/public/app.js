@@ -1046,7 +1046,9 @@ async function viewArticle(el, slug) {
     if (heading) return `<h4>${inline(heading[1])}</h4>`;
     const sub = /^\*([^*]+)\*$/.exec(line);
     if (sub) return `<h5>${inline(sub[1])}</h5>`;
-    return `<p>${inline(line)}</p>`;
+    // A single newline inside a block is a line break, not a space: a day's meals
+    // listed one under the other would otherwise run together into one sentence.
+    return `<p>${inline(line).replace(/\n/g, '<br />')}</p>`;
   }).join('');
 
   el.innerHTML = `
