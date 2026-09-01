@@ -1,6 +1,6 @@
 import { desc, eq, sql } from 'drizzle-orm';
 import {
-  auditLog, contracts, crmContacts, db, opportunities, pipelineClients, tasks,
+  auditLog, contracts, crmContacts, db, mailThreads, opportunities, pipelineClients, tasks,
 } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 
@@ -31,7 +31,7 @@ import { writeAudit } from '@/lib/audit';
 const RESTORABLE: Record<string, string[]> = {
   task: [
     'title', 'description', 'status', 'priority', 'dueDate', 'startDate', 'deptId',
-    'ownerPersonId', 'tags', 'moneyImpactCents', 'archivedAt', 'snoozeUntil', 'recurrenceRule',
+    'ownerPersonId', 'tags', 'moneyImpactCents', 'archivedAt', 'snoozeUntil', 'snoozeCount', 'recurrenceRule',
   ],
   opportunity: [
     'title', 'kind', 'status', 'note', 'valueCents', 'counterparty', 'nextStep', 'nextStepDate',
@@ -49,6 +49,9 @@ const RESTORABLE: Record<string, string[]> = {
     'firstName', 'lastName', 'email', 'phone', 'jobTitle', 'companyName', 'companyId',
     'lifecycleStage', 'notes', 'archivedAt',
   ],
+  // Marking a conversation handled is a one-click decision on a list he is
+  // scanning, which is exactly the kind of click undo exists for.
+  mail_thread: ['dismissedAt'],
 };
 
 const TABLES = {
@@ -57,12 +60,38 @@ const TABLES = {
   contract: contracts,
   pipeline_client: pipelineClients,
   crm_contact: crmContacts,
+  mail_thread: mailThreads,
 } as const;
 
 type Undoable = keyof typeof TABLES;
 
+/** Two of these tables are keyed by something other than a uuid `id`. */
 const idColumn = (entity: Undoable) =>
-  entity === 'crm_contact' ? crmContacts.hubspotId : TABLES[entity].id;
+  entity === 'crm_contact'
+    ? crmContacts.hubspotId
+    : entity === 'mail_thread'
+      ? mailThreads.threadId
+      : TABLES[entity].id;
+
+/**
+ * The part of a row undo is able to put back.
+ *
+ * Audit rows were written to be read by a person — `before: { stage, nextStep }`
+ * says what changed and nothing more. Undo needs the whole restorable set, or
+ * it puts back two fields out of ten and calls that a revert. Passing a row
+ * through here at the point of the write costs nothing and makes the audit
+ * entry a complete snapshot of what undo may need.
+ */
+export function restorableSnapshot(
+  entityType: string,
+  row: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const keys = RESTORABLE[entityType];
+  if (!keys || !row) return {};
+  const out: Record<string, unknown> = {};
+  for (const key of keys) if (key in row) out[key] = row[key];
+  return out;
+}
 
 export interface UndoResult {
   ok: boolean;
@@ -94,14 +123,16 @@ export async function undoAudit(auditId: number, actor: string): Promise<UndoRes
    * Only the most recent change to this row.
    *
    * Undoing an older one would revert everything done since without saying so,
-   * which is not what the word means to the person clicking it.
+   * which is not what the word means to the person clicking it. An undo counts
+   * as a change like any other, which is what lets the undo itself be undone:
+   * its `before` holds the state the original change produced, so putting that
+   * back is a redo.
    */
   const [newest] = await db
     .select({ id: auditLog.id })
     .from(auditLog)
     .where(
-      sql`${auditLog.entityType} = ${entry.entityType} and ${auditLog.entityId} = ${entry.entityId}
-          and ${auditLog.action} not like '%.undo'`,
+      sql`${auditLog.entityType} = ${entry.entityType} and ${auditLog.entityId} = ${entry.entityId}`,
     )
     .orderBy(desc(auditLog.id))
     .limit(1);
@@ -141,6 +172,50 @@ export async function undoAudit(auditId: number, actor: string): Promise<UndoRes
   });
 
   return { ok: true, restored: Object.keys(patch) };
+}
+
+export interface UndoOffer {
+  auditId: number;
+  action: string;
+  entityType: string;
+  entityId: string;
+}
+
+/**
+ * The change to offer him back, right after he made one.
+ *
+ * The screen does not have to know what it just did or which row it touched —
+ * it says "something happened" and this finds it. That is what makes undo
+ * available everywhere rather than only where somebody remembered to plumb it
+ * through: any action that writes an audit row with a `before` is undoable,
+ * and one that does not simply offers nothing.
+ *
+ * Scoped to the actor and to the last couple of minutes, so a bar can never
+ * offer to revert something a background job did while he was reading.
+ */
+export async function lastUndoableFor(
+  actor: string,
+  withinSeconds = 120,
+): Promise<UndoOffer | null> {
+  const rows = await db
+    .select()
+    .from(auditLog)
+    .where(
+      sql`${auditLog.actor} = ${actor}
+          and ${auditLog.createdAt} > now() - ${sql.raw(`interval '${Math.max(0, Math.floor(withinSeconds))} seconds'`)}`,
+    )
+    .orderBy(desc(auditLog.id))
+    .limit(1);
+
+  const row = rows[0];
+  if (!row?.entityId) return null;
+  if (!isUndoable(row.entityType, row.before)) return null;
+  return {
+    auditId: row.id,
+    action: row.action,
+    entityType: row.entityType,
+    entityId: row.entityId,
+  };
 }
 
 /** The id of the last change to a row, which is what undo is offered against. */

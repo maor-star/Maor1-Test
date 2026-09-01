@@ -2,6 +2,7 @@
 
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUndo } from '@/components/ui/undo-bar';
 import {
   archiveTaskAction, completeTaskAction, snoozeTaskAction, updateTaskAction,
 } from '@/app/actions/tasks';
@@ -27,6 +28,7 @@ export function QuickTaskActions({
 }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const undo = useUndo();
 
   if (!isMine) return null;
 
@@ -37,6 +39,7 @@ export function QuickTaskActions({
     startTransition(async () => {
       const result = await action(fd);
       if (!result.ok && result.error) window.alert(result.error);
+      if (result.ok) undo.offer();
       router.refresh();
     });
   };

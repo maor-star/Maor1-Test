@@ -8,6 +8,8 @@ import {
   type OpportunitySource, type OpportunityStatus, type OpportunityView,
 } from './rules';
 import { detectOpportunity } from './detect';
+import { writeAudit } from '@/lib/audit';
+import { restorableSnapshot } from '@/lib/undo';
 
 /**
  * The opportunities module — the list, and everything he does to it.
@@ -208,8 +210,14 @@ export async function createOpportunity(
 export async function updateOpportunity(
   id: string,
   input: OpportunityInput,
+  actor = 'unknown',
 ): Promise<{ ok: boolean; error?: string }> {
   try {
+    // The row as it stands is what undo puts back, so it is read before the
+    // write rather than reconstructed from the form afterwards.
+    const [before] = await db.select().from(opportunities).where(eq(opportunities.id, id)).limit(1);
+    if (!before) return { ok: false, error: 'No opportunity with that id' };
+
     await db
       .update(opportunities)
       .set({
@@ -225,6 +233,15 @@ export async function updateOpportunity(
         lastTouchedAt: new Date(),
       })
       .where(eq(opportunities.id, id));
+
+    await writeAudit({
+      actor,
+      action: 'opportunity.update',
+      entityType: 'opportunity',
+      entityId: id,
+      before: restorableSnapshot('opportunity', before),
+      after: restorableSnapshot('opportunity', input as unknown as Record<string, unknown>),
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not save it' };
@@ -242,8 +259,12 @@ export async function setOpportunityStatus(
   id: string,
   status: OpportunityStatus,
   note?: string | null,
+  actor = 'unknown',
 ): Promise<{ ok: boolean; error?: string }> {
   try {
+    const [before] = await db.select().from(opportunities).where(eq(opportunities.id, id)).limit(1);
+    if (!before) return { ok: false, error: 'No opportunity with that id' };
+
     const decided = status === 'won' || status === 'lost';
     await db
       .update(opportunities)
@@ -254,18 +275,45 @@ export async function setOpportunityStatus(
         decidedNote: decided ? (note ?? null) : null,
       })
       .where(eq(opportunities.id, id));
+
+    await writeAudit({
+      actor,
+      action: 'opportunity.status',
+      entityType: 'opportunity',
+      entityId: id,
+      before: { status: before.status, decidedNote: before.decidedNote },
+      after: { status, decidedNote: decided ? (note ?? null) : null },
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not update it' };
   }
 }
 
-export async function archiveOpportunity(id: string): Promise<{ ok: boolean; error?: string }> {
+export async function archiveOpportunity(
+  id: string,
+  actor = 'unknown',
+): Promise<{ ok: boolean; error?: string }> {
   try {
+    const [before] = await db
+      .select({ archivedAt: opportunities.archivedAt })
+      .from(opportunities)
+      .where(eq(opportunities.id, id))
+      .limit(1);
+
     await db
       .update(opportunities)
       .set({ archivedAt: new Date() })
       .where(eq(opportunities.id, id));
+
+    await writeAudit({
+      actor,
+      action: 'opportunity.archive',
+      entityType: 'opportunity',
+      entityId: id,
+      before: { archivedAt: before?.archivedAt ?? null },
+      after: { archivedAt: new Date() },
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not archive it' };

@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUndo } from '@/components/ui/undo-bar';
 import { savePipelineClientAction } from '@/app/actions/pipeline';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
@@ -34,6 +35,7 @@ export function PipelineClientForm({
   const [stage, setStage] = useState<Stage>(client?.stage ?? 'lead');
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
+  const undo = useUndo();
 
   const needsStep = OPEN_STAGES.includes(stage);
 
@@ -48,6 +50,7 @@ export function PipelineClientForm({
           setFormError(result.ok ? null : (result.error ?? null));
           if (result.ok) {
             if (!client) formRef.current?.reset();
+            undo.offer();
             router.refresh();
             onDone?.();
           }

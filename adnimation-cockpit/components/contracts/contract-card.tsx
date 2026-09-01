@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUndo } from '@/components/ui/undo-bar';
 import {
   archiveContractAction, classifyAction, createLinkAction, refileAction, setContractStatusAction,
   setLinkAction, setWaitingOnAction, suggestLinksAction, summariseAction, undoAction,
@@ -63,6 +64,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
   const [message, setMessage] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const router = useRouter();
+  const undo = useUndo();
 
   /*
    * The things this contract could belong to, fetched once, when he first
@@ -91,6 +93,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
       setWarning(result.warning ?? null);
       if (result.ok) {
         setLinks(null);
+        undo.offer();
         router.refresh();
         if (!result.warning) setOpen(false);
       }

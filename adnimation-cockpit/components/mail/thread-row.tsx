@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { ToPipeline } from '@/components/mail/to-pipeline';
 import { useRouter } from 'next/navigation';
+import { useUndo } from '@/components/ui/undo-bar';
 import { dismissThreadAction, taskFromMailAction, replyAction } from '@/app/actions/mail';
 import { captureMailAction } from '@/app/actions/opportunities';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
   const [replying, setReplying] = useState(false);
   const [sent, setSent] = useState(false);
   const router = useRouter();
+  const undo = useUndo();
 
   const dismissed = t.dismissedAt !== null;
   const stale = !t.lastFromMe && t.daysWaiting >= 3;
@@ -118,7 +120,10 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
               if (dismissed) data.set('undo', '1');
               const result = await dismissThreadAction(data);
               setError(result.ok ? null : (result.error ?? 'That did not work'));
-              if (result.ok) router.refresh();
+              if (result.ok) {
+                undo.offer();
+                router.refresh();
+              }
             })
           }
           title={

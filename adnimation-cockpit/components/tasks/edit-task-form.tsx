@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUndo } from '@/components/ui/undo-bar';
 import { archiveTaskAction, updateTaskAction } from '@/app/actions/tasks';
 import { detachFromClickUpAction, editClickUpTaskAction } from '@/app/actions/clickup-tasks';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ export function EditTaskForm({
   const [message, setMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const router = useRouter();
+  const undo = useUndo();
 
   return (
     <form
@@ -57,7 +59,10 @@ export function EditTaskForm({
             : await updateTaskAction(formData);
           setMessage(result.ok ? null : (result.error ?? 'Update failed'));
           setSaved(result.ok);
-          if (result.ok) router.refresh();
+          if (result.ok) {
+            undo.offer();
+            router.refresh();
+          }
         });
       }}
     >
@@ -173,7 +178,10 @@ export function EditTaskForm({
               startTransition(async () => {
                 const result = await detachFromClickUpAction(fd);
                 setMessage(result.ok ? null : (result.error ?? 'Could not detach it'));
-                if (result.ok) router.refresh();
+                if (result.ok) {
+                  undo.offer();
+                  router.refresh();
+                }
               });
             }}
           >
@@ -193,7 +201,10 @@ export function EditTaskForm({
             fd.set('id', task.id);
             startTransition(async () => {
               const result = await archiveTaskAction(fd);
-              if (result.ok) router.push('/tasks');
+              if (result.ok) {
+                undo.offer();
+                router.push('/tasks');
+              }
               else setMessage(result.error ?? 'Archiving failed');
             });
           }}

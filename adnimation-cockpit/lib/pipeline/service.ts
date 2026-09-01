@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import { db, people, pipelineClients, pipelineTouches } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
+import { restorableSnapshot } from '@/lib/undo';
 import { todayInTz } from '@/lib/utils';
 import {
   QUIET_DAYS, pipelineInputSchema, touchInputSchema,
@@ -169,7 +170,7 @@ export async function upsertPipelineClient(
       action: 'pipeline.update',
       entityType: 'pipeline_client',
       entityId: input.id,
-      before: { stage: before.stage, nextStep: before.nextStep, nextStepDate: before.nextStepDate },
+      before: restorableSnapshot('pipeline_client', before),
       after: { stage: values.stage, nextStep: values.nextStep, nextStepDate: values.nextStepDate },
     });
     return input.id;

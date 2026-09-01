@@ -3,6 +3,7 @@ import { signOut as signOutAction } from '@/auth';
 import { Rail } from '@/components/hud/rail';
 import { MobileNav } from '@/components/hud/mobile-nav';
 import { TelemetryStrip } from '@/components/hud/telemetry-strip';
+import { UndoProvider } from '@/components/ui/undo-bar';
 
 // The telemetry strip is live operating data; nothing in this shell may be
 // cached between requests or the ticker silently shows yesterday.
@@ -25,18 +26,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   };
 
   return (
-    <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[248px_1fr]">
-      <Rail
-        userName={user.name}
-        userRole={user.role}
-        signOutAction={signOut}
-      />
+    <UndoProvider>
+      <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[248px_1fr]">
+        <Rail userName={user.name} userRole={user.role} signOutAction={signOut} />
 
-      <main className="hud-ground min-w-0">
-        <MobileNav userName={user.name} userRole={user.role} signOutAction={signOut} />
-        <TelemetryStrip />
-        <div className="px-4 py-4 pb-14 sm:px-6 lg:px-[30px] lg:py-[22px]">{children}</div>
-      </main>
-    </div>
+        <main className="hud-ground min-w-0">
+          <MobileNav userName={user.name} userRole={user.role} signOutAction={signOut} />
+          <TelemetryStrip />
+          <div className="px-4 py-4 pb-14 sm:px-6 lg:px-[30px] lg:py-[22px]">{children}</div>
+        </main>
+      </div>
+    </UndoProvider>
   );
 }

@@ -98,13 +98,24 @@ export async function updateTask(patch: TaskPatch, actor: string) {
 }
 
 export async function completeTask(id: string, actor: string) {
+  // Read the status first: it is what undo puts back, and after the update it
+  // is gone.
+  const [was] = await db
+    .select({ status: tasks.status })
+    .from(tasks)
+    .where(eq(tasks.id, id))
+    .limit(1);
+
   const [row] = await db
     .update(tasks)
     .set({ status: 'done', updatedAt: new Date() })
     .where(and(eq(tasks.id, id), eq(tasks.layer, 'mine')))
     .returning();
   if (!row) throw new Error('Task not found, or it belongs to the ClickUp layer');
-  await writeAudit({ actor, action: 'task.complete', entityType: 'task', entityId: id });
+  await writeAudit({
+    actor, action: 'task.complete', entityType: 'task', entityId: id,
+    before: { status: was?.status ?? 'open' }, after: { status: 'done' },
+  });
   return row;
 }
 
@@ -113,6 +124,12 @@ export async function completeTask(id: string, actor: string) {
  * surfaces it for a keep-or-kill decision at the management meeting.
  */
 export async function snoozeTask(id: string, until: Date, actor: string) {
+  const [was] = await db
+    .select({ snoozeUntil: tasks.snoozeUntil, snoozeCount: tasks.snoozeCount })
+    .from(tasks)
+    .where(eq(tasks.id, id))
+    .limit(1);
+
   const [row] = await db
     .update(tasks)
     .set({
@@ -125,6 +142,9 @@ export async function snoozeTask(id: string, until: Date, actor: string) {
   if (!row) throw new Error('Task not found, or it belongs to the ClickUp layer');
   await writeAudit({
     actor, action: 'task.snooze', entityType: 'task', entityId: id,
+    // The count comes back too — three snoozes marks a Zombie, and an undone
+    // snooze that still counted would push a task there on a click he took back.
+    before: { snoozeUntil: was?.snoozeUntil ?? null, snoozeCount: was?.snoozeCount ?? 0 },
     after: { until, snoozeCount: row.snoozeCount, zombie: isZombie(row.snoozeCount) },
   });
   return row;
@@ -138,7 +158,11 @@ export async function archiveTask(id: string, actor: string) {
     .where(and(eq(tasks.id, id), eq(tasks.layer, 'mine'), isNull(tasks.archivedAt)))
     .returning();
   if (!row) throw new Error('Task not found, or already archived');
-  await writeAudit({ actor, action: 'task.archive', entityType: 'task', entityId: id });
+  // It was not archived a moment ago — that is exactly what undo restores.
+  await writeAudit({
+    actor, action: 'task.archive', entityType: 'task', entityId: id,
+    before: { archivedAt: null }, after: { archivedAt: row.archivedAt },
+  });
   return row;
 }
 

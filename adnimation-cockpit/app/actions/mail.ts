@@ -21,7 +21,7 @@ const input = z.object({
 export async function dismissThreadAction(
   formData: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireUser();
+  const user = await requireUser();
 
   const parsed = input.safeParse({
     threadId: String(formData.get('threadId') ?? '').trim(),
@@ -30,7 +30,7 @@ export async function dismissThreadAction(
   if (!parsed.success) return { ok: false, error: 'Not a thread' };
 
   try {
-    await dismissThread(parsed.data.threadId, parsed.data.undo);
+    await dismissThread(parsed.data.threadId, parsed.data.undo, user.email);
     revalidatePath('/mail');
     revalidatePath('/');
     return { ok: true };

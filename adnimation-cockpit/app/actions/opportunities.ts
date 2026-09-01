@@ -69,7 +69,7 @@ export async function createOpportunityAction(formData: FormData): Promise<Actio
 }
 
 export async function updateOpportunityAction(formData: FormData): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
 
   const id = z.string().uuid().safeParse(String(formData.get('id') ?? ''));
   if (!id.success) return { ok: false, error: 'Not an opportunity' };
@@ -79,7 +79,7 @@ export async function updateOpportunityAction(formData: FormData): Promise<Actio
     return { ok: false, fieldErrors: parsed.error.flatten().fieldErrors };
   }
 
-  const result = await updateOpportunity(id.data, parsed.data);
+  const result = await updateOpportunity(id.data, parsed.data, user.email);
   if (!result.ok) return { ok: false, error: result.error };
 
   refresh();
@@ -87,7 +87,7 @@ export async function updateOpportunityAction(formData: FormData): Promise<Actio
 }
 
 export async function setStatusAction(formData: FormData): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
 
   const parsed = z
     .object({
@@ -102,7 +102,12 @@ export async function setStatusAction(formData: FormData): Promise<ActionResult>
     });
   if (!parsed.success) return { ok: false, error: 'Not a status' };
 
-  const result = await setOpportunityStatus(parsed.data.id, parsed.data.status, parsed.data.note);
+  const result = await setOpportunityStatus(
+    parsed.data.id,
+    parsed.data.status,
+    parsed.data.note,
+    user.email,
+  );
   if (!result.ok) return { ok: false, error: result.error };
 
   refresh();
@@ -110,12 +115,12 @@ export async function setStatusAction(formData: FormData): Promise<ActionResult>
 }
 
 export async function archiveOpportunityAction(formData: FormData): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
 
   const id = z.string().uuid().safeParse(String(formData.get('id') ?? ''));
   if (!id.success) return { ok: false, error: 'Not an opportunity' };
 
-  const result = await archiveOpportunity(id.data);
+  const result = await archiveOpportunity(id.data, user.email);
   if (!result.ok) return { ok: false, error: result.error };
 
   refresh();

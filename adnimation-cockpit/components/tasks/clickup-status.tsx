@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUndo } from '@/components/ui/undo-bar';
 import { clickUpStatusesAction, setClickUpStatusAction } from '@/app/actions/clickup-tasks';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/input';
@@ -31,6 +32,7 @@ export function ClickUpStatus({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const undo = useUndo();
 
   useEffect(() => {
     if (options !== null || !loading) return;
@@ -57,7 +59,10 @@ export function ClickUpStatus({
     startTransition(async () => {
       const result = await setClickUpStatusAction(data);
       setError(result.ok ? null : (result.error ?? 'Could not change the status'));
-      if (result.ok) router.refresh();
+      if (result.ok) {
+        undo.offer();
+        router.refresh();
+      }
     });
   };
 

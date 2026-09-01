@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUndo } from '@/components/ui/undo-bar';
 import { confirmCategoryAction, setContractStatusAction } from '@/app/actions/contracts';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/input';
@@ -29,6 +30,7 @@ export function ContractActions({ id, status }: { id: string; status: ContractSt
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const undo = useUndo();
   const moves = NEXT_MOVES[status] ?? [];
 
   if (moves.length === 0) return null;
@@ -40,7 +42,10 @@ export function ContractActions({ id, status }: { id: string; status: ContractSt
     startTransition(async () => {
       const result = await setContractStatusAction(data);
       setError(result.ok ? null : (result.error ?? 'Could not move the contract'));
-      if (result.ok) router.refresh();
+      if (result.ok) {
+        undo.offer();
+        router.refresh();
+      }
     });
   };
 
@@ -75,6 +80,7 @@ export function ConfirmFiling({
   const [choice, setChoice] = useState<ContractCategory>(category ?? 'demand');
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const undo = useUndo();
 
   return (
     <div className="flex flex-wrap items-center gap-1">
@@ -105,7 +111,10 @@ export function ConfirmFiling({
           startTransition(async () => {
             const result = await confirmCategoryAction(data);
             setError(result.ok ? null : (result.error ?? 'Could not confirm the filing'));
-            if (result.ok) router.refresh();
+            if (result.ok) {
+              undo.offer();
+              router.refresh();
+            }
           });
         }}
       >

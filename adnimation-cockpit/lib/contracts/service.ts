@@ -216,8 +216,8 @@ export async function confirmCategory(
     action: 'contract.confirm_category',
     entityType: 'contract',
     entityId: id,
-    before: { category: before.category, confirmed: before.categoryConfirmed },
-    after: { category, confirmed: true },
+    before: { category: before.category, categoryConfirmed: before.categoryConfirmed },
+    after: { category, categoryConfirmed: true },
   });
 }
 

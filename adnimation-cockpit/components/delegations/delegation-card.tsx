@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUndo } from '@/components/ui/undo-bar';
 import {
   archiveDelegationAction, nudgeAction, readConversationAction, replyAction, setStatusAction,
 } from '@/app/actions/delegations';
@@ -41,6 +42,7 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
   const [pending, startTransition] = useTransition();
   const [closing, setClosing] = useState(false);
   const router = useRouter();
+  const undo = useUndo();
 
   useEffect(() => {
     if (!open || thread !== null || loading) return;
@@ -60,6 +62,7 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
       setMessage(result.ok ? null : (result.error ?? 'That did not work'));
       if (result.ok) {
         setThread(null);
+        undo.offer();
         router.refresh();
       }
     });

@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUndo } from '@/components/ui/undo-bar';
 import {
   archiveOpportunityAction, decideSuggestionAction, promoteAction, setStatusAction,
   updateOpportunityAction,
@@ -45,6 +46,7 @@ export function OpportunityCard({
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const router = useRouter();
+  const undo = useUndo();
 
   const run = (action: (f: FormData) => Promise<{ ok: boolean; error?: string }>, data: FormData) =>
     startTransition(async () => {
@@ -54,6 +56,7 @@ export function OpportunityCard({
         setEditing(false);
         setDeciding(false);
         setPromoting(false);
+        undo.offer();
         router.refresh();
       }
     });

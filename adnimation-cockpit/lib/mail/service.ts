@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db, mailThreads, pipelineClients } from '@/lib/db';
 import { createTask } from '@/lib/tasks/mutations';
+import { writeAudit } from '@/lib/audit';
 
 /**
  * The mailbox, as the cockpit reads it.
@@ -216,11 +217,25 @@ export async function mailNeedingReply(limit = 5): Promise<MailRow[]> {
  * "needs a reply" for ever. The next sync clears this the moment he actually
  * answers in Gmail, so it cannot hide a live conversation.
  */
-export async function dismissThread(threadId: string, undo = false) {
-  await db
-    .update(mailThreads)
-    .set({ dismissedAt: undo ? null : new Date() })
-    .where(eq(mailThreads.threadId, threadId));
+export async function dismissThread(threadId: string, undo = false, actor = 'unknown') {
+  const [before] = await db
+    .select({ dismissedAt: mailThreads.dismissedAt })
+    .from(mailThreads)
+    .where(eq(mailThreads.threadId, threadId))
+    .limit(1);
+
+  const dismissedAt = undo ? null : new Date();
+  await db.update(mailThreads).set({ dismissedAt }).where(eq(mailThreads.threadId, threadId));
+
+  // Audited so the undo bar can offer it back like any other change.
+  await writeAudit({
+    actor,
+    action: undo ? 'mail.restore' : 'mail.dismiss',
+    entityType: 'mail_thread',
+    entityId: threadId,
+    before: { dismissedAt: before?.dismissedAt ?? null },
+    after: { dismissedAt },
+  });
 }
 
 /**

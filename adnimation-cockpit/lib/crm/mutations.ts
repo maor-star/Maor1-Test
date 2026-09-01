@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { crmCompanies, crmContacts, db } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
+import { restorableSnapshot } from '@/lib/undo';
 import {
   LOCAL_ID_PREFIX, companyInputSchema, contactInputSchema,
   type CompanyInput, type ContactInput,
@@ -166,7 +167,7 @@ export async function saveContact(input: ContactInput, actor: string): Promise<s
       action: 'crm.contact.update',
       entityType: 'crm_contact',
       entityId: parsed.id,
-      before: { email: before.email, companyId: before.companyId },
+      before: restorableSnapshot('crm_contact', before),
       after: { email: values.email, companyId: values.companyId },
     });
 
@@ -208,7 +209,7 @@ export async function archiveCompany(id: string, actor: string, restore = false)
 
 export async function archiveContact(id: string, actor: string, restore = false) {
   const [before] = await db
-    .select({ companyId: crmContacts.companyId })
+    .select({ companyId: crmContacts.companyId, archivedAt: crmContacts.archivedAt })
     .from(crmContacts)
     .where(eq(crmContacts.hubspotId, id))
     .limit(1);
@@ -223,6 +224,8 @@ export async function archiveContact(id: string, actor: string, restore = false)
     action: restore ? 'crm.contact.restore' : 'crm.contact.archive',
     entityType: 'crm_contact',
     entityId: id,
+    before: { archivedAt: before?.archivedAt ?? null },
+    after: { archivedAt: restore ? null : new Date() },
   });
 
   await recountCompany(before?.companyId ?? null);

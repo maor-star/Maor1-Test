@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUndo } from '@/components/ui/undo-bar';
 import {
   archiveCrmRecordAction, saveCompanyAction, saveContactAction,
 } from '@/app/actions/crm';
@@ -61,6 +62,7 @@ function useSubmit(action: (data: FormData) => Promise<{
   const [formError, setFormError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
+  const undo = useUndo();
 
   const submit = (formData: FormData) => {
     startTransition(async () => {
@@ -69,6 +71,7 @@ function useSubmit(action: (data: FormData) => Promise<{
       setFormError(result.ok ? null : (result.error ?? null));
       if (result.ok) {
         if (reset) formRef.current?.reset();
+        undo.offer();
         router.refresh();
         onDone?.();
       }
@@ -355,6 +358,7 @@ export function ArchiveButton({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const undo = useUndo();
 
   return (
     <span className="inline-flex items-center gap-2">
@@ -371,7 +375,10 @@ export function ArchiveButton({
             if (archived) data.set('restore', '1');
             const result = await archiveCrmRecordAction(data);
             setError(result.ok ? null : (result.error ?? 'Could not do that'));
-            if (result.ok) router.refresh();
+            if (result.ok) {
+              undo.offer();
+              router.refresh();
+            }
           })
         }
       >
