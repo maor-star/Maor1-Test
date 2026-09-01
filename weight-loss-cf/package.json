@@ -1,0 +1,20 @@
+{
+  "name": "easy-weight-loss-cf",
+  "version": "1.0.0",
+  "description": "הדרך הקלה לרדת במשקל - גרסת Cloudflare Workers (D1 + R2)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "npm run sync:public && wrangler deploy",
+    "db:local": "wrangler d1 migrations apply easy-weight-loss --local",
+    "db:remote": "wrangler d1 migrations apply easy-weight-loss --remote",
+    "sync:public": "rm -rf public && cp -r ../weight-loss/public public"
+  },
+  "dependencies": {
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "wrangler": "^3.99.0"
+  }
+}

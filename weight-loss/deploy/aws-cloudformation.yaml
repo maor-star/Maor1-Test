@@ -1,0 +1,276 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  הדרך הקלה לירידה במשקל — שרת יחיד על EC2 עם Node.js, SQLite ו-systemd.
+  אם מוזן DomainName, Caddy מנפיק תעודת HTTPS אוטומטית מ-Let's Encrypt.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: אפליקציה }
+        Parameters: [RepoUrl, RepoBranch, DomainName]
+      - Label: { default: שרת }
+        Parameters: [InstanceType, VolumeSizeGb]
+      - Label: { default: גישה }
+        Parameters: [KeyName, AllowedSshCidr]
+
+Parameters:
+  RepoUrl:
+    Type: String
+    Default: https://github.com/maor-star/Maor1-Test.git
+    Description: כתובת ה-git שממנה נמשך הקוד.
+  RepoBranch:
+    Type: String
+    Default: claude/build-website-1sxtoe
+    Description: הענף שייפרס.
+  DomainName:
+    Type: String
+    Default: ''
+    Description: >
+      דומיין שמצביע (רשומת A) לכתובת ה-IP של השרת. אם ריק — האתר יוגש ב-HTTP בלבד,
+      וסיסמאות יעברו ללא הצפנה. מומלץ מאוד למלא.
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues: [t3.micro, t3.small, t3.medium, t3.large]
+    Description: t3.micro מספיק לעשרות משתמשים.
+  VolumeSizeGb:
+    Type: Number
+    Default: 20
+    MinValue: 8
+    MaxValue: 200
+  KeyName:
+    Type: String
+    Default: ''
+    Description: >
+      זוג מפתחות EC2 לגישת SSH. אפשר להשאיר ריק — השרת נגיש דרך
+      Session Manager בלי מפתח כלל.
+  AllowedSshCidr:
+    Type: String
+    Default: 127.0.0.1/32
+    Description: טווח כתובות שממנו מותר SSH. רלוונטי רק אם הוזן KeyName.
+
+Conditions:
+  HasDomain: !Not [!Equals [!Ref DomainName, '']]
+  HasKey: !Not [!Equals [!Ref KeyName, '']]
+
+Mappings: {}
+
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub 'Web traffic for ${AWS::StackName}'
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0, Description: HTTP }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0, Description: HTTPS }
+        - !If
+          - HasKey
+          - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref AllowedSshCidr, Description: SSH }
+          - !Ref AWS::NoValue
+      Tags:
+        - { Key: Name, Value: !Sub '${AWS::StackName}-sg' }
+
+  # Session Manager, so the box is reachable without opening SSH or managing a key pair.
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref InstanceRole]
+
+  Eip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - { Key: Name, Value: !Sub '${AWS::StackName}-ip' }
+
+  EipAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt Eip.AllocationId
+      InstanceId: !Ref Instance
+
+  Instance:
+    Type: AWS::EC2::Instance
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT20M
+        Count: 1
+    Properties:
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      KeyName: !If [HasKey, !Ref KeyName, !Ref 'AWS::NoValue']
+      SecurityGroupIds: [!GetAtt SecurityGroup.GroupId]
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: !Ref VolumeSizeGb
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      Tags:
+        - { Key: Name, Value: !Sub '${AWS::StackName}' }
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+          exec > >(tee /var/log/ewl-bootstrap.log) 2>&1
+
+          # AL2023 does not ship aws-cfn-bootstrap in the AMI, so cfn-signal has to be
+          # installed before anything else can fail — otherwise a failed boot is
+          # indistinguishable from a hung one and the stack just times out.
+          dnf -y install aws-cfn-bootstrap
+
+          # The instance is deleted on failure, so the log dies with it. Send the tail
+          # of it back as the signal reason, which survives in the stack events.
+          signal() {
+            rc=$?
+            set +e
+            if [ "$rc" -eq 0 ]; then
+              reason="Application is serving requests on port 3100"
+            else
+              reason="bootstrap failed rc=$rc :: $(tail -c 700 /var/log/ewl-bootstrap.log | tr -cd '[:alnum:][:space:]:/._=+-' | tr -s '[:space:]' ' ')"
+            fi
+            CFN=$(command -v cfn-signal || echo /opt/aws/bin/cfn-signal)
+            "$CFN" -e "$rc" --reason "$reason" --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}
+            exit "$rc"
+          }
+          trap signal EXIT
+
+          APP_DIR=/opt/easy-weight-loss
+          ENV_FILE=/etc/easy-weight-loss.env
+          DOMAIN="${DomainName}"
+
+          dnf -y update
+          dnf -y install git gcc-c++ make python3 tar
+
+          # Node.js 20 from the distro repo; NodeSource only as a fallback, since its
+          # installer tracks el9 rather than AL2023 and can drift.
+          if ! dnf -y install nodejs20 nodejs20-npm; then
+            curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+            dnf -y install nodejs
+          fi
+          # The systemd unit calls /usr/bin/node, so make sure that path resolves.
+          [ -x /usr/bin/node ] || ln -sf "$(command -v node || echo /usr/bin/node-20)" /usr/bin/node
+          node --version
+          npm --version
+
+          # Application code
+          git clone --depth 1 --branch "${RepoBranch}" "${RepoUrl}" "$APP_DIR"
+          cd "$APP_DIR/weight-loss"
+          npm install --omit=dev
+
+          # A dedicated unprivileged user owns the app and its data
+          id -u ewl >/dev/null 2>&1 || useradd --system --home-dir "$APP_DIR" --shell /sbin/nologin ewl
+          mkdir -p "$APP_DIR/weight-loss/data"
+          chown -R ewl:ewl "$APP_DIR"
+
+          # Secrets are generated on the box and never leave it
+          if [ ! -f "$ENV_FILE" ]; then
+            printf 'SESSION_SECRET=%s\n' "$(head -c 32 /dev/urandom | base64 | tr -d '/+=')" > "$ENV_FILE"
+            printf 'APP_TZ=Asia/Jerusalem\n' >> "$ENV_FILE"
+            if [ -n "$DOMAIN" ]; then printf 'SECURE_COOKIES=true\n' >> "$ENV_FILE"; fi
+            chmod 600 "$ENV_FILE"
+          fi
+
+          cat > /etc/systemd/system/easy-weight-loss.service <<UNIT
+          [Unit]
+          Description=Easy Weight Loss
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=ewl
+          WorkingDirectory=$APP_DIR/weight-loss
+          EnvironmentFile=$ENV_FILE
+          Environment=NODE_ENV=production
+          Environment=PORT=3100
+          ExecStart=/usr/bin/node $APP_DIR/weight-loss/server.js
+          Restart=always
+          RestartSec=3
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectSystem=full
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+
+          systemctl daemon-reload
+          systemctl enable --now easy-weight-loss
+
+          # Caddy terminates TLS and proxies to the app. Installed as a pinned static
+          # binary rather than from a third-party repo, so the boot cannot drift.
+          CADDY_VERSION=2.8.4
+          curl -fsSL "https://github.com/caddyserver/caddy/releases/download/v${!CADDY_VERSION}/caddy_${!CADDY_VERSION}_linux_amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin caddy
+          chmod +x /usr/local/bin/caddy
+          id -u caddy >/dev/null 2>&1 || useradd --system --home-dir /var/lib/caddy --create-home --shell /sbin/nologin caddy
+          mkdir -p /etc/caddy
+
+          # With no domain there is no certificate to issue, so it serves plain HTTP.
+          if [ -n "$DOMAIN" ]; then
+            printf '%s {\n\treverse_proxy 127.0.0.1:3100\n}\n' "$DOMAIN" > /etc/caddy/Caddyfile
+          else
+            printf ':80 {\n\treverse_proxy 127.0.0.1:3100\n}\n' > /etc/caddy/Caddyfile
+          fi
+
+          cat > /etc/systemd/system/caddy.service <<CADDYUNIT
+          [Unit]
+          Description=Caddy
+          After=network.target
+
+          [Service]
+          User=caddy
+          Group=caddy
+          ExecStart=/usr/local/bin/caddy run --config /etc/caddy/Caddyfile
+          ExecReload=/usr/local/bin/caddy reload --config /etc/caddy/Caddyfile --force
+          Restart=always
+          RestartSec=3
+          AmbientCapabilities=CAP_NET_BIND_SERVICE
+          NoNewPrivileges=true
+
+          [Install]
+          WantedBy=multi-user.target
+          CADDYUNIT
+
+          chown -R caddy:caddy /var/lib/caddy /etc/caddy
+          systemctl daemon-reload
+          systemctl enable --now caddy
+
+          # Report success only once the app actually answers. The EXIT trap turns the
+          # final curl's status into the stack signal, so a dead app fails the stack.
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:3100/ >/dev/null; then break; fi
+            sleep 3
+          done
+          curl -fsS http://127.0.0.1:3100/ >/dev/null
+
+Outputs:
+  PublicIp:
+    Description: כתובת ה-IP הקבועה של השרת
+    Value: !Ref Eip
+  SiteUrl:
+    Description: כתובת האתר
+    Value: !If [HasDomain, !Sub 'https://${DomainName}', !Sub 'http://${Eip}']
+  DnsRecordNeeded:
+    Description: רשומת ה-DNS שצריך ליצור כדי שה-HTTPS יונפק
+    Value: !If [HasDomain, !Sub '${DomainName}  A  ${Eip}', 'לא נדרש — לא הוזן דומיין']
+  ShellCommand:
+    Description: כניסה לשרת בלי SSH
+    Value: !Sub 'aws ssm start-session --target ${Instance} --region ${AWS::Region}'
+  LogsCommand:
+    Description: צפייה בלוגים של האפליקציה
+    Value: 'sudo journalctl -u easy-weight-loss -f'

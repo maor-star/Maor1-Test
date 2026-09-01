@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up the Easy Weight Loss database to S3
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/easy-weight-loss.env
+ExecStart=/opt/easy-weight-loss/weight-loss/deploy/backup.sh

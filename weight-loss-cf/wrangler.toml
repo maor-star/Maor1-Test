@@ -1,0 +1,27 @@
+name = "easy-weight-loss"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+# הפרונטאנד מוגש כנכסים סטטיים ישירות מהקצה
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+# מסד הנתונים. את ה-database_id מקבלים מ:  wrangler d1 create easy-weight-loss
+[[d1_databases]]
+binding = "DB"
+database_name = "easy-weight-loss"
+database_id = "00000000-0000-0000-0000-000000000000" # יוחלף ע"י wrangler d1 create
+
+# אחסון תמונות ההתקדמות. את הדלי יוצרים עם:  wrangler r2 bucket create easy-weight-loss-photos
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "easy-weight-loss-photos"
+
+[vars]
+APP_TZ = "Asia/Jerusalem"
+
+# SESSION_SECRET אינו נשמר כאן. מגדירים אותו כסוד:
+#   wrangler secret put SESSION_SECRET

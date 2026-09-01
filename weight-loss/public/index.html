@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>הדרך הקלה לירידה במשקל</title>
+  <!-- The site is Hebrew by design. Without this, Chrome offers to translate it to
+       whatever the browser's own language is, and the bar covers the header. -->
+  <meta name="google" content="notranslate" />
+  <link rel="stylesheet" href="/design-system.css" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Ctext%20y='.9em'%20font-size='92'%3E%E2%9D%A4%EF%B8%8F%3C/text%3E%3C/svg%3E" />
+  <!-- Link previews. WhatsApp, Facebook and the rest read the HTML without running any
+       script, so what an article shows when shared is decided on the server: a request
+       for /a/<slug> replaces this block with that article's own title and picture.
+       Everything else falls back to what is written here. -->
+  <!--og-->
+  <meta property="og:site_name" content="הדרך הקלה לירידה במשקל" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="he_IL" />
+  <meta property="og:title" content="הדרך הקלה לירידה במשקל" />
+  <meta property="og:description" content="קבוצה שיורדת אחוזי שומן ובונה מסת שריר. שלושה יעדים יומיים, שקילה אחת בשבוע, ומאמרים שמסבירים את המנגנון." />
+  <meta name="description" content="קבוצה שיורדת אחוזי שומן ובונה מסת שריר. שלושה יעדים יומיים, שקילה אחת בשבוע, ומאמרים שמסבירים את המנגנון." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <!--/og-->
+</head>
+<body>
+  <!-- Sign in / sign up. A visitor can browse without it; it opens from any members-only screen. -->
+  <div id="auth" class="auth hidden" role="dialog" aria-modal="true" aria-labelledby="auth-heading">
+    <div class="auth-card bp">
+      <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+      <button class="auth-close" id="auth-close" type="button" aria-label="סגירה וחזרה לאתר">✕</button>
+      <div class="auth-brand">
+        <div class="kicker">Body Recomp</div>
+        <h1 id="auth-heading">הדרך הקלה לירידה במשקל</h1>
+        <p>שלושה יעדים יומיים. הגוף עושה את השאר.</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-mode="login" type="button">התחברות</button>
+        <button class="auth-tab" data-mode="register" type="button">הרשמה</button>
+      </div>
+
+      <form id="auth-form">
+        <div class="field register-only">
+          <label for="af-name">שם מלא</label>
+          <input class="input" id="af-name" type="text" name="full_name" autocomplete="name" />
+        </div>
+        <div class="field" style="margin-top:10px">
+          <label for="af-email">אימייל</label>
+          <input class="input" id="af-email" type="email" name="email" autocomplete="email" required />
+        </div>
+        <div class="field" style="margin-top:10px">
+          <label for="af-pass">סיסמה</label>
+          <input class="input" id="af-pass" type="password" name="password" autocomplete="current-password" required />
+        </div>
+        <p id="auth-error" class="auth-error"></p>
+        <button type="submit" class="btn btn-primary btn-block" id="auth-submit">התחברות</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Application shell -->
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <span>הדרך הקלה לירידה במשקל</span>
+          <small>Body Recomp</small>
+        </div>
+        <nav class="tabs" id="tabs"></nav>
+        <div class="readout">
+          <div class="readout-member hidden" id="readout-member">
+            <div>
+              <div class="val accent" id="xp-readout">0</div>
+              <div class="cap">XP</div>
+            </div>
+            <button class="btn btn-secondary" id="logout" type="button">יציאה</button>
+          </div>
+          <div class="readout-guest hidden" id="readout-guest">
+            <button class="btn btn-secondary" data-auth="login" type="button">התחברות</button>
+            <button class="btn btn-primary" data-auth="register" type="button">הרשמה</button>
+          </div>
+        </div>
+      </div>
+    </header>
+    <main id="view"></main>
+    <footer class="site-footer">האתר הוא רק לחברים של מאור <span class="heart">❤</span></footer>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

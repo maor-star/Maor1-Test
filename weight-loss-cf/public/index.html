@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>הדרך הקלה לירידה במשקל</title>
+  <link rel="stylesheet" href="/design-system.css" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%235980a6'/><text x='50' y='72' font-size='64' font-family='sans-serif' font-weight='700' fill='%23f2f2f3' text-anchor='middle'>ה</text></svg>" />
+</head>
+<body>
+  <!-- Sign in / sign up. A visitor can browse without it; it opens from any members-only screen. -->
+  <div id="auth" class="auth hidden" role="dialog" aria-modal="true" aria-labelledby="auth-heading">
+    <div class="auth-card bp">
+      <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+      <button class="auth-close" id="auth-close" type="button" aria-label="סגירה וחזרה לאתר">✕</button>
+      <div class="auth-brand">
+        <div class="kicker">Body Recomp</div>
+        <h1 id="auth-heading">הדרך הקלה לירידה במשקל</h1>
+        <p>שלושה יעדים יומיים. הגוף עושה את השאר.</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-mode="login" type="button">התחברות</button>
+        <button class="auth-tab" data-mode="register" type="button">הרשמה</button>
+      </div>
+
+      <form id="auth-form">
+        <div class="field register-only">
+          <label for="af-name">שם מלא</label>
+          <input class="input" id="af-name" type="text" name="full_name" autocomplete="name" />
+        </div>
+        <div class="field" style="margin-top:10px">
+          <label for="af-email">אימייל</label>
+          <input class="input" id="af-email" type="email" name="email" autocomplete="email" required />
+        </div>
+        <div class="field" style="margin-top:10px">
+          <label for="af-pass">סיסמה</label>
+          <input class="input" id="af-pass" type="password" name="password" autocomplete="current-password" required />
+        </div>
+        <p id="auth-error" class="auth-error"></p>
+        <button type="submit" class="btn btn-primary btn-block" id="auth-submit">התחברות</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Application shell -->
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <span>הדרך הקלה לירידה במשקל</span>
+          <small>Body Recomp</small>
+        </div>
+        <nav class="tabs" id="tabs"></nav>
+        <div class="readout">
+          <div class="readout-member hidden" id="readout-member">
+            <div>
+              <div class="val accent" id="xp-readout">0</div>
+              <div class="cap">XP</div>
+            </div>
+            <div>
+              <div class="val" id="streak-readout">0</div>
+              <div class="cap">רצף</div>
+            </div>
+            <button class="btn btn-secondary" id="logout" type="button">יציאה</button>
+          </div>
+          <div class="readout-guest hidden" id="readout-guest">
+            <button class="btn btn-secondary" data-auth="login" type="button">התחברות</button>
+            <button class="btn btn-primary" data-auth="register" type="button">הרשמה</button>
+          </div>
+        </div>
+      </div>
+    </header>
+    <main id="view"></main>
+    <footer class="site-footer">האתר הוא רק לחברים של מאור <span class="heart">❤</span></footer>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

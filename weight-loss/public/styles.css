@@ -1,0 +1,985 @@
+/* App layer for "הדרך הקלה לירידה במשקל".
+   Every value comes from the Industry tokens in design-system.css, no raw hexes,
+   no ad-hoc spacing. Load design-system.css first. */
+
+/* Amatic SC is the one hand-drawn face on Google Fonts that actually ships Hebrew
+   glyphs; Caveat and Gveret Levin do not. Used only for the picture signature. */
+@import url('https://fonts.googleapis.com/css2?family=Amatic+SC:wght@700&display=swap');
+
+:root {
+  /* The ink the blueprint registration marks are drawn in, the same value
+     design-system.css uses for .corner, lifted into a token so the section
+     rules can end in exactly the same cross. */
+  --mark-ink: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+html { direction: rtl; }
+body { min-height: 100vh; }
+.hidden { display: none !important; }
+
+/* Heebo needs a touch more line-height than Barlow was tuned for. */
+body { line-height: 1.6; }
+h1, h2, h3, h4 { letter-spacing: 0; }
+
+/* The design system aligns table text left; this app is right-to-left. */
+.table th, .table td { text-align: right; }
+
+/* ── Blueprint frame helpers ───────────────────────────────────────────── */
+.bp { position: relative; border: 1px solid var(--color-divider); }
+.bp > .corner {
+  position: absolute; width: 11px; height: 11px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+.bp > .corner::before, .bp > .corner::after { content: ""; position: absolute; background: currentColor; }
+.bp > .corner::before { left: 5px; top: 0; width: 1px; height: 100%; }
+.bp > .corner::after { top: 5px; left: 0; width: 100%; height: 1px; }
+.bp > .corner.tl { top: -6px; left: -6px; }
+.bp > .corner.tr { top: -6px; right: -6px; }
+.bp > .corner.bl { bottom: -6px; left: -6px; }
+.bp > .corner.br { bottom: -6px; right: -6px; }
+
+/* ── Sign in ───────────────────────────────────────────────────────────── */
+.auth {
+  position: fixed; inset: 0; z-index: 60; overflow-y: auto;
+  display: grid; place-items: center; padding: var(--space-6);
+  background: color-mix(in srgb, var(--color-text) 38%, transparent);
+}
+.auth-card {
+  width: min(420px, 100%); padding: var(--space-8); display: grid; gap: var(--space-4);
+  position: relative; background: var(--color-bg); box-shadow: var(--shadow-sm);
+}
+.auth-close {
+  position: absolute; top: var(--space-3); inset-inline-end: var(--space-3);
+  width: 30px; height: 30px; border: 0; background: transparent; cursor: pointer;
+  font-size: 15px; line-height: 1; color: var(--color-neutral-700);
+}
+.auth-close:hover { color: var(--color-text); }
+body.modal-open { overflow: hidden; }
+.auth-brand { display: grid; gap: var(--space-2); }
+.auth-brand .kicker {
+  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-700);
+}
+.auth-brand h1 { font-size: 34px; margin: 0; }
+.auth-brand p { margin: 0; font-size: 14px; color: var(--color-neutral-700); }
+.auth-tabs { display: flex; border: 1px solid var(--color-divider); }
+.auth-tab {
+  flex: 1; padding: var(--space-2); border: 0; background: transparent; cursor: pointer;
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 14px;
+  color: var(--color-neutral-700);
+}
+.auth-tab + .auth-tab { border-inline-start: 1px solid var(--color-divider); }
+.auth-tab.active { background: var(--color-accent-700); color: var(--color-bg); }
+.auth-error { min-height: 18px; font-size: 13px; color: #a8322b; }
+
+/* ── Shell ─────────────────────────────────────────────────────────────── */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--color-bg); border-bottom: 1px solid var(--color-divider);
+}
+.topbar-inner {
+  max-width: 1180px; margin: 0 auto;
+  display: flex; align-items: center; gap: var(--space-6); padding: var(--space-3) var(--space-6);
+  min-width: 0;
+}
+.brand {
+  display: flex; align-items: baseline; gap: var(--space-2); margin-inline-end: auto; flex: none;
+  font-family: var(--font-heading); font-weight: 700; font-size: 19px;
+}
+.brand span { white-space: nowrap; }
+.brand small {
+  font-family: var(--font-body); font-weight: 500; font-size: 11px;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-700);
+}
+.tabs {
+  display: flex; gap: 2px;
+  min-width: 0; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tabs a { white-space: nowrap; }
+.tabs a {
+  padding: 7px 14px; text-decoration: none; border: 1px solid transparent;
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 14px;
+  color: var(--color-text);
+}
+.tabs a:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+.tabs a.active { background: var(--color-accent-700); color: var(--color-bg); }
+.readout {
+  display: flex; align-items: center; gap: var(--space-4); flex: none;
+  border-inline-start: 1px solid var(--color-divider); padding-inline-start: var(--space-4);
+}
+.readout-member, .readout-guest { display: flex; align-items: center; gap: var(--space-4); }
+.readout-guest { gap: var(--space-2); }
+.readout-member.hidden, .readout-guest.hidden { display: none; }
+.readout div { text-align: center; }
+.readout .val {
+  font-family: var(--font-heading); font-weight: 700; font-size: 20px; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.readout .val.accent { color: var(--color-accent-700); }
+.readout .cap { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.55; }
+.menu-toggle { display: none; }
+
+/* width:100% matters: an auto cross-axis margin on a flex item cancels the
+   stretch, and the column would otherwise shrink to fit its own content ,
+   making every screen a different width. */
+main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6) 80px; }
+.screen { display: grid; gap: var(--space-8); }
+
+/* ── Section headings ──────────────────────────────────────────────────── */
+.sec { display: grid; gap: var(--space-2); }
+.sec .kicker {
+  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent-700);
+}
+.sec h2 { margin: 0; }
+.sec p { margin: 0; max-width: 68ch; color: var(--color-neutral-700); }
+.label {
+  display: block;
+  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--color-neutral-600); text-align: start;
+  margin-bottom: var(--space-3);
+}
+/* A label used inline inside a framed block sets its own spacing. */
+.panel > .label, .statgrid .label { margin-bottom: 0; }
+
+/* The muted one-liner that sits under a block. */
+.note-line { margin: 0; font-size: 13px; color: var(--color-neutral-700); }
+/* A number inside a sentence that fills the field when clicked. It reads as text, so it
+   is styled as a link rather than as another button competing with the submit. */
+.linkish {
+  appearance: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
+  color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px;
+}
+
+/* A second-level section heading, one step down from the screen's h2. */
+.sec-sub h2 { font-size: clamp(21px, 2.4vw, 26px); }
+
+/* ── Hero ──────────────────────────────────────────────────────────────── */
+.hero {
+  padding: var(--space-8) calc(var(--space-8) * 1.6);
+  display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: calc(var(--space-8) * 1.8); align-items: end;
+}
+.hero .gate-actions { margin-top: var(--space-6); }
+.hero-note { margin: var(--space-4) 0 0; font-size: 13px; color: var(--color-neutral-600); }
+.hero h1 { font-size: clamp(38px, 5vw, 58px); margin: var(--space-2) 0 var(--space-3); }
+.hero p { margin: 0; max-width: 46ch; color: var(--color-neutral-700); }
+
+/* The right-hand column of the hero: portrait above, headline numbers below. */
+.hero-side { display: grid; gap: var(--space-8); align-content: end; justify-items: stretch; padding-top: var(--space-2); }
+
+/* A disc, sized against the viewport rather than the column, so it stays in
+   proportion with the headline instead of growing to fill the space. The square
+   aspect ratio is declared up front, so the block holds its height before the
+   photo decodes and the page never jumps when it arrives. */
+.portrait { position: relative; margin: 0; display: grid; justify-items: center; gap: var(--space-3); }
+.portrait img {
+  display: block;
+  width: clamp(112px, 10.5vw, 152px); height: auto;
+  aspect-ratio: 1; object-fit: cover; object-position: center 25%;
+  border-radius: 50%;
+  /* A hairline ring, offset by the page ground, the same two-line language the
+     framed boxes use, bent around a circle. */
+  box-shadow:
+    0 0 0 1px var(--color-divider),
+    0 0 0 6px var(--color-bg),
+    0 0 0 7px var(--color-divider);
+  filter: saturate(0.94) contrast(1.03);
+}
+.portrait figcaption {
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--color-neutral-600); text-align: center;
+}
+
+/* Who contributed what to the one shared target. */
+.share { border-top: 1px solid var(--color-divider); margin-top: var(--space-6); padding-top: var(--space-4); }
+.share .label { margin-bottom: var(--space-3); }
+.share-row {
+  display: grid; grid-template-columns: minmax(90px, 1fr) minmax(0, 3fr) auto;
+  gap: var(--space-4); align-items: center; padding: var(--space-2) 0;
+}
+.share-row + .share-row { border-top: 1px solid var(--color-divider); }
+.share-name { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-bar { height: 6px; background: var(--color-neutral-200); display: block; }
+.share-bar i { display: block; height: 100%; background: var(--color-accent); }
+.share-kg { font-variant-numeric: tabular-nums; font-size: 14px; color: var(--color-neutral-700); white-space: nowrap; }
+
+/* ── Divided stat block ────────────────────────────────────────────────── */
+.statgrid { display: grid; grid-template-columns: 1fr 1fr; }
+.statgrid > div { padding: var(--space-3) var(--space-4); }
+.statgrid > div:nth-child(odd) { border-inline-start: 1px solid var(--color-divider); }
+.statgrid > div:nth-child(n + 3) { border-top: 1px solid var(--color-divider); }
+.statgrid .val {
+  font-family: var(--font-heading); font-weight: 700; font-size: 32px; line-height: 1;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.statgrid .val.accent { color: var(--color-accent-700); }
+.statgrid .cap { font-size: 11px; color: var(--color-neutral-600); margin-top: 3px; }
+
+.statrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.statrow > div { padding: var(--space-4) var(--space-6); }
+.statrow > div + div { border-inline-end: 1px solid var(--color-divider); }
+.statrow .val {
+  font-family: var(--font-heading); font-weight: 700; font-size: 30px; line-height: 1;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.statrow .val.big { font-size: clamp(40px, 7vw, 76px); color: var(--color-accent); }
+.statrow .val.accent { color: var(--color-accent-700); }
+.statrow .cap { font-size: 11px; color: var(--color-neutral-600); margin-top: 4px; }
+
+/* ── Goal rows ─────────────────────────────────────────────────────────── */
+.goals { display: grid; gap: var(--space-4); }
+.goal { display: grid; gap: 6px; }
+.goal-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.goal-name { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 17px; }
+.goal-val { font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }
+.bar { height: 6px; background: var(--color-neutral-300); }
+.bar > span { display: block; height: 100%; background: var(--color-accent); transition: width .5s ease; }
+.bar.met > span { background: var(--color-accent-700); }
+
+/* ── Rules of thumb ────────────────────────────────────────────────────── */
+.rules { display: grid; gap: var(--space-4); }
+
+/* One rule shows at a time; the others stay in the flow so the block keeps its height. */
+/* Every line is laid out; only one is painted. The block therefore keeps the
+   height of the tallest line and never resizes as the lines swap. */
+.rules[data-index] { position: relative; display: grid; }
+.rules[data-index] .rule { grid-area: 1 / 1; opacity: 0; visibility: hidden; transition: opacity .5s ease; }
+.rules[data-index] .rule.is-shown { opacity: 1; visibility: visible; }
+.rules[data-index] .rule.is-goal { color: var(--color-accent-700); }
+.rule-ticks { grid-area: 2 / 1; display: flex; gap: 6px; padding-top: var(--space-3); }
+.rule-ticks i {
+  width: 18px; height: 2px; background: var(--color-neutral-300);
+  cursor: pointer; transition: background .3s ease;
+}
+.rule-ticks i.on { background: var(--color-accent); }
+.rule-ticks i:hover { background: var(--color-accent-400); }
+
+/* The slogan band sits between the hero and the group numbers. It draws its own
+   bottom rule with the same registration marks as the rest of the page. */
+.screen > .slogans {
+  position: relative;
+  display: grid; gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+}
+.screen > .slogans::before,
+.screen > .slogans::after {
+  content: ""; position: absolute; bottom: -6px; width: 11px; height: 11px;
+  background:
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 1px 100% no-repeat,
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 100% 1px no-repeat;
+}
+.screen > .slogans::before { inset-inline-start: -6px; }
+.screen > .slogans::after  { inset-inline-end: -6px; }
+.slogans .rule { font-size: 22px; }
+@media (max-width: 720px) { .slogans .rule { font-size: 18px; } }
+.rule {
+  border-inline-start: 2px solid var(--color-accent); padding-inline-start: var(--space-4);
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 19px; line-height: 1.25;
+}
+
+/* ── Layout pairs ──────────────────────────────────────────────────────── */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: calc(var(--space-8) * 1.4); align-items: start; }
+.split-wide { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+.panel { padding: var(--space-6); display: grid; gap: var(--space-4); }
+.panel > header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.panel > header h3 { margin: 0; font-size: 22px; }
+.panel > header .when { font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.field { display: grid; }
+.check {
+  display: flex; align-items: center; gap: var(--space-3); cursor: pointer; font-size: 14px;
+  padding: var(--space-2) 0;
+}
+.check input { width: 16px; height: 16px; accent-color: var(--color-accent); }
+.check .xp { color: var(--color-accent-700); font-size: 13px; }
+
+/* ── Charts ────────────────────────────────────────────────────────────── */
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+.chart .grid-line { stroke: var(--color-neutral-300); stroke-width: 1; }
+.chart .lbl { font-size: 10px; fill: var(--color-neutral-600); font-family: var(--font-body); }
+.chart .line { fill: none; stroke: var(--color-accent); stroke-width: 2; }
+.chart .dot { fill: var(--color-accent); }
+.chart .bar-rect { fill: var(--color-neutral-400); }
+.chart .bar-rect.met { fill: var(--color-accent); }
+.chart .goal-line { stroke: var(--color-accent-700); stroke-width: 1; stroke-dasharray: 4 3; }
+/* Numbers inside an SVG under direction: rtl flip their anchor, so the chart's own text
+   is laid out left to right and the label is pinned to the start of the target line. */
+.chart .goal-lbl {
+  font-size: 12px; fill: var(--color-accent-700); font-family: var(--font-body);
+  direction: ltr; unicode-bidi: plaintext; text-anchor: start;
+}
+/* The SVG scales as a whole, so its text shrinks with it: a 660-unit canvas drawn at
+   330px renders 10-unit labels at 5px. The sizes are stated in user units per
+   breakpoint, chosen so the rendered result lands near 10px at every width. */
+.chart-compact .lbl { font-size: 14px; }
+.chart-compact .goal-lbl { font-size: 15px; }
+@media (max-width: 700px) {
+  .chart .lbl, .chart-compact .lbl { font-size: 18px; }
+  .chart .goal-lbl, .chart-compact .goal-lbl { font-size: 20px; }
+  .chart .dot { r: 5; }
+}
+
+/* ── Articles ──────────────────────────────────────────────────────────── */
+.articles { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-6); }
+.article { padding: var(--space-6); display: grid; gap: var(--space-3); align-content: start; text-decoration: none; color: inherit; }
+.article:hover { background: color-mix(in srgb, var(--color-text) 3%, transparent); }
+.article h3 { margin: 0; font-size: 21px; }
+.article p { margin: 0; font-size: 14px; color: var(--color-neutral-700); }
+.article .meta { font-size: 11px; color: var(--color-neutral-600); }
+.article-body { max-width: 68ch; display: grid; gap: var(--space-4); }
+.article-body p { margin: 0; }
+/* A link to another article reads as part of the sentence, marked but not shouted. */
+.article-body a {
+  color: var(--color-accent-700); text-decoration: underline;
+  text-underline-offset: 3px; text-decoration-thickness: 1px;
+}
+.article-body a:hover { text-decoration-thickness: 2px; }
+/* A link on the words of a heading keeps the heading's colour, not the link's. */
+.article-body h4 a, .article-body h5 a { color: inherit; }
+.article-body h4 { margin: var(--space-4) 0 0; font-size: 19px; }
+/* The level under a sub-heading: it groups a few paragraphs without competing with the
+   section title above it, so it is smaller and carries the accent instead of the size. */
+.article-body h5 {
+  margin: var(--space-3) 0 0; font-size: 14px; letter-spacing: 0.04em;
+  color: var(--color-accent-700);
+}
+
+/* ── Group ─────────────────────────────────────────────────────────────── */
+.members { display: grid; }
+.member {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-4);
+  padding: var(--space-3) var(--space-4); border: 1px solid var(--color-divider); border-bottom: 0;
+  background: transparent; cursor: pointer; text-align: start; font: inherit; color: inherit; width: 100%;
+}
+.members .member:last-child { border-bottom: 1px solid var(--color-divider); }
+.member:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+.member.active { background: var(--color-accent-100); border-color: var(--color-accent-400); }
+.member .who { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 17px; }
+.member .facts { display: flex; gap: var(--space-4); font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }
+/* Two numbers in the one cell: where they are now, and how far they have come. */
+.member .kg { display: grid; justify-items: end; gap: 2px; text-align: end; }
+.member .kg-now {
+  font-family: var(--font-heading); font-weight: 700; font-size: 20px; line-height: 1;
+  color: var(--color-accent-700); font-variant-numeric: tabular-nums;
+}
+.member .kg-diff { font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }
+
+/* A weigh-in the programme asked for and did not get. Red, and said in words as well
+   as in colour, so it reads for anyone who cannot tell the two apart. */
+.member.is-missing { border-inline-start: 3px solid var(--color-danger); }
+.member.is-missing .kg-now { color: var(--color-danger); }
+.member .flag {
+  color: var(--color-danger); font-weight: 700;
+  letter-spacing: 0.02em; white-space: nowrap;
+}
+
+/* A face beside the name. Square like everything else here, never a circle. */
+.avatar {
+  display: block; flex: none; object-fit: cover; object-position: center 25%;
+  border: 1px solid var(--color-divider); background: var(--color-neutral-200);
+}
+.avatar-md { width: 44px; height: 44px; }
+.avatar-sm { width: 26px; height: 26px; }
+.avatar-blank {
+  display: grid; place-items: center;
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  color: var(--color-neutral-600);
+}
+.avatar-md.avatar-blank { font-size: 18px; }
+.avatar-sm.avatar-blank { font-size: 12px; }
+.share-name { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+
+/* A removed member stays in the editor's list so the decision can be undone. */
+.row.is-off { opacity: 0.55; }
+
+/* The thirteen-week plan. Each row is a date that is already decided and a number
+   waiting to be typed, so the states have to read at a glance. */
+.plan-table td { vertical-align: middle; }
+.plan-table .plan-n {
+  font-family: var(--font-heading); font-weight: 700; color: var(--color-neutral-500);
+  font-variant-numeric: tabular-nums; width: 1%;
+}
+.plan-table .plan-diff { font-variant-numeric: tabular-nums; color: var(--color-neutral-700); white-space: nowrap; }
+.plan-table .plan-date { white-space: nowrap; }
+.plan-table .plan-date .input-sm { max-width: 150px; }
+.plan-table .plan-date .tag { margin-inline-start: var(--space-2); }
+.plan-table .input-sm { padding: 5px var(--space-3); font-size: 14px; max-width: 110px; }
+.plan-table tr.is-done td { background: color-mix(in srgb, var(--color-accent) 5%, transparent); }
+.plan-table tr.is-now td { background: var(--color-accent-100); }
+.plan-table tr.is-missed .plan-n,
+.plan-table tr.is-missed td { color: var(--color-neutral-500); }
+.plan-table tr.is-ahead td { color: var(--color-neutral-500); }
+.plan-table .plan-soon { font-size: 12px; color: var(--color-neutral-500); white-space: nowrap; }
+@media (pointer: coarse) { .plan-table .input-sm { min-height: 38px; } }
+/* With a date picker in every row the save button falls off the side of a phone. The
+   change column is the one thing here that can be read on the chart instead, so it goes
+   and the inputs tighten until the whole row fits without a sideways scroll. */
+@media (max-width: 560px) {
+  .table-wrap .table.plan-table { min-width: 0; }
+  .plan-table th:nth-child(4), .plan-table td:nth-child(4) { display: none; }
+  .plan-table th, .plan-table td { padding-inline: 6px; }
+  /* Widths, not caps: under auto table layout a max-width lets the browser squeeze the
+     weight field down to a couple of digits. */
+  .plan-table .plan-date .input-sm { width: 112px; max-width: 112px; padding-inline: 4px; }
+  .plan-table td:nth-child(3) .input-sm { width: 76px; max-width: 76px; }
+  .plan-table th, .plan-table td { padding-inline: 4px; }
+  .plan-table .btn-sm { padding-inline: var(--space-2); }
+  .plan-table .btn-sm { padding-inline: var(--space-3); }
+}
+
+/* The week as one form. The day column carries the name, the date and, on Tuesday, the
+   weigh-in mark, so the rhythm of the week is readable before anything is filled in. */
+/* Asked once, on the way in. Once it is answered the card is gone and the number moves
+   to settings, where the other fixed figures live. */
+.start-weight {
+  display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;
+  border-color: var(--color-accent-300); background: var(--color-accent-100);
+}
+.start-weight > div:first-child { flex: 1 1 280px; min-width: 0; }
+.start-weight h3 { margin: 4px 0 6px; font-size: 24px; }
+.start-weight-form { display: flex; gap: var(--space-3); flex: none; margin-inline-start: auto; }
+.start-weight-form .input { width: 110px; }
+
+/* The week's targets, stated before the form that fills them in. Three across on a wide
+   screen: a single bar stretched over the full panel reads as a loading indicator. */
+.targets .goals { gap: var(--space-4); }
+@media (min-width: 720px) {
+  .targets .goals { grid-template-columns: repeat(3, 1fr); gap: var(--space-6); }
+}
+
+/* The weigh-in opens the weekly update: one row, one number, the week it belongs to. */
+.update-weight {
+  display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;
+  padding: var(--space-4); margin: var(--space-4) 0;
+  border: 1px solid var(--color-accent-300); background: var(--color-accent-100);
+}
+.update-weight.is-done { border-color: var(--color-divider); background: transparent; }
+.update-weight > div:first-child { flex: 1 1 200px; min-width: 0; }
+.update-when {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 20px; line-height: 1.2; margin-top: 4px;
+}
+.update-weight .input { width: 130px; margin-inline-start: auto; flex: none; }
+@media (max-width: 560px) {
+  .start-weight-form { flex: 1 1 100%; margin-inline-start: 0; }
+  .start-weight-form .input { flex: 1; width: auto; }
+  .start-weight h3 { font-size: 20px; }
+  .update-weight { padding: var(--space-3); gap: var(--space-3); }
+  .update-when { font-size: 17px; }
+  .update-weight .input { flex: 1 1 100%; width: auto; margin-inline-start: 0; }
+}
+
+/* The week's three numbers, inside the report they describe. */
+.week-summary {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  border-block: 1px solid var(--color-divider);
+  margin-bottom: var(--space-4);
+}
+.week-summary > div { padding: var(--space-4) var(--space-3); }
+.week-summary > div + div { border-inline-start: 1px solid var(--color-divider); }
+.week-summary .val {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums;
+}
+.week-summary .val.accent { color: var(--color-accent); }
+.week-summary .cap { margin-top: 6px; font-size: 11px; letter-spacing: 0.06em; color: var(--color-neutral-600); }
+
+.week-table { min-width: 460px; }
+.week-table td { vertical-align: middle; }
+.week-table .input-sm { padding: 5px var(--space-3); font-size: 14px; max-width: 110px; }
+.week-table .week-day { display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; }
+.week-table .week-name { font-weight: 600; }
+.week-table .week-date { font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }
+.week-table .week-check { text-align: center; }
+.week-table .week-check input { width: 20px; height: 20px; accent-color: var(--color-accent); }
+.week-table tr.is-now td { background: var(--color-accent-100); }
+.week-table tr.is-weighin td { box-shadow: inset 0 -1px 0 var(--color-accent); }
+@media (pointer: coarse) {
+  .week-table .input-sm { min-height: 38px; }
+  .week-table .week-check input { width: 24px; height: 24px; }
+}
+/* Seven days will not fit across a phone, and a table that scrolls sideways hides the
+   column you came to fill. Each day becomes its own block, with the headers repeated
+   above the fields they belong to. */
+@media (max-width: 560px) {
+  .table-wrap:has(.week-table) { overflow-x: visible; }
+  /* The class is doubled to outrank the .table-wrap .table min-width set further down. */
+  .table-wrap .table.week-table { min-width: 0; width: 100%; }
+  .week-table, .week-table tbody, .week-table tr, .week-table td { display: block; }
+  .week-table thead { display: none; }
+  .week-table tr {
+    display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2) var(--space-3);
+    padding: var(--space-3) 0; border-bottom: 1px solid var(--color-divider);
+  }
+  .week-table tr.is-now { background: var(--color-accent-100); }
+  .week-table tr.is-weighin { box-shadow: inset 2px 0 0 var(--color-accent); padding-inline-start: var(--space-3); }
+  .week-table tr.is-weighin td, .week-table tr.is-now td { background: none; box-shadow: none; }
+  .week-table td { border: 0; padding: 0; }
+  .week-table .week-day { grid-column: 1 / -1; }
+  .week-table td[data-label]::before {
+    content: attr(data-label); display: block; margin-bottom: 4px;
+    font-size: 11px; letter-spacing: 0.06em; color: var(--color-neutral-600);
+  }
+  .week-table .input-sm { max-width: none; width: 100%; }
+  .week-table .week-check {
+    grid-column: 1 / -1; display: flex; align-items: center; gap: var(--space-2);
+  }
+  .week-table .week-check::before { margin: 0; }
+}
+.row .row-text { display: inline-flex; align-items: center; gap: var(--space-3); }
+
+/* Who wrote it, under the standfirst, and again at the end of the piece. */
+.byline {
+  margin: var(--space-2) 0 0;
+  font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+/* The share button sits on the article's own measure, under the closing byline. */
+.share-row { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-6); }
+
+.byline-end {
+  margin-top: var(--space-6); padding-top: var(--space-4);
+  border-top: 1px solid var(--color-divider);
+}
+
+/* The illustration at the head of an article, and its smaller twin on the card.
+   Both declare an aspect ratio so the page holds its height before the image loads. */
+/* 16:9 is what the image model returns, so matching it here means the picture is
+   shown whole instead of being cropped through the middle by a wider frame. */
+.article-figure {
+  position: relative; width: 100%;
+  /* Capped and centred rather than run to the full column width: at 1139px a 16:9
+     header fills the whole screen and pushes the article out of sight. Tied to the
+     body measure so the picture reads as part of the piece, not as a poster. */
+  max-width: 780px; margin: 0 auto;
+  /* The signature is sized against the picture, not the viewport, so its proportion
+     to the image is identical on a phone and on a desktop. */
+  container-type: inline-size;
+}
+.article-figure img {
+  display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; object-position: center;
+  border: 1px solid var(--color-divider);
+  filter: saturate(0.92) contrast(1.04);
+}
+
+/* Real text rather than pixels burnt into the file: it stays sharp at any size, and
+   it also marks photographs uploaded by hand. The scrim keeps it readable whether the
+   corner underneath is light or dark. */
+/* The scrim spans the full width of the picture and fades out, so it reads as part of
+   the photograph rather than as a grey label stuck in the corner. */
+.article-figure::after {
+  content: ""; position: absolute; left: 1px; right: 1px; bottom: 1px; height: 34%;
+  background: linear-gradient(to top, rgb(0 0 0 / 40%), rgb(0 0 0 / 12%) 45%, rgb(0 0 0 / 0%));
+  pointer-events: none;
+}
+.article-figure .watermark {
+  /* physically bottom-left: on an RTL page inline-start would resolve to the right */
+  position: absolute; left: 2.6cqw; bottom: 2.2cqw; z-index: 1;
+  font-family: 'Amatic SC', var(--font-heading), cursive;
+  /* Amatic runs small and light for its point size, hence the generous multiplier.
+     The clamp keeps it legible on a very narrow phone and stops it growing without
+     limit on a wide screen. */
+  font-weight: 700; font-size: clamp(11px, 2.7cqw, 22px);
+  line-height: 1; letter-spacing: 0.02em;
+  color: rgb(255 255 255 / 95%);
+  text-shadow: 0 1px 5px rgb(0 0 0 / 50%);
+  pointer-events: none; white-space: nowrap;
+}
+.article-figure::before, .article-figure::after {
+  content: ""; position: absolute; top: -6px; width: 11px; height: 11px; pointer-events: none;
+  background:
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 1px 100% no-repeat,
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 100% 1px no-repeat;
+}
+.article-figure::before { inset-inline-start: -6px; }
+.article-figure::after  { inset-inline-end: -6px; }
+
+.card-figure { display: block; margin-bottom: var(--space-4); }
+/* The assistant lives inside the same framed box the rest of the site uses, with the
+   registration marks, so it reads as part of the page and not as a widget dropped in.
+   The thread's height is fixed so the page never jumps as answers arrive. */
+.chat { display: grid; gap: var(--space-3); padding: var(--space-4); }
+/* The thread is a grid with a fixed height, so without this its rows stretch and a
+   single greeting fills the whole box. */
+.chat .thread { height: clamp(210px, 27vh, 300px); overflow-y: auto; align-content: start; }
+.chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); }
+.chat-note { margin: 0; font-size: 12px; }
+.msg-sources { margin-top: var(--space-2); font-size: 12px; color: var(--color-neutral-600); }
+.msg-sources a { color: var(--color-accent-700); }
+.msg.is-pending .msg-body { color: var(--color-neutral-500); }
+.msg.is-error .msg-body { color: var(--color-danger); }
+@media (max-width: 720px) {
+  .chat-form { grid-template-columns: 1fr; }
+  .chat { padding: var(--space-4); }
+  .chat .thread { height: clamp(200px, 34vh, 280px); }
+}
+
+/* One measure for the whole article: the picture, the headline and the body all sit
+   on the same 780px column, so the text does not run wider than the image above it.
+   Below that width it is simply the full column. */
+.measure { max-width: 780px; margin-inline: auto; width: 100%; }
+.measure p { max-width: none; }
+
+.card-figure img {
+  display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; object-position: center 30%;
+  border: 1px solid var(--color-divider);
+  filter: saturate(0.92) contrast(1.04);
+}
+
+/* A drawn figure rather than a photograph: no crop, no filter, and the page's own
+   type and colour tokens, because it is inline SVG and not an <img>. */
+.article-figure.drawn { border: 1px solid var(--color-divider); padding: var(--space-6); }
+.article-figure.drawn figcaption {
+  margin-top: var(--space-4); padding-top: var(--space-3);
+  border-top: 1px solid var(--color-divider);
+  font-size: 12px; color: var(--color-neutral-600); max-width: 70ch;
+}
+/* SVG text-anchor is logical, not geometric: under direction:rtl "end" flips to the
+   left and the labels run off the canvas. The chart is positioned by coordinates, so
+   it opts out of the page's direction, and each label gets plaintext bidi so the
+   Hebrew inside it still reads right to left. */
+.figure-chart { direction: ltr; }
+.figure-chart text { unicode-bidi: plaintext; }
+.figure-chart .fig-kicker {
+  font-family: var(--font-body); font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; fill: var(--color-accent-700);
+}
+.figure-chart .fig-title {
+  font-family: var(--font-heading); font-weight: 700; font-size: 26px; fill: var(--color-text);
+}
+.figure-chart .fig-label {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 15px; fill: var(--color-text);
+}
+.figure-chart .fig-value {
+  font-family: var(--font-heading); font-weight: 700; font-size: 14px;
+  fill: var(--color-neutral-700); font-variant-numeric: tabular-nums;
+}
+.figure-chart .fig-bar { fill: var(--color-neutral-400); }
+.figure-chart .fig-bar.good { fill: var(--color-accent); }
+.figure-chart .fig-bar.warn { fill: var(--color-neutral-300); }
+/* The compact canvas is roughly half the width, so its type is sized in its own
+   user units rather than inheriting the wide chart's. */
+.figure-chart.compact .fig-title { font-size: 19px; }
+.figure-chart.compact .fig-kicker { font-size: 9px; letter-spacing: 0.08em; }
+.figure-chart.compact .fig-label { font-size: 13px; }
+.figure-chart.compact .fig-value { font-size: 12px; }
+@media (max-width: 720px) {
+  .article-figure.drawn { padding: var(--space-4); }
+}
+
+/* ── Science ───────────────────────────────────────────────────────────── */
+.mechanisms { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-8); }
+.mechanism {
+  position: relative;
+  display: grid; gap: var(--space-3); align-content: start;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-divider);
+}
+/* The column rule is a drawn edge like the box's, so it ends in the same cross. */
+.mechanism::before,
+.mechanism::after {
+  content: "";
+  position: absolute;
+  top: -6px;
+  width: 11px; height: 11px;
+  background:
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 1px 100% no-repeat,
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 100% 1px no-repeat;
+}
+.mechanism::before { inset-inline-start: -6px; }
+.mechanism::after { inset-inline-end: -6px; }
+.mechanism .num {
+  font-family: var(--font-heading); font-weight: 700; font-size: 44px; line-height: 1;
+  color: var(--color-neutral-400); font-variant-numeric: tabular-nums;
+}
+.mechanism h3 { margin: 0; font-size: 21px; }
+.mechanism p { margin: 0; font-size: 14px; color: var(--color-neutral-700); }
+.refs { display: grid; gap: var(--space-4); }
+.ref { font-size: 14px; }
+.ref b { font-family: var(--font-heading); font-weight: var(--font-heading-weight); }
+.ref p { margin: 3px 0 0; color: var(--color-neutral-700); }
+.gate-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.disclaimer { font-size: 12px; color: var(--color-neutral-600); }
+.disclaimer a { color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
+
+/* ── Badges ────────────────────────────────────────────────────────────── */
+.badges { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-6); }
+.badge { padding: var(--space-4); display: grid; gap: var(--space-2); align-content: start; }
+.badge.locked { opacity: 0.45; }
+.badge .ico { color: var(--color-accent); }
+.badge h4 { margin: 0; font-size: 17px; }
+.badge p { margin: 0; font-size: 13px; color: var(--color-neutral-700); }
+
+/* ── Utility ───────────────────────────────────────────────────────────── */
+.empty { padding: var(--space-8); text-align: center; color: var(--color-neutral-600); font-size: 14px; }
+.table-wrap { overflow-x: auto; max-width: 100%; }
+.table-wrap .table { min-width: 520px; }
+.screen > *, .split > *, .articles > * { min-width: 0; }
+
+.toast {
+  position: fixed; bottom: var(--space-6); inset-inline-start: var(--space-6); z-index: 100;
+  padding: var(--space-3) var(--space-6); border: 1px solid var(--color-accent);
+  background: var(--color-accent); color: var(--color-bg);
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 15px;
+  opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s; pointer-events: none;
+}
+.toast.show { opacity: 1; transform: none; }
+.toast.error { background: #a8322b; border-color: #a8322b; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; gap: var(--space-8); padding: var(--space-6); }
+  .share-row { grid-template-columns: minmax(96px, 1.2fr) minmax(0, 1.4fr) auto; gap: var(--space-3); }
+  .avatar-md { width: 38px; height: 38px; }
+  .portrait img { width: clamp(104px, 28vw, 128px); }
+  .split, .split-wide { grid-template-columns: 1fr; gap: var(--space-8); }
+}
+@media (max-width: 700px) {
+  html, body { overflow-x: hidden; }
+  .topbar-inner { flex-wrap: wrap; gap: var(--space-3); padding: var(--space-3) var(--space-4); }
+  .tabs { order: 3; width: 100%; overflow-x: auto; padding-bottom: 2px; }
+  .tabs a { white-space: nowrap; }
+  main { padding: var(--space-6) var(--space-4) 64px; }
+  .form-row { grid-template-columns: 1fr; }
+  .statrow > div + div { border-inline-end: 0; border-top: 1px solid var(--color-divider); }
+  .member { grid-template-columns: 1fr; gap: var(--space-2); }
+  .readout { gap: var(--space-3); padding-inline-start: var(--space-3); }
+  .readout-guest .btn { padding-inline: var(--space-3); font-size: 13px; }
+  .tabs a { padding: 11px 14px; }
+}
+
+/* ── Dialog ────────────────────────────────────────────────────────────── */
+.dialog-backdrop { z-index: 60; }
+.dialog { max-height: 88vh; }
+.dialog-form { display: flex; flex-direction: column; min-height: 0; gap: var(--space-4); }
+.dialog-body { overflow-y: auto; }
+.dialog-actions { display: flex; gap: var(--space-3); justify-content: flex-start; }
+.dialog textarea.input { min-height: 200px; line-height: 1.7; }
+
+/* ── Small action buttons, for table rows and list rows ────────────────── */
+.btn-sm { font-size: 13px; padding: 4px var(--space-3); min-height: 0; }
+.row-actions { display: flex; gap: 6px; justify-content: flex-start; white-space: nowrap; }
+
+/* ── Row list, the editor's tips, and anything else that is a plain list ─ */
+.rowlist { display: grid; border: 1px solid var(--color-divider); }
+.rowlist > * + * { border-top: 1px solid var(--color-divider); }
+.rowlist .row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-4); padding: var(--space-3) var(--space-4);
+}
+.rowlist .row-text {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 16px; line-height: 1.35;
+}
+.rowlist .row:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+
+/* ── Section head with an action on the far side ───────────────────────── */
+.sec-row { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); }
+.sec-row .sec { flex: 1; }
+
+/* ── Inline add form ───────────────────────────────────────────────────── */
+.add-row { display: flex; gap: var(--space-3); margin-top: var(--space-4); }
+.add-row .input { flex: 1; }
+
+@media (max-width: 700px) {
+    .sec-row { flex-direction: column; align-items: stretch; }
+  .sec-row .btn { align-self: flex-start; }
+  .rowlist .row { flex-direction: column; align-items: stretch; gap: var(--space-3); }
+  .add-row { flex-direction: column; }
+  /* the header reads as one bar rather than three stacked fragments */
+  .topbar-inner { row-gap: var(--space-2); }
+  .brand { font-size: 17px; }
+  .brand small { display: none; }
+  .readout { border-inline-start: 0; padding-inline-start: 0; margin-inline-start: auto; gap: var(--space-3); }
+}
+
+/* ── Page footer ───────────────────────────────────────────────────────── */
+/* Mirrors the header: the same hairline, edge to edge, closing the page. */
+.site-footer {
+  position: relative;
+  margin-top: auto;
+  background: var(--color-bg);
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 15px;
+  color: var(--color-neutral-700);
+}
+.site-footer .heart { color: #c0463d; font-family: var(--font-body); }
+/* The footer rule follows the content column rather than the page edge, and ends
+   in the same registration marks as every other line on the site. */
+.site-footer::before {
+  content: "";
+  position: absolute; top: -5px;
+  inset-inline-start: 50%; transform: translateX(50%);
+  width: min(1180px - 2 * var(--space-6), 100% - 2 * var(--space-6));
+  height: 11px; pointer-events: none;
+  background:
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 100% 1px no-repeat,
+    linear-gradient(var(--mark-ink), var(--mark-ink)) left  center / 1px 100% no-repeat,
+    linear-gradient(var(--mark-ink), var(--mark-ink)) right center / 1px 100% no-repeat;
+}
+
+/* The shell fills the viewport so the footer sits at the bottom on short pages. */
+#app { display: flex; flex-direction: column; min-height: 100vh; }
+main { flex: 1; }
+
+/* ── Section rules ─────────────────────────────────────────────────────── */
+/* Every separator in the page body is the same hairline as the header and the
+   footer, and runs the full width of the content column, so the page reads as
+   one ruled sheet rather than blocks with different edges. */
+.screen > .sec + *,
+.screen > .sec-row + * { margin-top: 0; }
+.screen > .sec,
+.screen > .sec-row {
+  position: relative;
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+/* The framed box at the top ends its lines in a registration cross. A rule that
+   just stops is a different language, so every section rule gets the same two
+   marks at its ends, drawn exactly like .corner, from the same two hairlines. */
+.screen > .sec::before,
+.screen > .sec::after,
+.screen > .sec-row::before,
+.screen > .sec-row::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  width: 11px;
+  height: 11px;
+  background:
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 1px 100% no-repeat,
+    linear-gradient(var(--mark-ink), var(--mark-ink)) center / 100% 1px no-repeat;
+}
+.screen > .sec::before,
+.screen > .sec-row::before { inset-inline-start: -6px; }
+.screen > .sec::after,
+.screen > .sec-row::after { inset-inline-end: -6px; }
+
+.screen > .sec-sub { border-bottom: 0; padding-bottom: 0; }
+.screen > .sec-sub::before,
+.screen > .sec-sub::after { content: none; }
+
+/* A block that draws its own top edge would stack a second rule under the
+   section's. One line, never two, the page keeps a single hairline weight. */
+.screen > .sec:has(+ .articles),
+.screen > .sec:has(+ .mechanisms),
+.screen > .sec:has(+ .badges),
+.screen > .sec:has(+ .rowlist),
+.screen > .sec:has(+ .table-wrap),
+.screen > .sec:has(+ .bp),
+.screen > .sec:has(+ .statrow),
+.screen > .sec-row:has(+ .table-wrap),
+.screen > .sec-row:has(+ .rowlist) { border-bottom: 0; padding-bottom: var(--space-2); }
+
+.screen > .sec:has(+ .articles)::before, .screen > .sec:has(+ .articles)::after,
+.screen > .sec:has(+ .mechanisms)::before, .screen > .sec:has(+ .mechanisms)::after,
+.screen > .sec:has(+ .badges)::before, .screen > .sec:has(+ .badges)::after,
+.screen > .sec:has(+ .rowlist)::before, .screen > .sec:has(+ .rowlist)::after,
+.screen > .sec:has(+ .table-wrap)::before, .screen > .sec:has(+ .table-wrap)::after,
+.screen > .sec:has(+ .bp)::before, .screen > .sec:has(+ .bp)::after,
+.screen > .sec:has(+ .statrow)::before, .screen > .sec:has(+ .statrow)::after,
+.screen > .sec-row:has(+ .table-wrap)::before, .screen > .sec-row:has(+ .table-wrap)::after,
+.screen > .sec-row:has(+ .rowlist)::before, .screen > .sec-row:has(+ .rowlist)::after { content: none; }
+
+/* The home page's slogan sits above the product name. */
+.slogan-sub {
+  margin: var(--space-2) 0 var(--space-3) !important;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: clamp(19px, 2.2vw, 24px);
+  color: var(--color-accent-700);
+}
+
+@media (max-width: 700px) {
+  .site-footer { font-size: 13.5px; padding: var(--space-6) var(--space-3); }
+  .site-footer::before { width: min(1180px - 2 * var(--space-4), 100% - 2 * var(--space-4)); }
+}
+
+/* ── Tags hug their text ───────────────────────────────────────────────── */
+/* .tag is inline-flex, but as a grid item it stretches to the whole column
+   and the tint reads as a band across the card. */
+.tag { justify-self: start; width: fit-content; }
+
+/* ── Identity block: picture beside the name ───────────────────────────── */
+.hero-id { display: flex; align-items: flex-start; gap: var(--space-6); }
+.hero-id > div:last-child { min-width: 0; }
+
+.photo-slot {
+  position: relative; flex: none;
+  width: 120px; height: 120px;
+  display: grid; place-items: center;
+  cursor: pointer; overflow: hidden;
+  background: var(--color-surface);
+}
+.photo-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-slot:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.photo-slot .photo-empty {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 13px; color: var(--color-neutral-600); text-align: center; line-height: 1.3;
+}
+.photo-slot > .corner { z-index: 1; }
+
+/* ── The coach's emphases ──────────────────────────────────────────────── */
+.note-card { border-inline-start: 2px solid var(--color-accent); }
+.coach-note {
+  margin: 0;
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: clamp(18px, 2.2vw, 22px); line-height: 1.4;
+}
+
+/* ── The thread with the coach ─────────────────────────────────────────── */
+.thread {
+  display: grid; gap: var(--space-4);
+  max-height: 340px; overflow-y: auto;
+  padding-inline-end: var(--space-2);
+}
+.msg { display: grid; gap: 4px; max-width: 46ch; }
+.msg-who { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--color-neutral-600); }
+.msg-body {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-divider);
+  line-height: 1.6; white-space: pre-wrap;
+}
+.msg.from-me { justify-self: start; }
+.msg.from-coach { justify-self: end; }
+.msg.from-coach .msg-body {
+  background: var(--color-accent-100);
+  border-color: var(--color-accent-300);
+}
+.msg.from-coach .msg-who { color: var(--color-accent-700); }
+
+@media (max-width: 700px) {
+  /* Stacking put an empty photo frame above the name and pushed the weigh-in card, the
+     one thing this page is opened for, off the first screen. It sits beside the name. */
+  .hero-id { gap: var(--space-4); align-items: center; }
+  .photo-slot { width: 72px; height: 72px; flex: none; }
+  .thread { max-height: 300px; }
+  .msg { max-width: 100%; }
+}
+
+/* A row that carries a second line of context under its title. */
+.rowlist .row > span:first-child { display: grid; gap: 3px; min-width: 0; }
+.rowlist .facts { font-size: 13px; color: var(--color-neutral-600); }
+.rowlist .row-text .tag { display: inline-flex; margin-inline-start: var(--space-2); }
+.dialog .thread { max-height: 300px; }
+
+/* ── Touch targets ─────────────────────────────────────────────────────────
+   Anything tapped with a thumb gets a real target. Keyed to the pointer rather
+   than the viewport, so tablets are covered too and a mouse is left alone. */
+@media (pointer: coarse) {
+  .btn { min-height: 44px; }
+  .btn-sm { min-height: 38px; padding-block: 6px; }
+  .tabs a { padding-block: 11px; }
+  .member { min-height: 56px; }
+  .rule-ticks i { height: 3px; padding-block: 10px; background-clip: content-box; }
+}

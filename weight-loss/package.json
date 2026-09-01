@@ -1,0 +1,19 @@
+{
+  "name": "easy-weight-loss",
+  "version": "1.0.0",
+  "description": "הדרך הקלה לרדת במשקל - מעקב תזונה, אימונים ומשקל עם גיימיפיקציה",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "express": "^4.21.2",
+    "sharp": "^0.35.4"
+  }
+}
