@@ -147,6 +147,9 @@ addColumn('posts', 'image_url', 'TEXT');
 addColumn('posts', 'category', "TEXT NOT NULL DEFAULT ''");
 addColumn('posts', 'excerpt', "TEXT NOT NULL DEFAULT ''");
 addColumn('posts', 'read_minutes', 'INTEGER NOT NULL DEFAULT 5');
+// Some pictures carry the signature inside the file, so it travels with them when the
+// article is shared. Those must not also get the one the page draws on top.
+addColumn('posts', 'image_has_mark', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('profiles', 'is_editor', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('profiles', 'target_weight', 'REAL');
 addColumn('profiles', 'photo_url', 'TEXT');
