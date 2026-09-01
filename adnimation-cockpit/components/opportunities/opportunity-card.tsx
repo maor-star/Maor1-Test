@@ -10,13 +10,14 @@ import {
   updateOpportunityAction,
 } from '@/app/actions/opportunities';
 import { Button } from '@/components/ui/button';
+import { Attachments } from '@/components/attachments';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 // From the pure rules, never from the module: that one owns the database
 // connection, and importing it here would pull the driver into the browser.
 import {
-  KIND_LABEL, KIND_TO_CLIENT_TYPE, OPPORTUNITY_KINDS, STATUS_LABEL,
+  KIND_LABEL, KIND_TO_CLIENT_TYPE, OPPORTUNITY_KINDS, OPPORTUNITY_STATUSES, STATUS_LABEL,
   type OpportunityListItem,
 } from '@/lib/opportunities/rules';
 import { CLIENT_TYPES, CLIENT_TYPE_LABEL, OPEN_STAGES, STAGE_LABEL } from '@/lib/pipeline/types';
@@ -276,6 +277,12 @@ export function OpportunityCard({
           </a>
         ) : null}
 
+        {/*
+          An opportunity captured from a mail was usually captured because of
+          what was attached to it — the deck, the rate card, the draft.
+        */}
+        {o.source === 'mail' ? <Attachments kind="opportunity" id={o.id} /> : null}
+
         {o.sourceUrl ? (
           <a
             href={o.sourceUrl}
@@ -387,8 +394,9 @@ export function OpportunityCard({
             const data = new FormData(e.currentTarget);
             data.set('id', o.id);
             // A suggestion keeps its status while being named: naming it is
-            // not the same as deciding it is real.
-            data.set('status', o.status);
+            // not the same as deciding it is real, so the form does not offer
+            // to change it until he has accepted or declined the suggestion.
+            if (suggestion) data.set('status', o.status);
             run(updateOpportunityAction, data);
           }}
         >
@@ -397,6 +405,23 @@ export function OpportunityCard({
               <Label htmlFor={`t-${o.id}`}>Name</Label>
               <Input id={`t-${o.id}`} name="title" defaultValue={o.title} required />
             </div>
+            {/*
+              The status belongs in the form as well as on the buttons. WON and
+              LOST still stamp the decision either way — see updateOpportunity —
+              so moving one here is the same move, not a second kind of it.
+            */}
+            {!suggestion ? (
+              <div>
+                <Label htmlFor={`st-${o.id}`}>Status</Label>
+                <Select id={`st-${o.id}`} name="status" defaultValue={o.status} className="w-full">
+                  {OPPORTUNITY_STATUSES.filter((s) => s !== 'suggested').map((s) => (
+                    <option key={s} value={s}>
+                      {STATUS_LABEL[s]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
             <div>
               <Label htmlFor={`k-${o.id}`}>Kind</Label>
               <Select id={`k-${o.id}`} name="kind" defaultValue={o.kind} className="w-full">

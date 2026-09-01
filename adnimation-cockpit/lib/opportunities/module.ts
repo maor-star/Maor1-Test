@@ -218,6 +218,16 @@ export async function updateOpportunity(
     const [before] = await db.select().from(opportunities).where(eq(opportunities.id, id)).limit(1);
     if (!before) return { ok: false, error: 'No opportunity with that id' };
 
+    /*
+     * A status moved from the edit form is the same move as the DECIDE button.
+     *
+     * Won and lost are decisions, and a decision without `decidedAt` is a row
+     * that reads as decided everywhere except in the one column that says when
+     * — which is the column the win/loss review counts on.
+     */
+    const decided = input.status === 'won' || input.status === 'lost';
+    const wasDecided = before.status === 'won' || before.status === 'lost';
+
     await db
       .update(opportunities)
       .set({
@@ -231,6 +241,10 @@ export async function updateOpportunity(
         nextStepDate: input.nextStepDate ?? null,
         revisitOn: input.revisitOn ?? null,
         lastTouchedAt: new Date(),
+        // Re-opening a decided one clears the stamp; a decision already made
+        // keeps the date it was made on.
+        decidedAt: decided ? (before.decidedAt ?? new Date()) : null,
+        decidedNote: decided ? (wasDecided ? before.decidedNote : null) : null,
       })
       .where(eq(opportunities.id, id));
 

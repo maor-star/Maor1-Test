@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type {
-  ClickUpAdapter, ClickUpStatusResult, ClickUpTask, ClickUpTaskInput, ClickUpTaskPatch,
-  ClickUpTaskResult, ClickUpUpdateResult,
+  ClickUpAdapter, ClickUpAttachment, ClickUpStatusResult, ClickUpTask, ClickUpTaskInput,
+  ClickUpTaskPatch, ClickUpTaskResult, ClickUpUpdateResult,
 } from './types';
 
 const API = 'https://api.clickup.com/api/v2';
@@ -26,6 +26,40 @@ const clickUpTaskSchema = z.object({
   date_closed: z.union([z.string(), z.number()]).nullish(),
   list: z.object({ id: z.string().nullish(), name: z.string().nullish() }).nullish(),
 });
+
+/**
+ * An attachment, as ClickUp reports it on a task.
+ *
+ * `url_w_query` carries the signature that makes the URL fetchable; `url`
+ * alone is refused. Both are optional in the wild — a file still uploading has
+ * neither — and a row without one is not shown rather than shown broken.
+ */
+const attachmentSchema = z.object({
+  id: z.string(),
+  title: z.string().nullish(),
+  extension: z.string().nullish(),
+  mimetype: z.string().nullish(),
+  size: z.union([z.string(), z.number()]).nullish(),
+  url: z.string().nullish(),
+  url_w_query: z.string().nullish(),
+  thumbnail_medium: z.string().nullish(),
+  thumbnail_large: z.string().nullish(),
+});
+
+const taskWithAttachmentsSchema = z.object({
+  attachments: z.array(attachmentSchema).default([]),
+});
+
+/** ClickUp often reports no mime type at all; the extension is the fallback. */
+const MIME_BY_EXTENSION: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+  webp: 'image/webp', svg: 'image/svg+xml', heic: 'image/heic',
+  pdf: 'application/pdf', txt: 'text/plain', csv: 'text/csv',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
 
 const listResponseSchema = z.object({
   tasks: z.array(z.unknown()).default([]),
@@ -188,6 +222,58 @@ class RealClickUpAdapter implements ClickUpAdapter {
     return normaliseClickUpTask(await res.json().catch(() => null));
   }
 
+  /** The attachments live on the single-task response, not on the team list. */
+  private async attachmentsOf(taskId: string) {
+    const res = await fetch(`${API}/task/${taskId}`, { headers: this.headers() });
+    if (!res.ok) return [];
+    const parsed = taskWithAttachmentsSchema.safeParse(await res.json().catch(() => null));
+    return parsed.success ? parsed.data.attachments : [];
+  }
+
+  async listAttachments(taskId: string): Promise<ClickUpAttachment[]> {
+    const out: ClickUpAttachment[] = [];
+    for (const a of await this.attachmentsOf(taskId)) {
+      if (!a.url_w_query && !a.url) continue;
+      const name = a.title ?? `attachment.${a.extension ?? 'bin'}`;
+      const ext = (a.extension ?? name.split('.').pop() ?? '').toLowerCase();
+      const size = typeof a.size === 'number' ? a.size : Number(a.size ?? NaN);
+      out.push({
+        id: a.id,
+        name,
+        mimeType: a.mimetype || MIME_BY_EXTENSION[ext] || 'application/octet-stream',
+        sizeBytes: Number.isFinite(size) ? size : null,
+        thumbnailUrl: a.thumbnail_medium ?? a.thumbnail_large ?? null,
+      });
+    }
+    return out;
+  }
+
+  async readAttachment(
+    taskId: string,
+    attachmentId: string,
+  ): Promise<{ body: Buffer; mimeType: string; name: string } | null> {
+    const found = (await this.attachmentsOf(taskId)).find((a) => a.id === attachmentId);
+    const href = found?.url_w_query ?? found?.url;
+    if (!found || !href) return null;
+
+    // No API token here: the signature in the URL is the credential, and
+    // ClickUp's file host rejects the Authorization header outright.
+    const res = await fetch(href);
+    if (!res.ok) return null;
+
+    const name = found.title ?? `attachment.${found.extension ?? 'bin'}`;
+    const ext = (found.extension ?? name.split('.').pop() ?? '').toLowerCase();
+    return {
+      body: Buffer.from(await res.arrayBuffer()),
+      mimeType:
+        found.mimetype
+        || res.headers.get('content-type')
+        || MIME_BY_EXTENSION[ext]
+        || 'application/octet-stream',
+      name,
+    };
+  }
+
   /**
    * The statuses this task's list allows. ClickUp rejects a status the list
    * does not define, so the UI offers the list's own words rather than a
@@ -230,6 +316,8 @@ class RealClickUpAdapter implements ClickUpAdapter {
 export class FakeClickUpAdapter implements ClickUpAdapter {
   readonly name = 'clickup' as const;
   readonly created: ClickUpTaskInput[] = [];
+  /** Tests set these; a workspace with no files simply shows none. */
+  attachments: ClickUpAttachment[] = [];
   private tasks = new Map<string, ClickUpTask>();
   private nextId = 1;
   failNext = false;
@@ -309,6 +397,14 @@ export class FakeClickUpAdapter implements ClickUpAdapter {
       ...(patch.dueDateMs !== undefined ? { dueDateMs: patch.dueDateMs } : {}),
     });
     return { ok: true };
+  }
+
+  async listAttachments(): Promise<ClickUpAttachment[]> {
+    return this.attachments;
+  }
+
+  async readAttachment(): Promise<{ body: Buffer; mimeType: string; name: string } | null> {
+    return null;
   }
 }
 

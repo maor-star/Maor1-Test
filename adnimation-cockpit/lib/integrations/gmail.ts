@@ -1,6 +1,6 @@
 import { createSign } from 'node:crypto';
 import { z } from 'zod';
-import type { FoundReply, GmailAdapter } from './types';
+import type { AttachmentRef, FoundReply, GmailAdapter } from './types';
 
 /**
  * Gmail, for the delegation reply radar only.
@@ -18,6 +18,41 @@ import type { FoundReply, GmailAdapter } from './types';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+
+/**
+ * A MIME part, as far as attachments are concerned.
+ *
+ * Gmail nests parts arbitrarily deep — a forwarded mail with an attached mail
+ * with a photo in it is three levels — so this is walked recursively rather
+ * than read off the top level, which is where the first version of this looked
+ * and found nothing.
+ */
+export interface MimePart {
+  partId?: string;
+  filename?: string;
+  mimeType?: string;
+  body?: { attachmentId?: string; size?: number };
+  parts?: MimePart[];
+}
+
+export function walkParts(part: MimePart | undefined, out: MimePart[] = []): MimePart[] {
+  if (!part) return out;
+  if (part.filename && part.body?.attachmentId) out.push(part);
+  for (const child of part.parts ?? []) walkParts(child, out);
+  return out;
+}
+
+/**
+ * An inline image is still a file he may want to look at, but a one-pixel
+ * tracking gif and a signature logo are not, and a mailbox is full of both.
+ */
+const TOO_SMALL_TO_MEAN_ANYTHING = 8_000;
+
+export function worthShowing(part: MimePart): boolean {
+  const size = part.body?.size ?? 0;
+  const isImage = (part.mimeType ?? '').startsWith('image/');
+  return !isImage || size >= TOO_SMALL_TO_MEAN_ANYTHING;
+}
 
 const serviceAccountSchema = z.object({
   client_email: z.string().email(),
@@ -114,6 +149,65 @@ class RealGmailAdapter implements GmailAdapter {
     return res.json();
   }
 
+  async listThreadAttachments(threadId: string): Promise<AttachmentRef[]> {
+    const thread = (await this.get(`/threads/${threadId}?format=full`)) as {
+      messages?: { id: string; payload?: MimePart }[];
+    };
+
+    const out: AttachmentRef[] = [];
+    const seen = new Set<string>();
+    for (const message of thread.messages ?? []) {
+      for (const part of walkParts(message.payload)) {
+        if (!worthShowing(part)) continue;
+        const id = part.body?.attachmentId;
+        if (!id) continue;
+        // The same file forwarded down a thread appears once per message; he
+        // wants the file, not the count of how often it was quoted.
+        const key = `${part.filename}:${part.body?.size ?? 0}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          id,
+          name: part.filename ?? 'attachment',
+          mimeType: part.mimeType ?? 'application/octet-stream',
+          sizeBytes: part.body?.size ?? null,
+          messageId: message.id,
+        });
+      }
+    }
+    return out;
+  }
+
+  async readAttachment(
+    messageId: string,
+    attachmentId: string,
+  ): Promise<{ body: Buffer; mimeType: string; name: string } | null> {
+    /*
+     * The name and type are on the message, not on the attachment.
+     *
+     * Gmail's attachments.get returns bytes and a size and nothing else, so
+     * serving the file with a content type — the difference between the
+     * browser showing a photo and offering to save an unnamed blob — means
+     * reading the part it belongs to first.
+     */
+    const message = (await this.get(`/messages/${messageId}?format=full`)) as {
+      payload?: MimePart;
+    };
+    const part = walkParts(message.payload).find((p) => p.body?.attachmentId === attachmentId);
+    if (!part) return null;
+
+    const data = (await this.get(
+      `/messages/${messageId}/attachments/${attachmentId}`,
+    )) as { data?: string };
+    if (!data.data) return null;
+
+    return {
+      body: Buffer.from(data.data, 'base64url'),
+      mimeType: part.mimeType ?? 'application/octet-stream',
+      name: part.filename ?? 'attachment',
+    };
+  }
+
   async findReply({
     fromEmail,
     since,
@@ -176,6 +270,17 @@ export class FakeGmailAdapter implements GmailAdapter {
     const reply = this.nextReply;
     this.nextReply = null;
     return reply;
+  }
+
+  /** Tests set these; an unconfigured mailbox simply has no files to show. */
+  attachments: AttachmentRef[] = [];
+
+  async listThreadAttachments(): Promise<AttachmentRef[]> {
+    return this.attachments;
+  }
+
+  async readAttachment(): Promise<{ body: Buffer; mimeType: string; name: string } | null> {
+    return null;
   }
 }
 

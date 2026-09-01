@@ -176,6 +176,8 @@ export async function taskForEditAction(id: string) {
       priority: task.priority,
       status: task.status,
       dueDate: task.dueDate,
+      startDate: task.startDate,
+      recurrenceRule: task.recurrenceRule,
       deptId: task.deptId,
       ownerPersonId: task.ownerPersonId,
       tags: task.tags,

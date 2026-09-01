@@ -70,6 +70,23 @@ export interface SlackAdapter {
   postThreadReply(channelId: string, threadTs: string, text: string): Promise<SlackPostResult>;
 }
 
+/**
+ * One file hanging off a mail or a task.
+ *
+ * The same shape whichever system it came from, because the screen showing it
+ * does not care: a name, something to say how big it is, and enough type
+ * information to know whether it can be shown or only downloaded.
+ */
+export interface AttachmentRef {
+  /** Stable within its source — the Gmail attachment id, the ClickUp file id. */
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number | null;
+  /** Gmail keeps attachments on messages, not threads. Null for ClickUp. */
+  messageId?: string;
+}
+
 export interface GmailAdapter {
   readonly name: 'gmail';
   /** Whether the adapter has what it needs to talk to Gmail at all. */
@@ -83,6 +100,16 @@ export interface GmailAdapter {
     since: Date;
     terms: string[];
   }): Promise<FoundReply | null>;
+  /** Every file attached anywhere in a conversation, oldest message first. */
+  listThreadAttachments(threadId: string): Promise<AttachmentRef[]>;
+  /**
+   * One attachment's bytes. The id is Gmail's, which is why the message id
+   * comes with it — Gmail scopes attachment ids to their message.
+   */
+  readAttachment(
+    messageId: string,
+    attachmentId: string,
+  ): Promise<{ body: Buffer; mimeType: string; name: string } | null>;
 }
 
 export interface ClickUpTaskInput {
@@ -161,4 +188,22 @@ export interface ClickUpAdapter {
   /** Delta poll: everything changed since `sinceMs` (spec 6.1.2 — every 5 minutes). */
   listTasksUpdatedSince(sinceMs: number): Promise<ClickUpTask[]>;
   getTask(taskId: string): Promise<ClickUpTask | null>;
+  /** The files the team hung on a task — specs, screenshots, signed PDFs. */
+  listAttachments(taskId: string): Promise<ClickUpAttachment[]>;
+  /**
+   * One attachment's bytes, fetched server-side.
+   *
+   * ClickUp serves attachments from signed URLs it hands back with the task,
+   * so the only safe way to reach one is to ask ClickUp for the task again and
+   * follow the URL it gives — never a URL the browser supplied.
+   */
+  readAttachment(
+    taskId: string,
+    attachmentId: string,
+  ): Promise<{ body: Buffer; mimeType: string; name: string } | null>;
+}
+
+export interface ClickUpAttachment extends AttachmentRef {
+  /** ClickUp renders its own thumbnails; null when it made none. */
+  thumbnailUrl: string | null;
 }

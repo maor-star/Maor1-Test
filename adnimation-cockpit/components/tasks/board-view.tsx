@@ -2,9 +2,24 @@ import type { TaskRow } from '@/lib/tasks/queries';
 import { STATUS_LABEL, TASK_STATUSES, type TaskStatus } from '@/lib/tasks/types';
 import { Num } from '@/components/num';
 import { HeatBar, PriorityBadge, TaskTitleLink } from '@/components/task-bits';
+import { InlineTaskEditor } from '@/components/tasks/inline-task-editor';
 
-/** Spec 6.4 — board by status. Columns are the fixed status set, not free-form. */
-export function TaskBoardView({ rows }: { rows: TaskRow[] }) {
+/**
+ * Spec 6.4 — board by status. Columns are the fixed status set, not free-form.
+ *
+ * Every card opens its whole task in place, the same as a row in the list: the
+ * board is where he moves work along, and moving it along meant leaving the
+ * board.
+ */
+export function TaskBoardView({
+  rows,
+  people,
+  departments,
+}: {
+  rows: TaskRow[];
+  people: { id: string; label: string }[];
+  departments: { id: string; label: string }[];
+}) {
   const byStatus = new Map<string, TaskRow[]>();
   for (const status of TASK_STATUSES) byStatus.set(status, []);
   for (const row of rows) {
@@ -37,6 +52,13 @@ export function TaskBoardView({ rows }: { rows: TaskRow[] }) {
                   {t.dueDate ? (
                     <Num className="mt-1 block text-2xs text-neutral-500">{t.dueDate}</Num>
                   ) : null}
+                  <div className="mt-1">
+                    <InlineTaskEditor
+                      taskId={t.id}
+                      departments={departments}
+                      people={people}
+                    />
+                  </div>
                 </li>
               ))
             )}

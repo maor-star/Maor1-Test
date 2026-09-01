@@ -160,7 +160,7 @@ function TaskViewSwitch({
   people: { id: string; label: string }[];
   departments: { id: string; label: string }[];
 }) {
-  if (view === 'board') return <TaskBoardView rows={rows} />;
+  if (view === 'board') return <TaskBoardView rows={rows} people={people} departments={departments} />;
   if (view === 'calendar') return <TaskCalendarView rows={rows} today={todayInTz()} />;
   return <TaskListView rows={rows} people={people} departments={departments} />;
 }

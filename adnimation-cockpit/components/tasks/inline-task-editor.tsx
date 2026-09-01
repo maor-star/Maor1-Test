@@ -37,6 +37,8 @@ export function InlineTaskEditor({
     priority: 'P0' | 'P1' | 'P2' | 'P3';
     status: string;
     dueDate: string | null;
+    startDate: string | null;
+    recurrenceRule: string | null;
     deptId: string | null;
     ownerPersonId: string | null;
     tags: string[];

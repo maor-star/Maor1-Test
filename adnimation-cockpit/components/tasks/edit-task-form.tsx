@@ -18,6 +18,8 @@ interface EditableTask {
   priority: TaskPriority;
   status: string;
   dueDate: string | null;
+  startDate: string | null;
+  recurrenceRule: string | null;
   deptId: string | null;
   ownerPersonId: string | null;
   tags: string[];
@@ -101,6 +103,20 @@ export function EditTaskForm({
           <Label htmlFor="edit-due">Due date</Label>
           <Input id="edit-due" name="dueDate" type="date" defaultValue={task.dueDate ?? ''} />
         </div>
+        {/*
+          The start date and the recurrence were the two fields the row could
+          show but not change, which meant a task that repeats had to be opened
+          on its own page to stop repeating.
+        */}
+        <div>
+          <Label htmlFor="edit-start">Start date</Label>
+          <Input
+            id="edit-start"
+            name="startDate"
+            type="date"
+            defaultValue={task.startDate ?? ''}
+          />
+        </div>
         <div>
           <Label htmlFor="edit-dept">Department</Label>
           <Select id="edit-dept" name="deptId" defaultValue={task.deptId ?? ''} className="w-full">
@@ -133,9 +149,21 @@ export function EditTaskForm({
         </div>
       </div>
 
-      <div>
-        <Label htmlFor="edit-tags">Tags (comma separated)</Label>
-        <Input id="edit-tags" name="tags" defaultValue={task.tags.join(', ')} />
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="edit-tags">Tags (comma separated)</Label>
+          <Input id="edit-tags" name="tags" defaultValue={task.tags.join(', ')} />
+        </div>
+        <div>
+          <Label htmlFor="edit-recurrence">Repeats (RRULE, blank for never)</Label>
+          <Input
+            id="edit-recurrence"
+            name="recurrenceRule"
+            dir="ltr"
+            placeholder="FREQ=WEEKLY;BYDAY=MO"
+            defaultValue={task.recurrenceRule ?? ''}
+          />
+        </div>
       </div>
 
       {/*

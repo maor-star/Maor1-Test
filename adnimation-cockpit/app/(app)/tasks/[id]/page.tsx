@@ -11,6 +11,7 @@ import { HeatBar, OverdueChip, PriorityBadge, StatusBadge, TaskTitleLink } from 
 import { CommentForm } from '@/components/tasks/comment-form';
 import { EditTaskForm } from '@/components/tasks/edit-task-form';
 import { ClickUpStatus } from '@/components/tasks/clickup-status';
+import { Attachments } from '@/components/attachments';
 import { NewTaskForm } from '@/components/tasks/new-task-form';
 import { DelegateButton } from '@/components/tasks/delegate-button';
 
@@ -84,6 +85,13 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                 </div>
               ) : null}
 
+              {/* The files the team hung on it in ClickUp, openable here. */}
+              {isMirror ? (
+                <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-divider pb-2">
+                  <Attachments kind="task" id={task.id} label="ATTACHED FILES" />
+                </div>
+              ) : null}
+
               <EditTaskForm
                 mode={isMirror ? 'clickup' : 'mine'}
                 task={{
@@ -93,6 +101,8 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                   priority: task.priority,
                   status: task.status,
                   dueDate: task.dueDate,
+                  startDate: task.startDate,
+                  recurrenceRule: task.recurrenceRule,
                   deptId: task.deptId,
                   ownerPersonId: task.ownerPersonId,
                   tags: task.tags,

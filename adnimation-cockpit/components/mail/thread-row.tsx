@@ -8,6 +8,7 @@ import { useUndo } from '@/components/ui/undo-bar';
 import { dismissThreadAction, taskFromMailAction, replyAction } from '@/app/actions/mail';
 import { captureMailAction } from '@/app/actions/opportunities';
 import { Button } from '@/components/ui/button';
+import { Attachments } from '@/components/attachments';
 import { Textarea } from '@/components/ui/input';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
@@ -98,6 +99,8 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
             SENT ✓
           </span>
         ) : null}
+
+        <Attachments kind="thread" id={t.threadId} />
 
         <a
           href={t.url}

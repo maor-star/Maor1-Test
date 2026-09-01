@@ -11,6 +11,8 @@ export interface TaskRow {
   status: string;
   dueDate: string | null;
   startDate: string | null;
+  /** Carried so the row can stop a task repeating without opening its page. */
+  recurrenceRule: string | null;
   tags: string[];
   heatScore: number;
   snoozeCount: number;
@@ -42,6 +44,7 @@ const selection = {
   status: tasks.status,
   dueDate: tasks.dueDate,
   startDate: tasks.startDate,
+  recurrenceRule: tasks.recurrenceRule,
   tags: tasks.tags,
   heatScore: tasks.heatScore,
   snoozeCount: tasks.snoozeCount,

@@ -8,6 +8,7 @@ import { fmtDate, fmtMoney } from '@/lib/utils';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { Button } from '@/components/ui/button';
+import { Attachments } from '@/components/attachments';
 import { HeatBar, OverdueChip, PriorityBadge, StatusBadge, TaskTitleLink } from '@/components/task-bits';
 import { QuickTaskActions } from '@/components/quick-task-actions';
 import { ClickUpStatus } from '@/components/tasks/clickup-status';
@@ -84,6 +85,9 @@ export function TaskListRow({
                 first. */}
             {t.clickupUrl ? <ClickUpStatus taskId={t.id} status={t.status} compact /> : null}
             <QuickTaskActions taskId={t.id} isMine={!mirrored} status={t.status} />
+            {/* Only a mirrored task can have files: ClickUp is where the team
+                attaches them. */}
+            {mirrored ? <Attachments kind="task" id={t.id} /> : null}
             <Button
               type="button"
               size="xs"
@@ -118,6 +122,8 @@ export function TaskListRow({
                 priority: t.priority,
                 status: t.status,
                 dueDate: t.dueDate,
+                startDate: t.startDate,
+                recurrenceRule: t.recurrenceRule,
                 deptId: t.deptId,
                 ownerPersonId: t.ownerPersonId,
                 tags: t.tags,
