@@ -1,4 +1,4 @@
-import { desc, inArray, sql } from 'drizzle-orm';
+import { arrayOverlaps, desc } from 'drizzle-orm';
 import { db, mailThreads } from '@/lib/db';
 
 /**
@@ -6,8 +6,13 @@ import { db, mailThreads } from '@/lib/db';
  *
  * A CRM row is a name and a phone number; what he needs before picking up that
  * phone is the last thing they said to each other. The mail mirror already
- * holds it, keyed by the same address the contact is keyed on, so this is a
- * join rather than anything new to maintain.
+ * holds it, so this is a join rather than anything new to maintain.
+ *
+ * Matched on everyone who was on the thread, not on whoever the mirror calls
+ * its counterpart. Four people at Digital Turbine had written to him and three
+ * of them showed nothing, because the counterpart of a thread is one address
+ * and a conversation is rarely two people — the person he actually wants to
+ * read about is often the one who was copied in.
  *
  * Threads are read for many contacts at once. One query per row would be four
  * hundred queries on the contacts screen, which is how a page that reads
@@ -40,27 +45,32 @@ export async function conversationsFor(
       lastMessageAt: mailThreads.lastMessageAt,
       messageCount: mailThreads.messageCount,
       lastFromMe: mailThreads.lastFromMe,
-      email: sql<string>`lower(${mailThreads.counterpartEmail})`,
+      participants: mailThreads.participants,
     })
     .from(mailThreads)
-    .where(inArray(sql`lower(${mailThreads.counterpartEmail})`, wanted))
+    .where(arrayOverlaps(mailThreads.participants, wanted))
     .orderBy(desc(mailThreads.lastMessageAt));
 
   for (const row of rows) {
-    const held = out.get(row.email) ?? { recent: [], total: 0 };
-    held.total += 1;
-    if (held.recent.length < perContact) {
-      held.recent.push({
-        threadId: row.threadId,
-        subject: row.subject,
-        snippet: row.snippet,
-        lastMessageAt: row.lastMessageAt,
-        messageCount: row.messageCount,
-        lastFromMe: row.lastFromMe,
-        url: `https://mail.google.com/mail/u/0/#all/${row.threadId}`,
-      });
+    // A thread reaches every one of its participants he asked about, so a
+    // conversation between three of them counts for all three.
+    for (const email of row.participants.map((e) => e.toLowerCase())) {
+      if (!wanted.includes(email)) continue;
+      const held = out.get(email) ?? { recent: [], total: 0 };
+      held.total += 1;
+      if (held.recent.length < perContact) {
+        held.recent.push({
+          threadId: row.threadId,
+          subject: row.subject,
+          snippet: row.snippet,
+          lastMessageAt: row.lastMessageAt,
+          messageCount: row.messageCount,
+          lastFromMe: row.lastFromMe,
+          url: `https://mail.google.com/mail/u/0/#all/${row.threadId}`,
+        });
+      }
+      out.set(email, held);
     }
-    out.set(row.email, held);
   }
 
   return out;

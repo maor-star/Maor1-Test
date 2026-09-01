@@ -21,6 +21,7 @@ async function thread(subject: string, at: string, over: Partial<typeof mailThre
     snippet: 'about the integration',
     counterpartEmail: DANA,
     counterpartName: 'Dana',
+    participants: [DANA],
     messageCount: 2,
     lastMessageAt: new Date(at),
     lastFromMe: false,
@@ -66,5 +67,20 @@ describe('the conversations behind a contact', () => {
   it('carries whether the last word was his, which is the whole point', async () => {
     await thread('answered', '2026-08-01T09:00:00Z', { lastFromMe: true });
     expect((await conversationsFor([DANA]))?.get(DANA)?.recent[0]?.lastFromMe).toBe(true);
+  });
+
+  it('counts a thread for everyone on it, not only its counterpart', async () => {
+    // Four people at one company wrote to him and three showed nothing: the
+    // counterpart of a thread is one address, and the person he wants to read
+    // about is often the one who was copied in.
+    const colleague = `neel-${MARK}@taboola.com`;
+    await thread('all three of us', '2026-08-01T09:00:00Z', {
+      participants: [DANA, colleague],
+    });
+
+    const found = await conversationsFor([DANA, colleague]);
+    expect(found.get(DANA)?.total).toBe(1);
+    expect(found.get(colleague)?.total).toBe(1);
+    expect(found.get(colleague)?.recent[0]?.subject).toBe('all three of us');
   });
 });
