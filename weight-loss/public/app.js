@@ -1430,22 +1430,28 @@ async function viewHome(el) {
       <div class="split split-wide">
         <div class="members" id="members">
           ${group.members.map((m) => `
-            <button class="member ${m.id === selected?.id ? 'active' : ''}" data-id="${m.id}" type="button">
+            <button class="member ${m.id === selected?.id ? 'active' : ''} ${m.missing_weigh_in ? 'is-missing' : ''}"
+                    data-id="${m.id}" type="button">
               ${avatar(m)}
               <span>
                 <span class="who">${esc(m.full_name)}</span>
                 <span class="facts">
                   <span>${ltr(`${m.weeks_in_program} שב׳`)}</span>
                   <span>${ltr(`${nf(m.total_points)} XP`)}</span>
+                  ${m.missing_weigh_in ? '<span class="flag">חסרה שקילה</span>' : ''}
                 </span>
               </span>
-              <span class="kg">${m.weight_change === null ? '-' : ltr(`${signed(m.weight_change)} ק״ג`)}</span>
+              <span class="kg">
+                <span class="kg-now">${m.weight_latest === null ? '-' : ltr(`${nf(m.weight_latest, 1)} ק״ג`)}</span>
+                <span class="kg-diff">${m.weight_change === null ? '' : ltr(`${signed(m.weight_change)} ק״ג`)}</span>
+              </span>
             </button>`).join('')}
         </div>
         <div id="member-panel">${memberPanel(selected)}</div>
       </div>
       <p class="disclaimer">
-        חברי הקבוצה רואים זה את זה רק את המספרים שלמעלה. הדיווחים היומיים, השקילות והתמונות נשארים פרטיים.
+        חברי הקבוצה רואים זה את זה את המשקל הנוכחי, את השינוי ואת המספרים שלמעלה.
+        הדיווחים היומיים, ההודעות ותמונות ההתקדמות נשארים פרטיים.
       </p>` : ''}
 
     <div class="sec">

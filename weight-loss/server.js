@@ -584,6 +584,12 @@ function memberSummary(row) {
     current_streak: row.current_streak,
     level: levelInfo(row.total_points),
     weeks_in_program: stats.weeks_in_program,
+    weight_latest: stats.weight_latest,
+    // Missing means the weigh-in the programme is asking for right now: this week's
+    // slot while it is running, and the very first one before it starts.
+    missing_weigh_in: stats.current_slot
+      ? stats.current_slot_weight === null
+      : stats.weight_latest === null,
     weight_change: stats.weight_change,
     waist_change: stats.waist_change,
     workouts_this_week: stats.workouts_this_week,

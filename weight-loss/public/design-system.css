@@ -28,6 +28,11 @@
   --color-accent-500: #749dc4;
   --color-accent-600: #597ea3;
   --color-accent-700: #416180;
+
+  /* The one warning colour in the system: a missing weigh-in, a failed request. Kept
+     as dark as it can be and still read as red, so it sits beside the steel blue
+     without shouting over it. */
+  --color-danger: #b3271e;
   --color-accent-800: #2c455d;
   --color-accent-900: #1d2d3d;
 

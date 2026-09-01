@@ -357,7 +357,22 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .member.active { background: var(--color-accent-100); border-color: var(--color-accent-400); }
 .member .who { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 17px; }
 .member .facts { display: flex; gap: var(--space-4); font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }
-.member .kg { font-family: var(--font-heading); font-weight: 700; font-size: 20px; color: var(--color-accent-700); font-variant-numeric: tabular-nums; }
+/* Two numbers in the one cell: where they are now, and how far they have come. */
+.member .kg { display: grid; justify-items: end; gap: 2px; text-align: end; }
+.member .kg-now {
+  font-family: var(--font-heading); font-weight: 700; font-size: 20px; line-height: 1;
+  color: var(--color-accent-700); font-variant-numeric: tabular-nums;
+}
+.member .kg-diff { font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums; }
+
+/* A weigh-in the programme asked for and did not get. Red, and said in words as well
+   as in colour, so it reads for anyone who cannot tell the two apart. */
+.member.is-missing { border-inline-start: 3px solid var(--color-danger); }
+.member.is-missing .kg-now { color: var(--color-danger); }
+.member .flag {
+  color: var(--color-danger); font-weight: 700;
+  letter-spacing: 0.02em; white-space: nowrap;
+}
 
 /* A face beside the name. Square like everything else here, never a circle. */
 .avatar {
@@ -593,7 +608,7 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .msg-sources { margin-top: var(--space-2); font-size: 12px; color: var(--color-neutral-600); }
 .msg-sources a { color: var(--color-accent-700); }
 .msg.is-pending .msg-body { color: var(--color-neutral-500); }
-.msg.is-error .msg-body { color: #b3271e; }
+.msg.is-error .msg-body { color: var(--color-danger); }
 @media (max-width: 720px) {
   .chat-form { grid-template-columns: 1fr; }
   .chat { padding: var(--space-4); }
