@@ -329,6 +329,12 @@ main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--space-8) v
 .article .meta { font-size: 11px; color: var(--color-neutral-600); }
 .article-body { max-width: 68ch; display: grid; gap: var(--space-4); }
 .article-body p { margin: 0; }
+/* A link to another article reads as part of the sentence, marked but not shouted. */
+.article-body a {
+  color: var(--color-accent-700); text-decoration: underline;
+  text-underline-offset: 3px; text-decoration-thickness: 1px;
+}
+.article-body a:hover { text-decoration-thickness: 2px; }
 .article-body h4 { margin: var(--space-4) 0 0; font-size: 19px; }
 /* The level under a sub-heading: it groups a few paragraphs without competing with the
    section title above it, so it is smaller and carries the accent instead of the size. */

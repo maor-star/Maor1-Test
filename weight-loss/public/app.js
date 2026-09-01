@@ -1031,7 +1031,13 @@ function barFigure({ kicker, title, note, rows }) {
 async function viewArticle(el, slug) {
   const post = await api('/posts/' + encodeURIComponent(slug));
   // Escaping happens first, so the markup below can never be used to inject HTML.
-  const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // Links are written as [label](article:slug) and can only ever point at an article on
+  // this site: the slug pattern admits nothing that could become an external or a
+  // javascript URL, and the label is already escaped by the time it gets here.
+  const inline = (t) => esc(t)
+    .replace(/\[([^\]]+)\]\(article:([a-z0-9-]+)\)/g,
+      (_, label, slug) => `<a href="#/articles/${slug}">${label}</a>`)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   const blocks = post.content.split('\n\n').map((block) => {
     const line = block.trim();
     const heading = /^\*\*(.+)\*\*$/.exec(line);
