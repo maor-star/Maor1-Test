@@ -77,6 +77,22 @@ async function previewFor(imageUrl) {
   }
 }
 
+/**
+ * Built at boot rather than on the first crawler request. Sharing an article is exactly
+ * the moment a preview is asked for, and a resize running inside that request is one
+ * more thing that can go wrong at the worst time.
+ */
+async function warmPreviews() {
+  const posts = db.prepare('SELECT image_url FROM posts WHERE image_url IS NOT NULL').all();
+  let built = 0;
+  for (const post of posts) {
+    const name = `${post.image_url.replace(/\.[^.]+$/, '')}-og.jpg`;
+    if (existsSync(join(uploadsDir, name))) continue;
+    if (await previewFor(post.image_url)) built += 1;
+  }
+  if (built) console.log(`נבנו ${built} תמונות תצוגה לשיתוף`);
+}
+
 app.get('/api/posts/:id/preview', asyncRoute(async (req, res) => {
   const post = db.prepare('SELECT image_url FROM posts WHERE id = ?').get(req.params.id);
   const path = post ? await previewFor(post.image_url) : null;
@@ -1127,5 +1143,7 @@ app.use((err, req, res, _next) => {
   console.error(err);
   if (!res.headersSent) res.status(err.status || 500).json({ error: err.message });
 });
+
+warmPreviews().catch((err) => console.error('preview warm-up failed', err.message));
 
 app.listen(PORT, () => console.log(`הדרך הקלה לירידה במשקל, פועל על http://localhost:${PORT}`));

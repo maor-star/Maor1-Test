@@ -954,7 +954,7 @@ async function viewArticles(el) {
     ${posts.length ? `
       <div class="articles">
         ${posts.map((p) => `
-          <a class="article bp ${p.image_url ? 'has-figure' : ''}" href="#/articles/${encodeURIComponent(p.slug)}">
+          <a class="article bp ${p.image_url ? 'has-figure' : ''}" href="${articleHref(p.slug)}" data-article="${encodeURIComponent(p.slug)}">
             ${corners()}
             ${p.image_url ? `<span class="card-figure"><img src="${postImage(p)}" alt="" loading="lazy" /></span>` : ''}
             <span class="tag tag-accent">${esc(p.category)}</span>
@@ -1036,7 +1036,7 @@ async function viewArticle(el, slug) {
   // javascript URL, and the label is already escaped by the time it gets here.
   const inline = (t) => esc(t)
     .replace(/\[([^\]]+)\]\(article:([a-z0-9-]+)\)/g,
-      (_, label, slug) => `<a href="#/articles/${slug}">${label}</a>`)
+      (_, label, slug) => `<a href="${articleHref(slug)}" data-article="${slug}">${label}</a>`)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   const blocks = post.content.split('\n\n').map((block) => {
     const line = block.trim();
@@ -1222,6 +1222,9 @@ async function viewSettings(el) {
  * The stored filename changes on every replacement, so it is the version tag: a new
  * picture is a new URL, and the hard caching behind it stays correct.
  */
+const articleHref = (slug) =>
+  `/a/${encodeURIComponent(slug)}#/articles/${encodeURIComponent(slug)}`;
+
 const postImage = (post, kind = 'image') =>
   `/api/posts/${post.id}/${kind}?v=${encodeURIComponent(post.image_url || '')}`;
 
@@ -1478,7 +1481,7 @@ async function viewHome(el) {
     </div>
     <div class="articles">
       ${posts.slice(0, 3).map((p) => `
-        <a class="article bp ${p.image_url ? 'has-figure' : ''}" href="#/articles/${encodeURIComponent(p.slug)}">
+        <a class="article bp ${p.image_url ? 'has-figure' : ''}" href="${articleHref(p.slug)}" data-article="${encodeURIComponent(p.slug)}">
           ${corners()}
           ${p.image_url ? `<span class="card-figure"><img src="${postImage(p)}" alt="" loading="lazy" /></span>` : ''}
           <span class="tag tag-accent">${esc(p.category)}</span>
@@ -1540,7 +1543,7 @@ async function viewHome(el) {
           node.appendChild(links);
         };
         credit('מתוך המאמרים: ', (sources || [])
-          .map((x) => `<a href="#/articles/${encodeURIComponent(x.slug)}">${esc(x.title)}</a>`));
+          .map((x) => `<a href="${articleHref(x.slug)}" data-article="${encodeURIComponent(x.slug)}">${esc(x.title)}</a>`));
         credit('מהמחקר: ', (web || [])
           .map((x) => x.uri
             ? `<a href="${esc(x.uri)}" target="_blank" rel="noopener noreferrer">${esc(x.title)}</a>`
@@ -2274,6 +2277,15 @@ document.getElementById('logout').addEventListener('click', async () => {
 });
 
 window.addEventListener('hashchange', render);
+
+// Article links point at the shareable path so copying one gives a URL that previews.
+// Following one here is still a hash change, so the app routes without a page load.
+document.addEventListener('click', (e) => {
+  const link = e.target.closest?.('a[data-article]');
+  if (!link || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+  e.preventDefault();
+  location.hash = `#/articles/${link.dataset.article}`;
+});
 
 setupAuthScreen();
 boot();
