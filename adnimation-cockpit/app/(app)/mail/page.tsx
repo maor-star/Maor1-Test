@@ -30,9 +30,17 @@ export default async function MailPage({
   searchParams: Promise<{ view?: string; q?: string }>;
 }) {
   const sp = await searchParams;
+  /*
+   * The whole inbox by default.
+   *
+   * It used to open on "important and waiting", which is a good triage list
+   * and a bad answer to "where is the mail I am looking at". He compares this
+   * screen against Gmail, and anything the filter hides reads as the mirror
+   * being broken. Triage is one click away.
+   */
   const view: MailView = MAIL_VIEWS.includes(sp.view as MailView)
     ? (sp.view as MailView)
-    : 'important';
+    : 'recent';
   const q = sp.q ?? '';
 
   const [all, counts] = await Promise.all([listMail(view), mailCounts()]);
@@ -40,7 +48,7 @@ export default async function MailPage({
   // The numbers open the list they count; the search narrows it. Both in the URL.
   const to = (v: MailView) => {
     const params = new URLSearchParams();
-    if (v !== 'important') params.set('view', v);
+    if (v !== 'recent') params.set('view', v);
     if (q) params.set('q', q);
     const query = params.toString();
     return query ? `/mail?${query}` : '/mail';

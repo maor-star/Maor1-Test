@@ -262,6 +262,17 @@ async function main() {
   console.log(`${threads.length} threads matching "${QUERY}"`);
 
   const seenIds = new Set(threads.map((t) => t.id));
+
+  /*
+   * What Gmail says about a THREAD, as opposed to what its messages say.
+   *
+   * These are filled by the passes below and win when the two disagree — the
+   * case being: a conversation in his inbox whose only inbound message he
+   * trashed. Every message left on it says SENT, so the mirror called it
+   * answered and it vanished from the one screen meant to be complete.
+   */
+  const inboxIds = new Set();
+  const labelledIds = new Map();
   let capturedCount = 0;
 
   /*
@@ -282,6 +293,17 @@ async function main() {
       );
       for (const ref of page.threads ?? []) {
         found += 1;
+        /*
+         * Gmail is the authority on what is in his inbox.
+         *
+         * The thread's labels are built below from its live messages, and that
+         * is wrong for exactly the case he hit: a conversation whose only
+         * inbound message he later trashed keeps sitting in his inbox, but
+         * every surviving message on it says SENT — so the mirror decided it
+         * was answered and it never appeared on the mail screen. Gmail listed
+         * the thread here; that settles it.
+         */
+        inboxIds.add(ref.id);
         if (seenIds.has(ref.id)) continue;
         seenIds.add(ref.id);
         threads.push(ref);
@@ -309,6 +331,12 @@ async function main() {
       );
       for (const ref of page.threads ?? []) {
         found += 1;
+        // Same again: the label he put on the thread is the thread's, whatever
+        // survives on the individual messages.
+        const held = labelledIds.get(ref.id) ?? new Set();
+        held.add(name);
+        labelledIds.set(ref.id, held);
+
         if (seenIds.has(ref.id)) continue;
         seenIds.add(ref.id);
         threads.push(ref);
@@ -382,6 +410,11 @@ async function main() {
       for (const id of m.labelIds ?? []) threadLabels.add(labels.get(id) ?? id);
     }
 
+    // What Gmail said about the thread itself, which outranks what is left on
+    // its messages. See the inbox pass above for why they can disagree.
+    if (inboxIds.has(ref.id)) threadLabels.add('INBOX');
+    for (const name of labelledIds.get(ref.id) ?? []) threadLabels.add(name);
+
     const domain = (counterpart.email ?? '').split('@')[1]?.replace(/^www\./, '') ?? '';
     const knownCompany = byEmail.get(counterpart.email ?? '') ?? byDomain.get(domain) ?? null;
 
@@ -449,6 +482,23 @@ async function main() {
    * reaching this condition really is entirely gone — a conversation with one
    * trashed message among twenty is not.
    */
+  /*
+   * Anything the mirror still calls "in the inbox" that Gmail no longer does.
+   *
+   * A thread he archives is not re-listed by the inbox pass and, if it falls
+   * outside the recency window, is never fetched again — so it would sit on
+   * the mail screen for ever, in an inbox he had already cleared.
+   */
+  if (inboxIds.size > 0) {
+    const stale = await sql`
+      update mail_threads
+         set labels = array_remove(labels, 'INBOX')
+       where labels @> array['INBOX'] and not (thread_id = any(${[...inboxIds]}))
+      returning thread_id
+    `;
+    if (stale.length > 0) console.log(`${stale.length} threads have left the inbox since`);
+  }
+
   const pruned = await sql`
     delete from mail_threads
     where labels && array['TRASH','SPAM']
