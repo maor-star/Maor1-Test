@@ -1,5 +1,5 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
-import { db, mailThreads } from '@/lib/db';
+import { db, mailThreads, pipelineClients } from '@/lib/db';
 import { createTask } from '@/lib/tasks/mutations';
 
 /**
@@ -253,4 +253,77 @@ export async function taskFromThread(
   );
 
   return { ok: true, id: task.id, title };
+}
+
+/**
+ * A conversation, straight into the pipeline.
+ *
+ * The path used to be two screens: capture it as an opportunity, open the
+ * opportunities page, promote it. That is the right sequence for something he
+ * noticed and has not acted on — and the wrong one for a mail that IS the
+ * deal starting, which is most of what arrives from a new partner.
+ *
+ * The thread supplies what the pipeline asks for: who they are, their domain,
+ * and a first touch that says where the conversation started. What it cannot
+ * supply is the next step, and the pipeline refuses a deal without one
+ * (spec §8), so that is his to fill in — the form arrives with a sensible
+ * suggestion rather than an empty box.
+ */
+export async function pipelineFromThread(
+  threadId: string,
+): Promise<
+  | {
+      ok: true;
+      suggestion: {
+        name: string;
+        domain: string;
+        nextStep: string;
+        notes: string;
+        source: string;
+      };
+      existingClientId: string | null;
+    }
+  | { ok: false; error: string }
+> {
+  const [row] = await db
+    .select()
+    .from(mailThreads)
+    .where(eq(mailThreads.threadId, threadId))
+    .limit(1);
+  if (!row) return { ok: false, error: 'That conversation is not in the mirror yet' };
+
+  const email = (row.counterpartEmail ?? '').toLowerCase();
+  const domain = email.includes('@') ? (email.split('@')[1] ?? '') : '';
+
+  // The company if the mirror knows it, otherwise the person, otherwise the
+  // domain — a name he will recognise on the board either way.
+  const name = row.knownCompany ?? row.counterpartName ?? (domain || email || 'Unknown');
+
+  // Already on the board under the same domain? Then this is a conversation
+  // with an existing deal, not a new one, and saying so beats a duplicate.
+  const [existing] = domain
+    ? await db
+        .select({ id: pipelineClients.id })
+        .from(pipelineClients)
+        .where(and(eq(pipelineClients.domain, domain), isNull(pipelineClients.archivedAt)))
+        .limit(1)
+    : [];
+
+  return {
+    ok: true,
+    suggestion: {
+      name,
+      domain,
+      nextStep: row.lastFromMe ? 'Follow up on the thread' : `Reply to "${row.subject ?? 'their mail'}"`,
+      notes: [
+        row.subject ? `From the mail: ${row.subject}` : '',
+        row.counterpartEmail ?? '',
+        `https://mail.google.com/mail/u/0/#all/${threadId}`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      source: 'inbound',
+    },
+    existingClientId: existing?.id ?? null,
+  };
 }

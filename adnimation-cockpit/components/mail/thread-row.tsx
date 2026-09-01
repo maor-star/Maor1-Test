@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { ToPipeline } from '@/components/mail/to-pipeline';
 import { useRouter } from 'next/navigation';
 import { dismissThreadAction, taskFromMailAction, replyAction } from '@/app/actions/mail';
 import { captureMailAction } from '@/app/actions/opportunities';
@@ -184,6 +185,14 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
         >
           {taskId ? 'TASK MADE ✓' : '→ TASK'}
         </Button>
+
+        {/*
+          The third thing a conversation turns into. An opportunity is
+          something he noticed; a task is something to do; the pipeline is a
+          deal that has started, which is what most first mails from a new
+          partner actually are.
+        */}
+        <ToPipeline threadId={t.threadId} />
 
         {taskId ? (
           <Link

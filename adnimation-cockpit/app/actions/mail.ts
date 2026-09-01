@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
-import { dismissThread, taskFromThread } from '@/lib/mail/service';
+import { dismissThread, pipelineFromThread, taskFromThread } from '@/lib/mail/service';
 import { replyToThread } from '@/lib/mail/send';
 
 /**
@@ -102,4 +102,19 @@ export async function taskFromMailAction(
   revalidatePath('/mail');
   revalidatePath('/');
   return { ok: true, id: result.id, title: result.title };
+}
+
+/**
+ * What a pipeline entry made from this conversation would say.
+ *
+ * Nothing is written here: the pipeline refuses a deal without a next step
+ * (spec §8), and inventing one on his behalf is how a board fills with
+ * "follow up" against a date nobody chose. The form arrives filled in from the
+ * thread and he confirms it.
+ */
+export async function pipelineSuggestionAction(threadId: string) {
+  await requireUser();
+  const parsed = z.string().min(1).max(80).safeParse(threadId);
+  if (!parsed.success) return { ok: false as const, error: 'Not a conversation' };
+  return pipelineFromThread(parsed.data);
 }
