@@ -1,9 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { redlineAction } from '@/app/actions/contract-intake';
+import {
+  redlineAction, rememberPositionAction, rewordAction,
+} from '@/app/actions/contract-intake';
+import { findMarks, splitByMarks } from '@/lib/contracts/highlight';
 import { Button } from '@/components/ui/button';
 import { Tag } from '@/components/hud/tag';
+import { Num } from '@/components/num';
+import { Input } from '@/components/ui/input';
 import type { Redline } from '@/lib/contracts/redline';
 
 /**
@@ -37,12 +42,19 @@ export function ContractReply({
   counterparty: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [full, setFull] = useState(false);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<
-    { redline: Redline; versionNo?: number; usedBrief?: boolean } | null
+    { redline: Redline; versionNo?: number; usedBrief?: boolean; documentText?: string } | null
   >(null);
   const [copied, setCopied] = useState<string | null>(null);
+  /** Which change is being looked at, so both columns scroll to the same one. */
+  const [focused, setFocused] = useState<number | null>(null);
+  /** His own wording, per change, once he has asked for it. */
+  const [mine, setMine] = useState<Record<number, { proposed: string; why: string }>>({});
+  const [asking, setAsking] = useState<number | null>(null);
+  const [remembered, setRemembered] = useState<string | null>(null);
 
   const run = () => {
     setWorking(true);
@@ -55,7 +67,10 @@ export function ContractReply({
             redline: r.redline,
             ...('versionNo' in r ? { versionNo: r.versionNo } : {}),
             ...('usedBrief' in r ? { usedBrief: r.usedBrief } : {}),
+            ...('documentText' in r && r.documentText ? { documentText: r.documentText } : {}),
           });
+          setMine({});
+          setFocused(null);
         } else {
           setError(('error' in r && r.error) || 'Could not prepare a reply');
         }
@@ -76,6 +91,52 @@ export function ContractReply({
 
   const redline = result?.redline;
 
+  /*
+   * Their draft with our problem passages marked in it.
+   *
+   * The marks are found on the text, not asked of the model a second time: a
+   * highlight in the wrong place is worse than none, because he reads the
+   * passage beside it as the one being changed.
+   */
+  const runs = (() => {
+    if (!redline || !result?.documentText) return null;
+    const marks = findMarks(result.documentText, redline.changes.map((c) => c.original));
+    return splitByMarks(result.documentText, marks);
+  })();
+
+  const reword = (index: number, instruction: string) => {
+    const change = redline?.changes[index];
+    if (!change || instruction.trim() === '') return;
+    setAsking(index);
+    rewordAction({
+      contractId,
+      clause: change.clause,
+      original: change.original,
+      currentProposal: mine[index]?.proposed ?? change.proposed,
+      instruction,
+    })
+      .then((r) => {
+        if (r.ok && 'proposed' in r) {
+          setMine((held) => ({ ...held, [index]: { proposed: r.proposed, why: r.why } }));
+        } else {
+          setError(('error' in r && r.error) || 'Could not redraft it');
+        }
+      })
+      .catch(() => setError('Could not redraft it'))
+      .finally(() => setAsking(null));
+  };
+
+  const remember = (position: string) => {
+    const data = new FormData();
+    data.set('position', position);
+    rememberPositionAction(data)
+      .then((r) => {
+        setRemembered(r.ok ? 'Saved to the agent' : (('error' in r && r.error) || 'Could not save it'));
+        setTimeout(() => setRemembered(null), 3000);
+      })
+      .catch(() => setRemembered('Could not save it'));
+  };
+
   return (
     <>
       <button
@@ -88,20 +149,39 @@ export function ContractReply({
       </button>
 
       {open ? (
-        <div className="mt-2 w-full border border-divider">
+        <div
+          className={
+            full
+              ? 'fixed inset-0 z-50 flex flex-col overflow-auto bg-ground'
+              : 'mt-2 w-full border border-divider'
+          }
+        >
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-divider px-2 py-1">
             <span className="hud-label text-[9px]">
               THE REPLY TO {fileName.toUpperCase()}
               {result?.versionNo ? ` · V${result.versionNo}` : ''}
               {result?.usedBrief === false ? ' · NO STANDING POSITIONS SET' : ''}
             </span>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="font-semi text-[10px] tracking-[0.14em] text-neutral-500 hover:text-accent"
-            >
-              CLOSE
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Reading a contract in a strip inside a list is not reading it. */}
+              <button
+                type="button"
+                onClick={() => setFull((v) => !v)}
+                className="font-semi text-[10px] tracking-[0.14em] text-accent-700 hover:text-accent"
+              >
+                {full ? 'SHRINK' : 'FULL SCREEN'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFull(false);
+                  setOpen(false);
+                }}
+                className="font-semi text-[10px] tracking-[0.14em] text-neutral-500 hover:text-accent"
+              >
+                CLOSE
+              </button>
+            </div>
           </div>
 
           {working ? (
@@ -119,10 +199,83 @@ export function ContractReply({
                 <span className="text-[13px] text-neutral-700">{redline.verdict}</span>
               </div>
 
+              {runs ? (
+                <div className={full ? 'grid gap-3 lg:grid-cols-2' : 'grid gap-3'}>
+                  <div className="border border-divider">
+                    <div className="border-b border-divider px-2 py-1">
+                      <span className="hud-label text-[9px]">
+                        THEIR DRAFT · <Num>{redline.changes.length}</Num> PASSAGES MARKED
+                      </span>
+                    </div>
+                    <pre
+                      className={`overflow-auto whitespace-pre-wrap px-2 py-2 text-[13px] leading-relaxed text-neutral-700 ${
+                        full ? 'max-h-[70vh]' : 'max-h-96'
+                      }`}
+                    >
+                      {runs.map((run, i) =>
+                        run.index === null ? (
+                          <span key={i}>{run.text}</span>
+                        ) : (
+                          <mark
+                            key={i}
+                            onClick={() => setFocused(run.index)}
+                            className={`cursor-pointer ${
+                              focused === run.index
+                                ? 'bg-accent text-ground'
+                                : 'bg-sev-warning/25 text-neutral-900'
+                            }`}
+                            title="What we would send back instead"
+                          >
+                            {run.text}
+                          </mark>
+                        ),
+                      )}
+                    </pre>
+                  </div>
+
+                  <div className="border border-divider">
+                    <div className="border-b border-divider px-2 py-1">
+                      <span className="hud-label text-[9px]">WHAT WE SEND BACK</span>
+                    </div>
+                    <div
+                      className={`overflow-auto px-2 py-2 ${full ? 'max-h-[70vh]' : 'max-h-96'}`}
+                    >
+                      {redline.changes.map((c, i) => (
+                        <div
+                          key={`${c.clause}-${i}`}
+                          onClick={() => setFocused(i)}
+                          className={`mb-2 cursor-pointer border-s-2 ps-2 ${
+                            focused === i ? 'border-accent bg-accent/5' : 'border-divider'
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semi text-[12px] text-neutral-900">{c.clause}</span>
+                            <Tag tone={SEVERITY_TONE[c.severity]}>{c.severity.toUpperCase()}</Tag>
+                          </div>
+                          <p className="mt-0.5 whitespace-pre-wrap text-[13px] text-neutral-900">
+                            {mine[i]?.proposed ?? c.proposed}
+                          </p>
+                          <p className="mt-0.5 text-[12px] text-neutral-500">
+                            {mine[i]?.why ?? c.why}
+                            {mine[i] ? ' · your wording' : ''}
+                          </p>
+
+                          <MyFix
+                            busy={asking === i}
+                            onAsk={(instruction) => reword(i, instruction)}
+                            onRemember={(instruction) => remember(instruction)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               {redline.changes.length > 0 ? (
                 <div>
                   <span className="hud-label text-[9px]">
-                    WHAT TO CHANGE — THEIRS ON THE LEFT, OURS ON THE RIGHT
+                    {runs ? 'EVERY CHANGE, CLAUSE BY CLAUSE' : 'WHAT TO CHANGE — THEIRS LEFT, OURS RIGHT'}
                   </span>
                   <ul className="mt-1 space-y-2">
                     {redline.changes.map((c, i) => (
@@ -225,6 +378,12 @@ export function ContractReply({
                 </pre>
               </div>
 
+              {remembered ? (
+                <p className="font-semi text-[10px] tracking-[0.1em] text-accent-700">
+                  {remembered.toUpperCase()} — THE NEXT CONTRACT STARTS FROM IT
+                </p>
+              ) : null}
+
               <p className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
                 THE DOCUMENT ITSELF IS NOT REWRITTEN. A CONTRACT REGENERATED BY A MODEL CANNOT BE
                 DIFFED AGAINST THE ONE THEY SENT — THESE ARE THE CHANGES TO MAKE IN THEIR FILE, IN
@@ -235,5 +394,65 @@ export function ContractReply({
         </div>
       ) : null}
     </>
+  );
+}
+
+/**
+ * His own fix for one clause.
+ *
+ * Two different things, deliberately separate. "Redraft it" changes this
+ * contract now. "Remember this" makes it a standing position, so the next
+ * contract arrives with the point already taken — that is the agent being
+ * configured by the corrections he actually makes, rather than by a form he
+ * has to remember to fill in.
+ */
+function MyFix({
+  busy,
+  onAsk,
+  onRemember,
+}: {
+  busy: boolean;
+  onAsk: (instruction: string) => void;
+  onRemember: (instruction: string) => void;
+}) {
+  const [instruction, setInstruction] = useState('');
+
+  return (
+    <div
+      className="mt-1 flex flex-wrap items-center gap-1"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <Input
+        value={instruction}
+        onChange={(e) => setInstruction(e.target.value)}
+        placeholder="What should it say instead? e.g. Net 45, cap at 12 months of fees"
+        className="h-7 min-w-0 flex-1 text-[12px]"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onAsk(instruction);
+          }
+        }}
+      />
+      <Button
+        type="button"
+        size="xs"
+        variant="outline"
+        disabled={busy || instruction.trim() === ''}
+        onClick={() => onAsk(instruction)}
+      >
+        {busy ? 'DRAFTING…' : 'REDRAFT IT'}
+      </Button>
+      <Button
+        type="button"
+        size="xs"
+        variant="ghost"
+        disabled={instruction.trim() === ''}
+        title="Make this a standing position, so the next contract starts from it"
+        onClick={() => onRemember(instruction)}
+      >
+        ALWAYS ASK FOR THIS
+      </Button>
+    </div>
   );
 }

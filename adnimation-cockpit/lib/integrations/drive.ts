@@ -256,10 +256,46 @@ export async function uploadFile(opts: {
  * .docx here means one less format parser to be wrong about, and Drive is
  * already where the file lives.
  */
+/**
+ * A copy of the file as a Google Doc, exported to text, then thrown away.
+ *
+ * Drive is the only thing here that can read a PDF or a Word file, and the
+ * copy is scratch: it is trashed whatever happens, or the contracts folder
+ * fills with `.cockpit-read-…` files nobody put there.
+ */
+async function convertToText(fileId: string, accessToken: string): Promise<string | null> {
+  const converted = (await api(
+    `/files/${fileId}/copy?fields=id&supportsAllDrives=true`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        name: `.cockpit-read-${Date.now()}`,
+        mimeType: 'application/vnd.google-apps.document',
+      }),
+    },
+    accessToken,
+  ).catch(() => null)) as { id?: string } | null;
+  if (!converted?.id) return null;
+
+  try {
+    const res = await fetch(
+      `${API}/files/${converted.id}/export?mimeType=text/plain&supportsAllDrives=true`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    return res.ok ? await res.text() : null;
+  } finally {
+    await api(
+      `/files/${converted.id}?supportsAllDrives=true`,
+      { method: 'PATCH', body: JSON.stringify({ trashed: true }) },
+      accessToken,
+    ).catch(() => null);
+  }
+}
+
 export async function fetchForReading(
   fileId: string,
 ): Promise<
-  | { ok: true; kind: 'pdf'; base64: string }
+  | { ok: true; kind: 'pdf'; base64: string; text?: string }
   | { ok: true; kind: 'text'; text: string }
   | { ok: false; error: string }
 > {
@@ -278,7 +314,20 @@ export async function fetchForReading(
       headers: { Authorization: `Bearer ${auth.token}` },
     });
     if (!res.ok) return { ok: false, error: `Could not download it: http_${res.status}` };
-    return { ok: true, kind: 'pdf', base64: Buffer.from(await res.arrayBuffer()).toString('base64') };
+    const base64 = Buffer.from(await res.arrayBuffer()).toString('base64');
+
+    /*
+     * The model reads the PDF itself — that is the accurate path, and it sees
+     * the layout. But a screen that puts their draft beside our changes needs
+     * the words as text, and a PDF has none to give. Drive will convert one,
+     * so both are fetched: the PDF for reading, the text for showing.
+     *
+     * The conversion is best-effort. A scanned contract comes back as noise or
+     * nothing, and that is fine: the review still works, it just cannot
+     * highlight inside the document.
+     */
+    const text = await convertToText(fileId, auth.token).catch(() => null);
+    return { ok: true, kind: 'pdf', base64, ...(text ? { text } : {}) };
   }
 
   // Already a Google Doc: export straight to text.

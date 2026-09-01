@@ -1,6 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { eq } from 'drizzle-orm';
+import { contracts, db } from '@/lib/db';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
 import {
@@ -9,7 +11,7 @@ import {
 } from '@/lib/contracts/intake-module';
 import { CONTRACT_STATUSES } from '@/lib/contracts/status';
 import { summariseContract } from '@/lib/contracts/summarise';
-import { redlineContract } from '@/lib/contracts/redline';
+import { redlineContract, rememberPosition, rewordClause } from '@/lib/contracts/redline';
 
 /**
  * What the contracts board can do.
@@ -253,4 +255,52 @@ export async function redlineAction(contractId: string, versionId?: string) {
   if (version && !version.success) return { ok: false as const, error: 'Not a document' };
 
   return redlineContract(parsed.data, version?.data);
+}
+
+/** Redraft one clause the way he just said it should read. */
+export async function rewordAction(input: {
+  contractId: string;
+  clause: string;
+  original: string;
+  currentProposal: string;
+  instruction: string;
+}) {
+  await requireUser();
+
+  const parsed = z
+    .object({
+      contractId: z.string().uuid(),
+      clause: z.string().trim().max(300),
+      original: z.string().trim().max(20_000),
+      currentProposal: z.string().trim().max(20_000),
+      instruction: z.string().trim().min(2, 'Say what to change').max(2000),
+    })
+    .safeParse(input);
+  if (!parsed.success) {
+    return { ok: false as const, error: parsed.error.flatten().formErrors[0] ?? 'Not a change' };
+  }
+
+  const [contract] = await db
+    .select({ counterpartyName: contracts.counterpartyName })
+    .from(contracts)
+    .where(eq(contracts.id, parsed.data.contractId))
+    .limit(1);
+  if (!contract) return { ok: false as const, error: 'No such contract' };
+
+  return rewordClause({ ...parsed.data, counterparty: contract.counterpartyName });
+}
+
+/**
+ * Keep a position he has just taken, so the next contract arrives with it
+ * already applied. It goes into the redliner agent's brief — the one place
+ * that teaches both this button and the agent.
+ */
+export async function rememberPositionAction(formData: FormData) {
+  const user = await requireUser();
+  const position = String(formData.get('position') ?? '');
+  const result = await rememberPosition(position, user.email);
+  if (!result.ok) return { ok: false as const, error: result.error };
+
+  revalidatePath('/agents');
+  return { ok: true as const, message: 'Saved. The next contract will start from it.' };
 }

@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { agents, contractVersions, contracts, db } from '@/lib/db';
 import { fetchForReading } from '@/lib/integrations/drive';
 import { ask } from '@/lib/integrations/claude';
+import { writeAudit } from '@/lib/audit';
 
 /**
  * Answering a contract: what to change, and the mail that says so.
@@ -104,6 +105,12 @@ export interface RedlineResult {
   versionId?: string;
   /** True when his standing positions were included. */
   usedBrief?: boolean;
+  /**
+   * Their draft as text, so the screen can show it beside our changes with the
+   * problem passages marked. Absent for a scanned PDF Drive cannot convert —
+   * the review still works, it just cannot highlight inside the document.
+   */
+  documentText?: string;
 }
 
 /** His standing positions, from the contract-redliner agent's brief. */
@@ -183,6 +190,11 @@ export async function redlineContract(
   }
   if (!result.parsed) return { ok: false, error: 'Claude did not return a reply' };
 
+  // Capped: a hundred-page schedule is not what he is reading on this screen,
+  // and the whole thing has to cross the wire to the browser.
+  const documentText =
+    file.kind === 'text' ? file.text : (file.text ?? '');
+
   return {
     ok: true,
     redline: result.parsed,
@@ -190,5 +202,105 @@ export async function redlineContract(
     fileName: target.fileName,
     versionId: target.id,
     usedBrief: brief.length > 0,
+    ...(documentText.trim() ? { documentText: documentText.slice(0, 120_000) } : {}),
   };
+}
+
+/**
+ * One clause, redrafted the way he just said.
+ *
+ * The proposal is a starting point; what he actually wants is usually one
+ * degree different — "make it net 45, not 30", "we can live with exclusivity
+ * if there is a minimum". This takes that sentence and turns it into wording
+ * he can send, without re-reading the whole contract to do it.
+ */
+export const rewordSchema = z.object({
+  proposed: z.string(),
+  why: z.string(),
+});
+
+export async function rewordClause(input: {
+  counterparty: string;
+  clause: string;
+  original: string;
+  currentProposal: string;
+  instruction: string;
+}): Promise<{ ok: true; proposed: string; why: string } | { ok: false; error: string }> {
+  const brief = await redlineBrief();
+
+  const result = await ask<{ proposed: string; why: string }>(
+    [
+      `Counterparty: ${input.counterparty}`,
+      `Clause: ${input.clause}`,
+      `As it stands in their draft:\n${input.original}`,
+      `What we were going to send back:\n${input.currentProposal}`,
+      `What Maor wants instead:\n${input.instruction}`,
+      brief ? `His standing positions:\n${brief}` : '',
+      '',
+      'Rewrite the clause as he wants it. Answer as JSON:',
+      '{ "proposed": "the wording to send", "why": "one line for him" }',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    {
+      system:
+        'You redraft one contract clause at a time, for the CEO of Adnimation. ' +
+        'Return contract wording, not a description of it — what you write is what gets ' +
+        'sent. Keep the drafting style of the document it belongs to, keep defined terms ' +
+        'exactly as the document defines them, and change only what he asked to change. ' +
+        'If what he asks for is unclear, write the closest defensible wording and say in ' +
+        '"why" what you assumed.',
+      schema: rewordSchema,
+      maxTokens: 1200,
+    },
+  );
+
+  if (!result.ok) return { ok: false, error: result.error };
+  if (!result.parsed) return { ok: false, error: 'Claude did not return wording' };
+  return { ok: true, proposed: result.parsed.proposed, why: result.parsed.why };
+}
+
+/**
+ * Teach the redliner what he just decided.
+ *
+ * A correction he makes once should not be a correction he makes every time.
+ * This appends it to the agent's brief — the same brief that drives both the
+ * button and the agent — so the next contract arrives with that position
+ * already taken. Appended rather than rewritten: his own words stay his, and
+ * nothing he wrote is ever replaced by something inferred from one clause.
+ */
+export async function rememberPosition(
+  position: string,
+  actor: string,
+): Promise<{ ok: true; brief: string } | { ok: false; error: string }> {
+  const line = position.trim().replace(/\s+/g, ' ');
+  if (line === '') return { ok: false, error: 'Nothing to remember' };
+  if (line.length > 500) return { ok: false, error: 'That is longer than a position should be' };
+
+  const [agent] = await db
+    .select({ id: agents.id, instructions: agents.instructions })
+    .from(agents)
+    .where(eq(agents.name, 'contract-redliner'))
+    .limit(1);
+  if (!agent) return { ok: false, error: 'The contract redliner is not installed' };
+
+  const existing = (agent.instructions ?? '').trim();
+  if (existing.includes(line)) return { ok: true, brief: existing };
+
+  const brief = existing ? `${existing}\n· ${line}` : `· ${line}`;
+
+  await db
+    .update(agents)
+    .set({ instructions: brief, instructionsUpdatedAt: new Date() })
+    .where(eq(agents.id, agent.id));
+
+  await writeAudit({
+    actor,
+    action: 'agent.instructions',
+    entityType: 'agent',
+    entityId: agent.id,
+    after: { added: line, from: 'contract review' },
+  });
+
+  return { ok: true, brief };
 }
