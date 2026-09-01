@@ -6,7 +6,8 @@ import { contracts, db } from '@/lib/db';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
 import {
-  archiveContract, classifyContract, createLinkTarget, fileContract, setWaitingOn, suggestLinks,
+  archiveContract, classifyContract, createLinkTarget, fileContract, setContractLink, setWaitingOn,
+  suggestLinks,
   undoLastChange,
 } from '@/lib/contracts/intake-module';
 import { CONTRACT_STATUSES } from '@/lib/contracts/status';
@@ -303,4 +304,36 @@ export async function rememberPositionAction(formData: FormData) {
 
   revalidatePath('/agents');
   return { ok: true as const, message: 'Saved. The next contract will start from it.' };
+}
+
+/** Link a contract to an opportunity or a deal, without opening the editor. */
+export async function setLinkAction(formData: FormData): Promise<ContractActionResult> {
+  const user = await requireUser();
+
+  const parsed = z
+    .object({
+      id: z.string().uuid(),
+      what: z.enum(['opportunity', 'deal']),
+      target: z.string().uuid().nullable(),
+    })
+    .safeParse({
+      id: String(formData.get('id') ?? ''),
+      what: String(formData.get('what') ?? ''),
+      target: String(formData.get('target') ?? '').trim() || null,
+    });
+  if (!parsed.success) return { ok: false, error: 'Not a link' };
+
+  const result = await setContractLink(
+    parsed.data.id,
+    parsed.data.what === 'opportunity'
+      ? { opportunityId: parsed.data.target }
+      : { pipelineClientId: parsed.data.target },
+    user.email,
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath('/contracts');
+  revalidatePath('/opportunities');
+  revalidatePath('/pipeline');
+  return { ok: true, warning: parsed.data.target ? undefined : 'Unlinked.' };
 }

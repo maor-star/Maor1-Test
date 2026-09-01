@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   archiveContractAction, classifyAction, createLinkAction, refileAction, setContractStatusAction,
-  setWaitingOnAction, suggestLinksAction, summariseAction, undoAction,
+  setLinkAction, setWaitingOnAction, suggestLinksAction, summariseAction, undoAction,
 } from '@/app/actions/contract-intake';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
@@ -64,12 +64,22 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
   const [warning, setWarning] = useState<string | null>(null);
   const router = useRouter();
 
-  useEffect(() => {
-    if (!open || links !== null) return;
+  /*
+   * The things this contract could belong to, fetched once, when he first
+   * reaches for one — opening the editor or touching a link picker. Forty
+   * candidates per contract on a page of twenty is a query nobody asked for.
+   */
+  const loadLinks = useCallback(() => {
+    if (links !== null) return;
     suggestLinksAction(c.counterpartyName)
       .then(setLinks)
       .catch(() => setLinks({ opportunities: [], deals: [] }));
-  }, [open, links, c.counterpartyName]);
+  }, [links, c.counterpartyName]);
+
+  useEffect(() => {
+    if (!open) return;
+    loadLinks();
+  }, [open, loadLinks]);
 
   const run = (
     action: (f: FormData) => Promise<{ ok: boolean; error?: string; warning?: string }>,
@@ -346,6 +356,107 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
                 : '→ WAITING ON ME'}
           </Button>
         ) : null}
+
+        {/*
+          Linking, on the card rather than inside the editor.
+          
+          It used to mean opening the classify form and saving the whole thing
+          to record one connection he had just noticed — so contracts stayed
+          linked to nothing. These save on change.
+        */}
+        <span className="inline-flex flex-wrap items-center gap-1">
+          <label className="sr-only" htmlFor={`lop-${c.id}`}>
+            Opportunity
+          </label>
+          <Select
+            id={`lop-${c.id}`}
+            value={c.opportunityId ?? ''}
+            disabled={pending}
+            className="h-7 max-w-[14rem] text-[12px]"
+            onFocus={() => loadLinks()}
+            onChange={(e) => {
+              const data = new FormData();
+              data.set('id', c.id);
+              data.set('what', 'opportunity');
+              data.set('target', e.target.value);
+              run(setLinkAction, data);
+            }}
+          >
+            <option value="">— no opportunity —</option>
+            {c.opportunityId && !(links?.opportunities ?? []).some((o) => o.id === c.opportunityId) ? (
+              <option value={c.opportunityId}>{c.opportunityTitle ?? 'Linked opportunity'}</option>
+            ) : null}
+            {(links?.opportunities ?? []).map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.title}
+              </option>
+            ))}
+          </Select>
+
+          {!c.opportunityId ? (
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              disabled={pending}
+              title={`Create an opportunity for ${c.counterpartyName}`}
+              onClick={() => {
+                const data = new FormData();
+                data.set('id', c.id);
+                data.set('what', 'opportunity');
+                run(createLinkAction, data);
+              }}
+            >
+              + OPPORTUNITY
+            </Button>
+          ) : null}
+
+          <label className="sr-only" htmlFor={`ldl-${c.id}`}>
+            Deal
+          </label>
+          <Select
+            id={`ldl-${c.id}`}
+            value={c.pipelineClientId ?? ''}
+            disabled={pending}
+            className="h-7 max-w-[14rem] text-[12px]"
+            onFocus={() => loadLinks()}
+            onChange={(e) => {
+              const data = new FormData();
+              data.set('id', c.id);
+              data.set('what', 'deal');
+              data.set('target', e.target.value);
+              run(setLinkAction, data);
+            }}
+          >
+            <option value="">— no deal —</option>
+            {c.pipelineClientId && !(links?.deals ?? []).some((d) => d.id === c.pipelineClientId) ? (
+              <option value={c.pipelineClientId}>{c.pipelineClientName ?? 'Linked deal'}</option>
+            ) : null}
+            {(links?.deals ?? []).map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name} — {d.stage}
+              </option>
+            ))}
+          </Select>
+
+          {!c.pipelineClientId ? (
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              disabled={pending}
+              title={`Start a deal for ${c.counterpartyName}`}
+              onClick={() => {
+                const data = new FormData();
+                data.set('id', c.id);
+                data.set('what', 'deal');
+                run(createLinkAction, data);
+              }}
+            >
+              + DEAL
+            </Button>
+          ) : null}
+        </span>
 
         {c.versions.some((v) => v.driveFileId) ? (
           <Button

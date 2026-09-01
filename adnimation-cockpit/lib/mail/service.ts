@@ -13,13 +13,14 @@ import { createTask } from '@/lib/tasks/mutations';
  * So the default view is not "mail". It is "the last word was theirs".
  */
 
-export const MAIL_VIEWS = ['waiting', 'important', 'recent', 'handled', 'filtered'] as const;
+export const MAIL_VIEWS = ['all', 'waiting', 'important', 'recent', 'handled', 'filtered'] as const;
 export type MailView = (typeof MAIL_VIEWS)[number];
 
 export const MAIL_VIEW_LABEL: Record<MailView, string> = {
+  all: 'EVERYTHING',
   waiting: 'NEEDS A REPLY',
   important: 'IMPORTANT & WAITING',
-  recent: 'WHOLE INBOX',
+  recent: 'CARRYING THE INBOX LABEL',
   handled: 'MARKED HANDLED',
   filtered: 'FILTERED PAST THE INBOX',
 };
@@ -91,17 +92,29 @@ export async function listMail(view: MailView = 'waiting', limit = 100): Promise
    * reachable, because "I know it skipped my inbox and I still want to see
    * what is unanswered" is a real question.
    */
+  /*
+   * "Everything" is the default, and INBOX is only one of the views.
+   *
+   * Gmail's INBOX label turned out to be a poor stand-in for what he sees: the
+   * mail he was looking at — read, replied to, sitting in front of him — was
+   * labelled IMPORTANT and CATEGORY_PERSONAL and nothing else. A screen that
+   * hides those is a screen he cannot trust against the mailbox beside it.
+   * So the default is every conversation the mirror holds, newest first, and
+   * the label-based views are filters on top of it.
+   */
   const where =
-    view === 'filtered'
-      ? and(sql`not (${mailThreads.labels} @> array['INBOX'])`, waiting)
-      : scoped
-        ? and(inInbox, scoped)
-        : inInbox;
+    view === 'all'
+      ? undefined
+      : view === 'filtered'
+        ? and(sql`not (${mailThreads.labels} @> array['INBOX'])`, waiting)
+        : scoped
+          ? and(inInbox, scoped)
+          : inInbox;
 
   const rows = await db
     .select()
     .from(mailThreads)
-    .where(where)
+    .where(where ?? sql`true`)
     .orderBy(desc(mailThreads.lastMessageAt))
     .limit(limit);
 

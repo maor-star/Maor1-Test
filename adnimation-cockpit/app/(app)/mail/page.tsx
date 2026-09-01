@@ -40,7 +40,7 @@ export default async function MailPage({
    */
   const view: MailView = MAIL_VIEWS.includes(sp.view as MailView)
     ? (sp.view as MailView)
-    : 'recent';
+    : 'all';
   const q = sp.q ?? '';
 
   const [all, counts] = await Promise.all([listMail(view), mailCounts()]);
@@ -48,7 +48,7 @@ export default async function MailPage({
   // The numbers open the list they count; the search narrows it. Both in the URL.
   const to = (v: MailView) => {
     const params = new URLSearchParams();
-    if (v !== 'recent') params.set('view', v);
+    if (v !== 'all') params.set('view', v);
     if (q) params.set('q', q);
     const query = params.toString();
     return query ? `/mail?${query}` : '/mail';
@@ -105,7 +105,7 @@ export default async function MailPage({
             active={false}
           />
           <Figure
-            label="IN THE INBOX"
+            label="CARRYING THE INBOX LABEL"
             value={fmtNumber(counts.total)}
             href={to('recent')}
             active={view === 'recent'}
@@ -119,9 +119,9 @@ export default async function MailPage({
       </HudCard>
 
       <p className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-        THIS IS YOUR INBOX. <Num>{fmtNumber(counts.mirrored - counts.total)}</Num> MORE
-        CONVERSATIONS WERE ROUTED PAST IT BY YOUR OWN GMAIL RULES — THEY ARE UNDER “FILTERED PAST
-        THE INBOX” AND ARE STILL READ FOR OPPORTUNITIES.
+        EVERY CONVERSATION THE MIRROR HOLDS — <Num>{fmtNumber(counts.mirrored)}</Num> OF THEM,
+        NEWEST FIRST. GMAIL&apos;S INBOX LABEL IS ONE FILTER AMONG THESE, NOT THE SCREEN: MAIL YOU
+        HAVE READ AND REPLIED TO OFTEN CARRIES NO INBOX LABEL AT ALL.
       </p>
 
       <nav className="flex flex-wrap border border-divider">

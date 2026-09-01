@@ -250,6 +250,42 @@ export async function suggestLinks(counterparty: string) {
 }
 
 /**
+ * Link a contract to an opportunity or a deal, on its own.
+ *
+ * Linking used to live inside the classify form, which meant opening the
+ * editor and saving the whole thing to record one connection he had just
+ * noticed. Its own control saves immediately, and writes an audit row like
+ * every other contract mutation (§10) so it can be undone.
+ */
+export async function setContractLink(
+  id: string,
+  link: { opportunityId?: string | null; pipelineClientId?: string | null },
+  actor: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const [before] = await db.select().from(contracts).where(eq(contracts.id, id)).limit(1);
+  if (!before) return { ok: false, error: 'No such contract' };
+
+  await writeAudit({
+    actor,
+    action: 'contract.link',
+    entityType: 'contract',
+    entityId: id,
+    before: { opportunityId: before.opportunityId, pipelineClientId: before.pipelineClientId },
+    after: link,
+  });
+
+  await db
+    .update(contracts)
+    .set({
+      ...(link.opportunityId !== undefined ? { opportunityId: link.opportunityId } : {}),
+      ...(link.pipelineClientId !== undefined ? { pipelineClientId: link.pipelineClientId } : {}),
+    })
+    .where(eq(contracts.id, id));
+
+  return { ok: true };
+}
+
+/**
  * Create the thing this contract belongs to, when it does not exist yet.
  *
  * A contract arriving for a counterparty nobody has captured is the common
