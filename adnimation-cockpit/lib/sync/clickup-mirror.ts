@@ -5,6 +5,7 @@ import { recordFailure, recordSuccess } from '@/lib/integrations/health';
 import { computeHeat } from '@/lib/tasks/heat';
 import { deptForList } from './departments';
 import { toMirrorRow, type MirrorRow } from './clickup-map';
+import { shouldMirror, skipList } from './mirror-skip';
 
 /**
  * Spec 6.1.2 — the company layer mirrors ClickUp, which stays the system of
@@ -31,6 +32,8 @@ export interface SyncResult {
   /** Finished tasks removed from the mirror. */
   removed: number;
   skipped: number;
+  /** Tasks that belong to somebody else, and were never mirrored. */
+  theirs?: number;
   error?: string;
 }
 
@@ -52,9 +55,25 @@ export async function syncClickUpTasks(
     return { fetched: 0, upserted: 0, removed: 0, skipped: 0, error: message };
   }
 
-  const rows = fetched.map(toMirrorRow);
+  /*
+   * Other people's work never enters the mirror.
+   *
+   * Filtering it on the way in rather than on the way out matters: a row that
+   * exists is a row that shows up in a count, a search, or the next screen
+   * somebody builds against this table.
+   */
+  const skip = skipList();
+  const all = fetched.map(toMirrorRow);
+  const rows = all.filter((r) => shouldMirror(r.assigneeEmails, skip));
+  const theirs = all.length - rows.length;
+
   const open = rows.filter((r) => !r.finished);
   const finished = rows.filter((r) => r.finished);
+
+  // Anything already mirrored that is now somebody else's — the list changed,
+  // or a task was reassigned — goes, so the rule applies to what is here too.
+  const notHis = all.filter((r) => !shouldMirror(r.assigneeEmails, skip)).map((r) => r.clickupId);
+  const dropped = await dropNotHis(notHis);
 
   const [ownerByEmail, deptIdByCode] = await Promise.all([
     loadOwners(open),
@@ -71,7 +90,14 @@ export async function syncClickUpTasks(
   const removed = await removeFinished(finished.map((r) => r.clickupId));
 
   await recordSuccess('clickup');
-  return { fetched: fetched.length, upserted, removed, skipped: fetched.length - rows.length };
+  return {
+    fetched: fetched.length,
+    upserted,
+    removed: removed + dropped,
+    // Fetched, but not upserted: somebody else's, or already finished.
+    skipped: fetched.length - upserted,
+    theirs,
+  };
 }
 
 /** Applies a single webhook payload without waiting for the next poll. */
@@ -84,6 +110,10 @@ export async function syncSingleTask(
   if (!task) return 'not_found';
 
   const row = toMirrorRow(task);
+  if (!shouldMirror(row.assigneeEmails)) {
+    await dropNotHis([row.clickupId]);
+    return 'removed';
+  }
   if (row.finished) {
     await removeFinished([row.clickupId]);
     return 'removed';
@@ -103,6 +133,22 @@ export async function syncSingleTask(
  * list already hides done, so keeping the row costs nothing on screen and
  * gives him the undo. purgeFinishedMirror clears the old ones.
  */
+/**
+ * Clears mirrored tasks that turn out to be somebody else's.
+ *
+ * These are dropped rather than marked done: they are not finished work, they
+ * are work that was never his. Nothing is lost — the row is a copy of a
+ * ClickUp task that still exists there.
+ */
+export async function dropNotHis(clickupIds: string[]): Promise<number> {
+  if (clickupIds.length === 0) return 0;
+  const gone = await db
+    .delete(tasks)
+    .where(and(eq(tasks.layer, 'company'), inArray(tasks.clickupId, clickupIds)))
+    .returning({ id: tasks.id });
+  return gone.length;
+}
+
 export async function removeFinished(clickupIds: string[], now = new Date()): Promise<number> {
   if (clickupIds.length === 0) return 0;
   const closed = await db

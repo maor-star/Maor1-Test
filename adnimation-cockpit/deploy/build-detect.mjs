@@ -97,6 +97,16 @@ const TARGETS = [
     ],
   },
   {
+    src: new URL('../lib/sync/mirror-skip.ts', import.meta.url),
+    out: new URL('./mirror-skip.mjs', import.meta.url),
+    from: 'lib/sync/mirror-skip.ts',
+    test: 'tests/unit/mirror-skip-parity.test.ts',
+    rewrites: [
+      ['export function skipList(raw: string | undefined = process.env.TASK_MIRROR_SKIP): string[] {', 'export function skipList(raw = process.env.TASK_MIRROR_SKIP) {'],
+      ['export function shouldMirror(assigneeEmails: string[], skip: string[] = skipList()): boolean {', 'export function shouldMirror(assigneeEmails, skip = skipList()) {'],
+    ],
+  },
+  {
     src: new URL('../lib/agents/slack-bots.ts', import.meta.url),
     out: new URL('./slack-bots.mjs', import.meta.url),
     from: 'lib/agents/slack-bots.ts',

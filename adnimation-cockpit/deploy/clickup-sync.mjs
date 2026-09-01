@@ -12,6 +12,8 @@
  *
  *  - the mirror shows OPEN work; a task ClickUp has closed is marked done and
  *    kept for thirty days, so one closed by mistake can be reopened;
+ *  - a task whose every assignee is on TASK_MIRROR_SKIP is not his and is not
+ *    mirrored at all;
  *  - the fields he has taken over on a task (its pinned_fields) are his, and
  *    are not overwritten from ClickUp;
  *  - the department is the ClickUp list the task sits in, unless he has said
@@ -20,6 +22,7 @@
  *    the app, which puts it in ClickUp first.
  */
 import postgres from 'postgres';
+import { shouldMirror, skipList } from './mirror-skip.mjs';
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
 const TEAM = process.env.CLICKUP_TEAM_ID;
@@ -118,8 +121,24 @@ async function main() {
 
     let upserted = 0;
     const finished = [];
+    const notHis = [];
+    const skip = skipList();
 
     for (const t of raw) {
+      /*
+       * Other people's work never enters the mirror. Filtered on the way in,
+       * not on the way out: a row that exists shows up in a count, a search,
+       * or the next screen built against this table.
+       *
+       * Only when everyone on it is somebody he does not track — a task he
+       * shares stays, and an unassigned one is nobody's to hide.
+       */
+      const assignees = (t.assignees ?? []).map((a) => a.email).filter(Boolean);
+      if (!shouldMirror(assignees, skip)) {
+        notHis.push(String(t.id));
+        continue;
+      }
+
       const status = mapStatus(t.status?.status);
       const closed = toMs(t.date_closed) !== null || status === 'done';
       if (closed) {
@@ -186,6 +205,19 @@ async function main() {
       removed = closed.length;
     }
 
+    // Anything already here that is now somebody else's — the list changed, or
+    // a task was reassigned. Dropped rather than marked done: it is not
+    // finished work, it was never his.
+    let dropped = 0;
+    if (notHis.length > 0) {
+      const gone = await sql`
+        delete from tasks
+         where layer = 'company' and clickup_id = any(${notHis})
+        returning id
+      `;
+      dropped = gone.length;
+    }
+
     // Long-finished tasks nobody is going to reopen. Thirty days, because a
     // task closed by mistake is noticed in a day or two, not a month.
     const swept = await sql`
@@ -206,7 +238,8 @@ async function main() {
 
     const [{ count }] = await sql`select count(*)::int as count from tasks where layer = 'company'`;
     console.log(
-      `open mirrored: ${upserted}; closed: ${removed}; long-done cleared: ${swept.length}; ` +
+      `open mirrored: ${upserted}; someone else's: ${notHis.length} (${dropped} removed); ` +
+        `closed: ${removed}; long-done cleared: ${swept.length}; ` +
         `mirror now holds ${count} company tasks`,
     );
   } catch (e) {

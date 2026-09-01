@@ -33,6 +33,14 @@ export interface MirrorRow {
   startDate: string | null;
   tags: string[];
   ownerEmail: string | null;
+  /**
+   * Everyone on the task, not only the first.
+   *
+   * Deciding whose task it is takes the first assignee, but deciding whether
+   * it is his at all takes all of them — a task he shares with someone whose
+   * work he does not track is still his to see.
+   */
+  assigneeEmails: string[];
   /** True when ClickUp says the task is finished — the mirror drops these. */
   finished: boolean;
 }
@@ -62,5 +70,6 @@ export function toMirrorRow(task: ClickUpTask): MirrorRow {
     startDate: msToDate(task.startDateMs),
     tags: task.tags,
     ownerEmail: task.assigneeEmails[0] ?? null,
+    assigneeEmails: task.assigneeEmails,
   };
 }
