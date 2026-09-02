@@ -3,7 +3,6 @@
 <title>ניהול הבית</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap');
 /* ============ Home OS — premium hi-tech design system ============ */
 :root{
   /* light (crisp, cool, Linear-style) */
@@ -81,44 +80,6 @@
 .viz-tabs button.on{color:var(--text);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
 .viz-wrap.table .viz-table{display:block}
 .viz-wrap.table .viz, .viz-wrap.table .viz-legend{display:none}
-/* ===== v8 «מכונה עתידנית» — העיצוב שנבחר (design handoff): פאנל כהה, ענבר, קווים דקים, פינות חדות, Barlow ===== */
-:root, :root[data-theme="dark"], :root:not([data-theme="light"]){ --bg:#0d1012; --bg-glow:transparent; --surface:#12171a; --surface-2:#0d1012; --surface-3:#0b0e10; --text:#e6eef1; --muted:#7e9098; --faint:#6f8189; --border:rgba(126,152,163,0.18);
-  --accent:#ffab2e; --accent-2:#4ecfc0; --accent-strong:#ffd08a; --on-accent:#0d1012; --grad:#ffab2e; --grad-soft:rgba(255,171,46,0.14); --green:#4ecfc0; --amber:#ffab2e; --red:#ff5f45; --income:#4ecfc0; --chip:#151b1f; --shadow:none; --shadow-lg:none; --glow:inset 0 0 12px rgba(255,171,46,0.25); --sidebar-1:#0d1012; --sidebar-2:#101416; --radius:0; --radius-sm:0;
-  --viz-1:#ffab2e; --viz-2:#ff5f45; --viz-3:#4ecfc0; --viz-4:#7fa8bd; --viz-5:#d9a05b; --viz-6:#9aa7ad; --viz-7:#ffe0ac; --viz-8:#9085e9; --viz-grid:rgba(126,152,163,0.14); --viz-axis:rgba(126,152,163,0.3); --viz-ink:#e6eef1; --viz-ink-2:#b9c9cf; --viz-muted:#6f8189; --viz-gray:#9aa7ad; --viz-good:#4ecfc0; --viz-bad:#ff5f45; --viz-warn:#ffab2e }
-:root[data-theme="light"]{ --bg:#f3efe6; --bg-glow:transparent; --surface:#faf7f0; --surface-2:#f3efe6; --surface-3:#ebe6db; --text:#1d1f20; --muted:#5d6d75; --faint:#7e9098; --border:rgba(29,31,32,0.16); --accent:#b8730f; --accent-2:#1f9a8c; --accent-strong:#8f5a0c; --on-accent:#fff; --grad:#b8730f; --grad-soft:rgba(184,115,15,0.12); --green:#1f9a8c; --amber:#b8730f; --red:#d64a33; --income:#1f9a8c; --chip:#ebe6db; --shadow:none; --shadow-lg:none; --glow:none; --sidebar-1:#1d1f20; --sidebar-2:#252829; --radius:0; --radius-sm:0;
-  --viz-1:#b8730f; --viz-2:#d64a33; --viz-3:#1f9a8c; --viz-4:#5980a6; --viz-5:#a8743a; --viz-6:#6f7a80; --viz-7:#c99a3c; --viz-8:#6a5acd; --viz-grid:rgba(29,31,32,0.12); --viz-axis:rgba(29,31,32,0.3); --viz-ink:#1d1f20; --viz-ink-2:#3d4a50; --viz-muted:#6f8189; --viz-gray:#8b989e; --viz-good:#1f9a8c; --viz-bad:#d64a33; --viz-warn:#b8730f }
-body{ font-family:"Barlow","Assistant","Rubik",system-ui,sans-serif !important; background:linear-gradient(rgba(126,152,163,0.055) 1px,transparent 1px),linear-gradient(90deg,rgba(126,152,163,0.055) 1px,transparent 1px),linear-gradient(180deg,#101416,#0b0e10 60%) !important; background-size:100% 34px,34px 100%,auto !important; background-attachment:fixed !important }
-:root[data-theme="light"] body{ background:linear-gradient(rgba(29,31,32,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(29,31,32,0.05) 1px,transparent 1px),var(--bg) !important; background-size:100% 34px,34px 100%,auto !important }
-h1,h2,h3,.brand-name,#page-title,.stat-card .value,.v8-num,.v8-amt,.v8-colv,.v8-ring-txt{ font-family:"Barlow Condensed","Barlow","Assistant",system-ui,sans-serif; font-weight:600 }
-.card,.panel,.stat-card,.btn,.btn-ghost,input,select,textarea,.modal,.pill,.drop,.hintbar,.asst,.bar-track,.bar-fill,.viz-tabs button,nav a,nav a .ico,.brand-logo,.theme-btn,.asst-chip,.asst-input input,.asst-send,.icon-btn,.month-wrap,.lock-card,.stat-card .sub,.urow,.ustatus,.legend span,.dot{ border-radius:0 !important; box-shadow:none !important }
-.panel,.card,.stat-card,.asst{ background:var(--surface); border:1px solid var(--border) }
-.section-head h2{ font-size:24px; letter-spacing:.01em } .panel h3, .card-header h2{ font-size:10.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); font-family:"Barlow","Assistant",system-ui,sans-serif; font-weight:500 }
-#page-title{ font-size:34px; letter-spacing:.01em; line-height:1 }
-.sidebar{ background:var(--sidebar-1); border-inline-start:1px solid rgba(126,152,163,0.22); box-shadow:none } nav a{ border-radius:0; color:#9fb2b9; font-family:"Barlow Condensed",sans-serif; font-weight:600; font-size:14.5px; letter-spacing:.06em; padding:8px 12px } nav a:hover{ background:rgba(126,152,163,0.08); color:#e6eef1 } nav a.active{ background:var(--accent); color:#0d1012 } nav a.active .ico{ background:transparent; box-shadow:none; color:#0d1012 } nav a.active::before{ display:none }
-.brand-logo{ background:transparent; border:1px solid var(--accent); color:var(--accent); box-shadow:inset 0 0 12px rgba(255,171,46,0.25) !important } .brand-sub{ letter-spacing:.22em; color:#6f8189 }
-.btn{ background:rgba(255,171,46,0.14); color:var(--accent); border:1px solid var(--accent); font-family:"Barlow Condensed",sans-serif; letter-spacing:.08em; font-weight:600 } .btn:hover{ background:rgba(255,171,46,0.24) } .btn-ghost{ border:1px solid rgba(126,152,163,0.3); color:var(--muted); background:transparent }
-.stat-card{ position:relative } .stat-card .label{ font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--faint) } .stat-card .value{ font-size:30px; line-height:1.06 }
-.stat-card::before,.stat-card::after{ content:""; position:absolute; width:7px; height:7px; pointer-events:none } .stat-card::before{ top:6px; left:6px; border-top:1px solid var(--accent); border-left:1px solid var(--accent) } .stat-card::after{ bottom:6px; right:6px; border-bottom:1px solid var(--accent); border-right:1px solid var(--accent) }
-.stat-card.income::before,.stat-card.income::after{ border-color:var(--green) } .stat-card.expense::before,.stat-card.expense::after{ border-color:var(--red) } .stat-card.warn::before,.stat-card.warn::after{ border-color:var(--amber) }
-.pill{ letter-spacing:.1em; text-transform:uppercase; font-size:10.5px; border:1px solid currentColor; background:transparent !important }
-#save-state::before{ content:""; display:inline-block; width:6px; height:6px; background:#4ecfc0; margin-inline-end:7px; animation:blink 2.4s ease-in-out infinite; vertical-align:middle }
-/* v8 components */
-.v8-kicker{ font-size:10.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); margin-bottom:12px; display:flex; gap:12px; align-items:baseline } .v8-kicker-x{ margin-inline-start:auto; letter-spacing:.06em; color:var(--faint) }
-.v8-micro{ font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint) } .v8-sub{ font-size:11.5px; color:var(--muted) } .v8-num{ font-size:30px; line-height:1.06; letter-spacing:-.01em; color:var(--text) } .v8-amt{ font-size:16px; white-space:nowrap }
-.v8-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; padding-bottom:4px; margin-bottom:14px } .v8-h2{ margin:0; font-size:38px; line-height:1; letter-spacing:-.01em }
-.v8-grid{ display:grid; gap:14px; margin-bottom:14px } .v8-grid.k{ grid-template-columns:repeat(auto-fit,minmax(250px,1fr)) } .v8-grid.w{ grid-template-columns:repeat(auto-fit,minmax(min(440px,100%),1fr)); align-items:start }
-.v8-kpi{ position:relative; background:var(--surface); border:1px solid var(--border); padding:16px 18px; display:flex; align-items:center; gap:15px; min-width:0 }
-.v8-corner{ position:absolute; width:7px; height:7px; pointer-events:none } .v8-corner.tl{ top:6px; left:6px; border-top:1px solid var(--kc); border-left:1px solid var(--kc) } .v8-corner.br{ bottom:6px; right:6px; border-bottom:1px solid var(--kc); border-right:1px solid var(--kc) }
-.v8-ring{ position:relative; width:68px; height:68px; flex:none } .v8-ring svg{ width:68px; height:68px; transform:rotate(-90deg); display:block } .v8-ring-txt{ position:absolute; inset:0; display:grid; place-items:center; font-size:15px }
-.v8-panel{ position:relative; background:var(--surface); border:1px solid var(--border); padding:22px 24px; overflow:hidden; min-width:0 } .v8-panel-head{ display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:14px }
-.v8-panel.scan::before{ content:""; position:absolute; inset:0 0 auto 0; height:2px; background:linear-gradient(90deg,transparent,rgba(255,171,46,0.5),transparent); animation:scan 9s linear infinite; pointer-events:none }
-.v8-cols{ display:grid; border-top:1px solid var(--border); margin-top:8px } .v8-col{ padding:9px 3px; text-align:center; border-inline-start:1px solid rgba(126,152,163,0.12); min-width:0; overflow:hidden } .v8-colv{ font-size:15px; white-space:nowrap }
-.v8-legend{ display:flex; gap:13px; flex-wrap:wrap; margin-top:10px; font-size:11.5px; letter-spacing:.06em; color:var(--viz-ink-2) } .v8-legend span{ display:flex; align-items:center; gap:6px } .v8-legend i{ width:9px; height:3px; display:inline-block }
-.v8-row{ display:flex; align-items:center; gap:10px; font-size:13px; padding:9px 0; border-bottom:1px solid rgba(126,152,163,0.12); margin:0 } .v8-key{ width:9px; height:3px; flex:none; display:inline-block }
-.v8-foot{ display:flex; justify-content:space-between; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); border-top:1px solid var(--border); padding-top:9px; margin-top:8px; align-items:center }
-.v8-badge{ font-size:10.5px; letter-spacing:.08em; padding:3px 8px; border:1px solid } .v8-log{ display:flex; align-items:center; gap:13px; padding:12px 0; border-top:1px solid rgba(126,152,163,0.14) } .v8-bar{ width:3px; height:30px; flex:none }
-@keyframes sweep{ from{ stroke-dashoffset:2600 } to{ stroke-dashoffset:0 } } @keyframes blink{ 0%,100%{ opacity:1 } 50%{ opacity:.25 } } @keyframes scan{ from{ transform:translateY(-100%) } to{ transform:translateY(1400%) } }
-.sweep{ animation:sweep 1.5s ease-out forwards }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{
@@ -1704,18 +1665,17 @@ function barsHTML(items,fmt,clickable){ if(!items.length) return '<div class="em
 // גרף רב-קווי (חודשים × סדרות): קו 2px, נקודות עם טבעת-משטח, רשת דקיקה, תווית ערך אחרונה, טולטיפ לכל חודש, מקרא + טבלה
 function multiLineChart(months,series,opts){ opts=opts||{}; if(!months.length||!series.length) return '<div class="empty">אין מספיק נתונים</div>';
   series=series.slice(0,8).map((s,i)=>({...s,color:s.color||vizSlot(i)}));
-  // v8: הזמן זורם מימין לשמאל (החודש האחרון משמאל); ציר הערכים בימין, תווית הערך האחרון בשמאל
-  const W=opts.W||860,H=opts.H||250,padR=54,padL=series.length<=4?64:16,padT=16,padB=30;
+  const W=opts.W||860,H=opts.H||250,padL=54,padR=series.length<=4?64:16,padT=16,padB=30;
   const max=niceMax(Math.max(...series.flatMap(s=>s.values),1)); const n=months.length; const plotW=W-padL-padR;
-  const x=i=>W-padR-(n>1?plotW/(n-1)*i:plotW/2); const y=v=>H-padB-((v||0)/max)*(H-padB-padT);
-  const grid=[0,.25,.5,.75,1].map(f=>{ const yy=y(max*f); return `<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" stroke="${f===0?'var(--viz-axis)':'var(--viz-grid)'}" stroke-width="1"/><text x="${W-padR+8}" y="${yy+3.5}" text-anchor="start" font-size="10" fill="var(--viz-muted)" class="tnum">${vizNum(max*f)}</text>`; }).join('');
+  const x=i=>padL+(n>1?plotW/(n-1)*i:plotW/2); const y=v=>H-padB-((v||0)/max)*(H-padB-padT);
+  const grid=[0,.25,.5,.75,1].map(f=>{ const yy=y(max*f); return `<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" stroke="${f===0?'var(--viz-axis)':'var(--viz-grid)'}" stroke-width="1"/><text x="${padL-8}" y="${yy+3.5}" text-anchor="end" font-size="10" fill="var(--viz-muted)" class="tnum">${vizNum(max*f)}</text>`; }).join('');
   const one=series.length===1;
   const lines=series.map(s=>{ const pts=months.map((m,i)=>`${x(i).toFixed(1)},${y(s.values[i]).toFixed(1)}`).join(' ');
     const area=one?`<polygon points="${x(0)},${H-padB} ${pts} ${x(n-1)},${H-padB}" fill="${s.color}" opacity=".10"/>`:'';
-    const dots=months.map((m,i)=>`<rect x="${(x(i)-3.5).toFixed(1)}" y="${(y(s.values[i])-3.5).toFixed(1)}" width="7" height="7" fill="var(--surface)" stroke="${s.color}" stroke-width="1.6" style="pointer-events:none"/>`).join('');
-    return `${area}<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="${one?2.4:1.8}" stroke-linejoin="miter" stroke-dasharray="2600" class="sweep" style="pointer-events:none"/>${dots}`; }).join('');
-  // תווית קצה (הערך האחרון, בשמאל) — רק כשיש מקום ואין התנגשות; אחרת המקרא והטולטיפ נושאים
-  let endLabels=''; if(series.length<=4){ const placed=[]; series.forEach(s=>{ const v=s.values[n-1]||0; let yy=y(v)+4; if(placed.some(p=>Math.abs(p-yy)<12)) return; placed.push(yy); endLabels+=`<text x="${padL-8}" y="${yy}" text-anchor="end" font-size="11" font-weight="700" fill="var(--viz-ink)" class="tnum">${vizNum(v)}</text>`; }); }
+    const dots=months.map((m,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(s.values[i]).toFixed(1)}" r="4" fill="${s.color}" stroke="var(--surface)" stroke-width="2" style="pointer-events:none"/>`).join('');
+    return `${area}<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"/>${dots}`; }).join('');
+  // תווית קצה (הערך האחרון) — רק כשיש מקום ואין התנגשות; אחרת המקרא והטולטיפ נושאים
+  let endLabels=''; if(series.length<=4){ const placed=[]; series.forEach(s=>{ const v=s.values[n-1]||0; let yy=y(v)+4; if(placed.some(p=>Math.abs(p-yy)<12)) return; placed.push(yy); endLabels+=`<text x="${W-padR+8}" y="${yy}" font-size="11" font-weight="700" fill="var(--viz-ink)" class="tnum">${vizNum(v)}</text>`; }); }
   const bw=n>1?plotW/(n-1):plotW;
   const cols=months.map((m,i)=>{ const tip=esc(fmtMonth(m)+'\n'+series.map(s=>`${s.name}: ${money(s.values[i]||0)}`).join('\n')); return `<rect class="hit" x="${(x(i)-bw/2).toFixed(1)}" y="${padT}" width="${bw.toFixed(1)}" height="${H-padT-padB}" data-tip="${tip}"/>`; }).join('');
   const step=Math.ceil(n/12);
@@ -3198,60 +3158,38 @@ async function analyticsBuild(mode){
   let radialRows=[];
   const el=document.createElement('div');
   if(mode==='charts'){
-    const monthTitle=state.month?fmtMonth(state.month):'כל התקופה';
-    const lastFull=trendCompl[trendCompl.length-1];
-    const kpiFrac=(v,ref)=>ref>0?Math.min(1,v/ref):0;
-    const ringPct=(v,ref)=>ref>0?Math.round(v/ref*100)+'%':'—';
-    const homeRef=state.month?homeCost:(lastFull?M[lastFull].home:0), incRef=state.month?totalInc:(lastFull?M[lastFull].income:0);
-    const kpis=[
-      v8Kpi({label:'הוצאות הבית',value:money(homeCost),color:V8.amber,frac:kpiFrac(homeRef,avgHome),ring:ringPct(homeRef,avgHome),sub:`ללא נדל״ן ומשכנתא · ${state.month?'מול':'החודש המלא האחרון מול'} ממוצע ${money(avgHome)}`,spark:trendCompl.map(m=>M[m].home)}),
-      v8Kpi({label:'הכנסות',value:money(totalInc),color:V8.teal,frac:kpiFrac(incRef,avgInc),ring:ringPct(incRef,avgInc),sub:`ללא שכירות והעברות בין חשבונות · ממוצע ${money(avgInc)}`,spark:trendCompl.map(m=>M[m].income)}),
-      v8Kpi({label:'מאזן הבית',value:money(net),color:net>=0?V8.teal:V8.red,frac:totalInc>0&&net>0?net/totalInc:0,ring:totalInc>0&&net>0?Math.round(net/totalInc*100)+'%':'—',sub:net>=0?'שיעור חיסכון מההכנסה':'גירעון — ההוצאות עולות על ההכנסות המזוהות (העברות מחשבונות אחרים אינן נספרות)',spark:trendCompl.map(m=>M[m].income-M[m].expense)}),
-      v8Kpi({label:'ממתין לסיווג',value:String(uncatN),color:uncatN?V8.red:V8.steel,frac:exp.length?1-uncatN/exp.length:1,ring:exp.length?Math.round((1-uncatN/exp.length)*100)+'%':'100%',sub:uncatN?`${money(uncat)} · <a class="link" data-nav="review">לסיווג ←</a>`:'הכל מסווג'}),
-    ].join('');
-    const metricKpis=metricVals.map(m=>v8Kpi({label:m.emoji+' '+m.title,value:money(m.scopeVal),color:m.color,frac:m.avgVal>0?m.scopeVal/m.avgVal:0,ring:ringPct(m.scopeVal,m.avgVal),sub:`${m.note} · ממוצע ${money(m.avgVal)}`,spark:m.vals,drill:m.k})).join('');
-    // CH.01 — שכבות: 5 הקטגוריות המובילות + «אחר»
-    const otherVals=trendCompl.map((m,i)=>Math.round(M[m].ess-catSeries.reduce((s,c)=>s+(c.values[i]||0),0)));
-    const layers=catSeries.map(c=>({label:c.name,color:c.color,values:c.values})).concat(otherVals.some(v=>v>0)?[{label:'אחר',color:V8.gray,values:otherVals.map(v=>Math.max(0,v))}]:[]);
-    // CH.02 — רדיאלי: הפילוח של החודש הנבחר (או החודש המלא האחרון)
-    radialRows=state.month?exp:essExpAll.filter(t=>String(t.tx_date).slice(0,7)===lastFull);
-    const rMap={}; radialRows.forEach(t=>{ const n=t.main_name||'ללא סיווג'; rMap[n]=rMap[n]||{label:n,value:0,color:t.main_color||V8.gray}; rMap[n].value+=t.amount; });
-    const radialItems=Object.values(rMap).sort((a,b)=>b.value-a.value);
-    // CH.06 — קצב מול תקציב: החודש הנוכחי, יום-יום
-    const today=new Date(); const ymNow=curYM; const dim=new Date(today.getFullYear(),today.getMonth()+1,0).getDate(); const dayNow=today.getDate();
-    const nowRows=essExpAll.filter(t=>String(t.tx_date).slice(0,7)===ymNow); const byDay={}; nowRows.forEach(t=>{ const d=Number(String(t.tx_date).slice(8,10)); byDay[d]=(byDay[d]||0)+t.amount; });
-    const cumDaily=[]; let accD=0; for(let d=1;d<=dayNow;d++){ accD+=byDay[d]||0; cumDaily.push(Math.round(accD)); }
-    const budgetTotal=cats.filter(c=>c.kind==='expense'&&!c.parent_id&&c.monthly_budget>0).reduce((s,c)=>s+c.monthly_budget,0)||Math.round(avgHome);
-    // CH.07 — קטגוריות מול יעד: תקציב שהוגדר, או הממוצע החודשי של הקטגוריה
-    const catAvg={}; essExpAll.forEach(t=>{ if(!complete.includes(String(t.tx_date).slice(0,7))) return; const n=t.main_name||'ללא סיווג'; catAvg[n]=(catAvg[n]||0)+t.amount; }); Object.keys(catAvg).forEach(k=>catAvg[k]=catAvg[k]/Math.max(1,complete.length));
-    const bulletItems=radialItems.slice(0,7).map(r=>{ const c=cats.find(x=>x.name===r.label&&!x.parent_id); return {label:r.label,value:r.value,color:r.color,target:(c&&c.monthly_budget>0)?c.monthly_budget:Math.round(catAvg[r.label]||0)}; }).filter(b=>b.target>0);
-    const logRows=(state.month?exp:essExpAll).slice().sort((a,b)=>String(b.tx_date).localeCompare(String(a.tx_date))).slice(0,8);
     el.innerHTML=`
-    <div class="v8-head"><div><div class="v8-kicker" style="margin-bottom:8px">STATUS · הוצאות הבית · ${monthTitle}</div><h2 class="v8-h2">${money(homeCost)}</h2></div><div class="v8-sub" style="max-width:460px;line-height:1.6">ללא נדל״ן ומשכנתא${reExp?` — עוד ${money(reExp)} ב<a class="link" data-nav="realestate">נדל״ן</a>`:''}${pendingSum?` · ⚠️ ${money(pendingSum)} חיובי כרטיס ללא פירוט — <a class="link" data-nav="bank">חברו את הכרטיס</a>`:''}${capSum?` · תנועות הון ${money(capSum)} מוחרגות`:''}${moveSum?` · העברות ומזומן ${money(moveSum)} נספרות אך לא מסווגות`:''}</div></div>
-    <section class="v8-grid k">${kpis}</section>
-    <div class="v8-kicker" style="margin:4px 0 -2px">CH.00 · המדדים של הבית${state.month?' · '+fmtMonth(state.month):' · החודש המלא האחרון מול הממוצע'} · 🔍 לעסקאות</div>
-    <section class="v8-grid k">${metricKpis}</section>
-    <section class="v8-grid w">
-      <div class="v8-panel scan"><div class="v8-panel-head"><div>${v8kicker('CH.01 · שכבות הוצאה · לפי קטגוריה')}<div class="v8-num" style="font-size:32px">${kilo(trendCompl.reduce((s,m)=>s+M[m].ess,0))}</div><div class="v8-sub">${trendCompl.length} חודשים מלאים</div></div></div>${v8Stream(trendCompl,layers)}</div>
-      <div class="v8-panel" data-drill="radial">${v8kicker('CH.02 · פילוח רדיאלי',state.month?fmtMonth(state.month):(lastFull?fmtMonth(lastFull):''))}${v8Radial(radialItems)}</div>
-    </section>
-    <section class="v8-grid w">
-      <div class="v8-panel">${v8kicker('CH.03 · קניות · ילדים · מסעדות · חשמל · מים','לפי חודש')}${metricSeries.length?multiLineChart(trendCompl,metricSeries):'<div class="empty">אין נתונים</div>'}</div>
-      <div class="v8-panel">${v8kicker('CH.04 · קווי מגמה','הכנסות · הוצאות · נטו')}${v8Trend(trendMonths,trendMonths.map(m=>M[m].income),trendMonths.map(m=>M[m].home))}</div>
-    </section>
-    <section class="v8-grid w">
-      <div class="v8-panel">${v8kicker('CH.05 · קצב מול תקציב',fmtMonth(ymNow))}${v8Pace(cumDaily,budgetTotal,dayNow,dim)}</div>
-      <div class="v8-panel" data-drill="radial">${v8kicker('CH.06 · קטגוריות מול יעד',state.month?fmtMonth(state.month):(lastFull?fmtMonth(lastFull):''))}${v8Bullets(bulletItems)}</div>
-    </section>
-    <section class="v8-grid w">
-      <div class="v8-panel" data-drill="util">${v8kicker('CH.07 · חשבונות הבית',scopeLabel)}${utilBars.length?barsHTML(utilBars,money,true):'<div class="empty">אין נתונים</div>'}${utilSeries.length&&trendCompl.length>=2?'<div style="height:14px"></div>'+multiLineChart(trendCompl,utilSeries,{W:560,H:220}):''}</div>
-      <div class="v8-panel">${v8kicker('LOG · תנועות אחרונות')}<div style="display:flex;flex-direction:column">${logRows.map(t=>`<div class="v8-log"><span class="v8-bar" style="background:${t.main_color||V8.steel}"></span><div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:500">${esc(t.merchant||t.description||'—')}</div><div class="v8-micro">${fmtDate(t.tx_date)} · ${esc(t.main_name||'ללא סיווג')}</div></div><span class="v8-amt" style="font-size:19px">${money(t.amount)}</span></div>`).join('')||'<div class="empty">אין תנועות</div>'}</div><div class="v8-foot"><a class="link" data-nav="transactions">כל העסקאות ←</a><span></span></div></div>
-    </section>
-    <section class="v8-grid w">
-      <div class="v8-panel" data-drill="exp">${v8kicker('פילוח מלא',monthTitle)}${barsHTML(byCatFull.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
-      <div class="v8-panel" data-drill="src">${v8kicker('אמצעי תשלום',monthTitle)}${donut(bySrc,true)}</div>
-      <div class="v8-panel" data-drill="inc">${v8kicker('הכנסות לפי מהות',monthTitle)}${donut(byInc,true)}</div>
-    </section>`;
+    <div class="stats-grid">
+      <div class="stat-card expense"><div class="label">🏠 הוצאות הבית ${state.month?'בחודש':'כולל'}</div><div class="value tnum">${money(homeCost)}</div><div class="sub">ללא נדל״ן ומשכנתא${reExp?` — עוד ${money(reExp)} ב<a class="link" data-nav="realestate">נדל״ן</a>`:''}</div></div>
+      <div class="stat-card income"><div class="label">💰 הכנסות ${state.month?'בחודש':'כולל'}</div><div class="value tnum">${money(totalInc)}</div><div class="sub">ללא שכירות והעברות בין חשבונות${rentSum?` · שכירות ${money(rentSum)} בנדל״ן`:''}</div></div>
+      <div class="stat-card ${net>=0?'income':'expense'}"><div class="label">${net>=0?'📈':'📉'} מאזן הבית</div><div class="value tnum">${money(net)}</div><div class="sub">הכנסות − הוצאות הבית</div></div>
+      <div class="stat-card ${uncatN?'warn':'accent'}"><div class="label">🏷️ ממתין לסיווג</div><div class="value tnum">${uncatN}</div><div class="sub">${uncatN?`${money(uncat)} · <a class="link" data-nav="review">סווגו במסך הסיווגים ←</a>`:'הכל מסווג ✔'}</div></div>
+    </div>
+    ${pendingSum?`<div class="hintbar" style="border-color:color-mix(in srgb,var(--amber) 40%,var(--border));background:color-mix(in srgb,var(--amber) 8%,transparent)">⚠️ <strong>${money(pendingSum)}</strong> חיובי כרטיס ללא פירוט${state.month?` ב${fmtMonth(state.month)}`:''} — כרטיס שאינו מחובר ל‑Open Finance. <a class="link" data-nav="bank">חברו אותו במסך «חיבור לבנק» ←</a></div>`:''}
+    ${capSum?`<div class="hintbar" style="border-color:color-mix(in srgb,var(--viz-7) 35%,var(--border));background:color-mix(in srgb,var(--viz-7) 6%,transparent)">🏦 <strong>${money(capSum)}</strong> תנועות הון (${capRows.slice(0,3).map(t=>esc((t.merchant||t.description||'').trim())+' '+money(t.amount)).join(' · ')}${capRows.length>3?` · ועוד ${capRows.length-3}`:''}) — מוחרגות מכל הסכומים.</div>`:''}
+    <div class="section-head"><h2>📊 המדדים של הבית</h2><span class="rule"></span><span class="hint" style="margin:0">${state.month?fmtMonth(state.month):`${trendCompl.length} חודשים מלאים`} · 🔍 לצפייה ועריכת העסקאות</span></div>
+    <div class="panels">${metricVals.map(metricCard).join('')}</div>
+    <div class="section-head"><h2>🧩 פילוח הוצאות הבית${state.month?` · ${fmtMonth(state.month)}`:''}</h2><span class="rule"></span></div>
+    <div class="panels">
+      <div class="panel" data-drill="exp"><h3>לפי קטגוריה</h3>${donut(byCatFull,true)}</div>
+      <div class="panel" data-drill="exp"><h3>פילוח מלא (לחיצה — העסקאות)</h3>${barsHTML(byCatFull.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
+      <div class="panel" data-drill="util"><h3>🏠 חשבונות הבית (${scopeLabel})</h3>${utilBars.length?barsHTML(utilBars,money,true):'<div class="empty">אין נתונים</div>'}</div>
+      <div class="panel" data-drill="src"><h3>לפי אמצעי תשלום</h3>${donut(bySrc,true)}</div>
+    </div>
+    ${trendCompl.length>=2?`
+    <div class="section-head"><h2>📈 מגמות לאורך זמן</h2><span class="rule"></span><span class="hint" style="margin:0">${trendCompl.length} חודשים מלאים${partialMonths.length?` · חלקיים: ${partialMonths.map(fmtMonth).join(', ')}`:''}</span></div>
+    <div class="panels">
+      ${metricSeries.length?`<div class="panel" style="grid-column:1/-1"><h3>קניות · ילדים · מסעדות · חשמל · מים — לפי חודש</h3>${multiLineChart(trendCompl,metricSeries)}</div>`:''}
+      <div class="panel"><h3>הוצאות הבית מול הכנסות</h3>${multiLineChart(trendMonths,homeSeries,{W:560,H:250})}</div>
+      <div class="panel"><h3>מאזן חודשי נטו</h3>${vBarChart(netData)}</div>
+      ${utilSeries.length?`<div class="panel"><h3>🔌 חשבונות הבית לאורך זמן</h3>${multiLineChart(trendCompl,utilSeries,{W:560,H:250})}</div>`:''}
+      ${catSeries.length?`<div class="panel"><h3>🧭 5 הקטגוריות המובילות</h3>${multiLineChart(trendCompl,catSeries,{W:560,H:250})}</div>`:''}
+    </div>`:''}
+    <div class="section-head"><h2>💰 הכנסות</h2><span class="rule"></span></div>
+    <div class="panels">
+      <div class="panel" data-drill="inc"><h3>הכנסות לפי מהות</h3>${donut(byInc,true)}</div>
+      <div class="panel" data-drill="inc"><h3>פילוח הכנסות</h3>${barsHTML(byInc.map(c=>({label:c.label,value:c.value,color:c.color})),money,true)}</div>
+    </div>`;
   } else {
     // ---- תובנות + עוזר הבית ----
     const arrow=p=>p==null?'':(p>0?`<span style="color:var(--red)">▲ ${p}%</span>`:p<0?`<span style="color:var(--green,#2f9e6f)">▼ ${Math.abs(p)}%</span>`:'ללא שינוי');
