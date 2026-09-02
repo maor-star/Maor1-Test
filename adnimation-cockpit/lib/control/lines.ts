@@ -9,34 +9,54 @@
 
 export const ACTIVITY_LINES = [
   'core_clients',
-  'video',
+  'ibv',
+  'rtb_display',
   'apps',
-  'bidder',
-  'trading_display',
-  'exchange',
+  'ctv',
+  'google_ctv',
   'seat_lease',
 ] as const;
 export type ActivityLine = (typeof ACTIVITY_LINES)[number];
 
 export const LINE_LABEL: Record<ActivityLine, string> = {
   core_clients: 'CORE CLIENTS',
-  video: 'VIDEO',
+  ibv: 'IBV — IN-BANNER VIDEO',
+  rtb_display: 'RTB DISPLAY',
   apps: 'APPS',
-  bidder: 'BIDDER',
-  trading_display: 'TRADING · DISPLAY',
-  exchange: 'EXCHANGE',
+  ctv: 'CTV',
+  google_ctv: 'GOOGLE CTV',
   seat_lease: 'SEAT LEASE',
 };
 
 /** What "entities" counts on each line, for the label under the number. */
 export const LINE_UNIT: Record<ActivityLine, string | null> = {
-  core_clients: 'ACCOUNTS',
-  video: 'SITES',
+  core_clients: 'SITES',
+  ibv: 'SITES',
+  rtb_display: 'SITES',
   apps: 'APPS',
-  bidder: null,
-  trading_display: 'FEEDS',
-  exchange: null,
+  ctv: 'ENDPOINTS',
+  google_ctv: 'SITES',
   seat_lease: 'PARTNERS',
+};
+
+/**
+ * Where each line comes from, said on the screen.
+ *
+ * These are seven different cuts of the business, not seven slices of one
+ * pie: core clients is a set of accounts, IBV and RTB display are formats
+ * running across all of them, CTV is a device. They overlap on purpose, and
+ * adding the tiles up does not give the company — the P&L above them does.
+ * Saying so on the tile is the difference between a panel he can act on and
+ * one he has to re-derive every time.
+ */
+export const LINE_SOURCE: Record<ActivityLine, string> = {
+  core_clients: 'The core publisher accounts, on the source’s own daily snapshot',
+  ibv: 'In-banner and outstream video units across the publisher portfolio',
+  rtb_display: 'Display bought through header bidding',
+  apps: 'Google Ad Manager, app inventory',
+  ctv: 'The exchange, CTV environment',
+  google_ctv: 'Google Ad Manager, connected TV and set-top box',
+  seat_lease: 'Seat lease partners, on the source’s own economics',
 };
 
 export interface LineDay {

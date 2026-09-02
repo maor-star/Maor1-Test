@@ -9,7 +9,7 @@ import { lastCompleteDay, rankCoreClients, summariseLine, type CoreClientDay, ty
  * week to compare against, because seven days against three reads as a boom.
  */
 
-const day = (date: string, gross: number, line: LineDay['line'] = 'video'): LineDay => ({
+const day = (date: string, gross: number, line: LineDay['line'] = 'ibv'): LineDay => ({
   line, date, grossCents: gross, profitCents: Math.round(gross / 10), impressions: gross * 3, entities: 5,
 });
 
@@ -32,7 +32,7 @@ describe('one line, summarised', () => {
 
   it('leads with the last full day and ignores the partial one', () => {
     const days = [...dates(14, today).map((d) => day(d, 1000)), day(today, 7)];
-    const s = summariseLine('video', days, today);
+    const s = summariseLine('ibv', days, today);
     expect(s.lastDay).toBe('2026-09-01');
     expect(s.grossCents).toBe(1000);
     expect(s.gross7dCents).toBe(7000);
@@ -41,24 +41,24 @@ describe('one line, summarised', () => {
   it('compares seven days against the seven before', () => {
     const ds = dates(14, today);
     const days = ds.map((d, i) => day(d, i < 7 ? 1000 : 1500));
-    expect(summariseLine('video', days, today).trendPct).toBeCloseTo(0.5);
+    expect(summariseLine('ibv', days, today).trendPct).toBeCloseTo(0.5);
   });
 
   it('offers no trend without a full prior week', () => {
     const days = dates(9, today).map((d) => day(d, 1000));
-    expect(summariseLine('video', days, today).trendPct).toBeNull();
+    expect(summariseLine('ibv', days, today).trendPct).toBeNull();
   });
 
   it('calls a line stale when its last full day is more than two days old', () => {
-    const fresh = summariseLine('video', dates(3, today).map((d) => day(d, 1)), today);
-    const old = summariseLine('video', dates(3, '2026-08-25').map((d) => day(d, 1)), today);
+    const fresh = summariseLine('ibv', dates(3, today).map((d) => day(d, 1)), today);
+    const old = summariseLine('ibv', dates(3, '2026-08-25').map((d) => day(d, 1)), today);
     expect(fresh.stale).toBe(false);
     expect(old.stale).toBe(true);
   });
 
   it('only counts its own line', () => {
     const days = [...dates(7, today).map((d) => day(d, 100)), ...dates(7, today).map((d) => day(d, 900, 'apps'))];
-    expect(summariseLine('video', days, today).gross7dCents).toBe(700);
+    expect(summariseLine('ibv', days, today).gross7dCents).toBe(700);
   });
 });
 

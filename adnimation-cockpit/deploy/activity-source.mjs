@@ -13,7 +13,7 @@
 import { assertSelect } from './revenue-source.mjs';
 
 export const LINES = [
-  'core_clients', 'video', 'apps', 'bidder', 'trading_display', 'exchange', 'seat_lease',
+  'core_clients', 'ibv', 'rtb_display', 'apps', 'ctv', 'google_ctv', 'seat_lease',
 ];
 
 const isoDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -40,7 +40,8 @@ export function lineQueries(from, to) {
        from ars_core_publishers_daily_snapshot
        where ${between} order by 1`,
     ),
-    video: assertSelect(
+    // In-banner and outstream video across the publisher portfolio.
+    ibv: assertSelect(
       `select report_date::text as date,
          round(sum(gross_revenue)*100)::bigint                  as gross_cents,
          round(sum(coalesce(source_profit_usd,0))*100)::bigint  as profit_cents,
@@ -48,6 +49,17 @@ export function lineQueries(from, to) {
          count(distinct ars_site_id)::int                       as entities
        from ars_site_daily_rollup
        where category = 'video' and not src_ignored and ${between}
+       group by 1 order by 1`,
+    ),
+    // Display bought through header bidding.
+    rtb_display: assertSelect(
+      `select report_date::text as date,
+         round(sum(gross_revenue)*100)::bigint                  as gross_cents,
+         round(sum(coalesce(source_profit_usd,0))*100)::bigint  as profit_cents,
+         sum(impressions)::bigint                               as impressions,
+         count(distinct ars_site_id)::int                       as entities
+       from ars_site_daily_rollup
+       where category = 'header_bidding' and not src_ignored and ${between}
        group by 1 order by 1`,
     ),
     apps: assertSelect(
@@ -60,41 +72,33 @@ export function lineQueries(from, to) {
        where ${between}
        group by 1 order by 1`,
     ),
-    // Same expression as the P&L's bidder line, 2026-06-01 switch included.
-    bidder: assertSelect(
+    /*
+     * CTV on the exchange. env_type is the environment the request came from,
+     * so this is CTV wherever it was bought, not one endpoint's guess at it.
+     */
+    ctv: assertSelect(
       `select report_date::text as date,
-         round(sum(case when report_date >= date '2026-06-01'
-                        then coalesce(ssp_revenue,0) else coalesce(revenue,0) end)*100)::bigint
-           as gross_cents,
-         round(sum(case when report_date >= date '2026-06-01'
-                        then coalesce(revenue,0)-coalesce(third_party_net_revenue,0) else 0 end)*100)::bigint
-           as profit_cents,
-         sum(impressions)::bigint as impressions,
-         null::int as entities
-       from trading_vidazoo_reports
-       where ${between}
+         round(sum(revenue)*100)::bigint      as gross_cents,
+         round(sum(profit)*100)::bigint       as profit_cents,
+         sum(impressions)::bigint             as impressions,
+         count(distinct dsp_id)::int          as entities
+       from xe_econ_path_daily
+       where env_type = 'CTV' and ${between}
        group by 1 order by 1`,
     ),
-    // Every display trading feed the source pulls by API, summed.
-    trading_display: assertSelect(
+    /*
+     * Google's CTV: Ad Manager's own device category. A set-top box is a
+     * television as far as this line is concerned — the buyer treats them the
+     * same and splitting them would give him two tiles nobody reads.
+     */
+    google_ctv: assertSelect(
       `select report_date::text as date,
-         round(sum(revenue_usd)*100)::bigint  as gross_cents,
+         round(sum(revenue)*100)::bigint      as gross_cents,
          0::bigint                            as profit_cents,
-         0::bigint                            as impressions,
-         count(distinct feed_key)::int        as entities
-       from trading_api_revenue_daily
-       where ${between}
-       group by 1 order by 1`,
-    ),
-    // ssp_id IS NULL is the un-split grain — see revenue-source.mjs.
-    exchange: assertSelect(
-      `select report_date::text as date,
-         round(sum(revenue)*100)::bigint                   as gross_cents,
-         round((sum(revenue)-sum(dsp_spend))*100)::bigint  as profit_cents,
-         sum(impressions)::bigint                          as impressions,
-         null::int                                         as entities
-       from trading_xe_reports
-       where ssp_id is null and ${between}
+         sum(impressions)::bigint             as impressions,
+         count(distinct site_id)::int         as entities
+       from gam_reports
+       where device_category in ('connected tv', 'set-top box') and ${between}
        group by 1 order by 1`,
     ),
     seat_lease: assertSelect(

@@ -5,7 +5,7 @@ import { Num } from '@/components/num';
 import { Sparkline } from '@/components/revenue/sparkline';
 import { fmtDateTime, fmtMoney, fmtNumber } from '@/lib/utils';
 import type { ControlPanel as Panel } from '@/lib/control/service';
-import type { LineSummary } from '@/lib/control/lines';
+import { LINE_SOURCE, type LineSummary } from '@/lib/control/lines';
 
 /**
  * The control panel — every line of the business on one strip.
@@ -26,12 +26,13 @@ export function ControlPanel({ panel }: { panel: Panel }) {
       <HudCard className="gap-0 p-0">
         <div className="flex flex-wrap items-baseline justify-between gap-3 p-[18px] pb-3">
           <HudCardHeader
-            title="Control panel"
+            title="Every line"
             index="C01"
             action={
               <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
+                SEVEN CUTS OF THE BUSINESS — THEY OVERLAP, THEY DO NOT SUM ·{' '}
                 {panel.pulledAt ? (
-                  <>FROM THE SOURCE · PULLED <Num>{fmtDateTime(panel.pulledAt)}</Num></>
+                  <>PULLED <Num>{fmtDateTime(panel.pulledAt)}</Num></>
                 ) : (
                   'NOT PULLED YET'
                 )}
@@ -118,7 +119,9 @@ function LineTile({ line }: { line: LineSummary }) {
   return (
     <div className="bg-ground p-[14px]">
       <div className="flex items-start justify-between gap-2">
-        <p className="hud-label text-[9px]">{line.label}</p>
+        <p className="hud-label text-[9px]" title={LINE_SOURCE[line.line]}>
+          {line.label}
+        </p>
         {line.stale ? <Tag tone="warning">SOURCE QUIET</Tag> : <Trend pct={line.trendPct} />}
       </div>
 

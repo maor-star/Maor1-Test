@@ -456,6 +456,18 @@ async function main() {
        */
       const links = linksInSignature(candidate.signature ?? '');
 
+      /*
+       * One number is one number.
+       *
+       * Told to read a phone and a mobile, the model puts an unlabelled single
+       * number in both — which reads on the card as two ways to reach someone
+       * who gave one. Only a number the signature actually distinguished
+       * survives as a mobile.
+       */
+      const sameNumber = (a, b) =>
+        a && b && String(a).replace(/\D/g, '') === String(b).replace(/\D/g, '');
+      if (sameNumber(found.phone, found.mobile)) found.mobile = null;
+
       const wanted = {
         first_name: found.firstName ?? (headerFirst || null),
         last_name: found.lastName ?? (headerRest.join(' ') || null),

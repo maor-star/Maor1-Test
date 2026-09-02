@@ -20,6 +20,7 @@ import { InlineTaskEditor } from '@/components/tasks/inline-task-editor';
 import { listDepartments, listPeople } from '@/lib/tasks/queries';
 import { loadControlPanel } from '@/lib/control/service';
 import { ControlPanel } from '@/components/home/control-panel';
+import { CompanyTotal } from '@/components/home/company-total';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,9 +89,27 @@ export default function OverviewPage() {
   );
 }
 
+/**
+ * The company first, then its lines.
+ *
+ * The lines are seven different cuts of the business and they overlap on
+ * purpose, so the total above them is the P&L rather than their sum.
+ */
+const HOME_PERIODS = ['YESTERDAY', '7D', 'MTD', 'QTD'] as const;
+
 async function ControlPanelSection() {
-  const panel = await loadControlPanel();
-  return <ControlPanel panel={panel} />;
+  const [panel, ...summaries] = await Promise.all([
+    loadControlPanel(),
+    ...HOME_PERIODS.map((p) => summariseCompany(p)),
+  ]);
+  const periods = HOME_PERIODS.map((period, i) => ({ period, summary: summaries[i]! }));
+
+  return (
+    <>
+      <CompanyTotal periods={periods} headline={summaries[0]!} />
+      <ControlPanel panel={panel} />
+    </>
+  );
 }
 
 /** What the company made, yesterday and month to date, by line. */
