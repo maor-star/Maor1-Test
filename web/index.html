@@ -1078,10 +1078,12 @@ function h_transactions(m,id,sub,b,qp){
     const baseKey=t=>[t.kind,strv(t.tx_date),strv(t.merchant||t.description).trim(),Math.abs(numv(t.amount))].join('|');
     const refMap=new Map(), txMap=new Map(); db.transactions.forEach(t=>{ const k=baseKey(t); const a=refMap.get(k)||[]; a.push(strv(t.ref)); refMap.set(k,a); (txMap.get(k)||txMap.set(k,[]).get(k)).push(t); });
     // מזהה ייחודי של Open Finance — סינון כפילויות מדויק ומהיר לעסקאות שהגיעו מהחיבור לבנק
-    const ofIds=new Set(); db.transactions.forEach(t=>{ if(t.of_id) ofIds.add(t.of_id); });
+    const ofIds=new Set(), ofTx=new Map(); db.transactions.forEach(t=>{ if(t.of_id){ ofIds.add(t.of_id); ofTx.set(t.of_id,t); } });
     let added=0,skipped=0,autoCategorized=0;
     for(const r of b.rows){
-      const ofId=strv(r.of_id); if(ofId && ofIds.has(ofId)){skipped++;continue;}
+      const ofId=strv(r.of_id); if(ofId && ofIds.has(ofId)){ // כבר קיימת — רק מיישרים את זהות הכרטיס לפי הבנק (מקור האמת)
+        const ex=ofTx.get(ofId); const acc=strv(r.account); if(ex && acc && strv(r.source)==='credit_card' && /••\d{4}/.test(acc) && ex.account!==acc && (isCardDetail(ex)||!strv(ex.account))){ ex.account=acc; ex.source='credit_card'; }
+        skipped++;continue; }
       const date=strv(r.date), desc=strv(r.description), merchant=strv(r.merchant||r.description);
       const amount=Math.abs(numv(r.amount)); if(!date||amount<=0){skipped++;continue;}
       const yr=+String(date).slice(0,4); if(yr<2010||yr>2027){skipped++;continue;}   // תאריך לא-סביר (שגיאת פענוח)
@@ -1093,8 +1095,13 @@ function h_transactions(m,id,sub,b,qp){
       const ref=strv(r.ref);
       const bk=[kind,date,merchant.trim(),amount].join('|');
       const seen=refMap.get(bk)||[];
+      // אותו כרטיס (4 ספרות אחרונות) שמגיע משני מקורות (דרך הבנק ודרך חברת האשראי) — אותה קנייה; שומרים אחת ומעדכנים לשם הנוכחי
+      const l4=(s)=>(String(s||'').match(/••(\d{4})/)||[])[1]||''; const rl4=strv(r.source)==='credit_card'?l4(r.account):'';
+      if(rl4){ const same=(txMap.get(bk)||[]).find(x=>l4(x.account)===rl4); if(same){ if(same.account!==strv(r.account)) same.account=strv(r.account); if(ofId&&!same.of_id){ same.of_id=ofId; ofIds.add(ofId); } skipped++; continue; } }
       if(seen.length && (ref==='' || seen.some(x=>x===''||x===ref))){ // כפילות — אבל מעשירים שורה קיימת (מקובץ) באסמכתא/מזהה מהבנק אם חסרים לה
-        const ex=(txMap.get(bk)||[]).find(x=>!strv(x.ref)); if(ex){ if(ref) ex.ref=ref; if(ofId&&!ex.of_id){ ex.of_id=ofId; ofIds.add(ofId); } if(r.of_cat&&r.of_cat.main&&!ex.of_cat) ex.of_cat=r.of_cat.main+(r.of_cat.sub?'/'+r.of_cat.sub:''); }
+        const ex=(txMap.get(bk)||[]).find(x=>!strv(x.ref)); if(ex){ if(ref) ex.ref=ref; if(ofId&&!ex.of_id){ ex.of_id=ofId; ofIds.add(ofId); } if(r.of_cat&&r.of_cat.main&&!ex.of_cat) ex.of_cat=r.of_cat.main+(r.of_cat.sub?'/'+r.of_cat.sub:'');
+          // הבנק הוא מקור האמת לזהות הכרטיס: קנייה שיובאה מקובץ תחת «אמריקן אקספרס» אך שייכת לכרטיס אחר (למשל ישראכרט ••6645) — משויכת מחדש
+          const acc=strv(r.account); if(acc && strv(r.source)==='credit_card' && /••\d{4}/.test(acc) && isCardDetail(ex) && ex.account!==acc){ ex.account=acc; ex.source='credit_card'; } }
         skipped++;continue; }
       const hash=[src,acct,date,desc,amount,kind].join('|')+(ref?'|'+ref:'');
       const cat=matchCategory(desc+' '+merchant, kind); if(cat) autoCategorized++;
