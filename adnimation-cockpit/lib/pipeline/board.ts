@@ -1,4 +1,5 @@
 import { OPEN_STAGES, QUIET_DAYS, STAGES, type ClientType, type Stage } from './types';
+import type { CloseOutcome, IntegrationProgress } from './integration';
 
 /**
  * The pipeline's shape and its arithmetic, with no database underneath.
@@ -28,6 +29,11 @@ export interface PipelineRow {
   /** True when the next step's date has passed. */
   stepOverdue: boolean;
   touches: number;
+  /** How far into going live it is. */
+  integration: IntegrationProgress;
+  closedAt: Date | null;
+  closeOutcome: CloseOutcome | null;
+  closeNote: string | null;
 }
 
 export interface PipelineBoard {

@@ -6,8 +6,8 @@ import { Num } from '@/components/num';
 import { AddPipelineClient } from '@/components/pipeline/add-client';
 import { PipelineClientRow } from '@/components/pipeline/client-row';
 import {
-  PIPELINE_SORTS, PIPELINE_SORT_LABEL, buildBoard, listOwners, listPipeline, recentTouches,
-  type PipelineSort,
+  PIPELINE_SORTS, PIPELINE_SORT_LABEL, buildBoard, closedCount, listOwners, listPipeline,
+  recentTouches, type PipelineSort,
 } from '@/lib/pipeline/service';
 import {
   CLIENT_TYPES, CLIENT_TYPE_LABEL, QUIET_DAYS, STAGES, STAGE_LABEL,
@@ -29,6 +29,8 @@ interface SearchParams {
   q?: string;
   attention?: string;
   sort?: string;
+  /** '1' shows the finished ones instead of the live board. */
+  closed?: string;
 }
 
 /**
@@ -50,6 +52,7 @@ export default async function PipelinePage({
     ? (sp.type as ClientType)
     : undefined;
   const attention = sp.attention === '1';
+  const closed = sp.closed === '1';
   const sort: PipelineSort = PIPELINE_SORTS.includes(sp.sort as PipelineSort)
     ? (sp.sort as PipelineSort)
     : 'newest';
@@ -59,11 +62,12 @@ export default async function PipelinePage({
     .map((l) => l.trim())
     .filter(Boolean);
 
-  const [rows, owners, inbox, labelHealth] = await Promise.all([
-    listPipeline({ stage, clientType, q: sp.q, attention, sort }),
+  const [rows, owners, inbox, labelHealth, finished] = await Promise.all([
+    listPipeline({ stage, clientType, q: sp.q, attention, sort, closed }),
     listOwners(),
     inboxOpportunities(),
     captureLabelHealth(gmailLabels).catch(() => []),
+    closedCount(),
   ]);
   const board = buildBoard(rows);
   const [touches, inboxContracts] = await Promise.all([
@@ -76,7 +80,8 @@ export default async function PipelinePage({
   const href = (patch: Partial<SearchParams>) => {
     const next = new URLSearchParams();
     const merged = {
-      stage: sp.stage, type: sp.type, q: sp.q, attention: sp.attention, sort: sp.sort, ...patch,
+      stage: sp.stage, type: sp.type, q: sp.q, attention: sp.attention, sort: sp.sort,
+      closed: sp.closed, ...patch,
     };
     for (const [k, v] of Object.entries(merged)) if (v) next.set(k, v);
     const qs = next.toString();
@@ -143,7 +148,7 @@ export default async function PipelinePage({
         It sits above the board because a suggestion nobody looked at is the
         same kind of silence as a deal nobody moved.
       */}
-      <HudCard id="inbox" className="gap-0 p-0">
+      <HudCard id="inbox" className={`gap-0 p-0 ${closed ? 'hidden' : ''}`}>
         <div className="flex flex-wrap items-baseline justify-between gap-3 p-[18px] pb-3">
           <HudCardHeader
             title="Suggested — not yet deals"
@@ -209,6 +214,16 @@ export default async function PipelinePage({
           NEEDS ATTENTION
         </FilterLink>
 
+        {/* Finished deals leave the board but never the record: this is where
+            the win/loss review reads from. */}
+        <FilterLink
+          href={href({ closed: closed ? undefined : '1' })}
+          active={closed}
+          className="border border-divider"
+        >
+          FINISHED · {finished}
+        </FilterLink>
+
         <nav className="flex flex-wrap border border-divider">
           {PIPELINE_SORTS.map((s) => (
             <FilterLink key={s} href={href({ sort: s })} active={sort === s}>
@@ -233,7 +248,9 @@ export default async function PipelinePage({
         <HudCard>
           <p className="font-semi text-[12px] text-neutral-500">
             {board.totals.clients === 0 && !stage && !clientType && !sp.q && !attention
-              ? 'No deals yet. Add the first one above, or accept a suggestion.'
+              ? closed
+                ? 'Nothing finished yet. A deal you close — won or lost — lands here.'
+                : 'No deals yet. Add the first one above, or accept a suggestion.'
               : 'Nothing matches these filters.'}
           </p>
         </HudCard>

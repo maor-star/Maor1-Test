@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildBoard, type PipelineRow } from '@/lib/pipeline/board';
 import { OPEN_STAGES, QUIET_DAYS, pipelineInputSchema } from '@/lib/pipeline/types';
+import { progressFor } from '@/lib/pipeline/integration';
 
 /**
  * The pipeline's two rules.
@@ -29,6 +30,10 @@ const row = (over: Partial<PipelineRow> = {}): PipelineRow => ({
   lastContactAt: new Date(),
   quietDays: 1,
   stepOverdue: false,
+  integration: progressFor('demand', {}),
+  closedAt: null,
+  closeOutcome: null,
+  closeNote: null,
   touches: 1,
   ...over,
 });

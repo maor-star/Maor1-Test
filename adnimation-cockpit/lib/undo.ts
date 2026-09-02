@@ -44,6 +44,8 @@ const RESTORABLE: Record<string, string[]> = {
   pipeline_client: [
     'name', 'domain', 'clientType', 'stage', 'temperature', 'ownerPersonId', 'nextStep',
     'nextStepDate', 'valueCents', 'probability', 'source', 'notes', 'archivedAt',
+    // The whole step map, so undoing puts back exactly the ticks that were there.
+    'integrationSteps', 'closedAt', 'closeOutcome', 'closeNote',
   ],
   crm_contact: [
     'firstName', 'lastName', 'email', 'phone', 'jobTitle', 'companyName', 'companyId',

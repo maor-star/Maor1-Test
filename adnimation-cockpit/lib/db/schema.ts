@@ -390,6 +390,12 @@ export const pipelineClients = pgTable(
     hubspotCompanyId: text('hubspot_company_id'),
     /** Where the deal came from, when it was promoted out of opportunities. */
     opportunityId: uuid('opportunity_id'),
+    /** How far into going live it is — see lib/pipeline/integration.ts. */
+    integrationSteps: jsonb('integration_steps').notNull().default({}),
+    /** Finished, and off the active board. Never deleted. */
+    closedAt: timestamptz('closed_at'),
+    closeOutcome: text('close_outcome'),
+    closeNote: text('close_note'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
     archivedAt: timestamptz('archived_at'),

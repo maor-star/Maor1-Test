@@ -1,8 +1,9 @@
-import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { db, people, pipelineClients, pipelineTouches } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 import { restorableSnapshot } from '@/lib/undo';
 import { todayInTz } from '@/lib/utils';
+import { progressFor, setStep, type CloseOutcome } from './integration';
 import {
   QUIET_DAYS, pipelineInputSchema, touchInputSchema,
   type ClientType, type PipelineInput, type Stage,
@@ -29,6 +30,14 @@ export interface PipelineFilter {
   /** Only the ones that need attention: overdue next step, or gone quiet. */
   attention?: boolean;
   sort?: PipelineSort;
+  /**
+   * Closed deals are off the board by default.
+   *
+   * A board that is mostly finished work stops being read, and a won deal with
+   * nowhere to go is how it becomes mostly finished work. They are one click
+   * away, never deleted.
+   */
+  closed?: boolean;
 }
 
 /**
@@ -76,6 +85,7 @@ export async function listPipeline(filter: PipelineFilter = {}): Promise<Pipelin
   const now = new Date();
   const where = [isNull(pipelineClients.archivedAt)];
 
+  where.push(filter.closed ? isNotNull(pipelineClients.closedAt) : isNull(pipelineClients.closedAt));
   if (filter.stage) where.push(eq(pipelineClients.stage, filter.stage));
   if (filter.clientType) where.push(eq(pipelineClients.clientType, filter.clientType));
   if (filter.q?.trim()) {
@@ -100,6 +110,10 @@ export async function listPipeline(filter: PipelineFilter = {}): Promise<Pipelin
       source: pipelineClients.source,
       notes: pipelineClients.notes,
       lastContactAt: pipelineClients.lastContactAt,
+      integrationSteps: pipelineClients.integrationSteps,
+      closedAt: pipelineClients.closedAt,
+      closeOutcome: pipelineClients.closeOutcome,
+      closeNote: pipelineClients.closeNote,
       touches: sql<number>`(select count(*)::int from pipeline_touches t where t.client_id = ${pipelineClients.id})`,
     })
     .from(pipelineClients)
@@ -126,6 +140,10 @@ export async function listPipeline(filter: PipelineFilter = {}): Promise<Pipelin
     quietDays: daysSince(r.lastContactAt, now),
     stepOverdue: r.nextStepDate !== null && r.nextStepDate <= today,
     touches: r.touches,
+    integration: progressFor(r.clientType as ClientType, r.integrationSteps),
+    closedAt: r.closedAt,
+    closeOutcome: r.closeOutcome as CloseOutcome | null,
+    closeNote: r.closeNote,
   }));
 
   if (!filter.attention) return mapped;
@@ -233,4 +251,85 @@ export async function recentTouches(clientIds: string[], perClient = 3) {
 
 export async function listOwners() {
   return db.select({ id: people.id, name: people.name }).from(people).orderBy(asc(people.name));
+}
+
+
+/**
+ * One integration step ticked, or a note on why it is not.
+ *
+ * Audited like every other change to a deal, and undoable — the whole map is
+ * written, so putting it back puts back exactly the ticks that were there.
+ */
+export async function setIntegrationStep(
+  clientId: string,
+  key: string,
+  patch: { done?: boolean; note?: string | null; blockedOn?: string | null },
+  actor: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const [before] = await db.select().from(pipelineClients).where(eq(pipelineClients.id, clientId)).limit(1);
+  if (!before) return { ok: false, error: 'No such deal' };
+
+  const next = setStep(before.integrationSteps, key, patch);
+  await db
+    .update(pipelineClients)
+    .set({ integrationSteps: next as never, updatedAt: new Date() })
+    .where(eq(pipelineClients.id, clientId));
+
+  await writeAudit({
+    actor,
+    action: 'pipeline.integration',
+    entityType: 'pipeline_client',
+    entityId: clientId,
+    before: { integrationSteps: before.integrationSteps },
+    after: { integrationSteps: next },
+  });
+  return { ok: true };
+}
+
+/**
+ * Finished — off the active board, and still every word of it kept.
+ *
+ * Closing is his decision, never the cockpit's: the board only ever says a
+ * deal *looks* finished. Reopening is the same call with `reopen`, because a
+ * deal closed by mistake at four in the afternoon should not need a database.
+ */
+export async function closeDeal(
+  clientId: string,
+  input: { outcome: CloseOutcome; note?: string | null; reopen?: boolean },
+  actor: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const [before] = await db.select().from(pipelineClients).where(eq(pipelineClients.id, clientId)).limit(1);
+  if (!before) return { ok: false, error: 'No such deal' };
+
+  const closing = !input.reopen;
+  await db
+    .update(pipelineClients)
+    .set({
+      closedAt: closing ? new Date() : null,
+      closeOutcome: closing ? input.outcome : null,
+      closeNote: closing ? (input.note ?? null) : null,
+      // A deal closed as lost belongs in the lost column, wherever it was.
+      ...(closing && input.outcome === 'lost' ? { stage: 'lost' } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(pipelineClients.id, clientId));
+
+  await writeAudit({
+    actor,
+    action: closing ? 'pipeline.close' : 'pipeline.reopen',
+    entityType: 'pipeline_client',
+    entityId: clientId,
+    before: { closedAt: before.closedAt, closeOutcome: before.closeOutcome, stage: before.stage },
+    after: closing ? { closedAt: new Date(), closeOutcome: input.outcome, note: input.note } : { closedAt: null },
+  });
+  return { ok: true };
+}
+
+/** How many are finished but still sitting on the board, for the header. */
+export async function closedCount(): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(pipelineClients)
+    .where(and(isNull(pipelineClients.archivedAt), isNotNull(pipelineClients.closedAt)));
+  return row?.n ?? 0;
 }

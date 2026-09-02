@@ -11,7 +11,9 @@ import { listMail, mailCounts, mailNeedingReply, MAIL_VIEWS } from '@/lib/mail/s
 import {
   captureLabelHealth, contractsForOpportunities, inboxOpportunities,
 } from '@/lib/opportunities/module';
-import { buildBoard, listOwners, listPipeline, recentTouches, PIPELINE_SORTS } from '@/lib/pipeline/service';
+import {
+  buildBoard, closedCount, listOwners, listPipeline, recentTouches, PIPELINE_SORTS,
+} from '@/lib/pipeline/service';
 import { STAGES } from '@/lib/pipeline/types';
 import { getSubtasks, getTask, listDepartments, listPeople, listTasks } from '@/lib/tasks/queries';
 import { listComments } from '@/lib/tasks/mutations';
@@ -98,6 +100,9 @@ describe('the deals board', () => {
   it('loads every stage, sort and filter', async () => {
     for (const stage of STAGES) await ok(`listPipeline ${stage}`, () => listPipeline({ stage }));
     for (const sort of PIPELINE_SORTS) await ok(`listPipeline ${sort}`, () => listPipeline({ sort }));
+    // The finished board is its own query and its own empty state.
+    await ok('listPipeline closed', () => listPipeline({ closed: true }));
+    await ok('closedCount', () => closedCount());
     const rows = await listPipeline({});
     buildBoard(rows);
     await ok('recentTouches', () => recentTouches(rows.map((r) => r.id)));
