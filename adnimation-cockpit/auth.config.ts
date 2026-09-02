@@ -19,7 +19,15 @@ import { verifyPassword } from '@/lib/auth/password';
  */
 
 /** Public surfaces: auth endpoints, webhooks and the Inngest handler. */
-const PUBLIC_PREFIXES = ['/login', '/api/auth', '/api/webhooks', '/api/inngest'];
+const PUBLIC_PREFIXES = [
+  '/login',
+  '/api/auth',
+  '/api/webhooks',
+  '/api/inngest',
+  // Signed with a server-only key inside the route itself; the timer that
+  // calls it has no session and never will.
+  '/api/internal/',
+];
 
 /**
  * Password sign-in for the owner account.
