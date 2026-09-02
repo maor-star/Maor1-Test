@@ -1,5 +1,5 @@
-import { beforeAll, describe, expect, it } from 'vitest';
-import { and, desc, eq } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { and, desc, eq, ilike, isNull, or } from 'drizzle-orm';
 import { auditLog, contracts, db, opportunities, pipelineClients } from '@/lib/db';
 import {
   classifyContract, createLinkTarget, setWaitingOn, undoLastChange,
@@ -20,6 +20,22 @@ let id: string;
 // previous run's — which showed up as the create silently returning ok:false
 // on the second run and passing on the first.
 const unique = (name: string) => `${name} ${Date.now().toString(36)}`;
+
+/*
+ * And they stay in the database afterwards, where anything reading it for real
+ * work finds them — the marketing agent looked for recently signed contracts
+ * and found eighty of these. So the fixtures put themselves away when the run
+ * ends. Archived, not deleted: nothing in this system deletes (CLAUDE.md §2),
+ * and archived is what every screen and every agent already filters on.
+ */
+afterAll(async () => {
+  const names = ['Undo Test %', 'Never Touched %', 'LinkTarget %'];
+  const like = (column: Parameters<typeof ilike>[0]) => or(...names.map((n) => ilike(column, n)))!;
+  const archivedAt = new Date();
+  await db.update(contracts).set({ archivedAt }).where(and(like(contracts.counterpartyName), isNull(contracts.archivedAt)));
+  await db.update(pipelineClients).set({ archivedAt }).where(and(like(pipelineClients.name), isNull(pipelineClients.archivedAt)));
+  await db.update(opportunities).set({ archivedAt }).where(and(like(opportunities.counterparty), isNull(opportunities.archivedAt)));
+});
 
 beforeAll(async () => {
   const [row] = await db

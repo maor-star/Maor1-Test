@@ -1,0 +1,98 @@
+import { secret } from '@/lib/secrets/store';
+
+/**
+ * Publishing to LinkedIn.
+ *
+ * The only code in the cockpit that says something to the public internet, so
+ * it is deliberately small and deliberately dumb: it takes text somebody has
+ * read, posts it, and hands back the link. It decides nothing. No agent calls
+ * it — the one caller is the action behind his PUBLISH button.
+ *
+ * Two credentials, both pasted on the Keys screen: LINKEDIN_ACCESS_TOKEN (a
+ * token with w_member_social) and LINKEDIN_AUTHOR_URN (him, or the company
+ * page). Without them the cockpit still drafts; publishing says what is
+ * missing instead of failing obscurely.
+ */
+
+const POSTS = 'https://api.linkedin.com/rest/posts';
+/** The API is versioned by date and rejects a request without one. */
+const VERSION = '202405';
+
+/**
+ * LinkedIn's "little text" format treats a dozen punctuation marks as markup
+ * and rejects a post that uses one unescaped. A backslash in front is the
+ * whole rule, and it is invisible in the published post.
+ */
+export function escapeCommentary(text: string): string {
+  return text.replace(/[()[\]{}<>@|~_*\\]/g, (c) => `\\${c}`);
+}
+
+export interface PublishResult {
+  ok: boolean;
+  url?: string | null;
+  urn?: string | null;
+  error?: string;
+}
+
+export interface LinkedInCredentials {
+  token: string;
+  author: string;
+}
+
+export async function linkedInCredentials(): Promise<LinkedInCredentials | { missing: string[] }> {
+  const [token, author] = await Promise.all([secret('LINKEDIN_ACCESS_TOKEN'), secret('LINKEDIN_AUTHOR_URN')]);
+  const missing = [
+    token ? null : 'LINKEDIN_ACCESS_TOKEN',
+    author ? null : 'LINKEDIN_AUTHOR_URN',
+  ].filter((m): m is string => m !== null);
+  if (missing.length > 0) return { missing };
+  return { token: token!, author: author! };
+}
+
+export type Publisher = (text: string, credentials: LinkedInCredentials) => Promise<PublishResult>;
+
+/** The real one. Separated so the action can be tested without a network. */
+export const publishToLinkedIn: Publisher = async (text, { token, author }) => {
+  const res = await fetch(POSTS, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'LinkedIn-Version': VERSION,
+      'X-Restli-Protocol-Version': '2.0.0',
+    },
+    body: JSON.stringify({
+      author,
+      commentary: escapeCommentary(text),
+      visibility: 'PUBLIC',
+      distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] },
+      lifecycleState: 'PUBLISHED',
+      isReshareDisabledByAuthor: false,
+    }),
+  });
+
+  if (res.status !== 201 && !res.ok) {
+    const body = await res.text().catch(() => '');
+    return { ok: false, error: `LinkedIn refused it (${res.status}): ${body.slice(0, 300)}` };
+  }
+
+  // The new post's urn comes back in a header, not the body.
+  const urn = res.headers.get('x-restli-id');
+  return {
+    ok: true,
+    urn,
+    url: urn ? `https://www.linkedin.com/feed/update/${urn}/` : null,
+  };
+};
+
+/** In-memory LinkedIn. Tests assert against `posted`. */
+export class FakePublisher {
+  readonly posted: string[] = [];
+  failWith: string | null = null;
+
+  publish: Publisher = async (text) => {
+    if (this.failWith) return { ok: false, error: this.failWith };
+    this.posted.push(text);
+    return { ok: true, urn: `urn:li:share:${this.posted.length}`, url: `https://linkedin.test/${this.posted.length}` };
+  };
+}

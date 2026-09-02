@@ -55,6 +55,18 @@ export const conditions: Record<string, ConditionEvaluator> = {
     };
   },
 
+  /** Something happened lately that a post could be written about. */
+  marketing_material: async (_config, context) => {
+    const { hasMaterial } = await import('@/lib/marketing/service');
+    const found = await hasMaterial(settingsOf(context));
+    return {
+      passed: found.count > 0,
+      detail: found.count
+        ? `${found.count} thing(s) worth writing about, starting with: ${found.first}.`
+        : 'Nothing new since the last run.',
+    };
+  },
+
   /** A control-panel line moved against its own previous week. */
   activity_anomaly: async (_config, context) => {
     const s = settingsOf(context);
@@ -300,6 +312,21 @@ export const performers: Record<string, ActionPerformer> = {
       ? 'The harvest itself runs as the crm-harvest job on its timer; this run only confirmed there is mail to read.'
       : 'Nothing to update from here.',
   }),
+
+  /**
+   * Writes the posts and stops there.
+   *
+   * There is deliberately no performer that publishes: the only path to
+   * LinkedIn is the button on the marketing screen, which is his hand.
+   */
+  draft_linkedin_posts: async (_config, context) => {
+    const { draftFromWins } = await import('@/lib/marketing/service');
+    const result = await draftFromWins({
+      actor: `agent:${String(context.agentName ?? 'marketing-writer')}`,
+      settings: settingsOf(context),
+    });
+    return { performed: result.ok && result.drafted > 0, detail: result.detail };
+  },
 
   autopilot_review: async (_config, context) => {
     const { runAutopilot } = await import('@/lib/copilot/autopilot');

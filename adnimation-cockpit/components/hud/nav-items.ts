@@ -20,6 +20,8 @@ export const NAV = [
   { href: '/trading', label: 'TRADING', num: '11', ready: true },
   { href: '/agents', label: 'AGENTS', num: '12', ready: true },
   { href: '/settings', label: 'KEYS', num: '13', ready: true },
+  // Where the posts written in his name wait for him to publish them.
+  { href: '/marketing', label: 'MARKETING', num: '14', ready: true },
 ] as const;
 
 export type NavItem = (typeof NAV)[number];

@@ -47,6 +47,18 @@ const PLAYBOOK_HINTS: Record<string, string> = {
     '· Tone, length, and the words you do and do not use.\n\n' +
     'WHEN IN DOUBT\n' +
     '· What to do when none of the above fits.',
+  'marketing-writer':
+    'HOW I SOUND\n' +
+    'Paste in two or three posts of mine that worked. That is the strongest instruction there is.\n\n' +
+    'WHAT I POST ABOUT\n' +
+    '· A partner going live, a signature, a product we shipped, a number of ours that is public.\n\n' +
+    'WHAT I NEVER POST\n' +
+    '· Revenue, CPMs, rev share, anything from inside a contract.\n' +
+    '· A client name before they have said it themselves.\n\n' +
+    'HOW IT READS\n' +
+    '· First line is the whole point. Short paragraphs. No “thrilled to announce”.\n\n' +
+    'WHEN IN DOUBT\n' +
+    '· Write the smaller true post, not the bigger one.',
   autopilot:
     'HOW I RUN THE COMPANY\n' +
     'What I look at first in the morning, and why. Which numbers matter and which are noise.\n\n' +

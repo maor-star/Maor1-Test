@@ -49,6 +49,12 @@ export const ACTION_TYPES = [
    * the permissions he set; it holds nothing irreversible of its own.
    */
   'autopilot_review',
+  /*
+   * Writing a LinkedIn post. Reversible because it produces a draft in the
+   * cockpit and nothing else — publishing it is his click on the marketing
+   * screen, and there is no action here that does it for him.
+   */
+  'draft_linkedin_posts',
   ...IRREVERSIBLE_ACTIONS,
 ] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];

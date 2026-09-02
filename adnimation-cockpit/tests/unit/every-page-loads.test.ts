@@ -33,6 +33,9 @@ import { listThreads } from '@/lib/copilot/service';
 import { decisionCounts, lastReviewAt, recentDecisions } from '@/lib/copilot/autopilot';
 import { taskAttachments } from '@/lib/attachments/service';
 import { statusOf } from '@/lib/secrets/store';
+import { draftCounts, linkedInReady, listDrafts } from '@/lib/marketing/service';
+import { findWins } from '@/lib/marketing/wins';
+import { slackReach } from '@/lib/copilot/slack-view';
 import { SECRET_KEYS } from '@/lib/secrets/catalogue';
 
 /**
@@ -203,10 +206,19 @@ describe('delegations and the copilot', () => {
     await ok('statusOf', () => statusOf(SECRET_KEYS));
   });
 
+  it('loads the marketing screen', async () => {
+    await ok('listDrafts', () => listDrafts());
+    await ok('draftCounts', () => draftCounts());
+    await ok('linkedInReady', () => linkedInReady());
+    await ok('findWins', () => findWins({ days: 30, limit: 3 }));
+    await ok('findWins from mail', () => findWins({ sources: ['mail'], days: 7, limit: 3 }));
+  });
+
   it('loads the copilot screen', async () => {
     await ok('listThreads', () => listThreads());
     await ok('recentDecisions', () => recentDecisions(40));
     await ok('decisionCounts', () => decisionCounts());
     await ok('lastReviewAt', () => lastReviewAt());
+    await ok('slackReach', () => slackReach());
   });
 });

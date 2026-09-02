@@ -562,6 +562,39 @@ export const appSecrets = pgTable('app_secrets', {
   updatedBy: text('updated_by').notNull(),
 });
 
+/**
+ * What the marketing agent wrote, and whether he let it out.
+ *
+ * The one table in the cockpit whose rows can end up on the public internet,
+ * which is why publishing is a column set by his click and never by an agent.
+ */
+export const marketingPosts = pgTable(
+  'marketing_posts',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    /** contract | deal | mail | manual */
+    sourceKind: text('source_kind').notNull(),
+    sourceRef: text('source_ref'),
+    occasion: text('occasion').notNull(),
+    body: text('body').notNull(),
+    /** Lines worth a second look before it goes out — figures, client names. */
+    flags: text('flags').array().notNull().default([]),
+    /** draft | posted | declined */
+    status: text('status').notNull().default('draft'),
+    editedBody: text('edited_body'),
+    postedUrl: text('posted_url'),
+    postedAt: timestamptz('posted_at'),
+    declinedAt: timestamptz('declined_at'),
+    decidedBy: text('decided_by'),
+    model: text('model'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [index('idx_marketing_open_drz').on(t.status, t.createdAt)],
+);
+
+export type MarketingPost = typeof marketingPosts.$inferSelect;
+
 export const companyDaily = pgTable('company_daily', {
   date: date('date').primaryKey(),
 

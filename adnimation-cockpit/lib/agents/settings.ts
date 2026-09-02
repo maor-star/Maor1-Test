@@ -212,6 +212,35 @@ export const AGENT_SETTINGS: Record<string, SettingField[]> = {
     ] },
     CHANNEL,
   ],
+  'marketing-writer': [
+    {
+      key: 'sources', label: 'Where it looks for something to post about', type: 'multi',
+      default: ['contracts', 'deals'],
+      options: [
+        { value: 'contracts', label: 'Contracts that were signed' },
+        { value: 'deals', label: 'Deals that went live or were won' },
+        { value: 'mail', label: 'Your mail (subjects that read like an achievement)' },
+      ],
+    },
+    { key: 'lookbackDays', label: 'How far back it looks (days)', type: 'number', default: 30, min: 3, max: 120 },
+    { key: 'maxPosts', label: 'Most drafts per run', type: 'number', default: 2, min: 1, max: 6 },
+    {
+      key: 'nameClients',
+      label: 'May name the client',
+      help: 'Off by default: it writes “a leading Israeli publisher” and you add the name yourself if you want it there.',
+      type: 'boolean',
+      default: false,
+    },
+    { key: 'hashtags', label: 'Hashtags to end with', type: 'text', default: '', placeholder: '#adtech #publishers' },
+    {
+      key: 'language', label: 'Language of the post', type: 'select', default: 'en',
+      options: [{ value: 'en', label: 'English' }, { value: 'he', label: 'Hebrew' }],
+    },
+    TONE,
+    { key: 'provider', label: 'Model', type: 'select', default: 'auto', options: [
+      { value: 'auto', label: 'Whichever key is set (Claude first)' }, { value: 'anthropic', label: 'Claude' }, { value: 'gemini', label: 'Gemini' },
+    ] },
+  ],
   autopilot: [
     { key: 'hour', label: 'Daily review at (hour, Israel time)', type: 'number', default: 6, min: 0, max: 23 },
     { key: 'provider', label: 'Model', type: 'select', default: 'auto', options: [

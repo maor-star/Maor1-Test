@@ -355,6 +355,29 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
     enabled: false,
   },
   {
+    name: 'marketing-writer',
+    description:
+      'Your marketing person. Reads what actually went right — contracts that were signed, deals ' +
+      'that went live, achievements sitting in your mail — and writes the LinkedIn post about it, ' +
+      'in your voice. Load it a document on this screen with posts you liked and it writes like ' +
+      'those. It never publishes: the post waits on the Marketing screen, you edit it and press ' +
+      'publish, and only then does it go out.',
+    rationale:
+      'The one agent whose output leaves the company, so the ladder is not the safeguard here — ' +
+      'the design is. Drafting and publishing are different actions with different actors: the ' +
+      'agent can only ever do the first, at any level.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 10 * * 0' },
+    conditions: [
+      { name: 'A model is connected', check: 'copilot_configured', config: {} },
+      { name: 'Something happened worth posting about', check: 'marketing_material', config: {} },
+    ],
+    actions: [{ type: 'draft_linkedin_posts', config: {} }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 2,
+    enabled: false,
+  },
+  {
     name: 'autopilot',
     description:
       'The daily review of the whole company. Reads the control panel, the core clients, the ' +

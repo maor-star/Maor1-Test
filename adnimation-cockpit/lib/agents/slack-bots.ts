@@ -99,6 +99,8 @@ export const AGENT_BOT: Record<string, string> = {
   'contact-harvester': 'sales',
   'systems-watch': 'work',
   'autopilot': 'work',
+  // A post about a win is sales news, and Rainmaker is where sales news goes.
+  'marketing-writer': 'sales',
 };
 
 export function botFor(agentName: string): BotIdentity {
