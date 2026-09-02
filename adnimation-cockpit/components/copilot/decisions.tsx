@@ -81,13 +81,21 @@ export function DecisionLog({ decisions, canReview }: { decisions: DecisionRow[]
                     {d.action.kind === 'task' && d.action.title ? `: ${String(d.action.title)}` : ''}
                     {d.action.kind === 'stage' ? `: → ${String(d.action.stage ?? '')}` : ''}
                     {d.action.kind === 'agent' ? `: ${String(d.action.agentName ?? '')} ${d.action.enabled ? 'ON' : 'OFF'}` : ''}
+                    {d.action.kind === 'slack' ? `: #${String(d.action.channel ?? 'a channel')}` : ''}
                     {d.executedRef ? ` · ${d.executedRef}` : ''}
                   </p>
+                  {/* A Slack message is the one thing here the whole company
+                      reads, so he sees the words before he approves them. */}
+                  {d.action.kind === 'slack' && d.action.text ? (
+                    <p className="mt-1 whitespace-pre-wrap border-s-2 border-divider ps-2 text-[13px] leading-relaxed text-neutral-800">
+                      {String(d.action.text)}
+                    </p>
+                  ) : null}
                 </div>
                 {d.status === 'proposed' ? (
                   <div className="flex shrink-0 gap-1">
                     <Button type="button" size="xs" disabled={pending} onClick={() => decideOn(d.id, true)}>
-                      DO IT
+                      {d.action.kind === 'slack' ? 'POST IT' : 'DO IT'}
                     </Button>
                     <Button type="button" size="xs" variant="ghost" disabled={pending} onClick={() => decideOn(d.id, false)}>
                       NO

@@ -217,11 +217,20 @@ export const AGENT_SETTINGS: Record<string, SettingField[]> = {
     { key: 'provider', label: 'Model', type: 'select', default: 'auto', options: [
       { value: 'auto', label: 'Whichever key is set (Claude first)' }, { value: 'anthropic', label: 'Claude' }, { value: 'gemini', label: 'Gemini' },
     ] },
-    { key: 'scope', label: 'What it reviews', type: 'multi', default: ['lines', 'clients', 'deals', 'contracts', 'tasks', 'mail', 'agents', 'systems'], options: [
+    { key: 'scope', label: 'What it reviews', type: 'multi', default: ['lines', 'clients', 'deals', 'contracts', 'tasks', 'mail', 'slack', 'agents', 'systems'], options: [
       { value: 'lines', label: 'Control panel lines' }, { value: 'clients', label: 'Core clients' }, { value: 'deals', label: 'Deals' },
       { value: 'contracts', label: 'Contracts' }, { value: 'tasks', label: 'Tasks and hand-offs' }, { value: 'mail', label: 'Mail waiting on you' },
+      { value: 'slack', label: 'Your Slack' },
       { value: 'agents', label: 'Other agents’ runs' }, { value: 'systems', label: 'Servers and syncs' },
     ] },
+    {
+      key: 'slackChannels',
+      label: 'Slack channels it may write in',
+      help: 'Comma separated, for example sales, ops. Leave empty for any channel the cockpit is in. A Slack message always waits for your approval, whatever the autonomy level.',
+      type: 'text',
+      default: '',
+      placeholder: 'sales, ops',
+    },
     { key: 'mayAct', label: 'What it may do on its own', type: 'multi', default: ['task', 'alert', 'note'], options: [
       { value: 'task', label: 'Open tasks' }, { value: 'alert', label: 'Raise alerts' }, { value: 'note', label: 'Log a note on a deal' },
       { value: 'stage', label: 'Move a deal’s stage' }, { value: 'agent', label: 'Switch other agents on or off' },

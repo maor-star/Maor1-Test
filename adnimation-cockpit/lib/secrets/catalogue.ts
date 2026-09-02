@@ -39,6 +39,16 @@ export const SECRETS: SecretSpec[] = [
     placeholder: '43925edf-…',
   },
   {
+    key: 'SLACK_USER_TOKEN',
+    label: 'Slack user token (yours)',
+    unlocks:
+      'The Copilot reading your whole Slack and searching it. Without it the cockpit only sees the channels its bot was invited to. It still posts as the cockpit, never as you.',
+    where:
+      'api.slack.com → your Slack app → OAuth & Permissions → User Token Scopes: search:read, channels:history, channels:read, groups:history, groups:read, im:history, mpim:history → Reinstall → copy the token starting xoxp-.',
+    group: 'data',
+    placeholder: 'xoxp-…',
+  },
+  {
     key: 'GEMINI_API_KEY',
     label: 'Gemini API key',
     unlocks: 'Gemini as a second model in the Copilot, and image generation for the marketing agent.',

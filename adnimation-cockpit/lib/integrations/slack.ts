@@ -1,11 +1,14 @@
 import type {
-  FoundReply, SlackAdapter, SlackMessage, SlackPostResult, ThreadMessage,
+  FoundReply, SlackAdapter, SlackChannel, SlackHit, SlackMessage, SlackPostResult, ThreadMessage,
 } from './types';
 
 const SLACK_API = 'https://slack.com/api/chat.postMessage';
 const SLACK_REPLIES = 'https://slack.com/api/conversations.replies';
 const SLACK_USERS = 'https://slack.com/api/users.info';
 const SLACK_OPEN = 'https://slack.com/api/conversations.open';
+const SLACK_LIST = 'https://slack.com/api/conversations.list';
+const SLACK_HISTORY = 'https://slack.com/api/conversations.history';
+const SLACK_SEARCH = 'https://slack.com/api/search.messages';
 
 /**
  * Slack permalinks carry the two things the API needs — the channel and the
@@ -169,6 +172,122 @@ class RealSlackAdapter implements SlackAdapter {
     };
   }
 
+  /**
+   * Every conversation the token can see.
+   *
+   * Slack pages this, and a workspace with hundreds of channels would page for
+   * a long time; a few hundred is every channel he actually has and far more
+   * than a model should be handed at once.
+   */
+  async listChannels(): Promise<SlackChannel[]> {
+    const out: SlackChannel[] = [];
+    let cursor = '';
+
+    for (let page = 0; page < 5; page += 1) {
+      const url =
+        `${SLACK_LIST}?types=public_channel,private_channel&exclude_archived=true&limit=200` +
+        (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${this.token}` } });
+      const body = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        channels?: {
+          id?: string; name?: string; is_private?: boolean; is_member?: boolean;
+          num_members?: number; topic?: { value?: string }; purpose?: { value?: string };
+        }[];
+        response_metadata?: { next_cursor?: string };
+      } | null;
+
+      if (!body?.ok || !body.channels) throw new Error(body?.error ?? `http_${res.status}`);
+
+      for (const c of body.channels) {
+        if (!c.id || !c.name) continue;
+        const isPrivate = c.is_private === true;
+        const isMember = c.is_member === true;
+        out.push({
+          id: c.id,
+          name: c.name,
+          isPrivate,
+          isMember,
+          // A private channel is only listed at all when the bot is in it.
+          readable: isMember || isPrivate,
+          topic: c.topic?.value?.trim() || null,
+          purpose: c.purpose?.value?.trim() || null,
+          memberCount: typeof c.num_members === 'number' ? c.num_members : null,
+        });
+      }
+
+      cursor = body.response_metadata?.next_cursor ?? '';
+      if (!cursor) break;
+    }
+
+    return out.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async readChannel(channelId: string, limit = 30): Promise<ThreadMessage[]> {
+    const url = `${SLACK_HISTORY}?channel=${channelId}&limit=${Math.min(200, Math.max(1, limit))}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${this.token}` } });
+    const body = (await res.json().catch(() => null)) as {
+      ok?: boolean;
+      error?: string;
+      messages?: { user?: string; bot_id?: string; username?: string; text?: string; ts?: string; subtype?: string }[];
+    } | null;
+
+    if (!body?.ok || !body.messages) throw new Error(body?.error ?? `http_${res.status}`);
+
+    const out: ThreadMessage[] = [];
+    // Slack hands history back newest first; a conversation reads the other way.
+    for (const m of [...body.messages].reverse()) {
+      if (!m.ts) continue;
+      // Joins and leaves are not conversation.
+      if (m.subtype === 'channel_join' || m.subtype === 'channel_leave') continue;
+      const fromCockpit = Boolean(m.bot_id) && !m.user;
+      out.push({
+        ts: m.ts,
+        authorId: m.user ?? null,
+        authorName: fromCockpit ? (m.username ?? 'Cockpit') : await this.userName(m.user),
+        text: m.text ?? '',
+        at: new Date(Number(m.ts.split('.')[0]) * 1000),
+        fromCockpit,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Slack's own search, which only a user token may call.
+   *
+   * It is the difference between "what the cockpit was invited to" and "his
+   * Slack": a bot reads the handful of channels somebody added it to, a user
+   * token searches everything he can see. The failure is left as Slack's own
+   * word (`not_allowed_token_type`) so the caller can say what to do about it.
+   */
+  async searchMessages(query: string, count = 40): Promise<SlackHit[]> {
+    const url = `${SLACK_SEARCH}?query=${encodeURIComponent(query)}&count=${Math.min(100, Math.max(1, count))}&sort=timestamp`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${this.token}` } });
+    const body = (await res.json().catch(() => null)) as {
+      ok?: boolean;
+      error?: string;
+      messages?: { matches?: { channel?: { id?: string; name?: string }; username?: string; user?: string; text?: string; ts?: string; permalink?: string }[] };
+    } | null;
+
+    if (!body?.ok) throw new Error(body?.error ?? `http_${res.status}`);
+
+    const hits: SlackHit[] = [];
+    for (const m of body.messages?.matches ?? []) {
+      if (!m.ts) continue;
+      hits.push({
+        channelId: m.channel?.id ?? '',
+        channelName: m.channel?.name ?? 'unknown',
+        authorName: m.username ?? (await this.userName(m.user)),
+        text: m.text ?? '',
+        at: new Date(Number(m.ts.split('.')[0]) * 1000),
+        url: m.permalink ?? null,
+      });
+    }
+    return hits;
+  }
+
   async findThreadReply(permalink: string, notFrom?: string): Promise<FoundReply | null> {
     const ref = parsePermalink(permalink);
     if (!ref) return null;
@@ -211,6 +330,9 @@ export class FakeSlackAdapter implements SlackAdapter {
       this.failNext = false;
       return { ok: false, messageUrl: null, error: 'fake_failure' };
     }
+    // Slack refuses a channel the bot was never added to, and so does this.
+    const known = this.channels.find((c) => c.id === message.target);
+    if (known && !known.isMember) return { ok: false, messageUrl: null, error: 'not_in_channel' };
     this.sent.push(message);
     return {
       ok: true,
@@ -243,6 +365,33 @@ export class FakeSlackAdapter implements SlackAdapter {
 
   async readThread(): Promise<ThreadMessage[]> {
     return this.thread;
+  }
+
+  /** Tests set these to the workspace the next read should see. */
+  channels: SlackChannel[] = [
+    { id: 'C-GENERAL', name: 'general', isPrivate: false, isMember: true, readable: true, topic: null, purpose: null, memberCount: 12 },
+  ];
+  history = new Map<string, ThreadMessage[]>();
+
+  async listChannels(): Promise<SlackChannel[]> {
+    return this.channels;
+  }
+
+  async readChannel(channelId: string, limit = 30): Promise<ThreadMessage[]> {
+    return (this.history.get(channelId) ?? []).slice(-limit);
+  }
+
+  /**
+   * What the next search finds. Null — the default, and what a bot token does
+   * in life — makes searching throw, so the caller's fallback is what tests
+   * exercise unless they opt into search.
+   */
+  searchable: SlackHit[] | null = null;
+
+  async searchMessages(query: string, count = 40): Promise<SlackHit[]> {
+    if (this.searchable === null) throw new Error('not_allowed_token_type');
+    const q = query.toLowerCase();
+    return this.searchable.filter((h) => h.text.toLowerCase().includes(q)).slice(0, count);
   }
 
   async postThreadReply(channelId: string, threadTs: string, text: string): Promise<SlackPostResult> {

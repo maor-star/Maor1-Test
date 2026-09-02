@@ -11,6 +11,7 @@ import { DecisionLog } from '@/components/copilot/decisions';
 import { listThreads, threadMessages } from '@/lib/copilot/service';
 import { decisionCounts, lastReviewAt, recentDecisions } from '@/lib/copilot/autopilot';
 import { loadProviderKeys, providerStatus } from '@/lib/copilot/provider';
+import { slackReach } from '@/lib/copilot/slack-view';
 import { AUTONOMY_LABEL } from '@/lib/agents/types';
 import { fmtDateTime } from '@/lib/utils';
 
@@ -30,12 +31,14 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
   await requireUser();
   const sp = await searchParams;
 
-  const [threads, decisions, counts, reviewedAt, [autopilot]] = await Promise.all([
+  const [threads, decisions, counts, reviewedAt, [autopilot], slack] = await Promise.all([
     listThreads(),
     recentDecisions(40),
     decisionCounts(),
     lastReviewAt(),
     db.select().from(agents).where(eq(agents.name, 'autopilot')).limit(1),
+    // Never let Slack being unreachable take the screen down with it.
+    slackReach().catch(() => ({ asUser: false, channels: null, why: 'Slack did not answer.' })),
   ]);
   await loadProviderKeys();
   const providers = providerStatus();
@@ -71,6 +74,24 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
             </p>
           </div>
         </div>
+        {/* What it can see of Slack, said out loud: a chat that answers
+            "nothing in Slack" because it was never invited anywhere is worse
+            than one that says it cannot look. */}
+        <p className="border-t border-divider pt-3 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+          SLACK —{' '}
+          {slack.channels === null ? (
+            <>
+              CANNOT READ IT YET. <Link href="/settings" className="text-accent-700 hover:text-accent">PASTE A SLACK USER TOKEN ON KEYS</Link>{' '}
+              AND IT READS EVERY CHANNEL YOU SEE. IT ALWAYS POSTS AS THE COCKPIT, NEVER AS YOU.
+            </>
+          ) : (
+            <>
+              READING {slack.asUser ? 'AS YOU' : 'AS THE COCKPIT BOT'} · <Num>{slack.channels}</Num> CHANNEL
+              {slack.channels === 1 ? '' : 'S'}
+              {slack.asUser ? '' : <> · <Link href="/settings" className="text-accent-700 hover:text-accent">PASTE A USER TOKEN ON KEYS</Link> TO READ ALL OF IT</>}
+            </>
+          )}
+        </p>
         <p className="border-t border-divider pt-3 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
           THE AUTOPILOT IS AT LEVEL {autopilot?.autonomyLevel ?? 1} — {AUTONOMY_LABEL[autopilot?.autonomyLevel ?? 1]}.
           IT CAN NEVER SEND, SIGN, PAY OR TOUCH ANYTHING OUTSIDE THE COCKPIT. WHAT IT MAY DO ON ITS OWN IS SET ON ITS DIALS.

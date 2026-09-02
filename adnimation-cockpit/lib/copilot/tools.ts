@@ -13,6 +13,7 @@ import { mailCounts, mailNeedingReply } from '@/lib/mail/service';
 import { listDelegations } from '@/lib/delegation/module';
 import { listAgents, setAgentEnabled } from '@/lib/agents/module';
 import { recentDecisions } from './autopilot';
+import { explainSlackError, postToSlack, readSlack, slackChannels } from './slack-view';
 import type { ToolCall, ToolSpec } from './provider';
 
 /**
@@ -105,6 +106,26 @@ const READ: ToolSpec[] = [
     parameters: { type: 'object', properties: {} },
   },
   {
+    name: 'slack_channels',
+    description: 'Every Slack channel in the workspace, and whether the cockpit is in it (only those can be read or posted to).',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'read_slack',
+    description:
+      'Read Slack. With text in q it searches the whole workspace; without it, it reads a channel you name, or sweeps the busiest channels the cockpit is in. ' +
+      'Optionally narrow to a channel or to the last N hours. This is how you know what the company is saying.',
+    parameters: {
+      type: 'object',
+      properties: {
+        channel: { type: 'string', description: 'Channel name or id. Omit to sweep several.' },
+        q: { type: 'string', description: 'Only messages containing this.' },
+        sinceHours: { type: 'number', description: 'Only the last N hours.' },
+        limit: { type: 'number', description: 'Messages per channel, up to 100 (default 25).' },
+      },
+    },
+  },
+  {
     name: 'recent_decisions',
     description: "The autopilot's recent decisions and whether Maor approved, declined or they were carried out.",
     parameters: { type: 'object', properties: { limit: { type: 'number' } } },
@@ -144,6 +165,17 @@ const WRITE: ToolSpec[] = [
     name: 'move_deal_stage',
     description: 'Move a deal to another stage. Reversible (undo on screen). Stages: open_new, open_existing, negotiation, contract, integration, live, lost.',
     parameters: { type: 'object', properties: { dealId: { type: 'string' }, stage: { type: 'string' } }, required: ['dealId', 'stage'] },
+  },
+  {
+    name: 'post_slack',
+    description:
+      'Say something in a Slack channel, as the cockpit. Only channels the cockpit is in. ' +
+      'The whole company sees it and it cannot be unsent — post only what Maor asked for, in the words he approved.',
+    parameters: {
+      type: 'object',
+      properties: { channel: { type: 'string' }, text: { type: 'string' } },
+      required: ['channel', 'text'],
+    },
   },
   {
     name: 'set_agent_enabled',
@@ -286,6 +318,40 @@ async function dispatch(call: ToolCall, ctx: ToolContext): Promise<unknown> {
         systems: health.map((h) => ({ system: h.system, lastSuccessAt: h.lastSuccessAt, lastAttemptAt: h.lastAttemptAt, consecutiveErrors: h.consecutiveErrors, lastError: h.lastError?.slice(0, 200) ?? null })),
       };
     }
+    case 'slack_channels': {
+      let rows;
+      try {
+        rows = await slackChannels();
+      } catch (e) {
+        return explainSlackError(e);
+      }
+      return {
+        count: rows.length,
+        inTheCockpit: rows.filter((c) => c.readable).length,
+        channels: rows.slice(0, 80).map((c) => ({
+          name: c.name, id: c.id, private: c.isPrivate, readable: c.readable,
+          members: c.memberCount, topic: c.topic ?? c.purpose,
+        })),
+      };
+    }
+    case 'read_slack': {
+      const out = await readSlack({
+        channel: str(a.channel) || null,
+        q: str(a.q) || null,
+        sinceHours: typeof a.sinceHours === 'number' ? a.sinceHours : null,
+        limit: typeof a.limit === 'number' ? a.limit : undefined,
+      });
+      return {
+        channelsRead: out.channelsRead,
+        searchedWholeWorkspace: out.searched,
+        skipped: out.skipped,
+        count: out.lines.length,
+        messages: out.lines.slice(0, 120).map((l) => ({
+          channel: l.channel, from: l.fromCockpit ? 'the cockpit' : l.author,
+          at: l.at, text: l.text.slice(0, 600), url: l.url,
+        })),
+      };
+    }
     case 'recent_decisions': {
       const rows = await recentDecisions(typeof a.limit === 'number' ? Math.min(60, a.limit) : 20);
       return rows.map((d) => ({ id: d.id, at: d.createdAt, area: d.area, title: d.title, status: d.status, action: short(d.action, 160) }));
@@ -334,6 +400,21 @@ async function dispatch(call: ToolCall, ctx: ToolContext): Promise<unknown> {
       await db.update(pipelineClients).set({ stage, updatedAt: new Date() }).where(eq(pipelineClients.id, dealId));
       await writeAudit({ actor: ctx.actor, action: 'pipeline.update', entityType: 'pipeline_client', entityId: dealId, before: { stage: before.stage }, after: { stage } });
       return `Moved ${before.name} from ${before.stage} to ${stage}.`;
+    }
+    case 'post_slack': {
+      const channel = str(a.channel).trim();
+      const text = str(a.text).trim();
+      if (!channel || !text) return 'Needs a channel and the text to post.';
+      const out = await postToSlack(channel, text);
+      if (!out.ok) return `Not posted: ${out.error}`;
+      await writeAudit({
+        actor: ctx.actor,
+        action: 'slack.post',
+        entityType: 'slack_channel',
+        entityId: out.channel ?? channel,
+        after: { text: text.slice(0, 2000), url: out.url ?? null },
+      });
+      return `Posted in #${out.channel}${out.url ? ` — ${out.url}` : ''}.`;
     }
     case 'set_agent_enabled': {
       const name = str(a.agentName);

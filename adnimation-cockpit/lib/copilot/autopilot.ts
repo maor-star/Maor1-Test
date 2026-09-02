@@ -20,7 +20,7 @@ import { systemBrief } from './service';
  * world — the executable kinds are the cockpit's own reversible mutations.
  */
 
-export const DECISION_KINDS = ['task', 'alert', 'note', 'stage', 'agent', 'none'] as const;
+export const DECISION_KINDS = ['task', 'alert', 'note', 'stage', 'agent', 'slack', 'none'] as const;
 export type DecisionKind = (typeof DECISION_KINDS)[number];
 
 export interface Decision {
@@ -36,7 +36,9 @@ const RECORD_TOOL = {
     'Record one decision from the review. Call it once per decision. kind is what you would do about it: ' +
     'task (open a task: title, description, priority P0-P3, dueDate), alert (raise an alert: title, body, severity), ' +
     'note (log a note on a deal: dealId, summary), stage (move a deal: dealId, stage), ' +
-    'agent (switch an agent on or off: agentName, enabled), or none (worth knowing, nothing to do).',
+    'agent (switch an agent on or off: agentName, enabled), slack (say something in a Slack channel: channel, text — ' +
+    'write the message in full, exactly as it should be posted; Maor always approves this one himself), ' +
+    'or none (worth knowing, nothing to do).',
   parameters: {
     type: 'object',
     properties: {
@@ -52,6 +54,7 @@ const RECORD_TOOL = {
           body: { type: 'string' }, severity: { type: 'string' },
           dealId: { type: 'string' }, summary: { type: 'string' }, stage: { type: 'string' },
           agentName: { type: 'string' }, enabled: { type: 'boolean' },
+          channel: { type: 'string' }, text: { type: 'string' },
         },
         required: ['kind'],
       },
@@ -76,11 +79,28 @@ export interface AutopilotResult {
   runId: string;
 }
 
-/** Which decision kinds may be carried out without him, at this level and with these dials. */
+/**
+ * Which decision kinds may be carried out without him, at this level and with
+ * these dials.
+ *
+ * `slack` is never in this set, whatever the dials say. Everything else the
+ * autopilot can do lives inside the cockpit and undoes; a Slack message is
+ * read by the whole company and cannot be unsent, so it waits for him. That is
+ * what he asked for — it recommends, he approves, then it posts.
+ */
+export const NEVER_AUTOMATIC: DecisionKind[] = ['slack'];
+
 export function executableKinds(autonomyLevel: number, settings: Settings): Set<DecisionKind> {
   if (autonomyLevel < 2) return new Set();
   const allowed = Array.isArray(settings.mayAct) ? (settings.mayAct as string[]) : ['task', 'alert', 'note'];
-  return new Set(allowed.filter((k): k is DecisionKind => (DECISION_KINDS as readonly string[]).includes(k) && k !== 'none'));
+  return new Set(
+    allowed.filter(
+      (k): k is DecisionKind =>
+        (DECISION_KINDS as readonly string[]).includes(k) &&
+        k !== 'none' &&
+        !NEVER_AUTOMATIC.includes(k as DecisionKind),
+    ),
+  );
 }
 
 export async function runAutopilot(opts: AutopilotOptions): Promise<AutopilotResult> {
@@ -89,9 +109,14 @@ export async function runAutopilot(opts: AutopilotOptions): Promise<AutopilotRes
   const provider = resolveProvider(typeof opts.settings.provider === 'string' ? opts.settings.provider : 'auto');
   if (!provider) return { ok: false, summary: 'No model is connected.', decisions: 0, executed: 0, runId };
 
-  const scope = Array.isArray(opts.settings.scope) ? (opts.settings.scope as string[]) : ['lines', 'clients', 'deals', 'contracts', 'tasks', 'mail', 'agents', 'systems'];
+  const scope = Array.isArray(opts.settings.scope) ? (opts.settings.scope as string[]) : ['lines', 'clients', 'deals', 'contracts', 'tasks', 'mail', 'slack', 'agents', 'systems'];
   const maxDecisions = typeof opts.settings.maxDecisions === 'number' ? opts.settings.maxDecisions : 12;
   const language = typeof opts.settings.language === 'string' ? opts.settings.language : 'match';
+  // The channels he has told it to work in. Empty means it may name any channel
+  // the cockpit is in; either way the post itself waits for his approval.
+  const slackChannels = typeof opts.settings.slackChannels === 'string'
+    ? opts.settings.slackChannels.split(',').map((c) => c.trim().replace(/^#/, '')).filter(Boolean)
+    : [];
   const ctx: ToolContext = { actor: opts.actor, today: todayInTz() };
   const may = executableKinds(opts.autonomyLevel, opts.settings);
 
@@ -100,6 +125,10 @@ export async function runAutopilot(opts: AutopilotOptions): Promise<AutopilotRes
     [
       `This is the daily autonomous review, not a conversation. Nobody is typing.`,
       `Review these areas, in this order, reading each through its tool: ${scope.join(', ')}.`,
+      scope.includes('slack')
+        ? `Read Slack with read_slack: what the team is saying, what is waiting on somebody, what was decided. Treat it as evidence like any other, and quote it when it is the reason for a decision.`
+        : '',
+      `You may propose a Slack message as a decision of kind slack — the words in full, ready to post${slackChannels.length ? `, in one of these channels: ${slackChannels.map((c) => `#${c}`).join(', ')}` : ' in a channel the cockpit is in'}. It is never sent by you: Maor approves it on the Copilot screen and it posts then. Propose one only when something genuinely needs saying to the team.`,
       `Then record at most ${maxDecisions} decisions with record_decision, most important first. Prefer fewer, sharper decisions over many small ones. Do not record a decision for something that already has an open task or alert with the same subject.`,
       `Write titles and reasoning in ${language === 'he' ? 'Hebrew' : language === 'en' ? 'English' : 'English'}. Ad-tech terms stay in English.`,
       may.size === 0
@@ -202,6 +231,11 @@ export async function executeDecision(d: Decision, ctx: ToolContext): Promise<{ 
     case 'agent': {
       const out = await call('set_agent_enabled', { agentName: a.agentName, enabled: a.enabled });
       return { ok: out.startsWith('Switched'), ref: out, detail: out };
+    }
+    case 'slack': {
+      // Only ever reached through his approval — see NEVER_AUTOMATIC.
+      const out = await call('post_slack', { channel: a.channel, text: a.text ?? d.title });
+      return { ok: out.startsWith('Posted'), ref: out, detail: out };
     }
     default:
       return { ok: false, ref: null, detail: 'Nothing to do.' };

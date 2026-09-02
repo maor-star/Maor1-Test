@@ -50,6 +50,35 @@ export interface FoundReply {
   url: string | null;
 }
 
+/**
+ * A conversation the cockpit can see in Slack.
+ *
+ * `readable` is the only thing the caller has to look at: a public channel the
+ * bot was never invited to is listed by Slack but its history is not, and a
+ * tool that offers to read it would only ever fail.
+ */
+export interface SlackChannel {
+  id: string;
+  name: string;
+  isPrivate: boolean;
+  isMember: boolean;
+  /** Membership for a public channel; being in the list at all for a private one. */
+  readable: boolean;
+  topic: string | null;
+  purpose: string | null;
+  memberCount: number | null;
+}
+
+/** One message Slack's own search found. */
+export interface SlackHit {
+  channelId: string;
+  channelName: string;
+  authorName: string;
+  text: string;
+  at: Date;
+  url: string | null;
+}
+
 export interface SlackAdapter {
   readonly name: 'slack';
   postMessage(message: SlackMessage): Promise<SlackPostResult>;
@@ -68,6 +97,16 @@ export interface SlackAdapter {
   readThread(channelId: string, threadTs: string): Promise<ThreadMessage[]>;
   /** Answer in the thread, as the cockpit's bot. */
   postThreadReply(channelId: string, threadTs: string, text: string): Promise<SlackPostResult>;
+  /** Every channel and group the token can see, public and private. */
+  listChannels(): Promise<SlackChannel[]>;
+  /**
+   * Search, across everything the token can see. Slack only offers this to a
+   * user token, so a bot-token client throws rather than pretending to have
+   * looked — the caller falls back to reading channels it is in.
+   */
+  searchMessages(query: string, count?: number): Promise<SlackHit[]>;
+  /** The last messages in a channel, newest last, with names resolved. */
+  readChannel(channelId: string, limit?: number): Promise<ThreadMessage[]>;
 }
 
 /**
