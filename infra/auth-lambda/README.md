@@ -19,6 +19,33 @@ user authentication. It is fronted by the HTTP API `home-management-sync-api`
 - `GET /data` / `PUT /data` — the household data blob, now gated: only a valid
   **approved-user token** (Authorization: Bearer …) is accepted.
 
+## Open Finance (live bank / card sync)
+
+All routes are `POST /of/{action}` and require an approved-user token. The
+Open Finance credentials (`userId`, `clientId`, `clientSecret`) live only in
+S3 at `data/__of_config__.json` and are never returned to the browser
+(`config` responses are masked).
+
+- `config` — admin only: `{userId, clientId, clientSecret, autoSync}` stores the
+  keys after verifying them against `https://api.open-finance.ai/oauth/token`.
+  `{clear:true}` removes them.
+- `status` — connections (`GET /v2/connections`) and accounts
+  (`GET /v2/data/accounts`) with balances, credit limits, mortgage balances.
+- `connect` — admin only: creates a connection (`POST /v2/connections`) and
+  returns the consent-journey URL (`scaOAuth`) to open at the bank.
+- `refresh` — asks Open Finance to refetch all connections for the user.
+- `sync` — `{dateFrom, dateTo}` pulls `GET /v2/data/transactions` (paginated),
+  keeps only CHECKING + CARD transactions, drops `isDuplicate`, and returns rows
+  normalised to the app's import format (`date, merchant, description, amount,
+  kind, ref, of_id, source, account, of_cat`). Card accounts are named by issuer
+  (`ישראכרט ••2613`, `אמריקן אקספרס ••8754`) so the bank's aggregate card
+  debit is recognised as covered by the itemised detail. The client syncs in
+  two-month windows to stay inside the API Gateway 30 s limit.
+
+Sign convention (verified against live data): negative `chargedAmount` is a
+debit for both bank and card transactions; `classification.type`
+(`*_EXPENSE` / `*_INCOME`) overrides the sign when present.
+
 ## Configuration (Lambda environment variables)
 
 - `BUCKET` — S3 bucket for storage.
