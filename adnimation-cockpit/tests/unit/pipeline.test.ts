@@ -16,7 +16,7 @@ const row = (over: Partial<PipelineRow> = {}): PipelineRow => ({
   name: 'Acme',
   domain: null,
   clientType: 'demand',
-  stage: 'qualified',
+  stage: 'open_new',
   temperature: 'warm',
   ownerName: null,
   ownerPersonId: null,
@@ -45,7 +45,7 @@ describe('pipeline validation', () => {
   it('rejects an open deal with a step but no date for it', () => {
     const result = pipelineInputSchema.safeParse({
       name: 'Acme',
-      stage: 'proposal_sent',
+      stage: 'negotiation',
       nextStep: 'Chase the signature',
     });
     expect(result.success).toBe(false);
@@ -57,7 +57,7 @@ describe('pipeline validation', () => {
     for (const stage of OPEN_STAGES) {
       expect(pipelineInputSchema.safeParse({ name: 'Acme', stage }).success).toBe(false);
     }
-    for (const stage of ['live', 'dormant', 'lost'] as const) {
+    for (const stage of ['live', 'lost'] as const) {
       expect(pipelineInputSchema.safeParse({ name: 'Acme', stage }).success).toBe(true);
     }
   });
@@ -65,7 +65,7 @@ describe('pipeline validation', () => {
   it('accepts an open deal that has both', () => {
     const result = pipelineInputSchema.safeParse({
       name: 'Acme',
-      stage: 'intro',
+      stage: 'open_existing',
       nextStep: 'Send the deck',
       nextStepDate: '2026-09-04',
     });
@@ -106,8 +106,8 @@ describe('pipeline board', () => {
 
   it('weights by the probability set, and counts an unset one as nothing', () => {
     const board = buildBoard([
-      row({ stage: 'qualified', valueCents: 200_000, probability: 25 }),
-      row({ stage: 'qualified', valueCents: 200_000, probability: null }),
+      row({ stage: 'negotiation', valueCents: 200_000, probability: 25 }),
+      row({ stage: 'negotiation', valueCents: 200_000, probability: null }),
     ]);
 
     expect(board.totals.weightedValueCents).toBe(50_000);
@@ -123,8 +123,8 @@ describe('pipeline board', () => {
   });
 
   it('drops empty stages so the board shows only what exists', () => {
-    const board = buildBoard([row({ stage: 'lead' }), row({ stage: 'lead' })]);
-    expect(board.byStage.map((s) => s.stage)).toEqual(['lead']);
+    const board = buildBoard([row({ stage: 'open_new' }), row({ stage: 'open_new' })]);
+    expect(board.byStage.map((s) => s.stage)).toEqual(['open_new']);
     expect(board.byStage[0]!.rows).toHaveLength(2);
   });
 

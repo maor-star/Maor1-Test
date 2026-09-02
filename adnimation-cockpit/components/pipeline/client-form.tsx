@@ -32,7 +32,7 @@ export function PipelineClientForm({
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [stage, setStage] = useState<Stage>(client?.stage ?? 'lead');
+  const [stage, setStage] = useState<Stage>(client?.stage ?? 'open_new');
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const undo = useUndo();

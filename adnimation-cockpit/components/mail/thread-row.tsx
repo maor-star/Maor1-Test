@@ -161,9 +161,9 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
               }
             })
           }
-          title="File this conversation as an opportunity to come back to"
+          title="Put this conversation in the deals inbox to decide on later"
         >
-          {captured ? 'SAVED AS OPPORTUNITY ✓' : '→ OPPORTUNITY'}
+          {captured ? 'IN THE INBOX ✓' : '→ SUGGEST'}
         </Button>
 
         {/*

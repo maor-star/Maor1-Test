@@ -11,6 +11,9 @@ import { z } from 'zod';
 export const CLIENT_TYPES = [
   'demand',
   'supply',
+  // The same partner on both sides — they send us supply and buy demand. It is
+  // the arrangement he most wants, and for a while the one kind he could not file.
+  'mutual',
   'publisher',
   'seat_lease',
   'vendor',
@@ -21,50 +24,75 @@ export type ClientType = (typeof CLIENT_TYPES)[number];
 export const CLIENT_TYPE_LABEL: Record<ClientType, string> = {
   demand: 'DEMAND',
   supply: 'SUPPLY',
+  mutual: 'MUTUAL — DEMAND & SUPPLY',
   publisher: 'PUBLISHER',
   seat_lease: 'SEAT LEASE',
   vendor: 'VENDOR',
   other: 'OTHER',
 };
 
-/** Spec §3 — the eight stages plus the two terminal ones. */
+/**
+ * The six stages a deal moves through, and the one it falls out to.
+ *
+ * Opportunities and the pipeline used to be two screens with two vocabularies:
+ * something he noticed lived in one, and only once somebody had decided it was
+ * real did it move to the other. In practice the move never happened, and the
+ * first screen filled with things nobody had decided about. So there is one
+ * board now, and "open" is its first stage — split by whether the other side
+ * is somebody we already work with, because that is the one thing that changes
+ * how the conversation is run.
+ */
 export const STAGES = [
-  'lead',
-  'intro',
-  'qualified',
+  'open_new',
+  'open_existing',
   'negotiation',
-  'proposal_sent',
-  'contract_out',
+  'contract',
   'integration',
   'live',
-  'dormant',
   'lost',
 ] as const;
 export type Stage = (typeof STAGES)[number];
 
 export const STAGE_LABEL: Record<Stage, string> = {
-  lead: 'LEAD',
-  intro: 'INTRO',
-  qualified: 'QUALIFIED',
+  open_new: 'OPEN — NEW CLIENT',
+  open_existing: 'OPEN — EXISTING CLIENT',
   negotiation: 'NEGOTIATION',
-  proposal_sent: 'PROPOSAL SENT',
-  contract_out: 'CONTRACT OUT',
+  contract: 'CONTRACT',
   integration: 'INTEGRATION',
   live: 'LIVE',
-  dormant: 'DORMANT',
   lost: 'LOST',
 };
 
 /** Stages where a deal is still moving — the ones that need a next step. */
 export const OPEN_STAGES: Stage[] = [
-  'lead',
-  'intro',
-  'qualified',
+  'open_new',
+  'open_existing',
   'negotiation',
-  'proposal_sent',
-  'contract_out',
+  'contract',
   'integration',
 ];
+
+/**
+ * The stages the board used to have, mapped onto the ones it has now.
+ *
+ * The migration rewrites the rows; this exists for anything that still says
+ * the old word — a job on an older build, a URL he bookmarked — so it lands on
+ * a real stage rather than on nothing.
+ */
+export const LEGACY_STAGE: Record<string, Stage> = {
+  lead: 'open_new',
+  intro: 'open_new',
+  qualified: 'open_new',
+  contact: 'open_new',
+  proposal_sent: 'negotiation',
+  contract_out: 'contract',
+  dormant: 'open_existing',
+};
+
+export function normaliseStage(raw: string | null | undefined): Stage {
+  if (raw && (STAGES as readonly string[]).includes(raw)) return raw as Stage;
+  return (raw && LEGACY_STAGE[raw]) || 'open_new';
+}
 
 export const TEMPERATURES = ['hot', 'warm', 'cold'] as const;
 export type Temperature = (typeof TEMPERATURES)[number];
@@ -96,7 +124,7 @@ export const pipelineInputSchema = z
     name: z.string().trim().min(1, 'Name is required').max(200),
     domain: emptyToNull(z.string().trim().max(200).nullable()).optional(),
     clientType: z.enum(CLIENT_TYPES).default('other'),
-    stage: z.enum(STAGES).default('lead'),
+    stage: z.preprocess((v) => (typeof v === 'string' ? normaliseStage(v) : v), z.enum(STAGES)).default('open_new'),
     temperature: z.enum(TEMPERATURES).default('warm'),
     ownerPersonId: emptyToNull(z.string().uuid().nullable()).optional(),
     nextStep: emptyToNull(z.string().trim().max(300).nullable()).optional(),

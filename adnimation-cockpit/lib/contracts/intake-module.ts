@@ -344,7 +344,7 @@ export async function createLinkTarget(
         name,
         clientType: side,
         // A signed contract is past being worked; anything else is out with them.
-        stage: contract.status === 'signed' ? 'integration' : 'contract_out',
+        stage: contract.status === 'signed' ? 'integration' : 'contract',
         temperature: 'warm',
         source: 'contract',
         notes: `Created from the ${name} contract.`,

@@ -41,7 +41,7 @@ export async function savePipelineClientAction(formData: FormData): Promise<Acti
     name: asString(formData.get('name')),
     domain: asString(formData.get('domain')),
     clientType: (asString(formData.get('clientType')) || 'other') as PipelineInput['clientType'],
-    stage: (asString(formData.get('stage')) || 'lead') as PipelineInput['stage'],
+    stage: (asString(formData.get('stage')) || 'open_new') as PipelineInput['stage'],
     temperature: (asString(formData.get('temperature')) || 'warm') as PipelineInput['temperature'],
     ownerPersonId: asString(formData.get('ownerPersonId')),
     nextStep: asString(formData.get('nextStep')),

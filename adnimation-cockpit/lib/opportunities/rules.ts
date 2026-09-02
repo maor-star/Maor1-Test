@@ -76,9 +76,7 @@ export const VIEW_LABEL: Record<OpportunityView, string> = {
 export const KIND_TO_CLIENT_TYPE: Record<OpportunityKind, string> = {
   supply: 'supply',
   demand: 'demand',
-  // The pipeline splits by side and has no both; demand is where the money
-  // starts with these, so that is the honest half to open with.
-  mutual: 'demand',
+  mutual: 'mutual',
   partnership: 'other',
   product: 'other',
   upsell: 'other',

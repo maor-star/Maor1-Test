@@ -128,7 +128,7 @@ export async function archiveOpportunityAction(formData: FormData): Promise<Acti
 }
 
 export async function decideSuggestionAction(formData: FormData): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
 
   const parsed = z
     .object({ id: z.string().uuid(), accept: z.boolean() })
@@ -138,10 +138,11 @@ export async function decideSuggestionAction(formData: FormData): Promise<Action
     });
   if (!parsed.success) return { ok: false, error: 'Not a suggestion' };
 
-  const result = await decideSuggestion(parsed.data.id, parsed.data.accept);
+  const result = await decideSuggestion(parsed.data.id, parsed.data.accept, user.email);
   if (!result.ok) return { ok: false, error: result.error };
 
   refresh();
+  revalidatePath('/pipeline');
   return { ok: true };
 }
 

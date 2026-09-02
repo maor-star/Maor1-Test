@@ -152,7 +152,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
 
           {c.opportunityTitle || c.pipelineClientName ? (
             <p className="hud-label mt-1 whitespace-normal text-[9px] text-accent-700">
-              LINKED TO {c.opportunityTitle ? `OPPORTUNITY: ${c.opportunityTitle}` : ''}
+              LINKED TO {c.opportunityTitle ? `SUGGESTION: ${c.opportunityTitle}` : ''}
               {c.opportunityTitle && c.pipelineClientName ? ' · ' : ''}
               {c.pipelineClientName ? `DEAL: ${c.pipelineClientName}` : ''}
             </p>
@@ -368,52 +368,6 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
           linked to nothing. These save on change.
         */}
         <span className="inline-flex flex-wrap items-center gap-1">
-          <label className="sr-only" htmlFor={`lop-${c.id}`}>
-            Opportunity
-          </label>
-          <Select
-            id={`lop-${c.id}`}
-            value={c.opportunityId ?? ''}
-            disabled={pending}
-            className="h-7 max-w-[14rem] text-[12px]"
-            onFocus={() => loadLinks()}
-            onChange={(e) => {
-              const data = new FormData();
-              data.set('id', c.id);
-              data.set('what', 'opportunity');
-              data.set('target', e.target.value);
-              run(setLinkAction, data);
-            }}
-          >
-            <option value="">— no opportunity —</option>
-            {c.opportunityId && !(links?.opportunities ?? []).some((o) => o.id === c.opportunityId) ? (
-              <option value={c.opportunityId}>{c.opportunityTitle ?? 'Linked opportunity'}</option>
-            ) : null}
-            {(links?.opportunities ?? []).map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.title}
-              </option>
-            ))}
-          </Select>
-
-          {!c.opportunityId ? (
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              disabled={pending}
-              title={`Create an opportunity for ${c.counterpartyName}`}
-              onClick={() => {
-                const data = new FormData();
-                data.set('id', c.id);
-                data.set('what', 'opportunity');
-                run(createLinkAction, data);
-              }}
-            >
-              + OPPORTUNITY
-            </Button>
-          ) : null}
-
           <label className="sr-only" htmlFor={`ldl-${c.id}`}>
             Deal
           </label>
@@ -679,41 +633,6 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
             </div>
 
             <div>
-              <Label htmlFor={`op-${c.id}`}>Belongs to an opportunity</Label>
-              <Select
-                id={`op-${c.id}`}
-                name="opportunityId"
-                defaultValue={c.opportunityId ?? ''}
-                className="w-full"
-              >
-                <option value="">— none —</option>
-                {(links?.opportunities ?? []).map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.title}
-                  </option>
-                ))}
-              </Select>
-              {/*
-                Often the contract IS the first record of the relationship, so
-                the thing to link to has to be creatable from here.
-              */}
-              {!c.opportunityId ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => {
-                    const data = new FormData();
-                    data.set('id', c.id);
-                    data.set('what', 'opportunity');
-                    run(createLinkAction, data);
-                  }}
-                  className="mt-1 font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
-                >
-                  + Create one for {c.counterpartyName}
-                </button>
-              ) : null}
-            </div>
-            <div>
               <Label htmlFor={`dl-${c.id}`}>Belongs to a deal</Label>
               <Select
                 id={`dl-${c.id}`}
@@ -761,9 +680,9 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
             <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
               {links === null
                 ? 'LOOKING FOR WHAT THIS BELONGS TO…'
-                : (links.opportunities.length + links.deals.length === 0
-                    ? 'NOTHING MATCHING THIS COUNTERPARTY IN OPPORTUNITIES OR THE PIPELINE'
-                    : `${links.opportunities.length + links.deals.length} POSSIBLE MATCHES FOUND`)}
+                : (links.deals.length === 0
+                    ? 'NO DEAL MATCHING THIS COUNTERPARTY ON THE BOARD'
+                    : `${links.deals.length} POSSIBLE MATCH${links.deals.length === 1 ? '' : 'ES'} FOUND`)}
               {' · MARKING IT SIGNED MOVES THE LINKED DEAL TO INTEGRATION'}
             </span>
           </div>

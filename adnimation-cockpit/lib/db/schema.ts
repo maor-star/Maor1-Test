@@ -363,7 +363,7 @@ export const pipelineClients = pgTable(
     name: text('name').notNull(),
     domain: text('domain'),
     clientType: text('client_type').notNull().default('other'),
-    stage: text('stage').notNull().default('lead'),
+    stage: text('stage').notNull().default('open_new'),
     temperature: text('temperature').notNull().default('warm'),
     ownerPersonId: uuid('owner_person_id').references(() => people.id),
     nextStep: text('next_step'),

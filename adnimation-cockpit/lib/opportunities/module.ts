@@ -513,7 +513,7 @@ export async function promoteToPipeline(
         clientType: overrides.clientType ?? KIND_TO_CLIENT_TYPE[row.kind as keyof typeof KIND_TO_CLIENT_TYPE] ?? 'other',
         // Something he has decided is a real deal is past a cold lead, but
         // calling it qualified is his judgement, not ours.
-        stage: overrides.stage ?? 'lead',
+        stage: overrides.stage ?? 'open_new',
         temperature: 'warm',
         valueCents: row.valueCents,
         nextStep: overrides.nextStep ?? row.nextStep,
@@ -582,23 +582,51 @@ export async function captureLabelHealth(labels: string[]): Promise<{
 }
 
 /** Accepting a suggestion makes it his; declining archives it for good. */
+/**
+ * Accepting a suggestion puts it straight on the deals board.
+ *
+ * There used to be a stage between "the detector proposed this" and "this is a
+ * deal" — his own list of things noticed and not acted on. It filled up and
+ * nothing left it. Now accepting means the deal exists, in its first stage,
+ * and the one list he works is the board.
+ */
 export async function decideSuggestion(
   id: string,
   accept: boolean,
+  actor = 'unknown',
 ): Promise<{ ok: boolean; error?: string }> {
   try {
+    if (accept) {
+      const result = await promoteToPipeline(id, actor, { stage: 'open_new' });
+      return result.ok ? { ok: true } : { ok: false, error: result.error };
+    }
     await db
       .update(opportunities)
-      .set(
-        accept
-          ? { status: 'new', lastTouchedAt: new Date() }
-          : { archivedAt: new Date(), lastTouchedAt: new Date() },
-      )
-      .where(and(eq(opportunities.id, id), eq(opportunities.status, 'suggested')));
+      .set({ archivedAt: new Date(), lastTouchedAt: new Date() })
+      .where(and(eq(opportunities.id, id), isNull(opportunities.pipelineClientId)));
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not update it' };
   }
+}
+
+/**
+ * The inbox: everything captured or proposed that is not yet a deal.
+ *
+ * Suggestions from the mail detector, conversations he labelled in Gmail,
+ * messages sent to the Slack bot — one queue, newest first, each one a click
+ * from becoming a deal or from going away.
+ */
+export async function inboxOpportunities(now = new Date()): Promise<OpportunityListItem[]> {
+  const rows = await db
+    .select()
+    .from(opportunities)
+    .where(and(isNull(opportunities.archivedAt), isNull(opportunities.pipelineClientId)))
+    .orderBy(desc(opportunities.createdAt));
+
+  return rows
+    .filter((r) => LIVE_STATUSES.includes(r.status as OpportunityStatus) || r.status === 'suggested')
+    .map((r) => ({ ...toRow(r), detectReasons: r.detectReasons ?? [], state: classify(toRow(r), now) }));
 }
 
 export { LIVE_STATUSES };

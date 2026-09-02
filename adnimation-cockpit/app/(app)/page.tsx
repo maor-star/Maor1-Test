@@ -5,7 +5,9 @@ import { topSeats } from '@/lib/seats/service';
 import { urgentWork, clientsToCall } from '@/lib/overview/service';
 import { listDelegations } from '@/lib/delegation/module';
 import { mailNeedingReply, mailCounts } from '@/lib/mail/service';
-import { opportunitiesNeedingAttention, opportunityCounts } from '@/lib/opportunities/module';
+import { inboxOpportunities } from '@/lib/opportunities/module';
+import { listPipeline } from '@/lib/pipeline/service';
+import { STAGE_LABEL } from '@/lib/pipeline/types';
 import { PERIOD_LABEL } from '@/lib/revenue/periods';
 import { fmtDateTime, fmtMoney } from '@/lib/utils';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
@@ -15,7 +17,6 @@ import { Num } from '@/components/num';
 import { DeltaPct } from '@/components/revenue/delta';
 import { Sparkline } from '@/components/revenue/sparkline';
 import { InlineTaskEditor } from '@/components/tasks/inline-task-editor';
-import { InlineOpportunityEditor } from '@/components/opportunities/inline-opportunity-editor';
 import { listDepartments, listPeople } from '@/lib/tasks/queries';
 
 export const dynamic = 'force-dynamic';
@@ -489,18 +490,21 @@ function Skeleton({ title, index }: { title: string; index: string }) {
 }
 
 /**
- * The opportunities that are going quiet.
+ * The deals that are slipping.
  *
  * These belong on the home page for the same reason the waiting panels do:
- * they decay. Nothing tells him an opportunity died — it simply stops being
- * mentioned, and the only moment he would notice is one where he happens to
- * remember it. This is that moment, made to happen daily.
+ * they decay. A deal whose next step has come and gone, or with nobody
+ * speaking to the other side, does not fail loudly — it simply stops being
+ * mentioned. This is the moment he would otherwise have to remember, made to
+ * happen daily. The count of suggestions waiting in the inbox rides along,
+ * because a proposal nobody looked at is the same kind of silence.
  */
 async function SlippingAwayCard() {
-  const [rows, counts] = await Promise.all([
-    opportunitiesNeedingAttention(4),
-    opportunityCounts(),
+  const [attention, inbox] = await Promise.all([
+    listPipeline({ attention: true, sort: 'next_step' }),
+    inboxOpportunities(),
   ]);
+  const rows = attention.slice(0, 5);
 
   return (
     <HudCard>
@@ -508,46 +512,49 @@ async function SlippingAwayCard() {
         title="Slipping away"
         index="O04"
         action={
-          <Link
-            href="/opportunities?view=cold"
-            className="font-semi text-[10px] tracking-[0.12em] text-accent-700 hover:text-accent"
-          >
-            <Num>{counts.cold}</Num> COLD · <Num>{counts.open}</Num> OPEN ·{' '}
-            <Num>{fmtMoney(counts.openValueCents)}</Num> ON THE TABLE ↗
-          </Link>
+          <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+            <Link href="/pipeline?attention=1" className="text-accent-700 hover:text-accent">
+              <Num>{attention.length}</Num> NEED ATTENTION
+            </Link>
+            {' · '}
+            <Link href="/pipeline#inbox" className="text-accent-700 hover:text-accent">
+              <Num>{inbox.length}</Num> SUGGESTED
+            </Link>
+          </span>
         }
       />
 
       {rows.length === 0 ? (
         <p className="font-semi text-[12px] text-neutral-500">
-          {counts.open === 0
-            ? 'Nothing written down yet. Anything you meant to do and have not — put it in opportunities.'
-            : 'Nothing has gone cold. Every open opportunity has a next step.'}
+          {inbox.length > 0
+            ? `Every open deal has a next step. ${inbox.length} suggestion${inbox.length === 1 ? '' : 's'} waiting in the inbox.`
+            : 'Every open deal has a next step and a recent conversation.'}
         </p>
       ) : (
         <ul className="space-y-2">
-          {rows.map((o) => (
-            <li key={o.id} className="border-t border-divider pt-2 first:border-0 first:pt-0">
+          {rows.map((d) => (
+            <li key={d.id} className="border-t border-divider pt-2 first:border-0 first:pt-0">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <Link
-                  href="/opportunities?view=cold"
+                  href={`/pipeline?q=${encodeURIComponent(d.name)}`}
                   className="font-cond text-[15px] leading-none text-neutral-900 hover:text-accent"
                 >
-                  {o.title}
+                  {d.name}
                 </Link>
                 <span className="font-cond text-[15px] leading-none text-sev-warning">
-                  <Num>{o.state.daysQuiet}d</Num>
+                  {d.stepOverdue ? (
+                    <>DUE <Num>{d.nextStepDate}</Num></>
+                  ) : d.quietDays === null ? (
+                    'NO CONVERSATION'
+                  ) : (
+                    <Num>{d.quietDays}d QUIET</Num>
+                  )}
                 </span>
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <InlineOpportunityEditor id={o.id} />
-              </div>
               <p className="hud-label mt-1 whitespace-normal text-[9px]">
-                {o.counterparty ? `${o.counterparty} · ` : ''}
-                {o.valueCents !== null ? <Num>{fmtMoney(o.valueCents)}</Num> : 'UNSIZED'}
-                {o.state.dueToRevisit ? ' · DUE TO REVISIT' : ''}
-                {o.state.needsNextStep ? ' · NO NEXT STEP' : ''}
-                {o.state.overdue ? ' · NEXT STEP OVERDUE' : ''}
+                {STAGE_LABEL[d.stage]}
+                {d.nextStep ? ` · ${d.nextStep}` : ' · NO NEXT STEP'}
+                {d.valueCents !== null ? <> · <Num>{fmtMoney(d.valueCents)}</Num></> : ''}
               </p>
             </li>
           ))}

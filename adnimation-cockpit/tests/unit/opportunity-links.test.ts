@@ -88,7 +88,7 @@ describe('the kind an opportunity can be', () => {
     }
   });
 
-  it('opens a mutual partner on the demand side, where the money starts', () => {
-    expect(KIND_TO_CLIENT_TYPE.mutual).toBe('demand');
+  it('files a mutual partner as mutual on the board, now that the board has the word', () => {
+    expect(KIND_TO_CLIENT_TYPE.mutual).toBe('mutual');
   });
 });

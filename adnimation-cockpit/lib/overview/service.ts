@@ -1,7 +1,6 @@
 import { and, asc, desc, eq, isNull, isNotNull, lte, ne, or, sql } from 'drizzle-orm';
 import { crmCompanies, db, departments, people, pipelineClients, tasks } from '@/lib/db';
 import { daysOverdue } from '@/lib/scoring/heat-score';
-import { loadClients } from '@/lib/clients/service';
 import { todayInTz } from '@/lib/utils';
 import type { TaskPriority } from '@/lib/tasks/types';
 
@@ -97,13 +96,14 @@ export interface ClientToCall {
 }
 
 /**
- * Who is owed a conversation, from three signals in priority order:
- *  1. a pipeline client whose next step is past due — a commitment already made;
- *  2. a paying client whose revenue fell hard against its own recent run rate;
- *  3. a large client nobody has logged a conversation with.
+ * Who is owed a conversation, from two signals in priority order:
+ *  1. a deal whose next step is past due — a commitment already made;
+ *  2. a large client nobody has logged a conversation with.
  *
- * Revenue is the 30-day account pull, so this is about real money, not a CRM
- * field somebody forgot to update.
+ * A third signal — a paying client whose revenue fell against its own run
+ * rate — used to sit between them, read from a static snapshot of the accounts
+ * that had not been refreshed since it was taken. The control panel reads that
+ * live from the source now, and this list stopped pretending.
  */
 export async function clientsToCall(limit = 8): Promise<ClientToCall[]> {
   const today = todayInTz();
@@ -143,29 +143,7 @@ export async function clientsToCall(limit = 8): Promise<ClientToCall[]> {
     });
   }
 
-  // 2. Revenue that has dropped against the client's own run rate.
-  if (out.length < limit) {
-    // The 7-day window, because a client is compared against its own 30-day
-    // run rate and the 30-day window has nothing to compare against.
-    const { clients } = await loadClients('7D').catch(() => ({ clients: [] }));
-    const falling = clients
-      .filter((c) => c.profitCents > 0 && c.trendPct !== null && c.trendPct < -0.3)
-      .sort((a, b) => (a.trendPct ?? 0) - (b.trendPct ?? 0))
-      .slice(0, limit - out.length);
-
-    for (const c of falling) {
-      out.push({
-        key: `revenue:${c.name}`,
-        name: c.name,
-        reason: 'REVENUE FALLING',
-        because: `Down ${Math.round(Math.abs(c.trendPct ?? 0) * 100)}% against its own 30-day run rate`,
-        tone: 'warning',
-        moneyCents: c.profitCents,
-      });
-    }
-  }
-
-  // 3. Big CRM accounts with nobody assigned to them.
+  // 2. Big CRM accounts with nobody assigned to them.
   if (out.length < limit) {
     const unowned = await db
       .select({ id: crmCompanies.hubspotId, name: crmCompanies.name, stage: crmCompanies.lifecycleStage })

@@ -14,6 +14,12 @@ import {
   type ClientType, type Stage,
 } from '@/lib/pipeline/types';
 import { fmtMoney, fmtNumber } from '@/lib/utils';
+import {
+  captureLabelHealth, contractsForOpportunities, inboxOpportunities,
+} from '@/lib/opportunities/module';
+import { OpportunityCard } from '@/components/opportunities/opportunity-card';
+import { SweepMail } from '@/components/opportunities/sweep-mail';
+import { HowToCapture } from '@/components/opportunities/how-to-capture';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,12 +54,22 @@ export default async function PipelinePage({
     ? (sp.sort as PipelineSort)
     : 'newest';
 
-  const [rows, owners] = await Promise.all([
+  const gmailLabels = (process.env.GMAIL_OPPORTUNITY_LABEL ?? 'Opportunity')
+    .split(',')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const [rows, owners, inbox, labelHealth] = await Promise.all([
     listPipeline({ stage, clientType, q: sp.q, attention, sort }),
     listOwners(),
+    inboxOpportunities(),
+    captureLabelHealth(gmailLabels).catch(() => []),
   ]);
   const board = buildBoard(rows);
-  const touches = await recentTouches(rows.map((r) => r.id));
+  const [touches, inboxContracts] = await Promise.all([
+    recentTouches(rows.map((r) => r.id)),
+    contractsForOpportunities(inbox.map((o) => o.id)),
+  ]);
 
   // Keep the current filters when only one of them changes — working the list
   // means narrowing it repeatedly, not starting over each time.
@@ -70,11 +86,11 @@ export default async function PipelinePage({
   return (
     <div className="space-y-5">
       <PageHeader
-        kicker="SALES / 06"
-        title="PIPELINE"
+        kicker="DEALS / 05"
+        title="DEALS"
         action={
           <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
-            MY OWN BOOK · NOT SYNCED FROM HUBSPOT
+            FROM FIRST MENTION TO LIVE · MY OWN BOOK, NOT SYNCED FROM HUBSPOT
           </span>
         }
       />
@@ -118,6 +134,48 @@ export default async function PipelinePage({
             ))}
           </div>
         ) : null}
+      </HudCard>
+
+      {/*
+        The inbox: what the mail detector proposed, what he labelled in Gmail,
+        what was sent to the Slack bot. None of it is a deal until he says so —
+        one click makes it one in its first stage, one click makes it go away.
+        It sits above the board because a suggestion nobody looked at is the
+        same kind of silence as a deal nobody moved.
+      */}
+      <HudCard id="inbox" className="gap-0 p-0">
+        <div className="flex flex-wrap items-baseline justify-between gap-3 p-[18px] pb-3">
+          <HudCardHeader
+            title="Suggested — not yet deals"
+            index="P02"
+            action={
+              <div className="flex flex-wrap items-center gap-3">
+                <SweepMail />
+                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                  <Num>{inbox.length}</Num> WAITING
+                </span>
+              </div>
+            }
+          />
+        </div>
+        {inbox.length === 0 ? (
+          <div className="border-t border-divider px-[18px] py-3">
+            <p className="mb-3 font-semi text-[12px] text-neutral-500">
+              Nothing proposed that you have not already decided on.
+            </p>
+            <HowToCapture gmailLabels={gmailLabels} labelHealth={labelHealth} />
+          </div>
+        ) : (
+          <ul>
+            {inbox.map((o) => (
+              <OpportunityCard
+                key={o.id}
+                opportunity={o}
+                contracts={inboxContracts.get(o.id) ?? []}
+              />
+            ))}
+          </ul>
+        )}
       </HudCard>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -175,7 +233,7 @@ export default async function PipelinePage({
         <HudCard>
           <p className="font-semi text-[12px] text-neutral-500">
             {board.totals.clients === 0 && !stage && !clientType && !sp.q && !attention
-              ? 'Nothing in the pipeline yet. Add the first client above.'
+              ? 'No deals yet. Add the first one above, or accept a suggestion.'
               : 'Nothing matches these filters.'}
           </p>
         </HudCard>
@@ -185,7 +243,7 @@ export default async function PipelinePage({
             <div className="p-[18px] pb-3">
               <HudCardHeader
                 title={STAGE_LABEL[group.stage]}
-                index={`P${String(i + 2).padStart(2, '0')}`}
+                index={`P${String(i + 3).padStart(2, '0')}`}
                 action={
                   <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
                     <Num>{fmtNumber(group.rows.length)}</Num> ·{' '}

@@ -18,7 +18,7 @@ const INSTANCE = 'i-09d6877e4c01aa149';
 
 const PATHS = [
   '/', '/trading', '/pipeline', '/crm', '/delegations',
-  '/revenue', '/clients', '/seats/demand', '/seats/supply', '/tasks',
+  '/revenue', '/seats/demand', '/seats/supply', '/tasks',
 ];
 
 const script = [

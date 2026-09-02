@@ -349,7 +349,7 @@ export function OpportunityCard({
         >
           <div>
             <Label htmlFor={`stage-${o.id}`}>Starting stage</Label>
-            <Select id={`stage-${o.id}`} name="stage" defaultValue="lead" className="h-8 text-[12px]">
+            <Select id={`stage-${o.id}`} name="stage" defaultValue="open_new" className="h-8 text-[12px]">
               {OPEN_STAGES.map((st) => (
                 <option key={st} value={st}>
                   {STAGE_LABEL[st]}
