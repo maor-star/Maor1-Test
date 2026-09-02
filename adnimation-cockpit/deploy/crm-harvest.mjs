@@ -239,7 +239,17 @@ async function readSignatures(batch) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 2000,
+        /*
+         * Room for the batch, not a fixed ceiling.
+         *
+         * One contact's answer is ~130 tokens and twelve short ones already
+         * came to 1500 — a batch of real signatures, with addresses and long
+         * company names, went past the old flat 2000 and was cut off. A cut
+         * answer is not partial: the JSON no longer parses, so the catch below
+         * returned an empty list and every contact in that batch silently kept
+         * its empty fields.
+         */
+        max_tokens: Math.max(2000, batch.length * 400),
         system: SYSTEM,
         messages: [{ role: 'user', content: prompt }],
       }),
@@ -248,10 +258,27 @@ async function readSignatures(batch) {
     if (res.ok) {
       const body = await res.json();
       const text = (body.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join('');
+      if (body.stop_reason === 'max_tokens') {
+        console.error(
+          `  the answer for ${batch.length} signatures was cut off at ${body.usage?.output_tokens} tokens`,
+        );
+      }
       try {
         const parsed = JSON.parse(/\{[\s\S]*\}/.exec(text)?.[0] ?? text);
-        return Array.isArray(parsed.contacts) ? parsed.contacts : [];
-      } catch {
+        const contacts = Array.isArray(parsed.contacts) ? parsed.contacts : [];
+        // Silence here used to be indistinguishable from "found nothing".
+        if (contacts.length < batch.length) {
+          console.error(
+            `  read ${contacts.length} of ${batch.length} signatures — ` +
+              `${batch.length - contacts.length} left as they were`,
+          );
+        }
+        return contacts;
+      } catch (e) {
+        console.error(
+          `  could not read the answer for ${batch.length} signatures ` +
+            `(${e.message}); they keep whatever they already had`,
+        );
         return [];
       }
     }
