@@ -7,8 +7,9 @@ import { eq } from 'drizzle-orm';
 import { agents, db } from '@/lib/db';
 import {
   runById, seedAgents, setAgentEnabled, setAutonomy, setGlobalKill, setInstructions,
-  setNotifySlack, setRunEvery,
+  setNotifySlack, setRunEvery, setSettings,
 } from '@/lib/agents/module';
+import { settingsFromForm } from '@/lib/agents/settings';
 import { jobFor, runJob } from '@/lib/agents/job-preview';
 import { setProfile, startTraining } from '@/lib/agents/learning';
 
@@ -223,4 +224,31 @@ export async function setProfileAction(formData: FormData): Promise<AgentActionR
 
   revalidatePath('/agents');
   return { ok: true, message: 'Saved. It is yours now, so training will leave it alone.' };
+}
+
+/**
+ * His dials for one agent, from the customise form.
+ *
+ * The form posts every field it shows; the settings module keeps only what the
+ * agent declares and only what differs from the default.
+ */
+export async function setSettingsAction(formData: FormData): Promise<AgentActionResult> {
+  const user = await requireUser();
+  const id = idSchema.safeParse(formData.get('id'));
+  if (!id.success) return { ok: false, error: 'Not an agent' };
+
+  const [row] = await db.select({ name: agents.name }).from(agents).where(eq(agents.id, id.data)).limit(1);
+  if (!row) return { ok: false, error: 'No such agent' };
+
+  const form: Record<string, string | string[]> = {};
+  for (const [key, value] of formData.entries()) {
+    if (key === 'id' || typeof value !== 'string') continue;
+    const held = form[key];
+    form[key] = held === undefined ? value : Array.isArray(held) ? [...held, value] : [held, value];
+  }
+
+  const result = await setSettings(id.data, settingsFromForm(row.name, form), user.email);
+  if (!result.ok) return { ok: false, error: result.error };
+  revalidatePath('/agents');
+  return { ok: true, message: 'Saved. The next run reads these.' };
 }

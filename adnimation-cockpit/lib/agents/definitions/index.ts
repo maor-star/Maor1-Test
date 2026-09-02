@@ -109,19 +109,20 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
     enabled: false,
   },
   {
-    name: 'opportunity-rescuer',
+    name: 'deal-mover',
     description:
-      'Finds opportunities that have gone quiet with no next step and drafts the one message ' +
-      'that would restart each.',
+      'Works the deals board: a next step that has come and gone gets its follow-up drafted, ' +
+      'a deal nobody has spoken to gets flagged, and a deal that has clearly moved on gets a ' +
+      'proposed stage change — each one yours to approve.',
     rationale:
-      'Opportunities do not fail loudly, they stop being mentioned. This turns the cold list ' +
-      'into drafted messages he only has to approve.',
+      'Deals do not fail loudly, they stop being mentioned. This turns the board’s quiet rows ' +
+      'into drafted messages and proposed moves he only has to approve.',
     triggerType: 'schedule',
-    triggerConfig: { cron: '0 10 * * 1' },
-    conditions: [{ name: 'Something has gone cold', check: 'opportunity_cold', config: {} }],
-    actions: [{ type: 'draft_reply', config: {} }],
+    triggerConfig: { cron: '0 9 * * 0-4' },
+    conditions: [{ name: 'A deal has gone quiet or overdue', check: 'deal_stale', config: {} }],
+    actions: [{ type: 'draft_reply', config: {} }, { type: 'create_task', config: {} }],
     autonomyLevel: 1,
-    maxRunsPerHour: 2,
+    maxRunsPerHour: 4,
     enabled: false,
   },
   {
@@ -202,40 +203,6 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
     enabled: false,
   },
   {
-    name: 'promo-filer',
-    description:
-      'Files sales and marketing mail under “Sales & Marketing” and takes it out of the inbox, so ' +
-      'what is left is what still needs you.',
-    rationale:
-      'Filed, never deleted, and it will not touch anyone the company deals with, anyone you ' +
-      'have replied to, or any reply or forward. Marketing left in the inbox costs you a glance; ' +
-      'a client filed as marketing costs you the client, so it errs the other way.',
-    triggerType: 'schedule',
-    triggerConfig: { cron: '0 */3 * * *' },
-    conditions: [{ name: 'It really is marketing', check: 'looks_promotional', config: {} }],
-    actions: [{ type: 'update_record', config: { label: 'Sales & Marketing', removeFromInbox: true } }],
-    autonomyLevel: 1,
-    maxRunsPerHour: 8,
-    enabled: false,
-  },
-  {
-    name: 'code-cleaner',
-    description:
-      'Throws out one-time login codes an hour after they arrive, by which time they no longer ' +
-      'work.',
-    rationale:
-      'They are worthless the moment they expire and they clutter the inbox for ever. It never ' +
-      'touches a security alert — those share almost all of a code’s vocabulary and are how you ' +
-      'find out an account was taken. Trash, not delete: Gmail keeps it thirty days.',
-    triggerType: 'schedule',
-    triggerConfig: { cron: '30 * * * *' },
-    conditions: [{ name: 'The code has expired', check: 'code_expired', config: { hours: 1 } }],
-    actions: [{ type: 'update_record', config: { trash: true } }],
-    autonomyLevel: 1,
-    maxRunsPerHour: 4,
-    enabled: false,
-  },
-  {
     name: 'renewal-warner',
     description:
       'Watches every signed contract for its notice period and warns you before the window to ' +
@@ -247,37 +214,6 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
     triggerConfig: { cron: '0 8 * * 1' },
     conditions: [{ name: 'A notice window is closing', check: 'renewal_window', config: { days: 45 } }],
     actions: [{ type: 'create_alert', config: { severity: 'warning' } }, { type: 'create_task', config: {} }],
-    autonomyLevel: 1,
-    maxRunsPerHour: 2,
-    enabled: false,
-  },
-  {
-    name: 'meeting-prep',
-    description:
-      'Before each meeting, one card: who they are, what we last agreed, what is open with them, ' +
-      'and what they are worth.',
-    rationale:
-      'Everything the cockpit knows about a counterparty, assembled in the ten minutes before ' +
-      'you speak to them instead of in the hour after.',
-    triggerType: 'schedule',
-    triggerConfig: { cron: '0 6 * * 0-4' },
-    conditions: [{ name: 'There is a meeting today', check: 'meeting_today', config: {} }],
-    actions: [{ type: 'post_slack_internal', config: { to: 'ceo' } }],
-    autonomyLevel: 1,
-    maxRunsPerHour: 2,
-    enabled: false,
-  },
-  {
-    name: 'payment-chaser',
-    description:
-      'Tracks invoices we have sent and drafts the chase when one goes past its terms.',
-    rationale:
-      'Money owed to us is the one number nobody in a small company is asked about daily. The ' +
-      'draft goes to you; sending to a customer stays yours.',
-    triggerType: 'schedule',
-    triggerConfig: { cron: '0 9 * * 2' },
-    conditions: [{ name: 'Something is overdue', check: 'receivable_overdue', config: { days: 7 } }],
-    actions: [{ type: 'draft_reply', config: {} }],
     autonomyLevel: 1,
     maxRunsPerHour: 2,
     enabled: false,
@@ -315,38 +251,6 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
     enabled: false,
   },
   {
-    name: 'intro-writer',
-    description:
-      'When you say who you want introduced to whom, drafts the introduction in your voice with ' +
-      'the context both sides need.',
-    rationale:
-      'Introductions are high value and slow to write, which is why they get postponed. The ' +
-      'draft is yours to send.',
-    triggerType: 'manual',
-    triggerConfig: {},
-    conditions: [{ name: 'Claude is connected', check: 'claude_configured', config: {} }],
-    actions: [{ type: 'draft_reply', config: {} }],
-    autonomyLevel: 1,
-    maxRunsPerHour: 10,
-    enabled: false,
-  },
-  {
-    name: 'expense-sorter',
-    description:
-      'Reads receipts and invoices as they arrive and files them by category and month, so the ' +
-      'bookkeeping is done before anyone asks for it.',
-    rationale:
-      'The month-end scramble, removed. Filing is reversible and internal, which makes this a ' +
-      'good candidate to run without asking once it has a record.',
-    triggerType: 'schedule',
-    triggerConfig: { cron: '0 5 * * *' },
-    conditions: [{ name: 'Claude is connected', check: 'claude_configured', config: {} }],
-    actions: [{ type: 'update_record', config: {} }],
-    autonomyLevel: 1,
-    maxRunsPerHour: 4,
-    enabled: false,
-  },
-  {
     name: 'commitment-tracker',
     description:
       'Reads what you promised in Slack and email — "I will send you", "by Thursday" — and turns ' +
@@ -363,16 +267,109 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
     enabled: false,
   },
   {
-    name: 'quiet-client-watch',
+    name: 'activity-watch',
     description:
-      'Notices a client you have not spoken to in longer than you usually would, and says who.',
+      'Watches every line on the control panel — core clients, video, apps, bidder, display ' +
+      'trading, the exchange, seat lease — against its own recent pattern, and says which line ' +
+      'moved and by how much the morning it happens.',
     rationale:
-      'Churn is quiet before it is loud. This is the list you would have made if you had ' +
-      'remembered to make it.',
+      'The company total hides a line collapsing. Each line against its own week is the only ' +
+      'comparison that catches it early, and the threshold is his to set.',
     triggerType: 'schedule',
-    triggerConfig: { cron: '0 9 * * 1' },
-    conditions: [{ name: 'Someone has gone quiet', check: 'client_quiet', config: { days: 30 } }],
-    actions: [{ type: 'create_alert', config: { severity: 'info' } }],
+    triggerConfig: { cron: '30 8 * * *' },
+    conditions: [{ name: 'A line moved abnormally', check: 'activity_anomaly', config: {} }],
+    actions: [{ type: 'create_alert', config: { severity: 'warning' } }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 4,
+    enabled: false,
+  },
+  {
+    name: 'core-client-guardian',
+    description:
+      'Watches the accounts that carry the company. When one drops against its own previous ' +
+      'week it raises the flag, drafts the note to the account, and opens the task for whoever ' +
+      'owns the relationship.',
+    rationale:
+      'Fifteen accounts are most of the money. A 25% drop in one of them is worth more than ' +
+      'any other signal on the screen, and it is invisible in the total.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '45 8 * * *' },
+    conditions: [{ name: 'A core account dropped', check: 'core_client_drop', config: {} }],
+    actions: [
+      { type: 'create_alert', config: { severity: 'warning' } },
+      { type: 'draft_reply', config: {} },
+      { type: 'create_task', config: {} },
+    ],
+    autonomyLevel: 1,
+    maxRunsPerHour: 4,
+    enabled: false,
+  },
+  {
+    name: 'task-hygiene',
+    description:
+      'Keeps the task board honest: stale tasks, zombies snoozed three times, work with no ' +
+      'owner and no date — surfaced daily, with the nudge drafted for whoever should move it.',
+    rationale:
+      'A task board nobody tends stops being believed. This is the tending, done every morning ' +
+      'before he looks.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '15 8 * * 0-4' },
+    conditions: [{ name: 'Something on the board is stale', check: 'task_stale', config: {} }],
+    actions: [{ type: 'create_alert', config: { severity: 'info' } }, { type: 'post_slack_internal', config: {} }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 4,
+    enabled: false,
+  },
+  {
+    name: 'contact-harvester',
+    description:
+      'Reads every mail that arrives and puts the person and their company into the CRM — name, ' +
+      'title, phone, anything the signature gives — so the CRM is built by the mail rather than ' +
+      'by remembering to type.',
+    rationale:
+      'The same harvest that built the CRM from a year of mail, run forward every few hours. ' +
+      'Reversible: a contact it should not have added is archived, never deleted.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 */3 * * *' },
+    conditions: [{ name: 'New mail has arrived', check: 'contact_harvest_pending', config: {} }],
+    actions: [{ type: 'update_record', config: { target: 'crm' } }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 8,
+    enabled: false,
+  },
+  {
+    name: 'systems-watch',
+    description:
+      'Watches the machinery: the syncs from ClickUp, HubSpot, Gmail and the revenue source, ' +
+      'the job timers on the server, and the other agents’ runs. A sync that is late or a job ' +
+      'that failed twice is said out loud before the screen goes stale.',
+    rationale:
+      'Every panel here is only as true as the sync behind it. This is the one agent whose job ' +
+      'is to doubt the others.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '*/30 * * * *' },
+    conditions: [{ name: 'A system is late or failing', check: 'systems_stale', config: {} }],
+    actions: [{ type: 'create_alert', config: { severity: 'critical' } }],
+    autonomyLevel: 1,
+    maxRunsPerHour: 6,
+    enabled: false,
+  },
+  {
+    name: 'autopilot',
+    description:
+      'The daily review of the whole company. Reads the control panel, the core clients, the ' +
+      'deals, the contracts, the tasks, the mail waiting on you and the other agents’ runs, ' +
+      'decides what should happen, and does what it is permitted to — opening tasks, raising ' +
+      'alerts, noting deals — while writing down every decision and why. The Copilot screen is ' +
+      'where you read the log and talk to it.',
+    rationale:
+      'The agent he asked for: one that manages rather than monitors. It is bounded by the same ' +
+      'ladder as everything else — at level 1 it proposes; nothing external, nothing ' +
+      'irreversible, ever — and its permissions are dials he sets, not assumptions it makes.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 6 * * *' },
+    conditions: [{ name: 'A model is connected', check: 'copilot_configured', config: {} }],
+    actions: [{ type: 'autopilot_review', config: {} }],
     autonomyLevel: 1,
     maxRunsPerHour: 2,
     enabled: false,

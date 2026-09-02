@@ -1,4 +1,4 @@
-import { desc, eq, sql } from 'drizzle-orm';
+import { desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { agentRuns, agents, db } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 import { claudeStatus } from '@/lib/integrations/claude';
@@ -7,6 +7,8 @@ import { notifyRun } from './notify';
 import { RUN_INTERVALS } from './types';
 import { getLearning, recentJobRuns, type JobRun, type Learning } from './learning';
 import { globalKill, runAgent, setGlobalKill, type Runtime } from './runtime';
+import { conditions as checkConditions, performers as checkPerformers, settingsContext } from './checks';
+import { RETIRED_AGENTS, effectiveSettings, settingsFor, type SettingField, type Settings } from './settings';
 import {
   isIrreversible, validateAgentConfig, type AgentInput, type AgentRecord,
 } from './types';
@@ -45,10 +47,14 @@ export interface AgentListItem extends AgentRecord {
   instructionsUpdatedAt: Date | null;
   lastRun: { startedAt: Date; outcome: string | null; haltReason: string | null } | null;
   runsToday: number;
+  /** His dials, with the defaults filled in, and what each one is. */
+  settings: Settings;
+  settingFields: SettingField[];
 }
 
 export async function listAgents(): Promise<AgentListItem[]> {
-  const rows = await db.select().from(agents).orderBy(agents.name);
+  // Retired agents keep their rows and their history; they just stop being listed.
+  const rows = await db.select().from(agents).where(isNull(agents.retiredAt)).orderBy(agents.name);
   const rationales = new Map(SEED_AGENTS.map((a) => [a.name, a.rationale]));
 
   const jobRuns = new Map(
@@ -92,6 +98,8 @@ export async function listAgents(): Promise<AgentListItem[]> {
         instructionsUpdatedAt: r.instructionsUpdatedAt,
         lastRun: last ?? null,
         runsToday: today?.n ?? 0,
+        settings: effectiveSettings(r.name, r.settings),
+        settingFields: settingsFor(r.name),
       };
     }),
   );
@@ -108,7 +116,7 @@ export interface AgentsOverview {
 }
 
 export async function agentsOverview(): Promise<AgentsOverview> {
-  const rows = await db.select().from(agents);
+  const rows = await db.select().from(agents).where(isNull(agents.retiredAt));
   const claude = claudeStatus();
 
   return {
@@ -134,6 +142,23 @@ export async function agentsOverview(): Promise<AgentsOverview> {
 export async function seedAgents(actor: string): Promise<{ added: string[] }> {
   const existing = new Set((await db.select({ name: agents.name }).from(agents)).map((r) => r.name));
   const added: string[] = [];
+
+  /*
+   * Retire what the roster no longer carries. The rows stay — their runs, their
+   * briefs and their audit trail are still readable — but they leave the
+   * screen and are switched off so no timer acts on them again.
+   */
+  const retiring = await db
+    .select({ id: agents.id, name: agents.name })
+    .from(agents)
+    .where(sql`${agents.name} = any(${[...RETIRED_AGENTS]}::text[]) and ${agents.retiredAt} is null`);
+  if (retiring.length > 0) {
+    await db
+      .update(agents)
+      .set({ retiredAt: new Date(), enabled: false })
+      .where(inArray(agents.id, retiring.map((r) => r.id)));
+    await writeAudit({ actor, action: 'agents.retire', entityType: 'agents', after: { retired: retiring.map((r) => r.name) } });
+  }
 
   for (const definition of SEED_AGENTS) {
     if (existing.has(definition.name)) continue;
@@ -201,6 +226,33 @@ export async function setInstructions(
     entityId: id,
     before: { instructions: before.instructions },
     after: { instructions: text === '' ? null : text },
+  });
+  return { ok: true };
+}
+
+/**
+ * His dials for one agent.
+ *
+ * Validated against the agent's own declaration, so a value the code would
+ * not know how to read never lands in the row. Only what differs from the
+ * default is stored; the rest is the default the day it ships.
+ */
+export async function setSettings(
+  id: string,
+  settings: Settings,
+  actor: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const [before] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+  if (!before) return { ok: false, error: 'No such agent' };
+
+  await db.update(agents).set({ settings: settings as never }).where(eq(agents.id, id));
+  await writeAudit({
+    actor,
+    action: 'agent.settings',
+    entityType: 'agent',
+    entityId: id,
+    before: { settings: before.settings },
+    after: { settings },
   });
   return { ok: true };
 }
@@ -338,19 +390,22 @@ export function buildRuntime(): Runtime {
         const signed = context.status === 'signed';
         return { passed: !signed, detail: signed ? 'Already signed.' : 'Still open.' };
       },
+      ...checkConditions,
     },
-    actions: {},
+    actions: checkPerformers,
   };
 }
 
 export async function runById(
   id: string,
-  options: { dryRun?: boolean; triggeredBy?: string } = {},
+  options: { dryRun?: boolean; triggeredBy?: string; context?: Record<string, unknown> } = {},
 ) {
   const [row] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
   if (!row) return { outcome: 'failed' as const, conditions: [], actions: [], error: 'No such agent' };
 
-  const report = await runAgent(toRecord(row), buildRuntime(), options);
+  // Every check and performer sees the agent's own dials.
+  const context = { ...(await settingsContext(row.name)), ...(options.context ?? {}) };
+  const report = await runAgent(toRecord(row), buildRuntime(), { ...options, context });
 
   // Telling him must never be able to fail the run it is reporting on.
   await notifyRun(row.id, row.name, report).catch(() => ({ sent: false }));

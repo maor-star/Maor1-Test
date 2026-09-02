@@ -4,6 +4,9 @@
  */
 export const NAV = [
   { href: '/', label: 'OVERVIEW', num: '01', ready: true },
+  // The copilot sits beside the overview: the overview is what the company
+  // is doing; the copilot is who is minding it.
+  { href: '/copilot', label: 'COPILOT', num: '00', ready: true },
   { href: '/revenue', label: 'REVENUE', num: '02', ready: true },
   { href: '/tasks', label: 'TASKS', num: '03', ready: true },
   { href: '/delegations', label: 'DELEGATIONS', num: '04', ready: true },

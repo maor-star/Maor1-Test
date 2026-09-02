@@ -43,6 +43,12 @@ export const ACTION_TYPES = [
   'create_alert',
   'update_record',
   'create_opportunity',
+  /*
+   * The autopilot's daily review. It reads everything and then acts only
+   * through the other reversible actions here — tasks, alerts, notes — under
+   * the permissions he set; it holds nothing irreversible of its own.
+   */
+  'autopilot_review',
   ...IRREVERSIBLE_ACTIONS,
 ] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];

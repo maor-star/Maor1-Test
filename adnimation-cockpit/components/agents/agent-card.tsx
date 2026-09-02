@@ -17,6 +17,7 @@ import { botFor } from '@/lib/agents/slack-bots';
 import { summarise } from '@/lib/agents/summarise-run';
 import type { AgentListItem } from '@/lib/agents/module';
 import { fmtDateTime } from '@/lib/utils';
+import { AgentSettingsForm } from '@/components/agents/settings-form';
 
 /**
  * What a brief for this particular agent might say.
@@ -64,6 +65,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
   const [message, setMessage] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [teaching, setTeaching] = useState(false);
+  const [customising, setCustomising] = useState(false);
   const [editingVoice, setEditingVoice] = useState(false);
   const [openRun, setOpenRun] = useState<number | null>(null);
   const router = useRouter();
@@ -230,6 +232,23 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
         >
           {teaching ? 'CLOSE' : a.instructions ? 'EDIT ITS BRIEF' : 'TEACH IT'}
         </Button>
+
+        {/*
+          Its dials. The brief is for what nobody anticipated; these are the
+          thresholds and switches every run reads directly, so a change here
+          is guaranteed to be obeyed rather than interpreted.
+        */}
+        {a.settingFields.length > 0 ? (
+          <Button
+            type="button"
+            size="xs"
+            variant={Object.keys(a.settings).some((k) => JSON.stringify(a.settings[k]) !== JSON.stringify(a.settingFields.find((f) => f.key === k)?.default)) ? 'outline' : 'ghost'}
+            onClick={() => setCustomising((v) => !v)}
+            title="Thresholds, windows, scope and channel — read at the top of every run"
+          >
+            {customising ? 'CLOSE' : 'CUSTOMISE'}
+          </Button>
+        ) : null}
 
         <label className="sr-only" htmlFor={`lvl-${a.id}`}>
           Autonomy
@@ -442,6 +461,15 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
             </>
           )}
         </div>
+      ) : null}
+
+      {customising ? (
+        <AgentSettingsForm
+          agentId={a.id}
+          fields={a.settingFields}
+          values={a.settings}
+          onClose={() => setCustomising(false)}
+        />
       ) : null}
 
       {a.instructions && !teaching ? (

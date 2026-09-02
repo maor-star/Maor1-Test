@@ -487,6 +487,52 @@ export const coreClientsDaily = pgTable(
   (t) => [primaryKey({ columns: [t.account, t.date] }), index('idx_core_clients_date').on(t.date)],
 );
 
+/** The copilot's conversations and the autopilot's decisions — db/migrations/0032_copilot.sql. */
+export const copilotThreads = pgTable('copilot_threads', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  title: text('title').notNull().default('New conversation'),
+  provider: text('provider').notNull().default('auto'),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamptz('created_at').notNull().defaultNow(),
+  updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  archivedAt: timestamptz('archived_at'),
+});
+
+export const copilotMessages = pgTable(
+  'copilot_messages',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    threadId: uuid('thread_id').notNull().references(() => copilotThreads.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(),
+    content: text('content').notNull().default(''),
+    toolCalls: jsonb('tool_calls').notNull().default([]),
+    provider: text('provider'),
+    model: text('model'),
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('idx_copilot_messages_thread').on(t.threadId, t.createdAt)],
+);
+
+export const copilotDecisions = pgTable(
+  'copilot_decisions',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    runId: uuid('run_id'),
+    area: text('area').notNull(),
+    title: text('title').notNull(),
+    reasoning: text('reasoning').notNull(),
+    action: jsonb('action').notNull().default({}),
+    status: text('status').notNull().default('proposed'),
+    executedRef: text('executed_ref'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    decidedAt: timestamptz('decided_at'),
+    decidedBy: text('decided_by'),
+  },
+  (t) => [index('idx_copilot_decisions_status').on(t.status, t.createdAt)],
+);
+
 export const companyDaily = pgTable('company_daily', {
   date: date('date').primaryKey(),
 
@@ -633,6 +679,10 @@ export const agents = pgTable('agents', {
   /** Minimum minutes between real runs. Null runs whenever the timer fires. */
   runEveryMinutes: integer('run_every_minutes'),
   lastRanAt: timestamptz('last_ran_at'),
+  /** His dials for this agent — see lib/agents/settings.ts. Only what he changed. */
+  settings: jsonb('settings').notNull().default({}),
+  /** Set when the roster stopped carrying it. Hidden, never deleted. */
+  retiredAt: timestamptz('retired_at'),
   createdAt: timestamptz('created_at').notNull().defaultNow(),
   lastLevelChangeAt: timestamptz('last_level_change_at'),
 });

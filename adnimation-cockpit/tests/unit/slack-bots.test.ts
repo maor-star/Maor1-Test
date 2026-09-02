@@ -30,7 +30,7 @@ describe('slack bots — who speaks for whom', () => {
 
   it('groups the mail work under the mail bot', () => {
     expect(botFor('mail-answerer').key).toBe('mail');
-    expect(botFor('promo-filer').key).toBe('mail');
+    expect(botFor('inbox-triage').key).toBe('mail');
   });
 
   it('uses a bot’s own token when it has one', () => {

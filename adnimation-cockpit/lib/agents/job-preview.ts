@@ -22,9 +22,8 @@ const run = promisify(execFile);
 /** Only these, by name. Nothing here is built from anything he typed. */
 export const JOB_FOR: Record<string, string> = {
   'mail-answerer': 'mail-answer.mjs',
-  'promo-filer': 'mailbox-tidy.mjs',
-  'code-cleaner': 'mailbox-tidy.mjs',
   'invoice-forwarder': 'invoice-forward.mjs',
+  'contact-harvester': 'crm-harvest.mjs',
 };
 
 export function jobFor(agentName: string): string | null {

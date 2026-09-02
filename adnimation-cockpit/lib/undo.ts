@@ -1,6 +1,6 @@
 import { desc, eq, sql } from 'drizzle-orm';
 import {
-  auditLog, contracts, crmContacts, db, mailThreads, opportunities, pipelineClients, tasks,
+  agents, auditLog, contracts, crmContacts, db, mailThreads, opportunities, pipelineClients, tasks,
 } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 
@@ -52,6 +52,9 @@ const RESTORABLE: Record<string, string[]> = {
   // Marking a conversation handled is a one-click decision on a list he is
   // scanning, which is exactly the kind of click undo exists for.
   mail_thread: ['dismissedAt'],
+  // An agent's dials and brief. Not its autonomy: a promotion is earned, and
+  // undoing a demotion would hand back a level without the run count behind it.
+  agent: ['instructions', 'settings', 'enabled', 'notifySlack', 'runEveryMinutes'],
 };
 
 const TABLES = {
@@ -61,6 +64,7 @@ const TABLES = {
   pipeline_client: pipelineClients,
   crm_contact: crmContacts,
   mail_thread: mailThreads,
+  agent: agents,
 } as const;
 
 type Undoable = keyof typeof TABLES;
