@@ -974,7 +974,9 @@ var _hasCardDetail=null; // var (מונע TDZ כי save() ניגש אליו כב
 function hasCardDetail(){ if(_hasCardDetail===null) _hasCardDetail=db.transactions.some(t=>t.kind==='expense'&&isCardDetail(t)); return _hasCardDetail; }
 // אינדקס «חברת אשראי|חודש» של שורות הפירוט — כדי לדעת אילו חיובים מרוכזים כבר מיוצגים ע"י פירוט (מניעת כפילות)
 var _detailMonths=null;
-function detailMonths(){ if(_detailMonths===null){ _detailMonths=new Set(); db.transactions.forEach(t=>{ if(t.kind==='expense'&&isCardDetail(t)){ const i=detectIssuer(t.account); if(i) _detailMonths.add(i+'|'+String(t.tx_date).slice(0,7)); } }); } return _detailMonths; }
+function detailMonths(){ if(_detailMonths===null){ _detailMonths=new Set(); db.transactions.forEach(t=>{ if(t.kind==='expense'&&isCardDetail(t)){ const i=detectIssuer(t.account); const ym=String(t.tx_date).slice(0,7); if(i) _detailMonths.add(i+'|'+ym);
+  // גם לפי 4 הספרות האחרונות של הכרטיס («ישראכרט ••6645») — הבנק לפעמים מכנה את החיוב בשם חברה אחרת (למשל «כאל») אבל מציין את מספר הכרטיס באסמכתא
+  const l4=(String(t.account).match(/••(\d{4})/)||[])[1]; if(l4) _detailMonths.add('#'+l4+'|'+ym); } }); } return _detailMonths; }
 function _prevYM(ym){ const p=String(ym).split('-').map(Number); const y=p[0],m=p[1]; if(!y||!m) return ''; return (m-1?y:y-1)+'-'+String(m-1||12).padStart(2,'0'); }
 // חיוב מרוכז «מכוסה» אם קיים פירוט לאותה חברה בחודש החיוב או בחודש שלפניו (חיוב מפרט בערך את קניות החודש הקודם).
 // עם החיבור החי לבנק, לכל כרטיס (ישראכרט-מסטרקארד, אמריקן, כאל…) מגיע פירוט משלו — והחיוב המרוכז שלו בבנק מכוסה לפי שם החברה + חודש.
@@ -983,6 +985,8 @@ var _replAmts=null;
 function replAmts(){ if(_replAmts===null){ _replAmts=new Set(); db.transactions.forEach(t=>{ if(t.kind==='expense'&&/כרטיס תחליפי/.test(t.merchant||t.description||'')) _replAmts.add(Math.round(t.amount*100)); }); } return _replAmts; }
 function lumpCovered(t){ const i=detectIssuer(t.merchant||t.description); if(!i) return false; const ym=String(t.tx_date).slice(0,7); const s=detailMonths();
   if(s.has(i+'|'+ym) || s.has(i+'|'+_prevYM(ym))) return true;
+  // אסמכתת החיוב בבנק = 4 הספרות האחרונות של הכרטיס (למשל «כאל» אסמכתא 6645 = מסטרקארד פלטינה ••6645 שכבר מפורט)
+  const ref=String(t.ref||'').replace(/\D/g,''); if(ref.length>=3&&ref.length<=4){ const l4=ref.padStart(4,'0'); if(s.has('#'+l4+'|'+ym)||s.has('#'+l4+'|'+_prevYM(ym))) return true; }
   if(replAmts().size && replAmts().has(Math.round(t.amount*100))) return true;
   return false;
 }
@@ -1072,7 +1076,7 @@ function h_transactions(m,id,sub,b,qp){
     // (כי בין תדפיסים שונים לפעמים יש אסמכתא ולפעמים לא) — כך עסקת בנק שחוזרת בשני תדפיסים נחסמת,
     // אבל שתי רכישות אשראי שונות עם אסמכתאות שונות נשמרות שתיהן.
     const baseKey=t=>[t.kind,strv(t.tx_date),strv(t.merchant||t.description).trim(),Math.abs(numv(t.amount))].join('|');
-    const refMap=new Map(); db.transactions.forEach(t=>{ const k=baseKey(t); const a=refMap.get(k)||[]; a.push(strv(t.ref)); refMap.set(k,a); });
+    const refMap=new Map(), txMap=new Map(); db.transactions.forEach(t=>{ const k=baseKey(t); const a=refMap.get(k)||[]; a.push(strv(t.ref)); refMap.set(k,a); (txMap.get(k)||txMap.set(k,[]).get(k)).push(t); });
     // מזהה ייחודי של Open Finance — סינון כפילויות מדויק ומהיר לעסקאות שהגיעו מהחיבור לבנק
     const ofIds=new Set(); db.transactions.forEach(t=>{ if(t.of_id) ofIds.add(t.of_id); });
     let added=0,skipped=0,autoCategorized=0;
@@ -1089,7 +1093,9 @@ function h_transactions(m,id,sub,b,qp){
       const ref=strv(r.ref);
       const bk=[kind,date,merchant.trim(),amount].join('|');
       const seen=refMap.get(bk)||[];
-      if(seen.length && (ref==='' || seen.some(x=>x===''||x===ref))){skipped++;continue;} // כפילות
+      if(seen.length && (ref==='' || seen.some(x=>x===''||x===ref))){ // כפילות — אבל מעשירים שורה קיימת (מקובץ) באסמכתא/מזהה מהבנק אם חסרים לה
+        const ex=(txMap.get(bk)||[]).find(x=>!strv(x.ref)); if(ex){ if(ref) ex.ref=ref; if(ofId&&!ex.of_id){ ex.of_id=ofId; ofIds.add(ofId); } if(r.of_cat&&r.of_cat.main&&!ex.of_cat) ex.of_cat=r.of_cat.main+(r.of_cat.sub?'/'+r.of_cat.sub:''); }
+        skipped++;continue; }
       const hash=[src,acct,date,desc,amount,kind].join('|')+(ref?'|'+ref:'');
       const cat=matchCategory(desc+' '+merchant, kind); if(cat) autoCategorized++;
       const tx={id:uid(),tx_date:date,source:strv(r.source)||src,account:strv(r.account)||acct,description:desc,merchant,amount,kind,category_id:cat,notes:'',hash};
