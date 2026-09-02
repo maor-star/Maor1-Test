@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  domainOf, fieldsToFill, isCompanyDomain, isHarvestable, signatureBlock,
-} from '@/lib/crm/from-mail';
+  domainOf, fieldsToFill, isCompanyDomain, isHarvestable, signatureBlock, linksInSignature} from '@/lib/crm/from-mail';
 
 /**
  * Reading contacts off the mailbox.
@@ -137,5 +136,44 @@ describe('what gets written', () => {
     const empty: Record<string, string | null> = { phone: null };
     expect(fieldsToFill(held, { phone: null })).toEqual({});
     expect(fieldsToFill(empty, { phone: '' })).toEqual({});
+  });
+});
+
+describe('the links in a signature', () => {
+  it('finds a LinkedIn profile and the company site, and tells them apart', () => {
+    const block = [
+      'Dana Levi',
+      'VP Partnerships | Taboola',
+      'M +972 54 123 4567',
+      'https://www.linkedin.com/in/dana-levi-8a2b1/',
+      'https://www.taboola.com',
+    ].join('\n');
+    expect(linksInSignature(block)).toEqual({
+      linkedinUrl: 'https://www.linkedin.com/in/dana-levi-8a2b1/',
+      website: 'https://www.taboola.com',
+    });
+  });
+
+  it('never offers a scheduling or social link as the company site', () => {
+    const block = 'Book me: https://calendly.com/dana/30min\nhttps://twitter.com/dana';
+    expect(linksInSignature(block).website).toBeNull();
+  });
+
+  it('strips the punctuation a sentence leaves on the end of a URL', () => {
+    expect(linksInSignature('See https://acme.io.').website).toBe('https://acme.io');
+  });
+
+  it('reads a Hebrew signature the same way — a URL has no language', () => {
+    const block = 'מור דוידוביץ׳\nמנכ״ל, Adnimation\nhttps://www.adnimation.com';
+    expect(linksInSignature(block).website).toBe('https://www.adnimation.com');
+  });
+
+  it('says nothing rather than guessing when there are no links', () => {
+    expect(linksInSignature('Dana Levi\nVP Partnerships')).toEqual({ linkedinUrl: null, website: null });
+  });
+
+  it('takes a company LinkedIn page as well as a personal profile', () => {
+    expect(linksInSignature('https://linkedin.com/company/adnimation').linkedinUrl)
+      .toBe('https://linkedin.com/company/adnimation');
   });
 });

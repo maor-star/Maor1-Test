@@ -232,7 +232,15 @@ async function Companies({
               <li key={c.hubspotId} className="border-t border-divider px-[18px] py-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-cond text-[17px] text-neutral-900">{c.name}</p>
+                    {/* The name is the way in: everyone there, everything
+                        said to any of them, and what the rest of the cockpit
+                        already holds about them. */}
+                    <Link
+                      href={`/crm/company/${encodeURIComponent(c.hubspotId)}`}
+                      className="font-cond text-[17px] text-neutral-900 hover:text-accent"
+                    >
+                      {c.name}
+                    </Link>
                     <p className="hud-label mt-0.5 text-[9px]">
                       {[c.domain, c.city, c.country].filter(Boolean).join(' · ') || 'NO DOMAIN'}
                     </p>
@@ -259,9 +267,12 @@ async function Companies({
                   <ul className="mt-2 grid gap-1 sm:grid-cols-2 xl:grid-cols-3">
                     {people.map((p) => (
                       <li key={p.hubspotId} className="min-w-0">
-                        <span className="truncate font-semi text-[12px] text-neutral-700">
+                        <Link
+                          href={`/crm/contact/${encodeURIComponent(p.hubspotId)}`}
+                          className="block truncate font-semi text-[12px] text-neutral-700 hover:text-accent"
+                        >
                           {contactName(p)}
-                        </span>
+                        </Link>
                         <p className="truncate font-semi text-[10px] tracking-[0.06em] text-neutral-500">
                           {[p.jobTitle, p.email, p.phone].filter(Boolean).join(' · ') ||
                             'NO CONTACT DETAILS'}
@@ -351,9 +362,12 @@ async function Contacts({
             <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-cond text-[16px] leading-none text-neutral-900">
+                  <Link
+                    href={`/crm/contact/${encodeURIComponent(p.hubspotId)}`}
+                    className="font-cond text-[16px] leading-none text-neutral-900 hover:text-accent"
+                  >
                     {contactName(p)}
-                  </p>
+                  </Link>
                   {p.source === 'local' ? (
                     <Tag tone="accent" title="Created here, never in HubSpot">
                       ADDED HERE
@@ -366,7 +380,19 @@ async function Contacts({
                   <Tag tone="neutral">{stageLabel(p.lifecycleStage)}</Tag>
                 </div>
                 <p className="hud-label mt-1 whitespace-normal text-[9px]">
-                  {[p.companyName, p.jobTitle].filter(Boolean).join(' · ') || 'NO COMPANY'}
+                  {p.companyId && p.companyName ? (
+                    <Link
+                      href={`/crm/company/${encodeURIComponent(p.companyId)}`}
+                      className="text-accent-700 hover:text-accent"
+                    >
+                      {p.companyName}
+                    </Link>
+                  ) : (
+                    p.companyName
+                  )}
+                  {p.companyName && p.jobTitle ? ' · ' : ''}
+                  {p.jobTitle}
+                  {!p.companyName && !p.jobTitle ? 'NO COMPANY' : ''}
                 </p>
                 <p className="mt-1 break-words text-[12px] text-neutral-600">
                   {p.email ? <Num>{p.email}</Num> : null}

@@ -22,6 +22,7 @@ import {
 } from '@/lib/crm/queries';
 import { companySuggestions } from '@/lib/crm/mutations';
 import { conversationsFor } from '@/lib/crm/conversations';
+import { conversationsWith, getCompany, getContact } from '@/lib/crm/detail';
 import { loadTrading, TRADING_PERIODS } from '@/lib/trading/service';
 import { agentsOverview, listAgents, seedAgents } from '@/lib/agents/module';
 import { conditions } from '@/lib/agents/checks';
@@ -139,9 +140,36 @@ describe('mail, contracts, CRM', () => {
     await ok('listContacts', () => listContacts({}));
     await ok('crmSummary', () => crmSummary());
     await ok('crmFilterOptions', () => crmFilterOptions());
-    await ok('companySuggestions', () => companySuggestions('a'));
+    await ok('companySuggestions', () => companySuggestions());
     await ok('contactsForCompanies', () => contactsForCompanies(companies.rows.slice(0, 3).map((c) => c.hubspotId)));
     await ok('conversationsFor', () => conversationsFor(['nobody@example.com']));
+  });
+
+  it('opens one company and one contact, whole', async () => {
+    const { rows: companies } = await listCompanies({});
+    const { rows: contacts } = await listContacts({});
+    await ok('conversationsWith', () => conversationsWith(['nobody@example.com']));
+
+    // An id that is not there answers null rather than throwing: a stale
+    // bookmark should reach the not-found page, not a 500.
+    expect(await getCompany('no-such-company')).toBeNull();
+    expect(await getContact('no-such-contact')).toBeNull();
+
+    const company = companies[0];
+    if (company) {
+      const detail = (await ok('getCompany', () => getCompany(company.hubspotId))) as {
+        company: { hubspotId: string };
+        contacts: unknown[];
+      } | null;
+      expect(detail?.company.hubspotId).toBe(company.hubspotId);
+    }
+    const contact = contacts[0];
+    if (contact) {
+      const detail = (await ok('getContact', () => getContact(contact.hubspotId))) as {
+        contact: { hubspotId: string };
+      } | null;
+      expect(detail?.contact.hubspotId).toBe(contact.hubspotId);
+    }
   });
 });
 

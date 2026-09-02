@@ -130,10 +130,39 @@ export interface HarvestedContact {
   lastName?: string | null;
   jobTitle?: string | null;
   phone?: string | null;
+  /** A second number, when the signature gives both an office and a mobile. */
+  mobile?: string | null;
+  linkedinUrl?: string | null;
+  website?: string | null;
+  address?: string | null;
   companyName?: string | null;
   companyDomain?: string | null;
   country?: string | null;
   city?: string | null;
+}
+
+/**
+ * The links a signature carries, read without asking a model.
+ *
+ * A URL is the one thing in a signature that cannot be misread: it is either
+ * there or it is not. Reading it here rather than in the prompt means it costs
+ * nothing, never hallucinates, and is right even when the block is in Hebrew,
+ * a language the pattern does not care about.
+ */
+const LINKEDIN = /\bhttps?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/(?:in|company)\/[A-Za-z0-9._%-]+\/?/i;
+const URL_ANY = /\bhttps?:\/\/[^\s<>()\[\]"']+/gi;
+
+/** Hosts that appear in a signature but are never the person's own site. */
+const NOT_A_SITE =
+  /(linkedin|twitter|x\.com|facebook|instagram|youtube|calendly|zoom\.us|teams\.microsoft|meet\.google|wa\.me|whatsapp|bit\.ly|goo\.gl|docs\.google|drive\.google|mailto)/i;
+
+export function linksInSignature(block: string): { linkedinUrl: string | null; website: string | null } {
+  const linkedinUrl = block.match(LINKEDIN)?.[0] ?? null;
+  const website =
+    (block.match(URL_ANY) ?? [])
+      .map((u) => u.replace(/[.,;:]+$/, ''))
+      .find((u) => !NOT_A_SITE.test(u)) ?? null;
+  return { linkedinUrl, website };
 }
 
 /** Only fills what is empty. Returns the fields that would actually change. */

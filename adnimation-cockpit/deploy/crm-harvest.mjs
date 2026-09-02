@@ -24,7 +24,7 @@
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import {
-  domainOf, fieldsToFill, isCompanyDomain, isHarvestable, signatureBlock,
+  domainOf, fieldsToFill, isCompanyDomain, isHarvestable, linksInSignature, signatureBlock,
 } from './crm-from-mail.mjs';
 
 const DB = process.env.DATABASE_URL;
@@ -159,6 +159,9 @@ async function collect() {
         fromName: from.name,
         signature: block.slice(0, 1200),
         subject: header(hs, 'subject') ?? '',
+        // The conversation the signature came out of, so a detail on the
+        // contact card can be traced back to the mail that supplied it.
+        threadId: message.threadId ?? ref.threadId ?? null,
         at: new Date(Number(message.internalDate ?? Date.now())),
       });
     }
@@ -184,7 +187,12 @@ guess is not. In particular:
   not name the company and the domain is a generic mailbox, leave it null. If
   the domain plainly IS the company (dana@taboola.com with no signature), you
   may use the domain's obvious name.
-· Take the phone number exactly as written, including the country code.
+· Take the phone numbers exactly as written, including the country code. When
+  the signature gives two, the one marked M/Mobile/Cell/נייד is the mobile and
+  the one marked T/O/Tel/Office/Direct is the phone. With only one number and
+  no label, it is the phone.
+· address is the postal address as written, on one line. Not a country on its
+  own, not a building with no street — the address a letter could be sent to.
 · Split the name into first and last as the signature gives it. Hebrew names
   stay in Hebrew.
 · country and city only when the signature says so — an address line, not a
@@ -216,8 +224,8 @@ async function readSignatures(batch) {
       .join('\n\n'),
     '',
     'Answer as JSON: {"contacts":[{"email":"…","isPerson":true,"firstName":null,' +
-      '"lastName":null,"jobTitle":null,"phone":null,"companyName":null,"country":null,' +
-      '"city":null}]}',
+      '"lastName":null,"jobTitle":null,"phone":null,"mobile":null,"companyName":null,' +
+      '"address":null,"country":null,"city":null}]}',
     'One entry per message, in the same order, with the same email.',
   ].join('\n');
 
@@ -394,7 +402,8 @@ async function main() {
         continue;
       }
       const [existing] = await sql`
-        select hubspot_id, first_name, last_name, phone, job_title, company_name, company_id,
+        select hubspot_id, first_name, last_name, phone, mobile, job_title, company_name,
+               company_id, linkedin_url, website, address, country, city, signature,
                edited_at, last_activity_at
           from crm_contacts
          where archived_at is null and lower(email) = ${candidate.email}
@@ -413,14 +422,31 @@ async function main() {
       const nameFromHeader = (candidate.fromName ?? '').trim();
       const [headerFirst, ...headerRest] = nameFromHeader.split(/\s+/);
 
+      /*
+       * The links come from the block itself, not from the model: a URL is
+       * either in the text or it is not, so reading it here costs nothing and
+       * cannot be imagined.
+       */
+      const links = linksInSignature(candidate.signature ?? '');
+
       const wanted = {
         first_name: found.firstName ?? (headerFirst || null),
         last_name: found.lastName ?? (headerRest.join(' ') || null),
         job_title: found.jobTitle ?? null,
         phone: found.phone ?? null,
+        mobile: found.mobile ?? null,
         company_name: found.companyName ?? null,
         company_id: companyId,
+        linkedin_url: links.linkedinUrl,
+        website: links.website,
+        address: found.address ?? null,
+        country: found.country ?? null,
+        city: found.city ?? null,
       };
+
+      // The block itself is kept whole. Every field above is a reading of it;
+      // this is the thing that was read, and it settles any argument later.
+      const block = (candidate.signature ?? '').trim() || null;
 
       if (existing) {
         const patch = fieldsToFill(
@@ -429,8 +455,14 @@ async function main() {
             last_name: existing.last_name,
             job_title: existing.job_title,
             phone: existing.phone,
+            mobile: existing.mobile,
             company_name: existing.company_name,
             company_id: existing.company_id,
+            linkedin_url: existing.linkedin_url,
+            website: existing.website,
+            address: existing.address,
+            country: existing.country,
+            city: existing.city,
           },
           wanted,
         );
@@ -451,8 +483,23 @@ async function main() {
                    last_name = coalesce(last_name, ${patch.last_name ?? null}),
                    job_title = coalesce(job_title, ${patch.job_title ?? null}),
                    phone = coalesce(phone, ${patch.phone ?? null}),
+                   mobile = coalesce(mobile, ${patch.mobile ?? null}),
                    company_name = coalesce(company_name, ${patch.company_name ?? null}),
                    company_id = coalesce(company_id, ${patch.company_id ?? null}),
+                   linkedin_url = coalesce(linkedin_url, ${patch.linkedin_url ?? null}),
+                   website = coalesce(website, ${patch.website ?? null}),
+                   address = coalesce(address, ${patch.address ?? null}),
+                   country = coalesce(country, ${patch.country ?? null}),
+                   city = coalesce(city, ${patch.city ?? null}),
+                   -- The newest signature wins: a person changes title and
+                   -- number, and the block he last sent is the current one.
+                   signature = case when ${block}::text is not null
+                     and (signature_at is null or signature_at < ${candidate.at})
+                     then ${block} else signature end,
+                   signature_at = case when ${block}::text is not null
+                     and (signature_at is null or signature_at < ${candidate.at})
+                     then ${candidate.at} else signature_at end,
+                   source_thread_id = coalesce(source_thread_id, ${candidate.threadId ?? null}),
                    last_activity_at = greatest(coalesce(last_activity_at, ${candidate.at}), ${candidate.at}),
                    synced_at = ${now}
              where hubspot_id = ${existing.hubspot_id}
@@ -470,11 +517,15 @@ async function main() {
       if (!DRY) {
         await sql`
           insert into crm_contacts
-            (hubspot_id, first_name, last_name, email, phone, job_title, company_name,
-             company_id, last_activity_at, source, synced_at)
+            (hubspot_id, first_name, last_name, email, phone, mobile, job_title, company_name,
+             company_id, linkedin_url, website, address, country, city, signature, signature_at,
+             source_thread_id, last_activity_at, source, synced_at)
           values (${`mail:${candidate.email}`}, ${wanted.first_name}, ${wanted.last_name},
-                  ${candidate.email}, ${wanted.phone}, ${wanted.job_title},
-                  ${wanted.company_name}, ${wanted.company_id}, ${candidate.at}, 'mail', ${now})
+                  ${candidate.email}, ${wanted.phone}, ${wanted.mobile}, ${wanted.job_title},
+                  ${wanted.company_name}, ${wanted.company_id}, ${wanted.linkedin_url},
+                  ${wanted.website}, ${wanted.address}, ${wanted.country}, ${wanted.city},
+                  ${block}, ${block ? candidate.at : null}, ${candidate.threadId ?? null},
+                  ${candidate.at}, 'mail', ${now})
           on conflict (hubspot_id) do nothing
         `;
       }
