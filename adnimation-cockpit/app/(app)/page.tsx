@@ -18,6 +18,8 @@ import { DeltaPct } from '@/components/revenue/delta';
 import { Sparkline } from '@/components/revenue/sparkline';
 import { InlineTaskEditor } from '@/components/tasks/inline-task-editor';
 import { listDepartments, listPeople } from '@/lib/tasks/queries';
+import { loadControlPanel } from '@/lib/control/service';
+import { ControlPanel } from '@/components/home/control-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +40,15 @@ export default function OverviewPage() {
   return (
     <div className="space-y-5">
       <PageHeader kicker="OVERVIEW / 01" title="The company" />
+
+      {/*
+        The control panel first: every line of the business, live from the
+        source, before anything the cockpit itself keeps. It is the screen he
+        asked to be able to run the company from.
+      */}
+      <Suspense fallback={<Skeleton title="Control panel" index="C01" />}>
+        <ControlPanelSection />
+      </Suspense>
 
       <Suspense fallback={<Skeleton title="Profit" index="O01" />}>
         <ProfitStrip />
@@ -75,6 +86,11 @@ export default function OverviewPage() {
       </div>
     </div>
   );
+}
+
+async function ControlPanelSection() {
+  const panel = await loadControlPanel();
+  return <ControlPanel panel={panel} />;
 }
 
 /** What the company made, yesterday and month to date, by line. */

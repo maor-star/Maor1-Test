@@ -451,6 +451,42 @@ export type NewCrmContact = typeof crmContacts.$inferInsert;
  * This was a JSON fixture compiled into the build, which is why the numbers on
  * screen aged: refreshing them required a redeploy. Here a timer can write it.
  */
+/**
+ * The control panel's lines — one row per business line per day, pulled from
+ * the Ad Ops Architect source by the activity sync. See
+ * db/migrations/0030_activity_lines.sql.
+ */
+export const activityDaily = pgTable(
+  'activity_daily',
+  {
+    line: text('line').notNull(),
+    date: date('date').notNull(),
+    grossCents: moneyCents('gross_cents').notNull().default(0),
+    profitCents: moneyCents('profit_cents').notNull().default(0),
+    impressions: moneyCents('impressions').notNull().default(0),
+    entities: integer('entities'),
+    source: text('source').notNull().default('lovable'),
+    pulledAt: timestamptz('pulled_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.line, t.date] })],
+);
+
+/** One row per paying account per day — the core clients, ranked by money. */
+export const coreClientsDaily = pgTable(
+  'core_clients_daily',
+  {
+    account: text('account').notNull(),
+    date: date('date').notNull(),
+    isTrading: boolean('is_trading').notNull().default(false),
+    grossCents: moneyCents('gross_cents').notNull().default(0),
+    profitCents: moneyCents('profit_cents').notNull().default(0),
+    impressions: moneyCents('impressions').notNull().default(0),
+    source: text('source').notNull().default('lovable'),
+    pulledAt: timestamptz('pulled_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.account, t.date] }), index('idx_core_clients_date').on(t.date)],
+);
+
 export const companyDaily = pgTable('company_daily', {
   date: date('date').primaryKey(),
 

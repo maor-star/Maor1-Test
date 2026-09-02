@@ -77,6 +77,9 @@ async function main() {
     // revenue-sync imports revenue-source, and revenue-seed fills a fresh
     // database from the checked-in snapshot. All three have to travel.
     'revenue-sync.mjs', 'revenue-source.mjs', 'revenue-seed.mjs',
+    // The control panel's lines: activity-sync imports activity-source, which
+    // borrows the read-only guard from revenue-source.
+    'activity-sync.mjs', 'activity-source.mjs',
     // opportunity-sweep imports the generated copy of the detection rules.
     'opportunity-sweep.mjs', 'opportunity-detect.mjs', 'slack-capture.mjs',
     // contract-sync imports the generated copy of the intake rules.
