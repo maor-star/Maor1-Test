@@ -1037,6 +1037,16 @@ function ensureDefaults(){
       for(const [re,cid] of FIX){ if(cid&&re.test(txt)&&t.category_id!==cid){ t.category_id=cid; n++; break; } } });
     db.fixV22=n; db.defaultsV=22; save();
   }
+  if((db.defaultsV||0) < 23){
+    // סיווגים לפי תשובות המשתמש: מכביס/סוהו/STUDIO = מסעדות · פאנקו (יין) + הטבות פיס/פיס פלוס = קניות לסופר · עמותת ספורטאי = חוגים לילדים
+    const byName=(mainName,subName)=>{ const m=db.categories.find(c=>c.name===mainName&&!c.parent_id); if(!m) return null; const s=subName?db.categories.find(c=>c.parent_id==m.id&&c.name===subName):null; return (s||m).id; };
+    const REST=byName('פנאי, בילויים וקניות','מסעדות ובתי קפה'), FOOD=byName('מזון','מזון וסופר'), KIDS=byName('ילדים וחינוך','חינוך וחוגים לילדים');
+    const MAP=[['מכביס',REST],['סוהו',REST],['studio',REST],['פאנקו',FOOD],['הטבות פיס',FOOD],['פיס פלוס',FOOD],['עמותת ספורטאי',KIDS]];
+    MAP.forEach(([k,cid])=>{ if(!cid) return; const kk=k.toLowerCase(); db.rules=db.rules.filter(r=>strv(r.match_text).toLowerCase()!==kk); db.rules.push({id:++db.seq,match_text:k,category_id:cid}); });
+    let n=0; (db.transactions||[]).forEach(t=>{ if(t.kind!=='expense') return; const txt=((t.merchant||'')+' '+(t.description||'')).toLowerCase();
+      for(const [k,cid] of MAP){ if(cid && (k==='studio' ? /^studio\b/i.test((t.merchant||'').trim()) : txt.includes(k.toLowerCase()))){ if(t.category_id!==cid){ t.category_id=cid; n++; } break; } } });
+    db.fixV23=n; db.defaultsV=23; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
