@@ -95,7 +95,7 @@ export default function OverviewPage() {
  * The lines are seven different cuts of the business and they overlap on
  * purpose, so the total above them is the P&L rather than their sum.
  */
-const HOME_PERIODS = ['YESTERDAY', '7D', 'MTD', 'QTD'] as const;
+const HOME_PERIODS = ['TODAY', 'YESTERDAY', '7D', '30D', 'MTD', 'QTD', 'LAST_Q', 'YTD'] as const;
 
 async function ControlPanelSection() {
   const [panel, ...summaries] = await Promise.all([
@@ -106,7 +106,8 @@ async function ControlPanelSection() {
 
   return (
     <>
-      <CompanyTotal periods={periods} headline={summaries[0]!} />
+      {/* Yesterday is the headline: the last whole day, not the half of today. */}
+      <CompanyTotal periods={periods} headline={summaries[1]!} />
       <ControlPanel panel={panel} />
     </>
   );

@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { escapeCommentary, FakePublisher } from '@/lib/marketing/linkedin';
-import { riskyBits, MAX_POST_CHARS } from '@/lib/marketing/service';
+import { FakeImageMaker, promptFromPost } from '@/lib/marketing/images';
+import {
+  drawImage, imageOf, publishDraft, removeImage, riskyBits, storeDraft, MAX_POST_CHARS,
+} from '@/lib/marketing/service';
+import { setSecret } from '@/lib/secrets/store';
 import { AGENT_SETTINGS, effectiveSettings } from '@/lib/agents/settings';
 import { SEED_AGENTS } from '@/lib/agents/definitions';
 import { ACTION_TYPES, IRREVERSIBLE_ACTIONS, isIrreversible } from '@/lib/agents/types';
@@ -96,5 +100,64 @@ describe('publishing', () => {
 
   it('stops at the length LinkedIn stops at', () => {
     expect(MAX_POST_CHARS).toBe(3000);
+  });
+});
+
+// The fake LinkedIn credentials must not outlive the run: a later hand test
+// of the publish button would otherwise find "connected" and post nowhere.
+afterAll(async () => {
+  await setSecret('LINKEDIN_ACCESS_TOKEN', '', 'test@adnimation.com');
+  await setSecret('LINKEDIN_AUTHOR_URN', '', 'test@adnimation.com');
+});
+
+describe('a picture for the post', () => {
+  it('writes the prompt from the post when he gave none, in the house style', () => {
+    const p = promptFromPost('A new publisher went live with us.\nMore below.', 'Signed with X');
+    expect(p).toContain('A new publisher went live with us.');
+    expect(p).toContain('Signed with X');
+    expect(p).toMatch(/no text, no logos/);
+  });
+
+  it('draws, keeps the prompt, serves the bytes, and goes out with the post', async () => {
+    const id = await storeDraft({ sourceKind: 'manual', sourceRef: `img-${Date.now()}`, occasion: 'Image test', body: 'Words.' });
+    expect(id).toBeTruthy();
+    const gemini = new FakeImageMaker();
+
+    // His own prompt is used as written.
+    const drawn = await drawImage(id!, 'a lighthouse', 'test@adnimation.com', gemini.make);
+    expect(drawn.ok).toBe(true);
+    expect(gemini.prompts).toEqual(['a lighthouse']);
+
+    const served = await imageOf(id!);
+    expect(served?.mime).toBe('image/png');
+    expect(served?.bytes.length).toBeGreaterThan(10);
+
+    // No prompt: one is derived from the post.
+    await drawImage(id!, '   ', 'test@adnimation.com', gemini.make);
+    expect(gemini.prompts[1]).toContain('Words.');
+
+    // Publishing carries the picture, as alt-texted media.
+    await setSecret('LINKEDIN_ACCESS_TOKEN', 'test-token', 'test@adnimation.com');
+    await setSecret('LINKEDIN_AUTHOR_URN', 'urn:li:person:test', 'test@adnimation.com');
+    const linkedIn = new FakePublisher();
+    const out = await publishDraft(id!, 'test@adnimation.com', linkedIn.publish);
+    expect(out.ok).toBe(true);
+    expect(linkedIn.images[0]?.mime).toBe('image/png');
+    expect(linkedIn.images[0]?.title).toBe('Image test');
+  });
+
+  it('can be taken off again, and says so when Gemini fails', async () => {
+    const id = await storeDraft({ sourceKind: 'manual', sourceRef: `img2-${Date.now()}`, occasion: 'Image test 2', body: 'Words.' });
+    const gemini = new FakeImageMaker();
+    await drawImage(id!, null, 'test@adnimation.com', gemini.make);
+    expect(await imageOf(id!)).not.toBeNull();
+    expect((await removeImage(id!, 'test@adnimation.com')).ok).toBe(true);
+    expect(await imageOf(id!)).toBeNull();
+
+    gemini.failWith = 'Gemini declined the prompt (SAFETY).';
+    const failed = await drawImage(id!, 'x', 'test@adnimation.com', gemini.make);
+    expect(failed.ok).toBe(false);
+    expect(failed.error).toMatch(/declined/);
+    expect(await imageOf(id!)).toBeNull();
   });
 });

@@ -19,9 +19,10 @@ export const NAV = [
   { href: '/seats/supply', label: 'SUPPLY', num: '10', ready: true },
   { href: '/trading', label: 'TRADING', num: '11', ready: true },
   { href: '/agents', label: 'AGENTS', num: '12', ready: true },
-  { href: '/settings', label: 'KEYS', num: '13', ready: true },
   // Where the posts written in his name wait for him to publish them.
-  { href: '/marketing', label: 'MARKETING', num: '14', ready: true },
+  { href: '/marketing', label: 'MARKETING', num: '13', ready: true },
+  // Keys last: set once, rarely revisited.
+  { href: '/settings', label: 'KEYS', num: '14', ready: true },
 ] as const;
 
 export type NavItem = (typeof NAV)[number];

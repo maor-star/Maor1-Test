@@ -1,3 +1,4 @@
+import { customType } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import {
   bigserial, boolean, date, index, integer, jsonb, pgTable, primaryKey,
@@ -10,6 +11,11 @@ import {
 
 // Drizzle mirror of db/schema.sql. Milestone 1 defines the tables it actually
 // reads or writes; later milestones add theirs as they ship (CLAUDE.md §8).
+
+/** Postgres bytea as a Buffer; drizzle has no built-in for it. */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => 'bytea',
+});
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
@@ -582,6 +588,11 @@ export const marketingPosts = pgTable(
     /** draft | posted | declined */
     status: text('status').notNull().default('draft'),
     editedBody: text('edited_body'),
+    /** The picture Gemini drew for it, if he asked for one. */
+    image: bytea('image'),
+    imageMime: text('image_mime'),
+    imagePrompt: text('image_prompt'),
+    imageAt: timestamptz('image_at'),
     postedUrl: text('posted_url'),
     postedAt: timestamptz('posted_at'),
     declinedAt: timestamptz('declined_at'),

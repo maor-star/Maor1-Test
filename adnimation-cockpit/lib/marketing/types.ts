@@ -21,4 +21,8 @@ export interface Draft {
   postedAt: Date | null;
   createdAt: Date;
   model: string | null;
+  /** Whether a picture is on it; the bytes come through /api/marketing/image/[id]. */
+  hasImage: boolean;
+  imagePrompt: string | null;
+  imageAt: Date | null;
 }

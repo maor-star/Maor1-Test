@@ -1,4 +1,4 @@
-import { desc, eq, isNull } from 'drizzle-orm';
+import { desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { copilotMessages, copilotThreads, db } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 import {
@@ -60,13 +60,15 @@ export async function listThreads(limit = 20): Promise<ThreadSummary[]> {
     .where(isNull(copilotThreads.archivedAt))
     .orderBy(desc(copilotThreads.updatedAt))
     .limit(limit);
-  const counts = await Promise.all(
-    rows.map(async (t) => {
-      const msgs = await db.select({ id: copilotMessages.id }).from(copilotMessages).where(eq(copilotMessages.threadId, t.id));
-      return msgs.length;
-    }),
-  );
-  return rows.map((t, i) => ({ id: t.id, title: t.title, provider: t.provider, updatedAt: t.updatedAt, messageCount: counts[i] ?? 0 }));
+  if (rows.length === 0) return [];
+  // One grouped count, not a query per thread — and a count, not every row.
+  const counts = await db
+    .select({ threadId: copilotMessages.threadId, n: sql<number>`count(*)::int` })
+    .from(copilotMessages)
+    .where(inArray(copilotMessages.threadId, rows.map((t) => t.id)))
+    .groupBy(copilotMessages.threadId);
+  const byThread = new Map(counts.map((c) => [c.threadId, c.n]));
+  return rows.map((t) => ({ id: t.id, title: t.title, provider: t.provider, updatedAt: t.updatedAt, messageCount: byThread.get(t.id) ?? 0 }));
 }
 
 export interface StoredMessage {

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { requireOwner } from '@/lib/auth/session';
-import { declineDraft, draftFromWins, editDraft, publishDraft } from '@/lib/marketing/service';
+import { declineDraft, draftFromWins, drawImage, editDraft, publishDraft, removeImage } from '@/lib/marketing/service';
 
 /**
  * The marketing screen's four buttons.
@@ -62,4 +62,23 @@ export async function publishDraftAction(formData: FormData): Promise<MarketingR
   return result.ok
     ? { ok: true, message: 'Published on LinkedIn.', url: result.url }
     : { ok: false, error: result.error };
+}
+
+/**
+ * A picture for the draft — from his prompt, or from the post when the prompt
+ * box is empty. Gemini draws; nothing is published.
+ */
+export async function drawImageAction(formData: FormData): Promise<MarketingResult> {
+  const user = await requireOwner();
+  const prompt = String(formData.get('prompt') ?? '').slice(0, 2000);
+  const result = await drawImage(String(formData.get('id') ?? ''), prompt || null, user.email);
+  revalidatePath('/marketing');
+  return result.ok ? { ok: true, message: 'Drawn.' } : { ok: false, error: result.error };
+}
+
+export async function removeImageAction(formData: FormData): Promise<MarketingResult> {
+  const user = await requireOwner();
+  const result = await removeImage(String(formData.get('id') ?? ''), user.email);
+  revalidatePath('/marketing');
+  return result.ok ? { ok: true, message: 'Removed. The post goes out as words only.' } : { ok: false, error: result.error };
 }

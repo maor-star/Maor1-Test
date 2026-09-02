@@ -15,6 +15,7 @@ import { secret } from '@/lib/secrets/store';
  */
 
 const POSTS = 'https://api.linkedin.com/rest/posts';
+const IMAGES_INIT = 'https://api.linkedin.com/rest/images?action=initializeUpload';
 /** The API is versioned by date and rejects a request without one. */
 const VERSION = '202405';
 
@@ -49,25 +50,70 @@ export async function linkedInCredentials(): Promise<LinkedInCredentials | { mis
   return { token: token!, author: author! };
 }
 
-export type Publisher = (text: string, credentials: LinkedInCredentials) => Promise<PublishResult>;
+export interface PostImage {
+  bytes: Buffer;
+  mime: string;
+  /** Alt text — the occasion, usually. */
+  title: string;
+}
+
+export type Publisher = (
+  text: string,
+  credentials: LinkedInCredentials,
+  image?: PostImage | null,
+) => Promise<PublishResult>;
+
+const headers = (token: string) => ({
+  Authorization: `Bearer ${token}`,
+  'Content-Type': 'application/json',
+  'LinkedIn-Version': VERSION,
+  'X-Restli-Protocol-Version': '2.0.0',
+});
+
+/**
+ * A picture goes up in two steps: LinkedIn hands out an upload URL and an
+ * image urn, the bytes go to the URL, and the urn goes into the post.
+ */
+async function uploadImage(image: PostImage, { token, author }: LinkedInCredentials): Promise<{ urn: string } | { error: string }> {
+  const init = await fetch(IMAGES_INIT, {
+    method: 'POST',
+    headers: headers(token),
+    body: JSON.stringify({ initializeUploadRequest: { owner: author } }),
+  });
+  const body = (await init.json().catch(() => null)) as { value?: { uploadUrl?: string; image?: string } } | null;
+  if (!init.ok || !body?.value?.uploadUrl || !body.value.image) {
+    return { error: `LinkedIn would not take the picture (${init.status}).` };
+  }
+
+  const put = await fetch(body.value.uploadUrl, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': image.mime },
+    body: new Uint8Array(image.bytes),
+  });
+  if (!put.ok) return { error: `The picture upload failed (${put.status}).` };
+  return { urn: body.value.image };
+}
 
 /** The real one. Separated so the action can be tested without a network. */
-export const publishToLinkedIn: Publisher = async (text, { token, author }) => {
+export const publishToLinkedIn: Publisher = async (text, credentials, image) => {
+  let media: { id: string; title: string } | null = null;
+  if (image) {
+    const up = await uploadImage(image, credentials);
+    if ('error' in up) return { ok: false, error: up.error };
+    media = { id: up.urn, title: image.title.slice(0, 200) };
+  }
+
   const res = await fetch(POSTS, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'LinkedIn-Version': VERSION,
-      'X-Restli-Protocol-Version': '2.0.0',
-    },
+    headers: headers(credentials.token),
     body: JSON.stringify({
-      author,
+      author: credentials.author,
       commentary: escapeCommentary(text),
       visibility: 'PUBLIC',
       distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] },
       lifecycleState: 'PUBLISHED',
       isReshareDisabledByAuthor: false,
+      ...(media ? { content: { media } } : {}),
     }),
   });
 
@@ -85,14 +131,16 @@ export const publishToLinkedIn: Publisher = async (text, { token, author }) => {
   };
 };
 
-/** In-memory LinkedIn. Tests assert against `posted`. */
+/** In-memory LinkedIn. Tests assert against `posted` and `images`. */
 export class FakePublisher {
   readonly posted: string[] = [];
+  readonly images: (PostImage | null)[] = [];
   failWith: string | null = null;
 
-  publish: Publisher = async (text) => {
+  publish: Publisher = async (text, _credentials, image) => {
     if (this.failWith) return { ok: false, error: this.failWith };
     this.posted.push(text);
+    this.images.push(image ?? null);
     return { ok: true, urn: `urn:li:share:${this.posted.length}`, url: `https://linkedin.test/${this.posted.length}` };
   };
 }

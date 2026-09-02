@@ -5,6 +5,7 @@ import { chat, loadProviderKeys, resolveProvider, type ToolSpec } from '@/lib/co
 import { effectiveSettings, type Settings } from '@/lib/agents/settings';
 import { findWins, type Win, type WinSource } from './wins';
 import { linkedInCredentials, publishToLinkedIn, type Publisher } from './linkedin';
+import { drawWithGemini, promptFromPost, type ImageMaker } from './images';
 import { MAX_POST_CHARS, type Draft } from './types';
 
 export { MAX_POST_CHARS };
@@ -241,7 +242,70 @@ export async function listDrafts(limit = 40): Promise<Draft[]> {
     postedAt: r.postedAt,
     createdAt: r.createdAt,
     model: r.model,
+    hasImage: r.image !== null && r.imageMime !== null,
+    imagePrompt: r.imagePrompt,
+    imageAt: r.imageAt,
   }));
+}
+
+/**
+ * A picture for the draft.
+ *
+ * With a prompt he typed, that prompt; without one, a prompt the cockpit
+ * writes from the post. Either is kept on the row, so the next attempt can
+ * start from the last. Drawing a new one replaces the old — a draft has one
+ * picture, and the old one was his to keep by pressing publish first.
+ */
+export async function drawImage(
+  id: string,
+  prompt: string | null,
+  actor: string,
+  maker: ImageMaker = drawWithGemini,
+): Promise<{ ok: boolean; error?: string; prompt?: string }> {
+  const [row] = await db.select().from(marketingPosts).where(eq(marketingPosts.id, id)).limit(1);
+  if (!row) return { ok: false, error: 'No such draft.' };
+  if (row.status === 'posted') return { ok: false, error: 'That one is already published.' };
+
+  const text = prompt?.trim() || promptFromPost(row.editedBody ?? row.body, row.occasion);
+  const made = await maker(text);
+  if (!made.ok || !made.bytes || !made.mime) return { ok: false, error: made.error ?? 'Gemini drew nothing.' };
+  if (made.bytes.length > 8 * 1024 * 1024) return { ok: false, error: 'The picture came back too large to keep.' };
+
+  await db
+    .update(marketingPosts)
+    .set({ image: made.bytes, imageMime: made.mime, imagePrompt: text, imageAt: new Date(), updatedAt: new Date() })
+    .where(eq(marketingPosts.id, id));
+  await writeAudit({
+    actor,
+    action: 'marketing.image',
+    entityType: 'marketing_post',
+    entityId: id,
+    after: { prompt: text.slice(0, 1000), bytes: made.bytes.length, mime: made.mime },
+  });
+  return { ok: true, prompt: text };
+}
+
+export async function removeImage(id: string, actor: string): Promise<{ ok: boolean; error?: string }> {
+  const [row] = await db.select({ status: marketingPosts.status }).from(marketingPosts).where(eq(marketingPosts.id, id)).limit(1);
+  if (!row) return { ok: false, error: 'No such draft.' };
+  if (row.status === 'posted') return { ok: false, error: 'That one is already published.' };
+  await db
+    .update(marketingPosts)
+    .set({ image: null, imageMime: null, imageAt: null, updatedAt: new Date() })
+    .where(eq(marketingPosts.id, id));
+  await writeAudit({ actor, action: 'marketing.image_removed', entityType: 'marketing_post', entityId: id });
+  return { ok: true };
+}
+
+/** The bytes, for the authenticated route that serves them. */
+export async function imageOf(id: string): Promise<{ bytes: Buffer; mime: string } | null> {
+  const [row] = await db
+    .select({ image: marketingPosts.image, mime: marketingPosts.imageMime })
+    .from(marketingPosts)
+    .where(eq(marketingPosts.id, id))
+    .limit(1);
+  if (!row?.image || !row.mime) return null;
+  return { bytes: Buffer.from(row.image), mime: row.mime };
 }
 
 export async function draftCounts(): Promise<{ waiting: number; posted: number; declined: number }> {
@@ -327,14 +391,15 @@ export async function publishDraft(
   }
 
   const text = row.editedBody ?? row.body;
-  const result = await publisher(text, credentials);
+  const image = row.image && row.imageMime ? { bytes: Buffer.from(row.image), mime: row.imageMime, title: row.occasion } : null;
+  const result = await publisher(text, credentials, image);
 
   await writeAudit({
     actor,
     action: result.ok ? 'marketing.published' : 'marketing.publish_failed',
     entityType: 'marketing_post',
     entityId: id,
-    after: { text: text.slice(0, 2000), url: result.url ?? null, error: result.error ?? null },
+    after: { text: text.slice(0, 2000), withImage: image !== null, url: result.url ?? null, error: result.error ?? null },
   });
 
   if (!result.ok) return { ok: false, error: result.error ?? 'LinkedIn refused it.' };

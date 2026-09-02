@@ -39,7 +39,7 @@ export default async function MarketingPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        kicker="MARKETING / 14"
+        kicker="MARKETING / 13"
         title="Posts"
         action={
           <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">

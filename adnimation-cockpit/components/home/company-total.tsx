@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { Num } from '@/components/num';
 import { Sparkline } from '@/components/revenue/sparkline';
-import { PERIOD_LABEL, type Period } from '@/lib/revenue/periods';
+import { PARTIAL_PERIODS, PERIOD_LABEL, type Period } from '@/lib/revenue/periods';
 import { fmtMoney, fmtNumber } from '@/lib/utils';
 import type { CompanySummary } from '@/lib/revenue/company';
 
@@ -45,18 +45,29 @@ export function CompanyTotal({
 
       <div className="grid gap-4 border-t border-divider p-[18px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <div>
-          <p className="hud-label text-[9px]">
-            {PERIOD_LABEL[headline.range.period]} · PROFIT
-          </p>
-          <p className="hud-numeral mt-1 text-[38px] leading-none">
-            <Num>{fmtMoney(headline.company.profitCents)}</Num>
-          </p>
+          {/* Gross and net side by side, the same size: he asked for the sum
+              of both, not one with the other as a footnote. Net is what
+              Adnimation kept after every payout and fee — the P&L's profit. */}
+          <div className="grid grid-cols-2 gap-x-6">
+            <div>
+              <p className="hud-label text-[9px]">{PERIOD_LABEL[headline.range.period]} · GROSS</p>
+              <p className="hud-numeral mt-1 text-[32px] leading-none text-neutral-700">
+                <Num>{fmtMoney(headline.company.grossCents)}</Num>
+              </p>
+            </div>
+            <div>
+              <p className="hud-label text-[9px]">{PERIOD_LABEL[headline.range.period]} · NET</p>
+              <p className="hud-numeral mt-1 text-[32px] leading-none">
+                <Num>{fmtMoney(headline.company.profitCents)}</Num>
+              </p>
+            </div>
+          </div>
           <p className="mt-1 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-            ON <Num>{fmtMoney(headline.company.grossCents)}</Num> GROSS
+            NET IS WHAT WE KEPT
             {headline.company.marginPct !== null ? (
               <>
                 {' · '}
-                <Num>{(headline.company.marginPct * 100).toFixed(1)}%</Num> MARGIN
+                <Num>{(headline.company.marginPct * 100).toFixed(1)}%</Num> OF GROSS
               </>
             ) : null}
           </p>
@@ -65,14 +76,15 @@ export function CompanyTotal({
             className="mt-3 h-10 w-full text-accent-500"
           />
           <p className="mt-1 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-            DAILY PROFIT, TO <Num>{headline.lastCompleteDay}</Num>
+            DAILY NET, TO <Num>{headline.lastCompleteDay}</Num>
             {headline.live ? '' : ' · FROM THE BUILT-IN SNAPSHOT, NOT YET SYNCED'}
           </p>
         </div>
 
         {/* Every unit of time at once: the point is the comparison between
-            them, and a switcher makes that impossible. */}
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+            them, and a switcher makes that impossible. Gross and net on every
+            tile, in that order, the same on every tile. */}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
           {periods.map(({ period, summary }) => (
             <Link
               key={period}
@@ -80,12 +92,17 @@ export function CompanyTotal({
               className="group min-w-0"
               title={`${PERIOD_LABEL[period]} — open the breakdown`}
             >
-              <p className="hud-label text-[9px] group-hover:text-accent">{PERIOD_LABEL[period]}</p>
-              <p className="mt-0.5 font-cond text-[21px] leading-none text-neutral-900 group-hover:text-accent">
-                <Num>{fmtMoney(summary.company.profitCents)}</Num>
+              <p className="hud-label text-[9px] group-hover:text-accent">
+                {PERIOD_LABEL[period]}
+                {PARTIAL_PERIODS.includes(period) ? ' · SO FAR' : ''}
               </p>
               <p className="mt-0.5 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-                <Num>{fmtMoney(summary.company.grossCents)}</Num> GROSS
+                GROSS <span className="font-cond text-[17px] tracking-normal text-neutral-700"><Num>{fmtMoney(summary.company.grossCents)}</Num></span>
+              </p>
+              <p className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+                NET <span className="font-cond text-[21px] tracking-normal text-neutral-900 group-hover:text-accent"><Num>{fmtMoney(summary.company.profitCents)}</Num></span>
+              </p>
+              <p className="mt-0.5 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
                 {summary.deltaPct !== null ? (
                   <span
                     className={

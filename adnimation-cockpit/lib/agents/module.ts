@@ -72,25 +72,39 @@ export async function listAgents(): Promise<AgentListItem[]> {
         pair[1] !== null),
   );
 
-  return Promise.all(
-    rows.map(async (r) => {
-      const [last] = await db
-        .select({
+  /*
+   * Two grouped queries for every agent, not two queries per agent. With
+   * twenty agents the difference is forty round trips on every load of the
+   * screen — and this screen is opened to check on something that is late.
+   */
+  const ids = rows.map((r) => r.id);
+  const lastRuns = ids.length
+    ? await db
+        .selectDistinctOn([agentRuns.agentId], {
+          agentId: agentRuns.agentId,
           startedAt: agentRuns.startedAt,
           outcome: agentRuns.outcome,
           haltReason: agentRuns.haltReason,
         })
         .from(agentRuns)
-        .where(eq(agentRuns.agentId, r.id))
-        .orderBy(desc(agentRuns.startedAt))
-        .limit(1);
+        .where(inArray(agentRuns.agentId, ids))
+        .orderBy(agentRuns.agentId, desc(agentRuns.startedAt))
+    : [];
+  const lastByAgent = new Map(lastRuns.map((r) => [r.agentId, r]));
 
-      const [today] = await db
-        .select({ n: sql<number>`count(*)::int` })
+  const todayRows = ids.length
+    ? await db
+        .select({ agentId: agentRuns.agentId, n: sql<number>`count(*)::int` })
         .from(agentRuns)
-        .where(sql`${agentRuns.agentId} = ${r.id} and ${agentRuns.startedAt} > now() - interval '1 day'`);
+        .where(and(inArray(agentRuns.agentId, ids), sql`${agentRuns.startedAt} > now() - interval '1 day'`))
+        .groupBy(agentRuns.agentId)
+    : [];
+  const todayByAgent = new Map(todayRows.map((r) => [r.agentId, r.n]));
 
-      return {
+  return rows.map((r) => {
+      const last = lastByAgent.get(r.id);
+      const today = { n: todayByAgent.get(r.id) ?? 0 };
+  return {
         ...toRecord(r),
         rationale: rationales.get(r.name) ?? null,
         notifySlack: r.notifySlack,
@@ -100,7 +114,7 @@ export async function listAgents(): Promise<AgentListItem[]> {
         learning: learning.get(r.name) ?? null,
         jobRuns: jobRuns.get(r.name) ?? [],
         instructionsUpdatedAt: r.instructionsUpdatedAt,
-        lastRun: last ?? null,
+        lastRun: last ? { startedAt: last.startedAt, outcome: last.outcome, haltReason: last.haltReason } : null,
         runsToday: today?.n ?? 0,
         settings: effectiveSettings(r.name, r.settings),
         settingFields: settingsFor(r.name),
@@ -108,8 +122,7 @@ export async function listAgents(): Promise<AgentListItem[]> {
         playbookName: r.playbookName,
         playbookUpdatedAt: r.playbookUpdatedAt,
       };
-    }),
-  );
+  });
 }
 
 export interface AgentsOverview {

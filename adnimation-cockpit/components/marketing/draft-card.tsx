@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { declineDraftAction, editDraftAction, publishDraftAction } from '@/app/actions/marketing';
+import {
+  declineDraftAction, drawImageAction, editDraftAction, publishDraftAction, removeImageAction,
+} from '@/app/actions/marketing';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
 import { Tag } from '@/components/hud/tag';
@@ -27,6 +29,8 @@ const SOURCE_LABEL: Record<string, string> = {
  */
 export function DraftCard({ draft, canPublish, missing }: { draft: Draft; canPublish: boolean; missing: string[] }) {
   const [body, setBody] = useState(draft.body);
+  const [imagePrompt, setImagePrompt] = useState(draft.imagePrompt ?? '');
+  const [drawing, setDrawing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -87,6 +91,70 @@ export function DraftCard({ draft, canPublish, missing }: { draft: Draft; canPub
         </ul>
       ) : null}
 
+      {/* The picture. Gemini draws it from his prompt, or from the post when
+          the box is empty; it goes up with the words when he publishes. The
+          image URL carries the draw time so a redraw is not served from cache. */}
+      {draft.hasImage || open ? (
+        <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+          {draft.hasImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={`/api/marketing/image/${draft.id}?t=${draft.imageAt ? new Date(draft.imageAt).getTime() : 0}`}
+              alt={draft.occasion}
+              className="w-full border border-divider"
+            />
+          ) : open ? (
+            <div className="flex min-h-[80px] items-center justify-center border border-dashed border-divider p-3 text-center font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+              NO PICTURE YET
+            </div>
+          ) : null}
+          {open ? (
+            <div>
+              <Textarea
+                value={imagePrompt}
+                onChange={(e) => setImagePrompt(e.target.value)}
+                rows={3}
+                placeholder="Describe the picture — or leave this empty and it draws one from the post."
+                className="w-full text-[12px]"
+                maxLength={2000}
+              />
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  disabled={pending || drawing}
+                  onClick={() => {
+                    setDrawing(true);
+                    const data = new FormData();
+                    data.set('id', draft.id);
+                    data.set('prompt', imagePrompt);
+                    startTransition(async () => {
+                      const result = await drawImageAction(data);
+                      setMessage(result.ok ? (result.message ?? 'Drawn.') : (result.error ?? 'That did not work'));
+                      setDrawing(false);
+                      if (result.ok) router.refresh();
+                    });
+                  }}
+                >
+                  {drawing ? 'GEMINI IS DRAWING…' : draft.hasImage ? 'DRAW IT AGAIN' : imagePrompt.trim() ? 'DRAW THIS' : 'DRAW ONE FROM THE POST'}
+                </Button>
+                {draft.hasImage ? (
+                  <Button type="button" size="xs" variant="ghost" disabled={pending} onClick={() => run(removeImageAction)}>
+                    NO PICTURE
+                  </Button>
+                ) : null}
+              </div>
+              {draft.imagePrompt ? (
+                <p className="mt-1 text-2xs text-neutral-500" title={draft.imagePrompt}>
+                  DRAWN FROM: {draft.imagePrompt.slice(0, 140)}{draft.imagePrompt.length > 140 ? '…' : ''}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {open ? (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Button type="button" size="xs" variant="ghost" disabled={pending || !dirty} onClick={() => run(editDraftAction, { body })}>
@@ -111,7 +179,9 @@ export function DraftCard({ draft, canPublish, missing }: { draft: Draft; canPub
               <Button type="button" size="xs" variant="ghost" disabled={pending} onClick={() => setConfirming(false)}>
                 NOT YET
               </Button>
-              <span className="text-2xs text-neutral-600">This goes out on LinkedIn now and cannot be taken back.</span>
+              <span className="text-2xs text-neutral-600">
+                This goes out on LinkedIn now{draft.hasImage ? ', with the picture,' : ''} and cannot be taken back.
+              </span>
             </>
           ) : (
             <Button

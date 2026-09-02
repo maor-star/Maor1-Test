@@ -33,7 +33,7 @@ import { listThreads } from '@/lib/copilot/service';
 import { decisionCounts, lastReviewAt, recentDecisions } from '@/lib/copilot/autopilot';
 import { taskAttachments } from '@/lib/attachments/service';
 import { statusOf } from '@/lib/secrets/store';
-import { draftCounts, linkedInReady, listDrafts } from '@/lib/marketing/service';
+import { draftCounts, imageOf, linkedInReady, listDrafts } from '@/lib/marketing/service';
 import { findWins } from '@/lib/marketing/wins';
 import { slackReach } from '@/lib/copilot/slack-view';
 import { SECRET_KEYS } from '@/lib/secrets/catalogue';
@@ -210,6 +210,7 @@ describe('delegations and the copilot', () => {
     await ok('listDrafts', () => listDrafts());
     await ok('draftCounts', () => draftCounts());
     await ok('linkedInReady', () => linkedInReady());
+    await ok('imageOf', () => imageOf('00000000-0000-0000-0000-000000000000').then((r) => r ?? 'none'));
     await ok('findWins', () => findWins({ days: 30, limit: 3 }));
     await ok('findWins from mail', () => findWins({ sources: ['mail'], days: 7, limit: 3 }));
   });

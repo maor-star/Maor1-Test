@@ -11,7 +11,7 @@ import { DecisionLog } from '@/components/copilot/decisions';
 import { listThreads, threadMessages } from '@/lib/copilot/service';
 import { decisionCounts, lastReviewAt, recentDecisions } from '@/lib/copilot/autopilot';
 import { loadProviderKeys, providerStatus } from '@/lib/copilot/provider';
-import { slackReach } from '@/lib/copilot/slack-view';
+import { slackReach, type SlackReach } from '@/lib/copilot/slack-view';
 import { AUTONOMY_LABEL } from '@/lib/agents/types';
 import { fmtDateTime } from '@/lib/utils';
 
@@ -37,8 +37,14 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
     decisionCounts(),
     lastReviewAt(),
     db.select().from(agents).where(eq(agents.name, 'autopilot')).limit(1),
-    // Never let Slack being unreachable take the screen down with it.
-    slackReach().catch(() => ({ asUser: false, channels: null, why: 'Slack did not answer.' })),
+    // Never let Slack being unreachable — or slow — hold the screen. Three
+    // seconds is longer than Slack ever takes and shorter than he waits.
+    Promise.race([
+      slackReach(),
+      new Promise<SlackReach>((resolve) =>
+        setTimeout(() => resolve({ asUser: false, channels: null, why: 'Slack did not answer in time.' }), 3000),
+      ),
+    ]).catch((): SlackReach => ({ asUser: false, channels: null, why: 'Slack did not answer.' })),
   ]);
   await loadProviderKeys();
   const providers = providerStatus();
