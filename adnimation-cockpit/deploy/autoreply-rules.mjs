@@ -91,6 +91,23 @@ export function triage(candidate) {
 }
 
 /**
+ * The final word on whether a draft may be sent.
+ *
+ * Separate from drafting on purpose: the thing that decides to send must be
+ * readable on its own, and must not be the thing that wanted to send.
+ */
+export function maySend(triaged, draft) {
+  if (!triaged.answerable) return { send: false, why: triaged.reason };
+  if (!draft.shouldReply) return { send: false, why: draft.reasoning };
+  if (draft.confidence !== 'high') {
+    return { send: false, why: `only ${draft.confidence} confidence — ${draft.reasoning}` };
+  }
+  if (draft.reply.trim().length < 10) return { send: false, why: 'the draft is empty' };
+  if (draft.reply.length > 1200) return { send: false, why: 'the draft is too long to be simple' };
+  return { send: true, why: triaged.reason };
+}
+
+/**
  * The third outcome: nothing to answer, but worth seeing.
  *
  * Not every email is a question. A great deal of what arrives is information —

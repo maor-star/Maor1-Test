@@ -26,7 +26,7 @@
  */
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
-import { mayFile, triage } from './autoreply-rules.mjs';
+import { mayFile, maySend, triage } from './autoreply-rules.mjs';
 import { postAsBot } from './bot-post.mjs';
 import { agentState, markRan, mayAct, recordRun, startLog } from './agent-brief.mjs';
 
@@ -210,18 +210,13 @@ async function draft(candidate) {
   return JSON.parse(json);
 }
 
-/**
- * The last gate, deliberately not the code that produced the draft.
- * Mirrors maySend in lib/agents/autoreply.ts.
+/*
+ * The last gate — whether a drafted reply is actually sent — is imported from
+ * the generated copy of lib/agents/autoreply.ts rather than written again
+ * here. It was written twice, and the two agreed only because nobody had
+ * changed either yet: a gate that decides whether mail leaves the building is
+ * the last thing that should exist in two versions.
  */
-function maySend(triaged, d) {
-  if (!triaged.answerable) return { send: false, why: triaged.reason };
-  if (!d.shouldReply) return { send: false, why: d.reasoning };
-  if (d.confidence !== 'high') return { send: false, why: `only ${d.confidence} confidence` };
-  if ((d.reply ?? '').trim().length < 10) return { send: false, why: 'the draft is empty' };
-  if ((d.reply ?? '').length > 1200) return { send: false, why: 'too long to be simple' };
-  return { send: true, why: triaged.reason };
-}
 
 async function labelId(name) {
   const { labels } = await gmail('/labels');

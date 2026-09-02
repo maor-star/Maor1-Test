@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mayFile, triage, type ReplyCandidate } from '@/lib/agents/autoreply';
+import { mayFile, triage, type ReplyCandidate, maySend} from '@/lib/agents/autoreply';
 // @ts-expect-error — the generated job copy is plain ESM with no types.
 import * as js from '@/deploy/autoreply-rules.mjs';
 
@@ -77,5 +77,35 @@ describe('autoreply parity — what may be filed without a reply', () => {
       expect(mjs.consider, c.subject ?? '').toBe(ts.consider);
       expect(mjs.why, c.subject ?? '').toBe(ts.why);
     }
+  });
+});
+
+
+describe('the send gate, on both sides', () => {
+  const triaged = { answerable: true, reason: 'a simple question', matched: [] as string[] };
+  const draft = { shouldReply: true, confidence: 'high' as const, reply: 'Yes, Tuesday works.', reasoning: 'plain scheduling' };
+
+  /*
+   * This gate decides whether mail actually leaves the building. It used to
+   * exist twice — once here in TypeScript, once hand-copied into
+   * mail-answer.mjs — and the two agreed only because nobody had changed
+   * either yet. The job now imports the generated copy; this proves the two
+   * still answer the same on the cases that matter.
+   */
+  const CASES: [string, unknown, unknown][] = [
+    ['a confident simple answer', triaged, draft],
+    ['a draft that declined to reply', triaged, { ...draft, shouldReply: false }],
+    ['medium confidence', triaged, { ...draft, confidence: 'medium' }],
+    ['low confidence', triaged, { ...draft, confidence: 'low' }],
+    ['an empty draft', triaged, { ...draft, reply: '   ' }],
+    ['a draft that is too long', triaged, { ...draft, reply: 'x'.repeat(1201) }],
+    ['a thread triage refused', { answerable: false, reason: 'it is about money', matched: ['about money'] }, draft],
+  ];
+
+  it.each(CASES)('agrees about %s', (_label, t, d) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mine = maySend(t as any, d as any);
+    const theirs = js.maySend(t, d);
+    expect(theirs.send, 'the two gates disagree about whether to send').toBe(mine.send);
   });
 });

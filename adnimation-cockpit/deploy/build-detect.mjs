@@ -12,7 +12,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 
-const TARGETS = [
+export const TARGETS = [
   {
     src: new URL('../lib/opportunities/detect.ts', import.meta.url),
     out: new URL('./opportunity-detect.mjs', import.meta.url),
@@ -51,14 +51,31 @@ const TARGETS = [
     out: new URL('./autoreply-rules.mjs', import.meta.url),
     from: 'lib/agents/autoreply.ts',
     test: 'tests/unit/autoreply-parity.test.ts',
+    /**
+     * Deliberately not generated: both need zod and the model client, which
+     * the job neither has nor wants — the job decides WHETHER to answer, the
+     * app decides WHAT to say. Everything the job's send gate depends on sits
+     * above them in the source and is generated.
+     */
+    omits: ['draftSchema', 'draftReply'],
     rewrites: [
       // The job does its own Claude call, so the drafting half is not needed.
       [/import \{ z \} from 'zod';\n/, ''],
       [/import \{ ask \}[^;]+;\n/, ''],
+      /*
+       * Everything from draftSchema down needs zod and the model client, which
+       * the job does not have and does not want: the job decides WHETHER to
+       * answer, the app decides WHAT to say. Declared in `omits` below so the
+       * generated-copies test knows this is a decision, not a slip.
+       */
       [/export const draftSchema[\s\S]*$/, ''],
       ['const NEVER: [RegExp, string][] = [', 'const NEVER = ['],
       ['const SIMPLE: [RegExp, string][] = [', 'const SIMPLE = ['],
       ['export function triage(candidate: ReplyCandidate): Triage {', 'export function triage(candidate) {'],
+      [
+        'export function maySend(triaged: Triage, draft: Draft): { send: boolean; why: string } {',
+        'export function maySend(triaged, draft) {',
+      ],
       [
         'export function mayFile(triaged: Triage): { consider: boolean; why: string } {',
         'export function mayFile(triaged) {',
@@ -110,6 +127,10 @@ const TARGETS = [
       [/export function fieldsToFill<T extends Record<string, unknown>>\(\n  existing: T,\n  found: Partial<T>,\n\): Partial<T> \{/, 'export function fieldsToFill(existing, found) {'],
       ['  const patch: Partial<T> = {};', '  const patch = {};'],
       [/  for \(const \[key, value\] of Object\.entries\(found\) as \[keyof T, T\[keyof T\]\]\[\]\) \{/, '  for (const [key, value] of Object.entries(found)) {'],
+      [
+        /export function linksInSignature\(block: string\): \{ linkedinUrl: string \| null; website: string \| null \} \{/,
+        'export function linksInSignature(block) {',
+      ],
     ],
   },
   {
@@ -207,21 +228,41 @@ function stripTypeDeclarations(source) {
   );
 }
 
-for (const target of TARGETS) {
+const SURVIVING_ANNOTATION =
+  /:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget|InvoiceInput|InvoiceGuess|MailFacts|PromoGuess|CodeGuess|ReplyCandidate|Triage|Draft|BotIdentity|BotStatus|EnvLike|HarvestCandidate|HarvestedContact)\b/;
+
+/**
+ * What the generated copy of one target should be, byte for byte.
+ *
+ * Exported so the suite can build every copy in memory and compare it with
+ * what is on disk. Forgetting to run this script is otherwise invisible until
+ * a job crashes on its timer — which is exactly how a new export shipped
+ * without its generated half.
+ */
+export function generate(target) {
   let body = stripTypeDeclarations(readFileSync(target.src, 'utf8'));
   for (const [from, to] of target.rewrites) body = body.replace(from, to);
 
   // Anything left with a type annotation would be a syntax error at run time,
   // and a job that crashes on the timer is worse than one that fails to build.
-  if (
-    /:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget|InvoiceInput|InvoiceGuess|MailFacts|PromoGuess|CodeGuess|ReplyCandidate|Triage|Draft|BotIdentity|BotStatus|EnvLike|HarvestCandidate|HarvestedContact)\b/.test(
-      body,
-    )
-  ) {
-    console.error(`${target.from}: a type annotation survived the strip — update its rewrites`);
-    process.exit(1);
+  if (SURVIVING_ANNOTATION.test(body)) {
+    throw new Error(`${target.from}: a type annotation survived the strip — update its rewrites`);
   }
 
-  writeFileSync(target.out, header(target.from, target.test) + body);
-  console.log(`wrote ${target.out.pathname}`);
+  return header(target.from, target.test) + body;
+}
+
+// Only when run as a script; importing this file must not write anything.
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+  for (const target of TARGETS) {
+    let generated;
+    try {
+      generated = generate(target);
+    } catch (e) {
+      console.error(e.message);
+      process.exit(1);
+    }
+    writeFileSync(target.out, generated);
+    console.log(`wrote ${target.out.pathname}`);
+  }
 }
