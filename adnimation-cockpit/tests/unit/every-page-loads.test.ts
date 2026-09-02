@@ -32,6 +32,8 @@ import { settingsContext } from '@/lib/agents/checks';
 import { listThreads } from '@/lib/copilot/service';
 import { decisionCounts, lastReviewAt, recentDecisions } from '@/lib/copilot/autopilot';
 import { taskAttachments } from '@/lib/attachments/service';
+import { statusOf } from '@/lib/secrets/store';
+import { SECRET_KEYS } from '@/lib/secrets/catalogue';
 
 /**
  * Every screen's data, against a real database.
@@ -197,6 +199,10 @@ describe('delegations and the copilot', () => {
     await ok('delegationCounts', () => delegationCounts());
     await ok('delegatableTeam', () => delegatableTeam('maor@adnimation.com'));
   });
+  it('loads the keys screen', async () => {
+    await ok('statusOf', () => statusOf(SECRET_KEYS));
+  });
+
   it('loads the copilot screen', async () => {
     await ok('listThreads', () => listThreads());
     await ok('recentDecisions', () => recentDecisions(40));

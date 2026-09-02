@@ -60,9 +60,26 @@ export interface ProviderStatus {
   auto: ProviderName | null;
 }
 
+/**
+ * Set by the app, alongside whatever the environment has.
+ *
+ * A key he pasted into the Keys screen has to work in the same breath as one
+ * the deploy set, or the screen is lying about being set. Read once at the top
+ * of a request and cached briefly by the store itself.
+ */
+let appKeys: Record<string, string | null> = {};
+
+export async function loadProviderKeys(): Promise<void> {
+  const { secret } = await import('@/lib/secrets/store');
+  const [anthropic, gemini] = await Promise.all([secret('ANTHROPIC_API_KEY'), secret('GEMINI_API_KEY')]);
+  appKeys = { ANTHROPIC_API_KEY: anthropic, GEMINI_API_KEY: gemini };
+}
+
+const keyFor = (name: string): string | null => process.env[name] ?? appKeys[name] ?? null;
+
 export function providerStatus(): ProviderStatus {
-  const anthropic = Boolean(process.env.ANTHROPIC_API_KEY);
-  const gemini = Boolean(process.env.GEMINI_API_KEY);
+  const anthropic = Boolean(keyFor('ANTHROPIC_API_KEY'));
+  const gemini = Boolean(keyFor('GEMINI_API_KEY'));
   const preferred = process.env.COPILOT_PROVIDER === 'gemini' ? 'gemini' : 'anthropic';
   const auto: ProviderName | null =
     preferred === 'gemini' && gemini ? 'gemini' : anthropic ? 'anthropic' : gemini ? 'gemini' : null;
@@ -132,8 +149,8 @@ function toAnthropicMessages(turns: Turn[]) {
 }
 
 async function chatAnthropic(req: ChatRequest): Promise<ChatResponse> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return { ok: false, error: 'ANTHROPIC_API_KEY is not set on the server', needsKey: true };
+  const key = keyFor('ANTHROPIC_API_KEY');
+  if (!key) return { ok: false, error: 'No Claude key — set one on the Keys screen', needsKey: true };
 
   const res = await withRetry(() =>
     fetch(ANTHROPIC_API, {
@@ -246,8 +263,8 @@ function toGeminiSchema(schema: Record<string, unknown>): Record<string, unknown
 }
 
 async function chatGemini(req: ChatRequest): Promise<ChatResponse> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return { ok: false, error: 'GEMINI_API_KEY is not set on the server', needsKey: true };
+  const key = keyFor('GEMINI_API_KEY');
+  if (!key) return { ok: false, error: 'No Gemini key — set one on the Keys screen', needsKey: true };
 
   const res = await withRetry(() =>
     fetch(geminiUrl(GEMINI_MODEL), {

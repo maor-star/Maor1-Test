@@ -18,28 +18,37 @@
  * exactly how the previous snapshot came to understate 2026-08-29 ninefold.
  */
 import postgres from 'postgres';
+import { loadSecrets } from './job-secrets.mjs';
 import { NUMERIC, assertSelect, assertWorthWriting, buildQueries, mergeDays } from './revenue-source.mjs';
 
 const DB = process.env.DATABASE_URL;
-const KEY = process.env.LOVABLE_API_KEY;
-const PROJECT = process.env.LOVABLE_PROJECT_ID;
 const WINDOW_DAYS = Number(process.env.REVENUE_SYNC_DAYS ?? 10);
 
 if (!DB) {
   console.error('DATABASE_URL is required.');
   process.exit(1);
 }
+
+const sql = postgres(DB, { max: 2, onnotice: () => {} });
+
+// He can paste the key into the Keys screen; read the store before deciding
+// there is nothing to pull from.
+const filled = await loadSecrets(sql, ['LOVABLE_API_KEY', 'LOVABLE_PROJECT_ID']);
+if (filled.length > 0) console.log(`using ${filled.join(' and ')} from the Keys screen`);
+
+const KEY = process.env.LOVABLE_API_KEY;
+const PROJECT = process.env.LOVABLE_PROJECT_ID;
 if (!KEY || !PROJECT) {
   // Not a failure worth alerting on: the credential has simply not been
   // supplied yet, and the cockpit keeps serving the rows it already holds.
   console.error(
-    'LOVABLE_API_KEY and LOVABLE_PROJECT_ID are not set, so there is nothing to pull from. ' +
-      'The cockpit will keep serving the last synced rows and will label their age.',
+    'LOVABLE_API_KEY and LOVABLE_PROJECT_ID are not set, in the environment or on the Keys ' +
+      'screen, so there is nothing to pull from. The cockpit keeps serving the last synced ' +
+      'rows and labels their age.',
   );
+  await sql.end().catch(() => {});
   process.exit(78); // EX_CONFIG — systemd records it without flapping the unit.
 }
-
-const sql = postgres(DB, { max: 2, onnotice: () => {} });
 
 async function query(statement) {
   assertSelect(statement);

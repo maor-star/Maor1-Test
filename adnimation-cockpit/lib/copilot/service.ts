@@ -2,7 +2,8 @@ import { desc, eq, isNull } from 'drizzle-orm';
 import { copilotMessages, copilotThreads, db } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 import {
-  PROVIDER_LABEL, chat, resolveProvider, type ProviderName, type ToolCall, type ToolResult, type Turn,
+  PROVIDER_LABEL, chat, loadProviderKeys, resolveProvider,
+  type ProviderName, type ToolCall, type ToolResult, type Turn,
 } from './provider';
 import { TOOL_SPECS, runTool, type ToolContext } from './tools';
 
@@ -137,6 +138,7 @@ export async function converse(
   const [thread] = await db.select().from(copilotThreads).where(eq(copilotThreads.id, threadId)).limit(1);
   if (!thread) return { ok: false, error: 'No such conversation' };
 
+  await loadProviderKeys();
   const provider = resolveProvider(wantedProvider ?? thread.provider);
   if (!provider) {
     return { ok: false, error: 'No model is connected — set ANTHROPIC_API_KEY or GEMINI_API_KEY on the server.' };

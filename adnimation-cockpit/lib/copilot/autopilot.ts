@@ -3,7 +3,7 @@ import { copilotDecisions, db } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 import { todayInTz } from '@/lib/utils';
 import type { Settings } from '@/lib/agents/settings';
-import { chat, resolveProvider, type ToolResult, type Turn } from './provider';
+import { chat, loadProviderKeys, resolveProvider, type ToolResult, type Turn } from './provider';
 import { READ_TOOL_SPECS, runTool, type ToolContext } from './tools';
 import { systemBrief } from './service';
 
@@ -85,6 +85,7 @@ export function executableKinds(autonomyLevel: number, settings: Settings): Set<
 
 export async function runAutopilot(opts: AutopilotOptions): Promise<AutopilotResult> {
   const runId = opts.runId ?? crypto.randomUUID();
+  await loadProviderKeys();
   const provider = resolveProvider(typeof opts.settings.provider === 'string' ? opts.settings.provider : 'auto');
   if (!provider) return { ok: false, summary: 'No model is connected.', decisions: 0, executed: 0, runId };
 

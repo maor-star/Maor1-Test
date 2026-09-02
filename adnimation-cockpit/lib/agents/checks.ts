@@ -43,8 +43,9 @@ const found = (context: Record<string, unknown>, items: Found[]) => {
 
 export const conditions: Record<string, ConditionEvaluator> = {
   copilot_configured: async () => {
+    const { secret } = await import('@/lib/secrets/store');
     const claude = claudeStatus();
-    const gemini = Boolean(process.env.GEMINI_API_KEY);
+    const gemini = Boolean(process.env.GEMINI_API_KEY || (await secret('GEMINI_API_KEY')));
     const ok = claude.configured || gemini;
     return {
       passed: ok,

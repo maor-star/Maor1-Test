@@ -553,6 +553,15 @@ export const copilotDecisions = pgTable(
   (t) => [index('idx_copilot_decisions_status').on(t.status, t.createdAt)],
 );
 
+/** Credentials he set in the app. Values are encrypted — see lib/secrets/store.ts. */
+export const appSecrets = pgTable('app_secrets', {
+  key: text('key').primaryKey(),
+  valueEnc: text('value_enc').notNull(),
+  hint: text('hint'),
+  updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  updatedBy: text('updated_by').notNull(),
+});
+
 export const companyDaily = pgTable('company_daily', {
   date: date('date').primaryKey(),
 

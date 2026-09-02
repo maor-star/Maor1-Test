@@ -10,7 +10,7 @@ import { CopilotChat } from '@/components/copilot/chat';
 import { DecisionLog } from '@/components/copilot/decisions';
 import { listThreads, threadMessages } from '@/lib/copilot/service';
 import { decisionCounts, lastReviewAt, recentDecisions } from '@/lib/copilot/autopilot';
-import { providerStatus } from '@/lib/copilot/provider';
+import { loadProviderKeys, providerStatus } from '@/lib/copilot/provider';
 import { AUTONOMY_LABEL } from '@/lib/agents/types';
 import { fmtDateTime } from '@/lib/utils';
 
@@ -37,6 +37,7 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
     lastReviewAt(),
     db.select().from(agents).where(eq(agents.name, 'autopilot')).limit(1),
   ]);
+  await loadProviderKeys();
   const providers = providerStatus();
   const threadId = sp.thread && threads.some((t) => t.id === sp.thread) ? sp.thread : (threads[0]?.id ?? null);
   const messages = threadId ? await threadMessages(threadId) : [];
