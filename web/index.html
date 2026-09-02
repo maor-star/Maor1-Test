@@ -1022,6 +1022,21 @@ function ensureDefaults(){
     db.dedupV21={rows:drop.size,sum:Math.round(dupSum)};
     db.defaultsV=21; save();
   }
+  if((db.defaultsV||0) < 22){
+    // ביקורת סיווגים: כללים רחבים מדי («מכבי» תפס את «מכבים» העיר, «אייס» תפס «מאניה אייס מול») + שיוך מפורש של סופרים/חנויות
+    const byName=(mainName,subName)=>{ const m=db.categories.find(c=>c.name===mainName&&!c.parent_id); if(!m) return null; const s=subName?db.categories.find(c=>c.parent_id==m.id&&c.name===subName):null; return (s||m).id; };
+    const FOOD=byName('מזון','מזון וסופר'), KIDS=byName('ילדים וחינוך','חינוך וחוגים לילדים'), HEALTH=byName('בריאות','בריאות ותרופות'), CLOTH=byName('פנאי, בילויים וקניות','ביגוד והנעלה'), APPL=byName('הוצאות בית ותשתיות','מכשירי חשמל וריהוט'), VAC=byName('פנאי, בילויים וקניות','נופש וחופשות'), FUN=byName('פנאי, בילויים וקניות','פנאי ובילויים');
+    const BAD_RULES=new Set(['מכבי','אייס','ace','חשמל','מקס ','max ','בר ','bar ','דן ','ten ','טן ','שוק']);
+    db.rules=db.rules.filter(r=>!BAD_RULES.has(strv(r.match_text).toLowerCase()));
+    const addRule=(k,cid)=>{ if(!cid) return; const kk=strv(k).toLowerCase(); if(!db.rules.some(r=>strv(r.match_text).toLowerCase()===kk)) db.rules.push({id:++db.seq,match_text:k,category_id:cid}); };
+    [['מכבי שרותי','HEALTH'],['מכבי שירותי','HEALTH'],['מכבידנט','HEALTH'],['maccabi','HEALTH'],['מכבי טבעי','HEALTH'],['כל בו מכבים','FOOD'],['כלבו מכבים','FOOD'],['carrefour','FOOD'],['קרפור','FOOD'],['מכבים מרכז חינוכי','KIDS'],['תנועת המכבי','KIDS'],['מאניה','CLOTH'],['מחסני חשמל','APPL'],['אייס הרדוור','APPL'],['ace hardware','APPL'],['סיגנל טורס','VAC'],['טורס','VAC'],['tours','VAC'],['לם לוגיסטיקה','HEALTH'],['מקס מודיעי','CLOTH'],['מקס ראשון','CLOTH']].forEach(([k,c])=>addRule(k,{FOOD,KIDS,HEALTH,CLOTH,APPL,VAC,FUN}[c]));
+    const FIX=[[/כל בו מכבים|כלבו מכבים|carrefour|קרפור/i,FOOD],[/מכבים מרכז חינוכי|תנועת המכבי/i,KIDS],[/^מאניה/i,CLOTH],[/מחסני חשמל/i,APPL],[/סיגנל טורס|טורס|tours/i,VAC],[/לם לוגיסטיקה/i,HEALTH]];
+    const CAP22=/העברת זה["”׳']?ב|שובר[- ]?נט|העברת חיובים לכרטיס תחליפי|הזמנת מט["״]?ח|קניית מט["״]?ח|ני["”]ע/;
+    let n=0; (db.transactions||[]).forEach(t=>{ if(t.kind!=='expense') return; const txt=(t.merchant||'')+' '+(t.description||'');
+      if(CAP22.test(txt)){ if(t.category_id){ t.category_id=null; n++; } return; } // תנועות הון — ללא סיווג
+      for(const [re,cid] of FIX){ if(cid&&re.test(txt)&&t.category_id!==cid){ t.category_id=cid; n++; break; } } });
+    db.fixV22=n; db.defaultsV=22; save();
+  }
 }
 ensureDefaults();
 const catById = (id)=> db.categories.find(c=>c.id==id);
