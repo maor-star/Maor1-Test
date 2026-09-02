@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import {
   activityDaily, agentRuns, agents, alerts, coreClientsDaily, db, integrationHealth,
   mailThreads, pipelineClients, tasks,
@@ -120,7 +120,7 @@ export const conditions: Record<string, ConditionEvaluator> = {
       .from(pipelineClients)
       .where(and(
         isNull(pipelineClients.archivedAt),
-        sql`${pipelineClients.stage} = any(${stages}::text[])`,
+        inArray(pipelineClients.stage, stages),
         or(
           lte(pipelineClients.nextStepDate, cutoff),
           isNull(pipelineClients.nextStepDate),

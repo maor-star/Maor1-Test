@@ -1,4 +1,4 @@
-import { desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { agentRuns, agents, db } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 import { claudeStatus } from '@/lib/integrations/claude';
@@ -151,7 +151,10 @@ export async function seedAgents(actor: string): Promise<{ added: string[] }> {
   const retiring = await db
     .select({ id: agents.id, name: agents.name })
     .from(agents)
-    .where(sql`${agents.name} = any(${[...RETIRED_AGENTS]}::text[]) and ${agents.retiredAt} is null`);
+    // inArray, not a hand-written `= any(…::text[])`: an array interpolated
+    // into raw SQL becomes a row constructor, which Postgres refuses to cast
+    // to an array — and this runs on every load of the agents screen.
+    .where(and(inArray(agents.name, [...RETIRED_AGENTS]), isNull(agents.retiredAt)));
   if (retiring.length > 0) {
     await db
       .update(agents)
