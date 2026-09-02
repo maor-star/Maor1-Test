@@ -701,6 +701,10 @@ export const agents = pgTable('agents', {
   lastRanAt: timestamptz('last_ran_at'),
   /** His dials for this agent — see lib/agents/settings.ts. Only what he changed. */
   settings: jsonb('settings').notNull().default({}),
+  /** The document behind the agent — see db/migrations/0035_agent_playbook.sql. */
+  playbook: text('playbook'),
+  playbookName: text('playbook_name'),
+  playbookUpdatedAt: timestamptz('playbook_updated_at'),
   /** Set when the roster stopped carrying it. Hidden, never deleted. */
   retiredAt: timestamptz('retired_at'),
   createdAt: timestamptz('created_at').notNull().defaultNow(),

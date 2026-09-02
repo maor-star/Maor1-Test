@@ -40,6 +40,8 @@ describe('the agent gate', () => {
       enabled: true,
       notify: true,
       brief: 'be careful',
+      // The document behind it, empty when he has not written one.
+      playbook: '',
       everyMinutes: null,
       lastRanAt: null,
       killed: false,
@@ -138,5 +140,36 @@ describe('the brief', () => {
     expect((await briefVeto({ brief: 'careful', agent: 'x', what: 'forward it', item, apiKey: 'k' })).go).toBe(false);
 
     expect((await briefVeto({ brief: 'careful', agent: 'x', what: 'forward it', item, apiKey: undefined })).go).toBe(false);
+  });
+});
+
+
+describe('the playbook, alongside the brief', () => {
+  it('reads the document he wrote for the agent', async () => {
+    const state = await agentState(
+      fakeSql({
+        flag: [{ value: 'false' }],
+        agent: [{ enabled: true, instructions: 'be careful', playbook: '  HOW THIS JOB IS DONE\nnever on Fridays  ', notify_slack: true }],
+      }),
+      'mail-answerer',
+    );
+    expect(state.playbook).toBe('HOW THIS JOB IS DONE\nnever on Fridays');
+  });
+
+  it('lets an agent with only a playbook be checked against it', async () => {
+    // The veto used to wave everything through when the brief was empty, which
+    // would have made a playbook-only agent unconstrained.
+    const verdict = await briefVeto({ brief: '', playbook: '', agent: 'x', what: 'file it', item: {} });
+    expect(verdict.go).toBe(true);
+
+    const held = await briefVeto({
+      brief: '',
+      playbook: 'never touch anything from Google',
+      agent: 'x',
+      what: 'file it',
+      item: {},
+      apiKey: '',
+    });
+    expect(held.go).toBe(false);
   });
 });

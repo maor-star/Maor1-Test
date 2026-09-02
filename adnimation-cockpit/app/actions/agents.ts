@@ -7,7 +7,7 @@ import { eq } from 'drizzle-orm';
 import { agents, db } from '@/lib/db';
 import {
   runById, seedAgents, setAgentEnabled, setAutonomy, setGlobalKill, setInstructions,
-  setNotifySlack, setRunEvery, setSettings,
+  setNotifySlack, setPlaybook, setRunEvery, setSettings, PLAYBOOK_MAX,
 } from '@/lib/agents/module';
 import { settingsFromForm } from '@/lib/agents/settings';
 import { jobFor, runJob } from '@/lib/agents/job-preview';
@@ -251,4 +251,38 @@ export async function setSettingsAction(formData: FormData): Promise<AgentAction
   if (!result.ok) return { ok: false, error: result.error };
   revalidatePath('/agents');
   return { ok: true, message: 'Saved. The next run reads these.' };
+}
+
+
+/**
+ * The document behind an agent, typed in or uploaded.
+ *
+ * A file arrives as text: what the agent needs is the words, and the filename
+ * is a label on them so he can see which document is loaded without opening it.
+ */
+export async function setPlaybookAction(formData: FormData): Promise<AgentActionResult> {
+  const user = await requireUser();
+  const id = idSchema.safeParse(formData.get('id'));
+  if (!id.success) return { ok: false, error: 'Not an agent' };
+
+  const parsed = z
+    .object({
+      playbook: z.string().max(PLAYBOOK_MAX + 1000),
+      name: z.string().trim().max(200).optional(),
+    })
+    .safeParse({
+      playbook: String(formData.get('playbook') ?? ''),
+      name: String(formData.get('name') ?? '') || undefined,
+    });
+  if (!parsed.success) return { ok: false, error: 'That document is too long to send.' };
+
+  const result = await setPlaybook(id.data, parsed.data.playbook, parsed.data.name ?? null, user.email);
+  if (!result.ok) return { ok: false, error: result.error };
+  revalidatePath('/agents');
+  return {
+    ok: true,
+    message: parsed.data.playbook.trim()
+      ? 'Saved. The next run reads it before anything else.'
+      : 'Removed. It runs on its dials and its brief alone.',
+  };
 }

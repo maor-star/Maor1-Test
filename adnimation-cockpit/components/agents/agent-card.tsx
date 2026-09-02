@@ -18,6 +18,7 @@ import { summarise } from '@/lib/agents/summarise-run';
 import type { AgentListItem } from '@/lib/agents/module';
 import { fmtDateTime } from '@/lib/utils';
 import { AgentSettingsForm } from '@/components/agents/settings-form';
+import { AgentPlaybook } from '@/components/agents/playbook';
 
 /**
  * What a brief for this particular agent might say.
@@ -26,6 +27,62 @@ import { AgentSettingsForm } from '@/components/agents/settings-form';
  * that matter are the ones only he knows, so the placeholder asks for those,
  * in the terms of the job that agent actually does.
  */
+/**
+ * What a playbook for this agent would actually contain.
+ *
+ * A blank sixteen-line box is a box nobody fills. The placeholder is the
+ * shape of the answer, per agent, so the first thing he sees is what a good
+ * one looks like rather than an invitation to invent a format.
+ */
+const PLAYBOOK_HINTS: Record<string, string> = {
+  default:
+    'The whole job, in your words. For example:\n\n' +
+    'WHAT THIS IS FOR\n' +
+    'One paragraph: what you want it to achieve, and what would count as it doing well.\n\n' +
+    'WHAT COUNTS\n' +
+    '· The cases it should act on, named specifically.\n\n' +
+    'WHAT NEVER COUNTS\n' +
+    '· The cases it must leave alone, however tempting.\n\n' +
+    'HOW TO SAY IT\n' +
+    '· Tone, length, and the words you do and do not use.\n\n' +
+    'WHEN IN DOUBT\n' +
+    '· What to do when none of the above fits.',
+  autopilot:
+    'HOW I RUN THE COMPANY\n' +
+    'What I look at first in the morning, and why. Which numbers matter and which are noise.\n\n' +
+    'WHAT I WANT TOLD IMMEDIATELY\n' +
+    '· A core client down more than 20% week over week.\n' +
+    '· Anything that threatens a contract or a renewal.\n\n' +
+    'WHAT CAN WAIT FOR THE WEEKLY\n' +
+    '· Small movements on small lines. Housekeeping.\n\n' +
+    'HOW I DECIDE\n' +
+    '· Protect existing revenue before chasing new revenue.\n' +
+    '· Never surprise a partner. Never let a signed contract sit unintegrated.\n\n' +
+    'WHO DOES WHAT\n' +
+    '· Names, and what each of them owns.',
+  'core-client-guardian':
+    'WHO THE CORE CLIENTS ARE\n' +
+    'Name them, and say what each is worth to us and who owns the relationship.\n\n' +
+    'WHAT A REAL DROP LOOKS LIKE\n' +
+    '· Seasonality I already know about, so you do not flag it every year.\n\n' +
+    'WHAT TO DO ABOUT ONE\n' +
+    '· Who to write to, what to check first, what never to say.',
+  'contract-redliner':
+    'OUR STANDING POSITIONS\n' +
+    'Payment terms, notice, liability, exclusivity, governing law — what we accept and what we never do.\n\n' +
+    'WHERE WE HAVE ROOM\n' +
+    '· What is worth conceding, and for what in return.\n\n' +
+    'HOW WE WORD A PUSHBACK\n' +
+    '· The phrasing that has worked, and the phrasing that has not.',
+  'mail-answerer':
+    'WHAT A SIMPLE MAIL IS\n' +
+    'The kinds you are happy for it to answer without you, with examples.\n\n' +
+    'WHAT IT NEVER TOUCHES\n' +
+    '· Money, contracts, staff, commitments, anyone senior at a partner.\n\n' +
+    'HOW I WRITE\n' +
+    '· Length, sign-off, and two or three replies of mine worth copying.',
+};
+
 const BRIEF_HINTS: Record<string, string> = {
   'mail-answerer':
     'Write it as you would tell a new assistant:\n' +
@@ -66,6 +123,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
   const [preview, setPreview] = useState<string | null>(null);
   const [teaching, setTeaching] = useState(false);
   const [customising, setCustomising] = useState(false);
+  const [writingPlaybook, setWritingPlaybook] = useState(false);
   const [editingVoice, setEditingVoice] = useState(false);
   const [openRun, setOpenRun] = useState<number | null>(null);
   const router = useRouter();
@@ -108,7 +166,22 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="font-cond text-[17px] leading-none text-neutral-900">{a.name}</p>
+            {/* The name is the way in — the same as a deal or a contact.
+                Hunting for the right button to open an agent is the reason
+                half of them were never opened. */}
+            <button
+              type="button"
+              onClick={() => {
+                const opening = !(customising || teaching || writingPlaybook);
+                setCustomising(opening);
+                setWritingPlaybook(opening);
+                setTeaching(opening);
+              }}
+              className="text-start font-cond text-[17px] leading-none text-neutral-900 hover:text-accent"
+              title="Open it: its playbook, its brief and its dials"
+            >
+              {a.name}
+            </button>
             <Tag tone={a.enabled ? 'ok' : 'neutral'}>{a.enabled ? 'ON' : 'OFF'}</Tag>
             <Tag tone="outline">LEVEL {a.autonomyLevel}</Tag>
             {irreversible.length > 0 ? (
@@ -238,6 +311,16 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
           thresholds and switches every run reads directly, so a change here
           is guaranteed to be obeyed rather than interpreted.
         */}
+        <Button
+          type="button"
+          size="xs"
+          variant={a.playbook ? 'outline' : 'ghost'}
+          onClick={() => setWritingPlaybook((v) => !v)}
+          title="The document behind it — how this job is actually done"
+        >
+          {writingPlaybook ? 'CLOSE' : a.playbook ? 'ITS PLAYBOOK ✓' : 'GIVE IT A PLAYBOOK'}
+        </Button>
+
         {a.settingFields.length > 0 ? (
           <Button
             type="button"
@@ -461,6 +544,17 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
             </>
           )}
         </div>
+      ) : null}
+
+      {writingPlaybook ? (
+        <AgentPlaybook
+          agentId={a.id}
+          playbook={a.playbook}
+          playbookName={a.playbookName}
+          updatedAt={a.playbookUpdatedAt}
+          hint={PLAYBOOK_HINTS[a.name] ?? PLAYBOOK_HINTS.default!}
+          onClose={() => setWritingPlaybook(false)}
+        />
       ) : null}
 
       {customising ? (

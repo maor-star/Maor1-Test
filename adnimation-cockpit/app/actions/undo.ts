@@ -42,6 +42,8 @@ const PHRASES: Record<string, string> = {
   'crm.contact.update': 'Contact edited',
   'crm.contact.archive': 'Contact archived',
   'crm.contact.restore': 'Contact restored',
+  'agent.playbook': 'Agent playbook changed',
+  'agent.settings': 'Agent dials changed',
   'mail.dismiss': 'Conversation marked handled',
   'mail.restore': 'Conversation put back',
   'delegation.archive': 'Delegation archived',

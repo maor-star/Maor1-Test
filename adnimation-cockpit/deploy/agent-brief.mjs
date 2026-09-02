@@ -27,7 +27,7 @@ export async function agentState(sql, name) {
 
   // A row we cannot read is not permission to run either.
   const [row] = await sql`
-    select enabled, instructions, notify_slack, run_every_minutes, last_ran_at
+    select enabled, instructions, playbook, notify_slack, run_every_minutes, last_ran_at
     from agents where name = ${name} limit 1
   `.catch(() => []);
 
@@ -37,6 +37,11 @@ export async function agentState(sql, name) {
     // The per-agent Slack switch on the screen. Off means it works silently.
     notify: Boolean(row?.notify_slack),
     brief: (row?.instructions ?? '').trim(),
+    /**
+     * The document behind the agent: how this job is actually done. Longer
+     * than the brief and read the same way — before anything is decided.
+     */
+    playbook: (row?.playbook ?? '').trim(),
     /** Minutes he asked it to wait between runs. Null: every timer firing. */
     everyMinutes: row?.run_every_minutes ?? null,
     lastRanAt: row?.last_ran_at ? new Date(row.last_ran_at) : null,
@@ -84,8 +89,17 @@ export async function markRan(sql, name, now = new Date()) {
  * whether this case is covered, the safe answer is to leave the item alone and
  * say so. Not acting is reversible; a forwarded email is not.
  */
-export async function briefVeto({ brief, agent, what, item, apiKey = process.env.ANTHROPIC_API_KEY }) {
-  if (!brief) return { go: true };
+export async function briefVeto({
+  brief,
+  // The document behind the agent, when there is one. It is standing
+  // instruction exactly as the brief is, and read the same way.
+  playbook = '',
+  agent,
+  what,
+  item,
+  apiKey = process.env.ANTHROPIC_API_KEY,
+}) {
+  if (!brief && !playbook) return { go: true };
   if (!apiKey) return { go: false, why: 'you have taught it something, but Claude is not connected' };
 
   const system =
@@ -94,7 +108,8 @@ export async function briefVeto({ brief, agent, what, item, apiKey = process.env
     `Your only job is to say whether his instructions tell it to LEAVE THIS ONE ALONE. ` +
     `You may only hold it back. You may never say to act on something, and you may never ` +
     `add a reason of your own — if his instructions do not cover this case, it goes ahead.\n\n` +
-    `His instructions, verbatim:\n${brief}`;
+    `His instructions, verbatim:\n${brief}` +
+    (playbook ? `\n\nAnd the playbook he wrote for it, verbatim:\n${playbook}` : '');
 
   const prompt =
     `The agent is about to: ${what}\n\n` +

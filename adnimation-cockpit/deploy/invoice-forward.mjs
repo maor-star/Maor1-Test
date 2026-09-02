@@ -273,6 +273,7 @@ async function main() {
      */
     const veto = await briefVeto({
       brief: state.brief,
+      playbook: state.playbook,
       agent: 'invoice-forwarder',
       what: `forward this email to ${to}, because it looks like an invoice`,
       item: { subject, from, attachments: names.join(', ') },

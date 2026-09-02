@@ -293,11 +293,27 @@ async function main() {
     process.exit(0);
   }
   if (!DRY) await markRan(sql, 'mail-answerer');
-  if (state.brief && !process.env.ANSWER_INSTRUCTIONS) {
-    INSTRUCTIONS = state.brief;
-    console.log(`using the brief you wrote it (${state.brief.length} chars).`);
-  } else if (!state.brief) {
-    console.log('no brief written for it yet — the built-in rules alone decide.');
+  /*
+   * The brief and the playbook are both his, and both are standing
+   * instruction: the brief is the correction, the playbook is how the job is
+   * done. They go in together, playbook first, because the corrections should
+   * read as amendments to it.
+   */
+  const written = [
+    state.playbook ? `HOW THIS JOB IS DONE\n${state.playbook}` : '',
+    state.brief ? `WHAT YOU HAVE TOLD IT\n${state.brief}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  if (written && !process.env.ANSWER_INSTRUCTIONS) {
+    INSTRUCTIONS = written;
+    console.log(
+      `using what you wrote it (${written.length} chars` +
+        `${state.playbook ? `, playbook ${state.playbook.length}` : ''}).`,
+    );
+  } else if (!written) {
+    console.log('nothing written for it yet — the built-in rules alone decide.');
   }
 
   const [learned] = await sql`

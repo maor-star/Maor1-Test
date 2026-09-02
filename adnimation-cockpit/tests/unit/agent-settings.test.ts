@@ -68,3 +68,14 @@ describe('from the form to the row', () => {
     expect(effectiveSettings('systems-watch', stored)).toEqual({ ...defaultSettings('systems-watch'), staleHours: 12 });
   });
 });
+
+
+describe('the document behind an agent', () => {
+  it('has a playbook placeholder for the agents whose job needs one', () => {
+    // Not every agent needs a written playbook, but the ones that make
+    // judgement calls do — a blank box is a box nobody fills.
+    for (const name of ['autopilot', 'core-client-guardian', 'contract-redliner', 'mail-answerer']) {
+      expect(Object.keys(AGENT_SETTINGS), name).toContain(name);
+    }
+  });
+});

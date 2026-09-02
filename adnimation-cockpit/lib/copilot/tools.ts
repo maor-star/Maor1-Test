@@ -268,7 +268,13 @@ async function dispatch(call: ToolCall, ctx: ToolContext): Promise<unknown> {
     }
     case 'agents_status': {
       const rows = await listAgents();
-      return rows.map((r) => ({ name: r.name, on: r.enabled, level: r.autonomyLevel, runs: r.runCount, lastRun: r.lastRun?.startedAt ?? null, lastOutcome: r.lastRun?.outcome ?? null, lastHalt: r.lastRun?.haltReason ?? null, runsToday: r.runsToday }));
+      return rows.map((r) => ({
+        name: r.name, on: r.enabled, level: r.autonomyLevel, runs: r.runCount,
+        lastRun: r.lastRun?.startedAt ?? null, lastOutcome: r.lastRun?.outcome ?? null,
+        lastHalt: r.lastRun?.haltReason ?? null, runsToday: r.runsToday,
+        // Whether he has told it how the job is done, and how much.
+        hasPlaybook: Boolean(r.playbook), playbookChars: r.playbook?.length ?? 0,
+      }));
     }
     case 'systems_health': {
       const [health, [open]] = await Promise.all([

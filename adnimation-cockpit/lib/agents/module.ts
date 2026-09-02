@@ -50,6 +50,10 @@ export interface AgentListItem extends AgentRecord {
   /** His dials, with the defaults filled in, and what each one is. */
   settings: Settings;
   settingFields: SettingField[];
+  /** The document behind it, and where it came from. */
+  playbook: string | null;
+  playbookName: string | null;
+  playbookUpdatedAt: Date | null;
 }
 
 export async function listAgents(): Promise<AgentListItem[]> {
@@ -100,6 +104,9 @@ export async function listAgents(): Promise<AgentListItem[]> {
         runsToday: today?.n ?? 0,
         settings: effectiveSettings(r.name, r.settings),
         settingFields: settingsFor(r.name),
+        playbook: r.playbook,
+        playbookName: r.playbookName,
+        playbookUpdatedAt: r.playbookUpdatedAt,
       };
     }),
   );
@@ -256,6 +263,53 @@ export async function setSettings(
     entityId: id,
     before: { settings: before.settings },
     after: { settings },
+  });
+  return { ok: true };
+}
+
+/**
+ * The document behind an agent.
+ *
+ * Longer than a brief and read the same way: at the top of every run, before
+ * anything is decided. Kept as text whatever it arrived as, because what the
+ * agent needs is the words — the file it came from is a label on them.
+ *
+ * There is a ceiling, and it is not arbitrary: a playbook goes into every
+ * prompt this agent makes, so a document nobody trimmed is a bill on every run
+ * for ever. Fifty thousand characters is a long chapter and still cheap.
+ */
+export const PLAYBOOK_MAX = 50_000;
+
+export async function setPlaybook(
+  id: string,
+  playbook: string | null,
+  name: string | null,
+  actor: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const [before] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+  if (!before) return { ok: false, error: 'No such agent' };
+
+  const text = (playbook ?? '').trim();
+  if (text.length > PLAYBOOK_MAX) {
+    return { ok: false, error: `That is ${text.length} characters. Trim it to ${PLAYBOOK_MAX}.` };
+  }
+
+  await db
+    .update(agents)
+    .set({
+      playbook: text || null,
+      playbookName: text ? (name?.trim() || null) : null,
+      playbookUpdatedAt: text ? new Date() : null,
+    })
+    .where(eq(agents.id, id));
+
+  await writeAudit({
+    actor,
+    action: 'agent.playbook',
+    entityType: 'agent',
+    entityId: id,
+    before: { playbook: before.playbook, playbookName: before.playbookName },
+    after: { playbook: text || null, playbookName: name ?? null },
   });
   return { ok: true };
 }

@@ -56,7 +56,7 @@ const RESTORABLE: Record<string, string[]> = {
   mail_thread: ['dismissedAt'],
   // An agent's dials and brief. Not its autonomy: a promotion is earned, and
   // undoing a demotion would hand back a level without the run count behind it.
-  agent: ['instructions', 'settings', 'enabled', 'notifySlack', 'runEveryMinutes'],
+  agent: ['instructions', 'settings', 'enabled', 'notifySlack', 'runEveryMinutes', 'playbook', 'playbookName'],
 };
 
 const TABLES = {

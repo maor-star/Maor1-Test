@@ -267,6 +267,7 @@ async function main() {
     if (promo.isPromo && (DRY || mayFilePromo.act)) {
       const veto = await briefVeto({
         brief: promoAgent.brief,
+        playbook: promoAgent.playbook,
         agent: 'promo-filer',
         what: `take this out of the inbox and file it under "${PROMO_LABEL}"`,
         item: { subject, from, why: promo.reasons.join(', ') },
