@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { lastCompleteDay, rankCoreClients, summariseLine, type CoreClientDay, type LineDay } from '@/lib/control/lines';
+import {
+  lastCompleteDay, rankCoreClients, summariseLine, summariseLineOver, type CoreClientDay, type LineDay,
+} from '@/lib/control/lines';
+import { rangeFor } from '@/lib/revenue/periods';
 
 /**
  * The control panel's arithmetic, with no source underneath.
@@ -90,5 +93,50 @@ describe('the core clients', () => {
   it('drops an account that earned nothing this week', () => {
     const rows = dates(14, today).map((d, i) => client('Gone', d, i < 7 ? 100 : 0));
     expect(rankCoreClients(rows, today)).toEqual([]);
+  });
+});
+
+describe('one line over the window he picked', () => {
+  const today = '2026-09-03';
+  const yesterday = '2026-09-02';
+  // Sixty full days at 1000, then today at 7.
+  const days = [...dates(60, today).map((d) => day(d, 1000)), day(today, 7)];
+
+  it('sums the window and compares it with the equivalent earlier one', () => {
+    const s = summariseLineOver('ibv', days, rangeFor('7D', yesterday, today), today);
+    expect(s.grossCents).toBe(7000);
+    expect(s.previousGrossCents).toBe(7000);
+    expect(s.deltaPct).toBe(0);
+    expect(s.daysReported).toBe(7);
+    expect(s.series).toHaveLength(7);
+    expect(s.entities).toBe(5);
+  });
+
+  it('month to date compares against the same days last month, not the whole month', () => {
+    const s = summariseLineOver('ibv', days, rangeFor('MTD', yesterday, today), today);
+    expect(s.range.current.from).toBe('2026-09-01');
+    expect(s.daysReported).toBe(2);
+    expect(s.previousDaysReported).toBe(2);
+    expect(s.deltaPct).toBe(0);
+  });
+
+  it('today is the one window that includes the partial day', () => {
+    const s = summariseLineOver('ibv', days, rangeFor('TODAY', yesterday, today), today);
+    expect(s.grossCents).toBe(7);
+    expect(s.range.partial).toBe(true);
+  });
+
+  it('offers no delta when there is nothing before the window', () => {
+    const s = summariseLineOver('ibv', days, rangeFor('YTD', yesterday, today), today);
+    expect(s.previousDaysReported).toBe(0);
+    expect(s.deltaPct).toBeNull();
+  });
+
+  it('says a line is quiet when its last full day is old, whatever the window', () => {
+    const old = dates(10, '2026-08-20').map((d) => day(d, 1000));
+    const s = summariseLineOver('ibv', old, rangeFor('30D', yesterday, today), today);
+    expect(s.stale).toBe(true);
+    expect(s.lastDay).toBe('2026-08-19');
+    expect(s.daysReported).toBe(10);
   });
 });

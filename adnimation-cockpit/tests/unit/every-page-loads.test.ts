@@ -67,6 +67,8 @@ describe('the overview', () => {
   it('loads the control panel', async () => {
     const panel = (await ok('loadControlPanel', () => loadControlPanel())) as { lines: unknown[] };
     expect(panel.lines).toHaveLength(7);
+    // The home page shows every one of these on a click.
+    for (const p of PERIODS) await ok(`loadControlPanel ${p}`, () => loadControlPanel(p));
   });
   it('loads the profit strip, the seats, the work and the mail', async () => {
     await ok('summariseCompany', () => summariseCompany('YESTERDAY'));

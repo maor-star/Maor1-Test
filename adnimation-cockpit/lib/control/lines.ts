@@ -1,3 +1,5 @@
+import type { PeriodRange } from '@/lib/revenue/periods';
+
 /**
  * The business lines the control panel watches, with no database underneath.
  *
@@ -203,4 +205,77 @@ export function rankCoreClients(days: CoreClientDay[], today: string, limit = 8)
       ...c,
       trendPct: grossBefore > 0 ? (c.gross7dCents - grossBefore) / grossBefore : null,
     }));
+}
+
+
+/** One line over a chosen window, against the equivalent earlier window. */
+export interface LinePeriodSummary {
+  line: ActivityLine;
+  label: string;
+  unit: string | null;
+  source: string;
+  range: PeriodRange;
+  grossCents: number;
+  profitCents: number;
+  impressions: number;
+  /** Live things on the line, averaged over the days that reported one. */
+  entities: number | null;
+  daysReported: number;
+  previousGrossCents: number;
+  previousDaysReported: number;
+  /** Gross against the earlier window. Null when there is nothing to compare. */
+  deltaPct: number | null;
+  /** Daily gross across the window, oldest first. */
+  series: number[];
+  /** The last full day the source has for this line. */
+  lastDay: string | null;
+  /** True when the source has not delivered a full day in over 48 hours. */
+  stale: boolean;
+}
+
+/**
+ * The line over the window he picked.
+ *
+ * Same rules as the week view, applied to any range: gross carries the
+ * comparison (several lines report no profit), the comparison window is the
+ * one the period defines (so MTD compares against the same days last month,
+ * not against a whole month), and a window with nothing before it offers no
+ * delta rather than a delta against zero.
+ */
+export function summariseLineOver(
+  line: ActivityLine,
+  days: LineDay[],
+  range: PeriodRange,
+  today: string,
+): LinePeriodSummary {
+  const mine = [...days].filter((d) => d.line === line).sort((a, b) => a.date.localeCompare(b.date));
+  const within = (r: { from: string; to: string }) => mine.filter((d) => d.date >= r.from && d.date <= r.to);
+  const now = within(range.current);
+  const before = within(range.previous);
+
+  const gross = sum(now.map((d) => d.grossCents));
+  const grossBefore = sum(before.map((d) => d.grossCents));
+  const counted = now.filter((d) => d.entities !== null);
+  const last = mine.filter((d) => d.date < today).at(-1) ?? null;
+
+  return {
+    line,
+    label: LINE_LABEL[line],
+    unit: LINE_UNIT[line],
+    source: LINE_SOURCE[line],
+    range,
+    grossCents: gross,
+    profitCents: sum(now.map((d) => d.profitCents)),
+    impressions: sum(now.map((d) => d.impressions)),
+    entities: counted.length ? Math.round(sum(counted.map((d) => d.entities ?? 0)) / counted.length) : null,
+    daysReported: now.length,
+    previousGrossCents: grossBefore,
+    previousDaysReported: before.length,
+    deltaPct: before.length > 0 && grossBefore > 0 ? (gross - grossBefore) / grossBefore : null,
+    series: now.map((d) => d.grossCents),
+    lastDay: last?.date ?? null,
+    stale: last
+      ? Date.parse(`${today}T00:00:00Z`) - Date.parse(`${last.date}T00:00:00Z`) > 2 * 86_400_000
+      : true,
+  };
 }

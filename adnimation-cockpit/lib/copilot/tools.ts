@@ -4,6 +4,7 @@ import {
 } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 import { loadControlPanel } from '@/lib/control/service';
+import { isPeriod, type Period } from '@/lib/revenue/periods';
 import { summariseCompany } from '@/lib/revenue/company';
 import { listPipeline, logTouch } from '@/lib/pipeline/service';
 import { STAGES, type Stage } from '@/lib/pipeline/types';
@@ -42,8 +43,13 @@ const money = (cents: number | null | undefined) =>
 const READ: ToolSpec[] = [
   {
     name: 'get_control_panel',
-    description: 'The seven business lines (core clients, video, apps, bidder, display trading, exchange, seat lease): last full day gross and profit in USD, seven-day totals, week-over-week trend, and the top accounts.',
-    parameters: { type: 'object', properties: {} },
+    description:
+      'The seven business lines (core clients, IBV, RTB display, apps, CTV, Google CTV, seat lease) over a window: gross and profit in USD, ' +
+      'impressions, the change against the equivalent earlier window, and the top accounts. Default window is the last 7 full days.',
+    parameters: {
+      type: 'object',
+      properties: { period: { type: 'string', description: 'TODAY | YESTERDAY | 7D | 30D | MTD | QTD | LAST_Q | YTD' } },
+    },
   },
   {
     name: 'get_pnl',
@@ -203,13 +209,17 @@ async function dispatch(call: ToolCall, ctx: ToolContext): Promise<unknown> {
   const a = call.args ?? {};
   switch (call.name) {
     case 'get_control_panel': {
-      const p = await loadControlPanel();
+      // The last 7 full days, against the 7 before — the window that reads
+      // best in an answer. He can ask for another window by name.
+      const period = isPeriod(str(a.period)) ? (str(a.period) as Period) : '7D';
+      const p = await loadControlPanel(period);
       return {
         pulledAt: p.pulledAt,
+        window: { period, from: p.range.current.from, to: p.range.current.to, comparedWith: p.range.previous },
         lines: p.lines.map((l) => ({
           line: l.line, lastDay: l.lastDay, grossUsd: money(l.grossCents), profitUsd: money(l.profitCents),
-          gross7dUsd: money(l.gross7dCents), profit7dUsd: money(l.profit7dCents),
-          weekOverWeekPct: l.trendPct === null ? null : Math.round(l.trendPct * 100), entities: l.entities, unit: l.unit, stale: l.stale,
+          impressions: l.impressions, daysReported: l.daysReported,
+          vsPreviousWindowPct: l.deltaPct === null ? null : Math.round(l.deltaPct * 100), entities: l.entities, unit: l.unit, stale: l.stale,
         })),
         topAccounts: p.coreClients.map((c) => ({
           account: c.account, trading: c.isTrading, gross7dUsd: money(c.gross7dCents), ours7dUsd: money(c.profit7dCents),

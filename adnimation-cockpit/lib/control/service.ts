@@ -1,9 +1,10 @@
 import { and, desc, gte, sql } from 'drizzle-orm';
 import { activityDaily, coreClientsDaily, db } from '@/lib/db';
 import { todayInTz } from '@/lib/utils';
+import { addDays, rangeFor, type Period, type PeriodRange } from '@/lib/revenue/periods';
 import {
-  ACTIVITY_LINES, rankCoreClients, summariseLine,
-  type ActivityLine, type CoreClient, type CoreClientDay, type LineDay, type LineSummary,
+  ACTIVITY_LINES, rankCoreClients, summariseLineOver,
+  type ActivityLine, type CoreClient, type CoreClientDay, type LineDay, type LinePeriodSummary,
 } from './lines';
 
 /**
@@ -17,7 +18,10 @@ import {
  */
 
 export interface ControlPanel {
-  lines: LineSummary[];
+  /** The window every tile is showing, and what it is compared against. */
+  period: Period;
+  range: PeriodRange;
+  lines: LinePeriodSummary[];
   coreClients: CoreClient[];
   /** When the sync last wrote anything, or null when it never has. */
   pulledAt: Date | null;
@@ -26,11 +30,16 @@ export interface ControlPanel {
   today: string;
 }
 
+/** The core-client ranking always wants five weeks, whatever the tiles show. */
 const WINDOW_DAYS = 35;
 
-export async function loadControlPanel(): Promise<ControlPanel> {
+export async function loadControlPanel(period: Period = '30D'): Promise<ControlPanel> {
   const today = todayInTz();
-  const since = new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
+  // Anchored on yesterday: the last day the source has finished with. TODAY
+  // is the one window that deliberately reaches past it.
+  const range = rangeFor(period, addDays(today, -1), today);
+  const fiveWeeksAgo = addDays(today, -WINDOW_DAYS);
+  const since = range.previous.from < fiveWeeksAgo ? range.previous.from : fiveWeeksAgo;
 
   const [lineRows, clientRows, [meta]] = await Promise.all([
     db.select().from(activityDaily).where(gte(activityDaily.date, since)),
@@ -63,7 +72,9 @@ export async function loadControlPanel(): Promise<ControlPanel> {
   }));
 
   return {
-    lines: ACTIVITY_LINES.map((line) => summariseLine(line, days, today)),
+    period,
+    range,
+    lines: ACTIVITY_LINES.map((line) => summariseLineOver(line, days, range, today)),
     coreClients: rankCoreClients(clients, today),
     pulledAt: meta?.pulledAt ? new Date(meta.pulledAt) : null,
     empty: lineRows.length === 0 && clientRows.length === 0,

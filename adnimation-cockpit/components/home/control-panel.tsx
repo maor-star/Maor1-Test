@@ -4,19 +4,21 @@ import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { Sparkline } from '@/components/revenue/sparkline';
 import { fmtDateTime, fmtMoney, fmtNumber } from '@/lib/utils';
+import { PERIOD_LABEL } from '@/lib/revenue/periods';
 import type { ControlPanel as Panel } from '@/lib/control/service';
-import { LINE_SOURCE, type LineSummary } from '@/lib/control/lines';
+import type { LinePeriodSummary } from '@/lib/control/lines';
 
 /**
- * The control panel — every line of the business on one strip.
+ * The control panel — every line of the business, one cube each, across the
+ * width of the page.
  *
- * Seven tiles, one per stream of money the company runs, each read live from
- * the Ad Ops Architect source and each carrying the same three things: what
- * it made on the last full day, how the week compares to the one before, and
- * the shape of the last four weeks. Below them, the accounts that carry the
- * company, ranked on money.
+ * Seven cubes, one per stream of money the company runs, each read from the
+ * Ad Ops Architect source and each showing the same window as the company
+ * cube above: what it made, what was ours, how that compares with the
+ * equivalent earlier window, and the shape of the days inside it. Below them,
+ * the accounts that carry the company, ranked on money.
  *
- * A tile whose source has gone quiet says so rather than showing a zero: on
+ * A cube whose source has gone quiet says so rather than showing a zero: on
  * this screen a zero reads as a collapse, and a collapse is the one thing he
  * must never be told by accident.
  */
@@ -30,7 +32,7 @@ export function ControlPanel({ panel }: { panel: Panel }) {
             index="C01"
             action={
               <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
-                SEVEN CUTS OF THE BUSINESS — THEY OVERLAP, THEY DO NOT SUM ·{' '}
+                {PERIOD_LABEL[panel.period]} · SEVEN CUTS OF THE BUSINESS — THEY OVERLAP, THEY DO NOT SUM ·{' '}
                 {panel.pulledAt ? (
                   <>PULLED <Num>{fmtDateTime(panel.pulledAt)}</Num></>
                 ) : (
@@ -47,10 +49,11 @@ export function ControlPanel({ panel }: { panel: Panel }) {
             with a Lovable API key.
           </p>
         ) : (
-          // Hairlines between tiles: the gap lets the divider colour show through.
-          <div className="grid gap-px border-t border-divider bg-divider sm:grid-cols-2 xl:grid-cols-4">
+          // Seven across on a wide screen, so the whole business is one row.
+          // Hairlines between cubes: the gap lets the divider colour show through.
+          <div className="grid gap-px border-t border-divider bg-divider sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
             {panel.lines.map((l) => (
-              <LineTile key={l.line} line={l} />
+              <LineCube key={l.line} line={l} />
             ))}
           </div>
         )}
@@ -104,7 +107,7 @@ export function ControlPanel({ panel }: { panel: Panel }) {
                       OURS <Num>{fmtMoney(c.profit7dCents)}</Num>
                     </p>
                   </div>
-                  <Trend pct={c.trendPct} />
+                  <Trend pct={c.trendPct} label="W/W" />
                 </div>
               </li>
             ))}
@@ -115,37 +118,40 @@ export function ControlPanel({ panel }: { panel: Panel }) {
   );
 }
 
-function LineTile({ line }: { line: LineSummary }) {
+function LineCube({ line }: { line: LinePeriodSummary }) {
+  const days = line.range.days;
   return (
-    <div className="bg-ground p-[14px]">
+    <div className="min-w-0 bg-ground p-[12px]">
       <div className="flex items-start justify-between gap-2">
-        <p className="hud-label text-[9px]" title={LINE_SOURCE[line.line]}>
+        <p className="hud-label truncate text-[9px]" title={line.source}>
           {line.label}
         </p>
-        {line.stale ? <Tag tone="warning">SOURCE QUIET</Tag> : <Trend pct={line.trendPct} />}
+        {line.stale ? <Tag tone="warning">QUIET</Tag> : <Trend pct={line.deltaPct} />}
       </div>
 
-      {line.lastDay === null ? (
-        <p className="mt-2 font-semi text-[12px] text-neutral-500">No full day yet.</p>
+      {line.daysReported === 0 ? (
+        <p className="mt-2 font-semi text-[12px] text-neutral-500">
+          {line.lastDay ? `Nothing in this window. Last day: ${line.lastDay}.` : 'No days from the source yet.'}
+        </p>
       ) : (
         <>
-          <p className="hud-numeral mt-1 text-[28px]">
+          <p className="hud-numeral mt-1 text-[24px] leading-none">
             <Num>{fmtMoney(line.grossCents)}</Num>
           </p>
           <p className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-            GROSS ON <Num>{line.lastDay}</Num>
+            GROSS
             {line.profitCents > 0 ? (
               <> · OURS <Num>{fmtMoney(line.profitCents)}</Num></>
             ) : null}
           </p>
-          <Sparkline values={line.series} className="mt-2 h-8 w-full text-accent-500" />
-          <p className="mt-1 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-            7D <Num>{fmtMoney(line.gross7dCents)}</Num>
-            {line.entities !== null && line.unit ? (
-              <> · <Num>{fmtNumber(line.entities)}</Num> {line.unit}</>
-            ) : null}
+          <Sparkline values={line.series} className="mt-2 h-7 w-full text-accent-500" />
+          <p className="mt-1 truncate font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+            <Num>{line.daysReported}</Num>/<Num>{days}</Num> DAYS
             {line.impressions > 0 ? (
               <> · <Num>{fmtNumber(line.impressions)}</Num> IMP</>
+            ) : null}
+            {line.entities !== null && line.unit ? (
+              <> · <Num>{fmtNumber(line.entities)}</Num> {line.unit}</>
             ) : null}
           </p>
         </>
@@ -154,15 +160,15 @@ function LineTile({ line }: { line: LineSummary }) {
   );
 }
 
-/** Week over week, coloured by direction. Nothing at all when there is no prior week. */
-function Trend({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="hud-label text-[9px] text-neutral-400">NO PRIOR WEEK</span>;
+/** Against the earlier window, coloured by direction. Nothing when there is nothing to compare. */
+function Trend({ pct, label }: { pct: number | null; label?: string }) {
+  if (pct === null) return <span className="hud-label text-[9px] text-neutral-400">NO PRIOR</span>;
   const tone = pct <= -0.15 ? 'critical' : pct < -0.05 ? 'warning' : pct >= 0.05 ? 'ok' : 'neutral';
   const sign = pct > 0 ? '+' : '';
   return (
     <Tag tone={tone}>
       <Num>{`${sign}${(pct * 100).toFixed(0)}%`}</Num>
-      <span className="ms-1">W/W</span>
+      {label ? <span className="ms-1">{label}</span> : null}
     </Tag>
   );
 }

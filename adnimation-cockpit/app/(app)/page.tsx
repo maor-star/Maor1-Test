@@ -8,19 +8,17 @@ import { mailNeedingReply, mailCounts } from '@/lib/mail/service';
 import { inboxOpportunities } from '@/lib/opportunities/module';
 import { listPipeline } from '@/lib/pipeline/service';
 import { STAGE_LABEL } from '@/lib/pipeline/types';
-import { PERIOD_LABEL } from '@/lib/revenue/periods';
+import { isPeriod, type Period } from '@/lib/revenue/periods';
 import { fmtDateTime, fmtMoney } from '@/lib/utils';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
-import { DeltaPct } from '@/components/revenue/delta';
-import { Sparkline } from '@/components/revenue/sparkline';
 import { InlineTaskEditor } from '@/components/tasks/inline-task-editor';
 import { listDepartments, listPeople } from '@/lib/tasks/queries';
 import { loadControlPanel } from '@/lib/control/service';
 import { ControlPanel } from '@/components/home/control-panel';
-import { CompanyTotal } from '@/components/home/company-total';
+import { CompanyCube } from '@/components/home/company-total';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,22 +35,23 @@ export const dynamic = 'force-dynamic';
  * a panel with no data says so rather than showing a zero that reads like a
  * collapse.
  */
-export default function OverviewPage() {
+export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
+  const sp = await searchParams;
+  // One window for the whole top of the page: the company cube and every
+  // line tile show the same days, so they can be read against each other.
+  const period: Period = isPeriod(sp.period) ? sp.period : '30D';
+
   return (
     <div className="space-y-5">
       <PageHeader kicker="OVERVIEW / 01" title="The company" />
 
       {/*
-        The control panel first: every line of the business, live from the
-        source, before anything the cockpit itself keeps. It is the screen he
-        asked to be able to run the company from.
+        The company first, then its lines, both over the window he picked —
+        live from the source, before anything the cockpit itself keeps. It is
+        the screen he asked to be able to run the company from.
       */}
-      <Suspense fallback={<Skeleton title="Control panel" index="C01" />}>
-        <ControlPanelSection />
-      </Suspense>
-
-      <Suspense fallback={<Skeleton title="Profit" index="O01" />}>
-        <ProfitStrip />
+      <Suspense fallback={<Skeleton title="The company" index="C00" />}>
+        <ControlPanelSection period={period} />
       </Suspense>
 
       <div className="grid gap-5 xl:grid-cols-2">
@@ -90,84 +89,18 @@ export default function OverviewPage() {
 }
 
 /**
- * The company first, then its lines.
+ * The company first, then its lines, over one window.
  *
  * The lines are seven different cuts of the business and they overlap on
- * purpose, so the total above them is the P&L rather than their sum.
+ * purpose, so the cube above them is the P&L rather than their sum.
  */
-const HOME_PERIODS = ['TODAY', 'YESTERDAY', '7D', '30D', 'MTD', 'QTD', 'LAST_Q', 'YTD'] as const;
-
-async function ControlPanelSection() {
-  const [panel, ...summaries] = await Promise.all([
-    loadControlPanel(),
-    ...HOME_PERIODS.map((p) => summariseCompany(p)),
-  ]);
-  const periods = HOME_PERIODS.map((period, i) => ({ period, summary: summaries[i]! }));
-
+async function ControlPanelSection({ period }: { period: Period }) {
+  const [panel, summary] = await Promise.all([loadControlPanel(period), summariseCompany(period)]);
   return (
     <>
-      {/* Yesterday is the headline: the last whole day, not the half of today. */}
-      <CompanyTotal periods={periods} headline={summaries[1]!} />
+      <CompanyCube summary={summary} period={period} />
       <ControlPanel panel={panel} />
     </>
-  );
-}
-
-/** What the company made, yesterday and month to date, by line. */
-async function ProfitStrip() {
-  const [day, mtd] = await Promise.all([summariseCompany('YESTERDAY'), summariseCompany('MTD')]);
-
-  return (
-    <HudCard>
-      <HudCardHeader
-        title="Profit"
-        index="O01"
-        action={
-          <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
-            LAST FULL DAY <Num>{day.lastCompleteDay}</Num> ·{' '}
-            <Link href="/revenue" className="text-accent-700 hover:text-accent">
-              FULL BREAKDOWN
-            </Link>
-          </span>
-        }
-      />
-
-      <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-3 xl:flex xl:flex-wrap xl:items-end xl:gap-x-10">
-        <Figure label="PROFIT / DAY" value={fmtMoney(day.company.profitCents)} big />
-        <Figure label="GROSS / DAY" value={fmtMoney(day.company.grossCents)} />
-        <Figure
-          label="MARGIN"
-          value={day.company.marginPct === null ? '—' : `${(day.company.marginPct * 100).toFixed(1)}%`}
-        />
-        <Figure label={`PROFIT ${PERIOD_LABEL.MTD}`} value={fmtMoney(mtd.company.profitCents)} />
-        <div>
-          <p className="hud-label text-[9px]">VS SAME DAY LAST WEEK</p>
-          <p className="mt-1">
-            <DeltaPct delta={{ pct: day.deltaPct, absCents: null }} />
-          </p>
-        </div>
-      </div>
-
-      <Sparkline
-        values={mtd.series.map((d) => d.profitCents)}
-        className="mt-1 h-12 w-full text-accent-500"
-      />
-
-      <div className="grid gap-x-6 gap-y-2 border-t border-divider pt-3 sm:grid-cols-2 xl:grid-cols-4">
-        {day.lines.map((l) => (
-          <div key={l.line} className="min-w-0">
-            <p className="hud-label truncate text-[9px]">{l.label}</p>
-            <p className="font-cond text-[20px] leading-none text-neutral-900">
-              <Num>{fmtMoney(l.profitCents)}</Num>
-            </p>
-            <p className="mt-0.5 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-              <Num>{(l.shareOfProfit * 100).toFixed(0)}%</Num> OF PROFIT ·{' '}
-              <Num>{l.marginPct === null ? '—' : `${(l.marginPct * 100).toFixed(0)}%`}</Num> MARGIN
-            </p>
-          </div>
-        ))}
-      </div>
-    </HudCard>
   );
 }
 
@@ -365,23 +298,6 @@ async function ClientsCard() {
         </ul>
       )}
     </HudCard>
-  );
-}
-
-function Figure({ label, value, big }: { label: string; value: string; big?: boolean }) {
-  return (
-    <div className="min-w-0">
-      <p className="hud-label text-[9px]">{label}</p>
-      <p
-        className={
-          big
-            ? 'hud-numeral mt-1 text-[32px] sm:text-[38px]'
-            : 'mt-1 font-cond text-[20px] font-medium leading-none text-neutral-800 sm:text-[22px]'
-        }
-      >
-        <Num>{value}</Num>
-      </p>
-    </div>
   );
 }
 
