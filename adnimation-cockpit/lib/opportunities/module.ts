@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { contracts, db, mailThreads, opportunities, pipelineClients } from '@/lib/db';
 import { WAITING_ON, type ContractStatus } from '@/lib/contracts/status';
+import { DEFAULT_NEXT_STEP, defaultNextStepDate } from '@/lib/pipeline/types';
 import { KIND_TO_CLIENT_TYPE } from './rules';
 import {
   LIVE_STATUSES, classify, inView, rank, type OpportunityListItem,
@@ -516,8 +517,11 @@ export async function promoteToPipeline(
         stage: overrides.stage ?? 'open_new',
         temperature: 'warm',
         valueCents: row.valueCents,
-        nextStep: overrides.nextStep ?? row.nextStep,
-        nextStepDate: overrides.nextStepDate ?? row.nextStepDate,
+        // An open deal carries a next step wherever it came from, so a
+        // suggestion promoted without one is not a deal nobody has committed
+        // to move — the same placeholder the form fills in.
+        nextStep: overrides.nextStep ?? row.nextStep ?? DEFAULT_NEXT_STEP,
+        nextStepDate: overrides.nextStepDate ?? row.nextStepDate ?? defaultNextStepDate(),
         source: `opportunity:${row.source}`,
         notes: [row.note, row.sourceExcerpt ? `From ${row.source}: ${row.sourceExcerpt}` : null]
           .filter(Boolean)
