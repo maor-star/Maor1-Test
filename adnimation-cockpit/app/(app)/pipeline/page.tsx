@@ -17,6 +17,7 @@ import { fmtMoney, fmtNumber } from '@/lib/utils';
 import {
   captureLabelHealth, contractsForOpportunities, inboxOpportunities,
 } from '@/lib/opportunities/module';
+import { PipelineFilterBar, type FilterGroup } from '@/components/pipeline/filter-bar';
 import { OpportunityCard } from '@/components/opportunities/opportunity-card';
 import { SweepMail } from '@/components/opportunities/sweep-mail';
 import { HowToCapture } from '@/components/opportunities/how-to-capture';
@@ -31,6 +32,8 @@ interface SearchParams {
   sort?: string;
   /** '1' shows the finished ones instead of the live board. */
   closed?: string;
+  /** '1' shows what has been suggested and not yet accepted. */
+  suggested?: string;
 }
 
 /**
@@ -53,6 +56,7 @@ export default async function PipelinePage({
     : undefined;
   const attention = sp.attention === '1';
   const closed = sp.closed === '1';
+  const suggested = sp.suggested === '1';
   const sort: PipelineSort = PIPELINE_SORTS.includes(sp.sort as PipelineSort)
     ? (sp.sort as PipelineSort)
     : 'newest';
@@ -62,8 +66,11 @@ export default async function PipelinePage({
     .map((l) => l.trim())
     .filter(Boolean);
 
-  const [rows, owners, inbox, labelHealth, finished] = await Promise.all([
+  const [rows, everything, owners, inbox, labelHealth, finished] = await Promise.all([
     listPipeline({ stage, clientType, q: sp.q, attention, sort, closed }),
+    // The whole book, for the counts on the bar: a count that moved with the
+    // filter would read zero on every chip he had not chosen.
+    listPipeline({ closed }),
     listOwners(),
     inboxOpportunities(),
     captureLabelHealth(gmailLabels).catch(() => []),
@@ -81,12 +88,98 @@ export default async function PipelinePage({
     const next = new URLSearchParams();
     const merged = {
       stage: sp.stage, type: sp.type, q: sp.q, attention: sp.attention, sort: sp.sort,
-      closed: sp.closed, ...patch,
+      closed: sp.closed, suggested: sp.suggested, ...patch,
     };
     for (const [k, v] of Object.entries(merged)) if (v) next.set(k, v);
     const qs = next.toString();
     return qs ? `/pipeline?${qs}` : '/pipeline';
   };
+
+  const countBy = <K extends string>(key: (r: (typeof everything)[number]) => K) => {
+    const out = new Map<K, number>();
+    for (const r of everything) out.set(key(r), (out.get(key(r)) ?? 0) + 1);
+    return out;
+  };
+  const byStage = countBy((r) => r.stage);
+  const byType = countBy((r) => r.clientType);
+  const needsAttention = everything.filter(
+    (r) => r.stepOverdue || r.quietDays === null || r.quietDays >= QUIET_DAYS,
+  ).length;
+
+  /*
+   * The bar. Three rows, and the third is the one he asked for: the
+   * suggestions sit beside the other views rather than in a card of their own
+   * above the board, so nothing takes the top of the screen until he asks it to.
+   */
+  const groups: FilterGroup[] = [
+    {
+      label: 'STAGE',
+      chips: [
+        { key: 'all', label: 'All', href: href({ stage: undefined, suggested: undefined }), active: !stage && !suggested, count: everything.length },
+        ...STAGES.map((s) => ({
+          key: s,
+          label: STAGE_LABEL[s],
+          href: href({ stage: s, suggested: undefined }),
+          active: stage === s && !suggested,
+          count: byStage.get(s) ?? 0,
+        })),
+      ],
+    },
+    {
+      label: 'TYPE',
+      chips: [
+        { key: 'all', label: 'All', href: href({ type: undefined, suggested: undefined }), active: !clientType && !suggested, count: everything.length },
+        ...CLIENT_TYPES.map((t) => ({
+          key: t,
+          label: CLIENT_TYPE_LABEL[t],
+          href: href({ type: t, suggested: undefined }),
+          active: clientType === t && !suggested,
+          count: byType.get(t) ?? 0,
+        })),
+      ],
+    },
+    {
+      label: 'VIEW',
+      chips: [
+        {
+          key: 'suggested',
+          label: 'Suggested',
+          href: href({ suggested: suggested ? undefined : '1' }),
+          active: suggested,
+          count: inbox.length,
+          tone: 'warn' as const,
+          title: 'Proposed from your mail, Slack and the Gmail label — not deals until you say so',
+        },
+        {
+          key: 'attention',
+          label: 'Needs attention',
+          href: href({ attention: attention ? undefined : '1', suggested: undefined }),
+          active: attention && !suggested,
+          count: needsAttention,
+          tone: 'warn' as const,
+          title: `An overdue next step, or no logged conversation in ${QUIET_DAYS} days`,
+        },
+        {
+          key: 'closed',
+          label: 'Finished',
+          href: href({ closed: closed ? undefined : '1', suggested: undefined }),
+          active: closed && !suggested,
+          count: finished,
+          title: 'Won or lost — off the board, still on the record',
+        },
+      ],
+    },
+    {
+      label: 'ORDER',
+      chips: PIPELINE_SORTS.map((s) => ({
+        key: s,
+        label: PIPELINE_SORT_LABEL[s],
+        href: href({ sort: s }),
+        active: sort === s,
+        count: null,
+      })),
+    },
+  ];
 
   return (
     <div className="space-y-5">
@@ -124,31 +217,20 @@ export default async function PipelinePage({
             hint="OVERDUE STEP / QUIET"
           />
         </div>
-
-        {board.totals.byType.length > 0 ? (
-          <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-divider pt-3">
-            {board.totals.byType.map((t) => (
-              <Link key={t.clientType} href={href({ type: t.clientType })} className="group">
-                <span className="hud-label block text-[9px] group-hover:text-accent">
-                  {CLIENT_TYPE_LABEL[t.clientType]}
-                </span>
-                <span className="font-cond text-[20px] leading-none text-neutral-800 group-hover:text-accent">
-                  <Num>{fmtNumber(t.n)}</Num>
-                </span>
-              </Link>
-            ))}
-          </div>
-        ) : null}
       </HudCard>
+
+      <PipelineFilterBar groups={groups} />
 
       {/*
         The inbox: what the mail detector proposed, what he labelled in Gmail,
         what was sent to the Slack bot. None of it is a deal until he says so —
         one click makes it one in its first stage, one click makes it go away.
-        It sits above the board because a suggestion nobody looked at is the
-        same kind of silence as a deal nobody moved.
+        Behind its own chip on the bar rather than always open above the board:
+        the count on the chip is what keeps a suggestion nobody looked at from
+        becoming the same silence as a deal nobody moved.
       */}
-      <HudCard id="inbox" className={`gap-0 p-0 ${closed ? 'hidden' : ''}`}>
+      {suggested ? (
+        <HudCard id="inbox" className="gap-0 p-0">
         <div className="flex flex-wrap items-baseline justify-between gap-3 p-[18px] pb-3">
           <HudCardHeader
             title="Suggested — not yet deals"
@@ -181,70 +263,19 @@ export default async function PipelinePage({
             ))}
           </ul>
         )}
-      </HudCard>
+        </HudCard>
+      ) : null}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <nav className="flex flex-wrap border border-divider">
-          <FilterLink href={href({ stage: undefined })} active={!stage}>
-            ALL STAGES
-          </FilterLink>
-          {STAGES.map((s) => (
-            <FilterLink key={s} href={href({ stage: s })} active={stage === s}>
-              {STAGE_LABEL[s]}
-            </FilterLink>
-          ))}
-        </nav>
+      {sp.q ? (
+        <p className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+          FILTERED BY “{sp.q}” ·{' '}
+          <Link href={href({ q: undefined })} className="text-accent-700 hover:text-accent">
+            CLEAR
+          </Link>
+        </p>
+      ) : null}
 
-        <nav className="flex flex-wrap border border-divider">
-          <FilterLink href={href({ type: undefined })} active={!clientType}>
-            ALL TYPES
-          </FilterLink>
-          {CLIENT_TYPES.map((t) => (
-            <FilterLink key={t} href={href({ type: t })} active={clientType === t}>
-              {CLIENT_TYPE_LABEL[t]}
-            </FilterLink>
-          ))}
-        </nav>
-
-        <FilterLink
-          href={href({ attention: attention ? undefined : '1' })}
-          active={attention}
-          className="border border-divider"
-        >
-          NEEDS ATTENTION
-        </FilterLink>
-
-        {/* Finished deals leave the board but never the record: this is where
-            the win/loss review reads from. */}
-        <FilterLink
-          href={href({ closed: closed ? undefined : '1' })}
-          active={closed}
-          className="border border-divider"
-        >
-          FINISHED · {finished}
-        </FilterLink>
-
-        <nav className="flex flex-wrap border border-divider">
-          {PIPELINE_SORTS.map((s) => (
-            <FilterLink key={s} href={href({ sort: s })} active={sort === s}>
-              {PIPELINE_SORT_LABEL[s]}
-            </FilterLink>
-          ))}
-        </nav>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {sp.q ? (
-            <Link
-              href={href({ q: undefined })}
-              className="font-semi text-[10px] uppercase tracking-[0.16em] text-accent-700 hover:text-accent"
-            >
-              Clear
-            </Link>
-          ) : null}
-        </div>
-      </div>
-
-      {board.byStage.length === 0 ? (
+      {suggested ? null : board.byStage.length === 0 ? (
         <HudCard>
           <p className="font-semi text-[12px] text-neutral-500">
             {board.totals.clients === 0 && !stage && !clientType && !sp.q && !attention
@@ -284,33 +315,10 @@ export default async function PipelinePage({
       )}
 
       <p className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-        QUIET = NO LOGGED CONVERSATION IN <Num>{QUIET_DAYS}</Num> DAYS. AN OPEN DEAL CANNOT BE SAVED
-        WITHOUT A NEXT STEP AND A DATE FOR IT.
+        QUIET = NO LOGGED CONVERSATION IN <Num>{QUIET_DAYS}</Num> DAYS. EVERY OPEN DEAL CARRIES A
+        NEXT STEP AND A DATE — ONE IS FILLED IN FOR YOU IF YOU LEAVE THEM EMPTY.
       </p>
     </div>
-  );
-}
-
-function FilterLink({
-  href,
-  active,
-  children,
-  className,
-}: {
-  href: string;
-  active: boolean;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`px-3 py-1 font-semi text-[11px] uppercase tracking-[0.16em] ${
-        active ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
-      } ${className ?? ''}`}
-    >
-      {children}
-    </Link>
   );
 }
 
