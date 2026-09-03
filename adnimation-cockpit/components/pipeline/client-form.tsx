@@ -15,10 +15,14 @@ import type { PipelineRow } from '@/lib/pipeline/service';
 /**
  * Add or edit a client in the pipeline.
  *
- * The next step and its date are required for any open stage — enforced on the
- * server too, so the rule holds however the form is bypassed. The field-level
- * error is shown inline rather than as a generic failure, because "which field"
- * is the only useful part of a validation message.
+ * Typing a name and pressing ADD CLIENT is enough. An open deal still ends up
+ * with a next step and a date — the server fills in a placeholder when he
+ * leaves them empty — because a deal nobody has committed to move is what the
+ * board exists to catch. What it no longer does is refuse the save.
+ *
+ * Anything that does fail says so at the top, in a colour, as well as under
+ * the field: two lines of small red text at the bottom of a long form is how a
+ * refused save reads as "nothing happened".
  */
 export function PipelineClientForm({
   owners,
@@ -58,6 +62,12 @@ export function PipelineClientForm({
       }}
     >
       {client ? <input type="hidden" name="id" value={client.id} /> : null}
+
+      {formError || Object.keys(errors).length > 0 ? (
+        <p className="border border-sev-critical/60 bg-sev-critical/10 px-2 py-1.5 text-[12px] text-neutral-900">
+          {formError ?? 'Not saved — see the fields marked below.'}
+        </p>
+      ) : null}
 
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <div className="sm:col-span-2">
@@ -166,7 +176,7 @@ export function PipelineClientForm({
 
         <div className="sm:col-span-2">
           <Label htmlFor={`pl-step-${client?.id ?? 'new'}`}>
-            Next step {needsStep ? '(required at this stage)' : '(optional)'}
+            Next step {needsStep ? '(filled in for you if you leave it empty)' : '(optional)'}
           </Label>
           <Input
             id={`pl-step-${client?.id ?? 'new'}`}
@@ -181,7 +191,7 @@ export function PipelineClientForm({
 
         <div>
           <Label htmlFor={`pl-stepdate-${client?.id ?? 'new'}`}>
-            Next step date {needsStep ? '(required)' : ''}
+            Next step date {needsStep ? '(tomorrow, if you leave it empty)' : ''}
           </Label>
           <Input
             id={`pl-stepdate-${client?.id ?? 'new'}`}

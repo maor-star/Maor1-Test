@@ -187,6 +187,96 @@ describe('contracts — creating the thing it belongs to', () => {
     expect(deal!.stage).toBe('integration');
   });
 
+  it('links to the deal that already exists rather than making a second one', async () => {
+    const [row] = await db
+      .insert(contracts)
+      .values({
+        counterpartyName: signedName,
+        category: 'supply',
+        categoryConfirmed: true,
+        docType: 'Addendum',
+        status: 'signed',
+        source: 'manual',
+      })
+      .returning({ id: contracts.id });
+
+    // The deal was made by the previous test, from another contract with the
+    // same counterparty. A second contract from them belongs to it, not to a
+    // duplicate of it.
+    const result = await createLinkTarget(row!.id, 'deal', 'test@adnimation.com');
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
+
+    const deals = await db
+      .select({ id: pipelineClients.id })
+      .from(pipelineClients)
+      .where(eq(pipelineClients.name, signedName));
+    expect(deals).toHaveLength(1);
+    expect(result.ok ? result.id : null).toBe(deals[0]!.id);
+  });
+
+  it('writes down what the button did, and gives the new deal a next step', async () => {
+    const name = unique('LinkTarget Audited');
+    const [row] = await db
+      .insert(contracts)
+      .values({
+        counterpartyName: name,
+        category: 'demand',
+        categoryConfirmed: true,
+        docType: 'Demand agreement',
+        status: 'in_review',
+        source: 'manual',
+      })
+      .returning({ id: contracts.id });
+
+    const result = await createLinkTarget(row!.id, 'deal', 'test@adnimation.com');
+    expect(result.ok).toBe(true);
+    const dealId = result.ok ? result.id : '';
+
+    // The link is on the contract — the bug was a deal created and orphaned.
+    const [after] = await db.select().from(contracts).where(eq(contracts.id, row!.id)).limit(1);
+    expect(after!.pipelineClientId).toBe(dealId);
+
+    // Audited, so "what did that click do" has an answer (CLAUDE.md §10).
+    const [entry] = await db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.entityType, 'contract'), eq(auditLog.entityId, row!.id)))
+      .orderBy(desc(auditLog.id))
+      .limit(1);
+    expect(entry!.action).toBe('contract.create_deal');
+
+    // An open deal carries a next step, whichever door it came in through.
+    const [deal] = await db.select().from(pipelineClients).where(eq(pipelineClients.id, dealId)).limit(1);
+    expect(deal!.stage).toBe('contract');
+    expect(deal!.nextStep).toBeTruthy();
+    expect(deal!.nextStepDate).toBeTruthy();
+  });
+
+  it('a classify that says nothing about the links leaves them alone', async () => {
+    const name = unique('LinkTarget Keeps');
+    const [row] = await db
+      .insert(contracts)
+      .values({
+        counterpartyName: name,
+        category: 'demand',
+        categoryConfirmed: true,
+        docType: 'Demand agreement',
+        status: 'in_review',
+        source: 'manual',
+      })
+      .returning({ id: contracts.id });
+    const made = await createLinkTarget(row!.id, 'deal', 'test@adnimation.com');
+    const dealId = made.ok ? made.id : '';
+
+    // What "SAVE AND FILE IT" sends when the form carries no link field: the
+    // status only. It used to arrive as pipelineClientId: null and unlink.
+    await classifyContract(row!.id, { status: 'signed' }, 'test@adnimation.com');
+
+    const [after] = await db.select().from(contracts).where(eq(contracts.id, row!.id)).limit(1);
+    expect(after!.status).toBe('signed');
+    expect(after!.pipelineClientId).toBe(dealId);
+  });
+
   it('refuses without a counterparty, which is the name it would file under', async () => {
     const [row] = await db
       .insert(contracts)

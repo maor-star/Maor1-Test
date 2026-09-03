@@ -8,6 +8,7 @@ import { filingFolder, stageForStatus, versionedFileName, type ContractCategory 
 import { BOARD_STATUSES, STATUS_LABEL, WAITING_ON, type ContractStatus } from './status';
 import { versionFromName } from './intake';
 import { rememberedCategory } from './remembered';
+import { DEFAULT_NEXT_STEP, defaultNextStepDate } from '@/lib/pipeline/types';
 
 /**
  * The contracts desk: what arrived, what it is, where it was filed, and what
@@ -315,48 +316,94 @@ export async function createLinkTarget(
 
   try {
     if (what === 'opportunity') {
-      const [created] = await db
-        .insert(opportunities)
-        .values({
-          title: `${name} — ${contract.docType || 'agreement'}`.slice(0, 300),
-          kind: side,
-          // A contract exists, so this is past "noticed" and is being worked.
-          status: 'exploring',
-          counterparty: name,
-          note: `Created from the ${name} contract.`,
-          source: 'manual',
-          sourceUrl: contract.sourceUrl,
-          createdBy: actor,
-        })
-        .returning({ id: opportunities.id });
-      if (!created) return { ok: false, error: 'Could not create it' };
+      // One per counterparty: pressing this twice, or pressing it on the second
+      // contract from the same partner, links to what is already there rather
+      // than filling the board with duplicates of the same name.
+      const [mine] = await db
+        .select({ id: opportunities.id })
+        .from(opportunities)
+        .where(and(eq(opportunities.counterparty, name), isNull(opportunities.archivedAt)))
+        .limit(1);
 
-      await db
-        .update(contracts)
-        .set({ opportunityId: created.id })
-        .where(eq(contracts.id, contractId));
-      return { ok: true, id: created.id };
+      const id =
+        mine?.id ??
+        (
+          await db
+            .insert(opportunities)
+            .values({
+              title: `${name} — ${contract.docType || 'agreement'}`.slice(0, 300),
+              kind: side,
+              // A contract exists, so this is past "noticed" and is being worked.
+              status: 'exploring',
+              counterparty: name,
+              note: `Created from the ${name} contract.`,
+              source: 'manual',
+              sourceUrl: contract.sourceUrl,
+              createdBy: actor,
+            })
+            .returning({ id: opportunities.id })
+        )[0]?.id;
+      if (!id) return { ok: false, error: 'Could not create it' };
+
+      await db.update(contracts).set({ opportunityId: id }).where(eq(contracts.id, contractId));
+      await writeAudit({
+        actor,
+        action: mine ? 'contract.link_opportunity' : 'contract.create_opportunity',
+        entityType: 'contract',
+        entityId: contractId,
+        before: { opportunityId: contract.opportunityId },
+        after: { opportunityId: id, counterparty: name },
+      });
+      return { ok: true, id };
     }
 
-    const [created] = await db
-      .insert(pipelineClients)
-      .values({
-        name,
-        clientType: side,
-        // A signed contract is past being worked; anything else is out with them.
-        stage: contract.status === 'signed' ? 'integration' : 'contract',
-        temperature: 'warm',
-        source: 'contract',
-        notes: `Created from the ${name} contract.`,
-      })
-      .returning({ id: pipelineClients.id });
-    if (!created) return { ok: false, error: 'Could not create it' };
+    const [mine] = await db
+      .select({ id: pipelineClients.id })
+      .from(pipelineClients)
+      .where(and(eq(pipelineClients.name, name), isNull(pipelineClients.archivedAt)))
+      .limit(1);
 
-    await db
-      .update(contracts)
-      .set({ pipelineClientId: created.id })
-      .where(eq(contracts.id, contractId));
-    return { ok: true, id: created.id };
+    const id =
+      mine?.id ??
+      (
+        await db
+          .insert(pipelineClients)
+          .values({
+            name,
+            clientType: side,
+            // A signed contract is past being worked; anything else is out with them.
+            stage: contract.status === 'signed' ? 'integration' : 'contract',
+            temperature: 'warm',
+            source: 'contract',
+            notes: `Created from the ${name} contract.`,
+            // Both stages are open ones, and an open deal carries a next step —
+            // the same default the form fills in, so a deal born here is not a
+            // deal nobody has committed to move.
+            nextStep: DEFAULT_NEXT_STEP,
+            nextStepDate: defaultNextStepDate(),
+          })
+          .returning({ id: pipelineClients.id })
+      )[0]?.id;
+    if (!id) return { ok: false, error: 'Could not create it' };
+
+    /*
+     * The link, and a record of it.
+     *
+     * Both were missing before: the deal was inserted with no audit row, so
+     * "what did that button do" had no answer — and when the classify form was
+     * saved afterwards with its stale "— none —" still selected, the link was
+     * quietly wiped and the deal was left orphaned on the board.
+     */
+    await db.update(contracts).set({ pipelineClientId: id }).where(eq(contracts.id, contractId));
+    await writeAudit({
+      actor,
+      action: mine ? 'contract.link_deal' : 'contract.create_deal',
+      entityType: 'contract',
+      entityId: contractId,
+      before: { pipelineClientId: contract.pipelineClientId },
+      after: { pipelineClientId: id, name },
+    });
+    return { ok: true, id };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not create it' };
   }

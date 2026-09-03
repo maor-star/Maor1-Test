@@ -52,8 +52,8 @@ export async function classifyAction(formData: FormData): Promise<ContractAction
       docType: z.string().trim().max(200).optional(),
       status: z.enum(CONTRACT_STATUSES),
       notes: z.string().trim().max(4000).nullable(),
-      opportunityId: z.string().uuid().nullable(),
-      pipelineClientId: z.string().uuid().nullable(),
+      opportunityId: z.string().uuid().nullable().optional(),
+      pipelineClientId: z.string().uuid().nullable().optional(),
     })
     .safeParse({
       id: String(formData.get('id') ?? ''),
@@ -62,8 +62,23 @@ export async function classifyAction(formData: FormData): Promise<ContractAction
       docType: String(formData.get('docType') ?? '') || undefined,
       status: String(formData.get('status') ?? ''),
       notes: emptyToNull(formData.get('notes')),
-      opportunityId: emptyToNull(formData.get('opportunityId')),
-      pipelineClientId: emptyToNull(formData.get('pipelineClientId')),
+      /*
+       * A link is only touched when the form actually carried its field.
+       *
+       * It used to send null for both whatever the form contained, and
+       * classifyContract reads null as "unlink" — so saving this form wiped
+       * the opportunity link every single time (the form has no field for it
+       * at all) and wiped a deal link that had just been created from inside
+       * the open editor, because the select still held the "— none —" it was
+       * rendered with. The deal was made, the connection was thrown away, and
+       * the contract still read "no deal".
+       */
+      ...(formData.has('opportunityId')
+        ? { opportunityId: emptyToNull(formData.get('opportunityId')) }
+        : {}),
+      ...(formData.has('pipelineClientId')
+        ? { pipelineClientId: emptyToNull(formData.get('pipelineClientId')) }
+        : {}),
     });
 
   if (!parsed.success) {
@@ -78,8 +93,10 @@ export async function classifyAction(formData: FormData): Promise<ContractAction
       ...(parsed.data.docType ? { docType: parsed.data.docType } : {}),
       status: parsed.data.status,
       notes: parsed.data.notes,
-      opportunityId: parsed.data.opportunityId,
-      pipelineClientId: parsed.data.pipelineClientId,
+      ...(parsed.data.opportunityId !== undefined ? { opportunityId: parsed.data.opportunityId } : {}),
+      ...(parsed.data.pipelineClientId !== undefined
+        ? { pipelineClientId: parsed.data.pipelineClientId }
+        : {}),
     },
     user.email,
   );

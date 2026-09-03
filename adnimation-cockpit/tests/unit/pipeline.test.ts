@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { buildBoard, type PipelineRow } from '@/lib/pipeline/board';
-import { OPEN_STAGES, QUIET_DAYS, pipelineInputSchema } from '@/lib/pipeline/types';
+import {
+  DEFAULT_NEXT_STEP, OPEN_STAGES, QUIET_DAYS, defaultNextStepDate, pipelineInputSchema,
+} from '@/lib/pipeline/types';
 import { progressFor } from '@/lib/pipeline/integration';
 
 /**
  * The pipeline's two rules.
  *
- * Spec §8 milestone 3 is explicit that a deal cannot be saved without a next
- * step and a date for it, and that the rule is enforced on the server rather
- * than only in the form — so it is tested against the schema, which is what the
- * server action actually runs.
+ * Spec §8 milestone 3 asks that no open deal be without a next step and a date
+ * for it, enforced on the server rather than only in the form. It is enforced
+ * here — in the schema the server action actually runs — by filling the pair
+ * in rather than refusing the save: rejecting it meant a deal he typed by hand
+ * simply did not appear, while deals arriving from the mail path were written
+ * without a next step anyway. The invariant is what matters; the refusal was
+ * only ever felt by the person typing.
  */
 
 const row = (over: Partial<PipelineRow> = {}): PipelineRow => ({
@@ -39,32 +44,44 @@ const row = (over: Partial<PipelineRow> = {}): PipelineRow => ({
 });
 
 describe('pipeline validation', () => {
-  it('rejects an open deal with no next step', () => {
-    const result = pipelineInputSchema.safeParse({ name: 'Acme', stage: 'negotiation' });
-    expect(result.success).toBe(false);
-    const paths = result.success ? [] : result.error.issues.map((i) => i.path.join('.'));
-    expect(paths).toContain('nextStep');
-    expect(paths).toContain('nextStepDate');
+  it('saves a deal that is only a name, and gives it a next step', () => {
+    const parsed = pipelineInputSchema.parse({ name: 'Acme', stage: 'negotiation' });
+    expect(parsed.nextStep).toBe(DEFAULT_NEXT_STEP);
+    expect(parsed.nextStepDate).toBe(defaultNextStepDate());
   });
 
-  it('rejects an open deal with a step but no date for it', () => {
-    const result = pipelineInputSchema.safeParse({
+  it('fills in only the half he left out', () => {
+    const parsed = pipelineInputSchema.parse({
       name: 'Acme',
       stage: 'negotiation',
       nextStep: 'Chase the signature',
     });
-    expect(result.success).toBe(false);
-    const paths = result.success ? [] : result.error.issues.map((i) => i.path.join('.'));
-    expect(paths).toEqual(['nextStepDate']);
+    expect(parsed.nextStep).toBe('Chase the signature');
+    expect(parsed.nextStepDate).toBe(defaultNextStepDate());
   });
 
-  it('holds the rule for every open stage, and for none of the closed ones', () => {
+  it('dates the placeholder tomorrow, so an untouched deal surfaces at once', () => {
+    expect(defaultNextStepDate('2026-09-03')).toBe('2026-09-04');
+    // Month and year ends included, because that is where date arithmetic goes wrong.
+    expect(defaultNextStepDate('2026-09-30')).toBe('2026-10-01');
+    expect(defaultNextStepDate('2026-12-31')).toBe('2027-01-01');
+  });
+
+  it('holds the invariant for every open stage, and imposes nothing on the closed ones', () => {
     for (const stage of OPEN_STAGES) {
-      expect(pipelineInputSchema.safeParse({ name: 'Acme', stage }).success).toBe(false);
+      const parsed = pipelineInputSchema.parse({ name: 'Acme', stage });
+      expect(parsed.nextStep, stage).toBeTruthy();
+      expect(parsed.nextStepDate, stage).toBeTruthy();
     }
     for (const stage of ['live', 'lost'] as const) {
-      expect(pipelineInputSchema.safeParse({ name: 'Acme', stage }).success).toBe(true);
+      const parsed = pipelineInputSchema.parse({ name: 'Acme', stage });
+      expect(parsed.nextStep ?? null, stage).toBeNull();
+      expect(parsed.nextStepDate ?? null, stage).toBeNull();
     }
+  });
+
+  it('still refuses a deal with no name — that one is not a placeholder', () => {
+    expect(pipelineInputSchema.safeParse({ name: '   ', stage: 'live' }).success).toBe(false);
   });
 
   it('accepts an open deal that has both', () => {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { todayInTz } from '@/lib/utils';
 
 /**
  * The sales pipeline's vocabulary.
@@ -114,11 +115,29 @@ const emptyToNull = <T extends z.ZodTypeAny>(inner: T) =>
   z.preprocess((v) => (v === '' || v === undefined ? null : v), inner);
 
 /**
- * Spec §3 is explicit: a deal in an open stage cannot be saved without a next
- * step and a date for it, and the rule is enforced on the server rather than
- * only in the form. A pipeline of deals nobody has committed to move is a list,
- * not a pipeline.
+ * Every open deal carries a next step and a date for it — but a missing one is
+ * filled in rather than refused.
+ *
+ * The rule (spec §3) is right: a pipeline of deals nobody has committed to
+ * move is a list, not a pipeline. Enforcing it by *rejecting the save* turned
+ * out to be wrong in practice — he types a name, presses ADD CLIENT, and
+ * nothing happens except two lines of small red text. Worse, deals arriving
+ * through the mail path were being written without a next step anyway, so the
+ * rule only ever bit the person typing by hand.
+ *
+ * So the invariant is kept and the friction is not: an open deal with no next
+ * step is saved with one, dated tomorrow, in words that are plainly a
+ * placeholder. It appears in "needs attention" the next morning until he says
+ * what the step really is.
  */
+export const DEFAULT_NEXT_STEP = 'Decide what happens next';
+
+/** Tomorrow, Israel time — soon enough that an untouched deal surfaces at once. */
+export function defaultNextStepDate(today = todayInTz()): string {
+  const t = new Date(`${today}T00:00:00Z`);
+  return new Date(t.getTime() + 86_400_000).toISOString().slice(0, 10);
+}
+
 export const pipelineInputSchema = z
   .object({
     name: z.string().trim().min(1, 'Name is required').max(200),
@@ -135,22 +154,13 @@ export const pipelineInputSchema = z
     notes: emptyToNull(z.string().trim().max(20_000).nullable()).optional(),
     hubspotCompanyId: emptyToNull(z.string().trim().max(60).nullable()).optional(),
   })
-  .superRefine((v, ctx) => {
-    if (!OPEN_STAGES.includes(v.stage)) return;
-    if (!v.nextStep) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['nextStep'],
-        message: 'An open deal needs a next step.',
-      });
-    }
-    if (!v.nextStepDate) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['nextStepDate'],
-        message: 'An open deal needs a date for its next step.',
-      });
-    }
+  .transform((v) => {
+    if (!OPEN_STAGES.includes(v.stage)) return v;
+    return {
+      ...v,
+      nextStep: v.nextStep || DEFAULT_NEXT_STEP,
+      nextStepDate: v.nextStepDate || defaultNextStepDate(),
+    };
   });
 
 export type PipelineInput = z.input<typeof pipelineInputSchema>;

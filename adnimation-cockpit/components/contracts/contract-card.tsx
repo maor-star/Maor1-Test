@@ -61,6 +61,16 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
   const [summarising, setSummarising] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  /*
+   * The deal this contract belongs to, held in state rather than read off the
+   * select's defaultValue.
+   *
+   * An uncontrolled select keeps whatever it was rendered with, so creating
+   * the deal from inside the open editor left it showing "— none —" — and the
+   * save that followed sent that back and unlinked what had just been made.
+   */
+  const [dealLink, setDealLink] = useState(c.pipelineClientId ?? '');
+  useEffect(() => setDealLink(c.pipelineClientId ?? ''), [c.pipelineClientId]);
   const [message, setMessage] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const router = useRouter();
@@ -637,17 +647,23 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
               <Select
                 id={`dl-${c.id}`}
                 name="pipelineClientId"
-                defaultValue={c.pipelineClientId ?? ''}
+                value={dealLink}
+                onChange={(e) => setDealLink(e.target.value)}
                 className="w-full"
               >
                 <option value="">— none —</option>
+                {/* The linked deal may not be among the suggestions — a name
+                    that no longer matches, or one just created. */}
+                {dealLink && !(links?.deals ?? []).some((d) => d.id === dealLink) ? (
+                  <option value={dealLink}>{c.pipelineClientName ?? 'Linked deal'}</option>
+                ) : null}
                 {(links?.deals ?? []).map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name} — {d.stage}
                   </option>
                 ))}
               </Select>
-              {!c.pipelineClientId ? (
+              {!dealLink ? (
                 <button
                   type="button"
                   disabled={pending}
@@ -655,7 +671,17 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
                     const data = new FormData();
                     data.set('id', c.id);
                     data.set('what', 'deal');
-                    run(createLinkAction, data);
+                    startTransition(async () => {
+                      const result = await createLinkAction(data);
+                      setMessage(result.ok ? null : (result.error ?? 'That did not work'));
+                      setWarning(result.warning ?? null);
+                      if (result.ok) {
+                        // Selected here and now, so the save that follows keeps it.
+                        if (result.id) setDealLink(result.id);
+                        setLinks(null);
+                        router.refresh();
+                      }
+                    });
                   }}
                   className="mt-1 font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
                 >
