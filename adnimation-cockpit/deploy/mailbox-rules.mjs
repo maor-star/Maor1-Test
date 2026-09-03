@@ -40,6 +40,13 @@ export const PROMO_LABEL = process.env.PROMO_LABEL ?? 'Sales & Marketing';
 export const CLAUDE_LABEL = process.env.CLAUDE_LABEL ?? 'Claude';
 export const ANSWERED_LABEL = process.env.ANSWERED_LABEL ?? 'Claude/Answered';
 export const FILED_LABEL = process.env.FILED_LABEL ?? 'Claude/Filed';
+/**
+ * Where an invoice goes once finance has it. Under the same parent, in his
+ * language, because the person opening this folder is him looking for "the
+ * one I sent to finance last week" — the record of the forward, kept with the
+ * original mail rather than as a line in a log.
+ */
+export const FORWARDED_LABEL = process.env.FORWARDED_LABEL ?? 'Claude/הועבר לפיננס';
 
 /* -------------------------------------------------------------------------
  * Sales and marketing

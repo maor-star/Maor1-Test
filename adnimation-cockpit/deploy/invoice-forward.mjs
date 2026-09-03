@@ -14,14 +14,17 @@
  * something it should not be. Each message is forwarded once — the id is
  * recorded, and a re-run skips it.
  *
- * A forwarded invoice is then archived out of the inbox: finance has it, so it
- * is no longer his to look at. Archived, not deleted — it stays in All Mail and
- * one search away. That needs gmail.modify; without it the forward still
- * happens and the archiving is reported as skipped rather than failing the run.
+ * A forwarded invoice is then filed: out of the inbox, and under the label
+ * "Claude/הועבר לפיננס" so every invoice finance has is in one folder of his
+ * Gmail, with the original mail intact. Filed, not deleted — it stays in All
+ * Mail and one search away. That needs gmail.modify; without it the forward
+ * still happens and the filing is reported as skipped rather than failing the
+ * run, and the next run with the scope files everything it missed.
  */
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { assertInternalRecipients, looksLikeInvoice } from './internal-mail.mjs';
+import { CLAUDE_LABEL, FORWARDED_LABEL } from './mailbox-rules.mjs';
 import { postAsBot } from './bot-post.mjs';
 import {
   agentState, briefVeto, markRan, mayAct, recordRun, startLog,
@@ -93,26 +96,59 @@ const SEND = 'https://www.googleapis.com/auth/gmail.send';
 const MODIFY = 'https://www.googleapis.com/auth/gmail.modify';
 
 /**
- * Take a forwarded invoice out of the inbox.
+ * The folder the forwarded invoices live in, created once.
  *
- * Never fatal. The forward is the point; archiving is tidying, and a missing
+ * Gmail nests labels by name — "Claude/הועבר לפיננס" is a child of "Claude" —
+ * and refuses the child while the parent is missing, so the parent is made
+ * first. Resolved once per run; a label id does not change.
+ */
+let fileLabel = null;
+async function fileLabelId() {
+  if (fileLabel) return fileLabel;
+  const { labels } = await gmail('/labels');
+  const existing = new Map((labels ?? []).map((l) => [l.name, l.id]));
+  for (const name of [CLAUDE_LABEL, FORWARDED_LABEL]) {
+    if (existing.has(name)) continue;
+    const created = await gmailWrite('/labels', {
+      name,
+      labelListVisibility: 'labelShow',
+      messageListVisibility: 'show',
+    });
+    existing.set(name, created.id);
+    console.log(`created the label "${name}"`);
+  }
+  fileLabel = existing.get(FORWARDED_LABEL);
+  return fileLabel;
+}
+
+/**
+ * File a forwarded invoice: out of the inbox, into its folder.
+ *
+ * Never fatal. The forward is the point; filing is tidying, and a missing
  * scope should not make a delivered invoice look like a failed run.
  */
-async function archive(messageId) {
+async function file(messageId) {
   try {
-    const t = await token(MODIFY);
-    const res = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
-      {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ removeLabelIds: ['INBOX'] }),
-      },
-    );
-    return res.ok ? { ok: true } : { ok: false, reason: `http_${res.status}` };
+    const labelId = await fileLabelId();
+    await gmailWrite(`/messages/${messageId}/modify`, {
+      removeLabelIds: ['INBOX'],
+      addLabelIds: labelId ? [labelId] : [],
+    });
+    return { ok: true, labelled: Boolean(labelId) };
   } catch (e) {
-    return { ok: false, reason: e.message ?? 'could not archive' };
+    return { ok: false, reason: e.message ?? 'could not file' };
   }
+}
+
+async function gmailWrite(path, body) {
+  const t = await token(MODIFY);
+  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`gmail ${path}: http_${res.status} ${(await res.text()).slice(0, 120)}`);
+  return res.json();
 }
 
 async function gmail(path) {
@@ -301,38 +337,40 @@ async function main() {
     sent += 1;
     forwarded.push(`• ${subject} — from ${from}`);
 
-    // Recorded before archiving, so a failure here can never cause a second
+    // Recorded before filing, so a failure here can never cause a second
     // forward on the next run.
-    const archived = await archive(ref.id);
-    if (archived.ok) {
-      await sql`update invoice_forwards set archived_at = now() where message_id = ${ref.id}`;
+    const filed = await file(ref.id);
+    if (filed.ok) {
+      await sql`update invoice_forwards set archived_at = now(), filed_at = ${filed.labelled ? sql`now()` : null} where message_id = ${ref.id}`;
     }
     console.log(
-      archived.ok
-        ? '      archived out of the inbox'
-        : `      left in the inbox (${archived.reason})`,
+      filed.ok
+        ? `      filed under "${FORWARDED_LABEL}", out of the inbox`
+        : `      left in the inbox (${filed.reason})`,
     );
   }
 
   /*
-   * Anything already forwarded but still sitting in the inbox.
+   * Anything already forwarded but not yet filed.
    *
-   * Archiving arrived after the first forwards did, so without this the ones
-   * finance already has would stay in front of him for ever — and a rule that
-   * only applies to mail arriving from now on is a rule he has to remember the
-   * exception to.
+   * Filing arrived after the first forwards did, so without this the ones
+   * finance already has would never reach the folder — and a rule that only
+   * applies to mail arriving from now on is a rule he has to remember the
+   * exception to. Bounded per run: a first pass over a long history is a lot
+   * of API calls, and the rest is picked up next time.
    */
   if (!DRY) {
-    const stale = await sql`
-      select message_id, subject from invoice_forwards where archived_at is null
+    const unfiled = await sql`
+      select message_id, subject from invoice_forwards
+      where filed_at is null order by forwarded_at desc limit 100
     `;
-    for (const row of stale) {
-      const result = await archive(row.message_id);
-      if (result.ok) {
-        await sql`update invoice_forwards set archived_at = now() where message_id = ${row.message_id}`;
-        console.log(`  archived a previously forwarded invoice: ${row.subject}`);
+    for (const row of unfiled) {
+      const result = await file(row.message_id);
+      if (result.ok && result.labelled) {
+        await sql`update invoice_forwards set archived_at = coalesce(archived_at, now()), filed_at = now() where message_id = ${row.message_id}`;
+        console.log(`  filed a previously forwarded invoice: ${row.subject}`);
       } else {
-        console.log(`  could not archive "${row.subject}": ${result.reason}`);
+        console.log(`  could not file "${row.subject}": ${result.reason ?? 'no label'}`);
       }
     }
   }
