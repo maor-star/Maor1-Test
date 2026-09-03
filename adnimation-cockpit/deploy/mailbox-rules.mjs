@@ -41,12 +41,12 @@ export const CLAUDE_LABEL = process.env.CLAUDE_LABEL ?? 'Claude';
 export const ANSWERED_LABEL = process.env.ANSWERED_LABEL ?? 'Claude/Answered';
 export const FILED_LABEL = process.env.FILED_LABEL ?? 'Claude/Filed';
 /**
- * Where an invoice goes once finance has it. Under the same parent, in his
- * language, because the person opening this folder is him looking for "the
- * one I sent to finance last week" — the record of the forward, kept with the
- * original mail rather than as a line in a log.
+ * Where an invoice goes once finance has it — the record of the forward, kept
+ * with the original mail rather than as a line in a log. English, like its
+ * siblings above: the label tree reads as one thing, and a Hebrew name sorts
+ * away from the rest of the Claude folder in Gmail's sidebar.
  */
-export const FORWARDED_LABEL = process.env.FORWARDED_LABEL ?? 'Claude/הועבר לפיננס';
+export const FORWARDED_LABEL = process.env.FORWARDED_LABEL ?? 'Claude/Sent to Finance';
 
 /* -------------------------------------------------------------------------
  * Sales and marketing

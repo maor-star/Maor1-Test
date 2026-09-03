@@ -15,8 +15,8 @@
  * recorded, and a re-run skips it.
  *
  * A forwarded invoice is then filed: out of the inbox, and under the label
- * "Claude/הועבר לפיננס" so every invoice finance has is in one folder of his
- * Gmail, with the original mail intact. Filed, not deleted — it stays in All
+ * "Claude/Sent to Finance" so every invoice finance has is in one folder of
+ * his Gmail, with the original mail intact. Filed, not deleted — it stays in All
  * Mail and one search away. That needs gmail.modify; without it the forward
  * still happens and the filing is reported as skipped rather than failing the
  * run, and the next run with the scope files everything it missed.
@@ -98,9 +98,9 @@ const MODIFY = 'https://www.googleapis.com/auth/gmail.modify';
 /**
  * The folder the forwarded invoices live in, created once.
  *
- * Gmail nests labels by name — "Claude/הועבר לפיננס" is a child of "Claude" —
- * and refuses the child while the parent is missing, so the parent is made
- * first. Resolved once per run; a label id does not change.
+ * Gmail nests labels by name — "Claude/Sent to Finance" is a child of
+ * "Claude" — and refuses the child while the parent is missing, so the parent
+ * is made first. Resolved once per run; a label id does not change.
  */
 let fileLabel = null;
 async function fileLabelId() {
