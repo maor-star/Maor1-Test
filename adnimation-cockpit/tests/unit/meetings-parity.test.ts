@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  decide, freeWindows, mayAnswer, maySend, pickSlots, proposalText, wantsMeeting,
+  decide, freeWindows, mayAnswer, maySend, pickSlots, proposalText, sameOffer, slotLine, wantsMeeting,
   type MeetingCandidate, type Slot,
 } from '@/lib/meetings/rules';
 // @ts-expect-error — the generated job copy is plain ESM with no types.
@@ -78,6 +78,17 @@ describe('the screen and the meetings job agree', () => {
       confidence, calendly: true, theyAsked,
     };
     expect(js.decide(input)).toEqual(decide(input));
+  });
+
+  it('agrees about what a rewrite in his voice may change', () => {
+    const slots = pickSlots(freeWindows([], { now: NOW, horizonDays: 6 }), { now: NOW });
+    const link = 'https://calendly.com/maor/30min';
+    const offer = { slots, calendlyUrl: link };
+    const lines = slots.map((s) => slotLine(s));
+    const good = `Hi,\n\n${lines.map((l) => `· ${l}`).join('\n')}\n\n${link}\n\nBest,\nMaor`;
+    for (const text of [good, good.replace(link, ''), `${good}\n\nor 21:45?`, '']) {
+      expect(js.sameOffer(text, offer)).toEqual(sameOffer(text, offer));
+    }
   });
 
   it('agrees at the last gate', () => {

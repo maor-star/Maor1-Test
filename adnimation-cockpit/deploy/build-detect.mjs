@@ -221,6 +221,11 @@ export const TARGETS = [
       ['export function asksForEvening(text: string): boolean {', 'export function asksForEvening(text) {'],
       [/export function decide\(input: \{[\s\S]*?\n\}\): Decision \{/, 'export function decide(input) {'],
       ['export function settled(why: string): boolean {', 'export function settled(why) {'],
+      [
+        /export function sameOffer\(\n  rewritten: string,\n  offer: \{ slots: Slot\[\]; calendlyUrl: string \| null; timeZone\?: string \},\n\): Verdict \{/,
+        'export function sameOffer(rewritten, offer) {',
+      ],
+      ['  const offered = new Set<string>();', '  const offered = new Set();'],
       // Two `(type: string)` arrows are left, one in each date helper.
       [/\(type: string\) =>/g, '(type) =>'],
     ],

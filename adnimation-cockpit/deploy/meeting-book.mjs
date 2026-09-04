@@ -32,7 +32,7 @@ import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import {
   MEETINGS_LABEL, decide, freeWindows, mayAnswer, maySend, pickSlots,
-  proposalText, settled, slotLine, wantsMeeting,
+  proposalText, sameOffer, settled, slotLine, wantsMeeting,
 } from './meeting-rules.mjs';
 import { isInternalAddress } from './internal-mail.mjs';
 import { postAsBot, readReplies } from './bot-post.mjs';
@@ -214,15 +214,43 @@ async function reply(candidate, text) {
 
 /* ── The diary ─────────────────────────────────────────────────────────── */
 
-async function busyBlocks(from, to) {
+/**
+ * Which calendars count as him being busy.
+ *
+ * Asking only for `primary` was the obvious thing and the wrong one: his
+ * account also owns a second calendar carrying meetings moved over from a
+ * colleague, and a slot free on one and taken on the other is a double
+ * booking made by this agent. So every calendar he owns counts, and the ones
+ * merely shared with him — a holiday feed, somebody else's diary — do not.
+ */
+async function busyCalendars(mode) {
+  if (mode === 'primary') return ['primary'];
   const t = await calendarToken();
+  const list = await fetch(
+    'https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=50',
+    { headers: { Authorization: `Bearer ${t}` } },
+  ).then((r) => r.json()).catch(() => null);
+
+  const items = list?.items ?? [];
+  if (items.length === 0) return ['primary'];
+  const wanted = items.filter((c) =>
+    mode === 'all' ? c.selected !== false : c.accessRole === 'owner' || c.primary);
+  const ids = wanted.map((c) => c.id);
+  return ids.includes('primary') || ids.some((id) => items.find((c) => c.id === id)?.primary)
+    ? ids
+    : ['primary', ...ids];
+}
+
+async function busyBlocks(from, to, mode = 'owned') {
+  const t = await calendarToken();
+  const ids = await busyCalendars(mode);
   const res = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
     method: 'POST',
     headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       timeMin: from.toISOString(),
       timeMax: to.toISOString(),
-      items: [{ id: 'primary' }],
+      items: ids.map((id) => ({ id })),
     }),
   });
   if (!res.ok) {
@@ -292,6 +320,63 @@ async function calendlyLink(token) {
     return generic?.scheduling_url ?? null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * The same offer, in his voice.
+ *
+ * He asked for every reply to sound like him rather than like a form. What
+ * makes that safe is that the model rewrites the words and nothing else: the
+ * times and the link go in as lines it must reproduce exactly, and sameOffer
+ * checks that it did. A rewrite that moved a meeting, dropped one, or added a
+ * link of its own is thrown away and the plain version goes instead — the
+ * voice is worth having, and never at the price of the appointment.
+ *
+ * The voice itself is the one already learned from three hundred of his own
+ * replies for the mail agent. It is how he writes, not how that agent writes,
+ * so it belongs to both.
+ */
+async function inHisVoice(plain, { slots, calendly, timeZone, style, brief, language, apiKey }) {
+  if (!style && !brief) return { text: plain, why: 'nothing learned about your voice yet' };
+
+  const keep = [
+    ...slots.map((s) => slotLine(s, timeZone)),
+    ...(calendly ? [calendly] : []),
+  ];
+
+  const system =
+    'You are rewriting one short scheduling email so that it sounds like the person sending it ' +
+    'rather than like a template. You may change the greeting, the wording and the sign-off. ' +
+    'You may not change what is being offered.\n\n' +
+    'These lines must appear in your version character for character, and nothing else may look ' +
+    'like a time or a link:\n' + keep.map((k) => `· ${k}`).join('\n') + '\n\n' +
+    'Never add a time, never drop one, never add a link, never promise anything beyond the ' +
+    'meeting, and never say what the meeting is about — you do not know. Keep it shorter than ' +
+    'the original if you can. Write in ' + (language === 'he' ? 'Hebrew' : 'English') + '.' +
+    (style ? `\n\nHow he writes, learned from his own replies. Match this voice:\n${style}` : '') +
+    (brief ? `\n\nStanding instructions from him, which win wherever they are stricter:\n${brief}` : '');
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 700,
+        system,
+        messages: [{ role: 'user', content: `The email, as written by the template:\n\n${plain}` }],
+      }),
+    });
+    if (!res.ok) throw new Error(`http_${res.status}`);
+    const body = await res.json();
+    const text = (body.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join('').trim();
+
+    const same = sameOffer(text, { slots, calendlyUrl: calendly, timeZone });
+    if (!same.ok) return { text: plain, why: `kept the plain wording — ${same.why}` };
+    return { text, why: 'in your voice' };
+  } catch (e) {
+    return { text: plain, why: `kept the plain wording — ${e.message}` };
   }
 }
 
@@ -436,6 +521,16 @@ async function main() {
   const filled = await loadSecrets(sql, ['ANTHROPIC_API_KEY', 'CALENDLY_LINK', 'CALENDLY_TOKEN']);
   if (filled.length > 0) console.log(`keys from the Keys screen: ${filled.join(', ')}`);
 
+  /*
+   * How he writes, read off three hundred of his own replies by mail-learn.
+   * It is his voice rather than that agent's, so this one uses it too — he
+   * asked for every reply to go out sounding like him.
+   */
+  const [learned] = await sql`
+    select profile from agent_learning where agent_name = 'mail-answerer'
+  `.catch(() => []);
+  const STYLE = (learned?.profile ?? '').trim();
+
   const CLAUDE = process.env.ANTHROPIC_API_KEY;
   if (!CLAUDE) {
     console.error('ANTHROPIC_API_KEY is required — the second gate cannot be skipped.');
@@ -474,11 +569,16 @@ async function main() {
   }
   const bookItself = setting('book', true) !== false;
   const signOff = String(setting('signOff', 'Best,\nMaor'));
+  const useVoice = setting('voice', true) !== false;
+  const busyMode = String(setting('busyCalendars', 'owned'));
 
   console.log(
     `working ${options.from}–${options.to} ${timeZone}, days ${options.days.join('')}, ` +
       `${options.minutes} minutes, evenings after ${eveningFrom} are a question` +
-      `${calendly ? ', booking link set' : ', no booking link'}${DRY ? ' (dry run)' : ''}`,
+      `${calendly ? ', booking link set' : ', no booking link'}` +
+      `, busy from ${busyMode === 'primary' ? 'your main calendar' : busyMode === 'all' ? 'every calendar you see' : 'every calendar you own'}` +
+      `${useVoice ? (STYLE ? `, written in your voice (${STYLE.length} chars learned)` : ', your voice not learned yet') : ', plain wording'}` +
+      `${DRY ? ' (dry run)' : ''}`,
   );
 
   /* The diary. Without the scope it still works — it sends the link instead. */
@@ -487,7 +587,7 @@ async function main() {
   try {
     const from = new Date();
     const to = new Date(Date.now() + (options.horizonDays + 1) * 86_400_000);
-    const busy = await busyBlocks(from, to);
+    const busy = await busyBlocks(from, to, busyMode);
     free = freeWindows(busy, options);
     console.log(`${busy.length} busy block(s) read, ${free.length} free slot(s) inside your hours`);
   } catch (e) {
@@ -529,7 +629,7 @@ async function main() {
     }
     // He said yes: answer them now, with the times this run found.
     const slots = pickSlots(free, { count: offerCount, minLeadHours });
-    const text = proposalText({
+    const plain = proposalText({
       toName: row.from_name,
       slots,
       calendlyUrl: calendly,
@@ -537,6 +637,13 @@ async function main() {
       signOff,
       language: row.why?.includes('hebrew') ? 'he' : 'en',
     });
+    const voiced = useVoice
+      ? await inHisVoice(plain, {
+          slots, calendly, timeZone, style: STYLE, brief: state.brief,
+          language: row.why?.includes('hebrew') ? 'he' : 'en', apiKey: CLAUDE,
+        })
+      : { text: plain, why: 'plain wording' };
+    const text = voiced.text;
     console.log(`  YOU SAID YES: ${row.subject} — answering ${row.from_email}`);
     console.log(text.split('\n').map((l) => `        ${l}`).join('\n'));
     if (DRY) { proposed += 1; continue; }
@@ -696,7 +803,7 @@ async function main() {
 
     /* Send. */
     const language = verdict.language === 'he' ? 'he' : 'en';
-    const text = proposalText({
+    const plain = proposalText({
       toName: candidate.fromName,
       slots,
       calendlyUrl: calendly,
@@ -704,6 +811,15 @@ async function main() {
       signOff,
       language,
     });
+    /*
+     * His voice, and then the same gates. The rewrite is checked against the
+     * offer it came from, and maySend runs on whatever is actually going out —
+     * never on the version before it was rewritten.
+     */
+    const voiced = useVoice
+      ? await inHisVoice(plain, { slots, calendly, timeZone, style: STYLE, brief: state.brief, language, apiKey: CLAUDE })
+      : { text: plain, why: 'plain wording' };
+    const text = voiced.text;
     const send = maySend(read, allowed, text, { slots: slots.length, calendly: Boolean(calendly) });
     if (!send.ok) {
       left += 1;
@@ -714,6 +830,7 @@ async function main() {
     console.log(`  ${DRY ? 'WOULD ANSWER' : 'ANSWERED'}: ${subject}`);
     console.log(`      from ${from}`);
     console.log(`      they wrote: ${theyWrote.replace(/\s+/g, ' ').slice(0, 300)}`);
+    console.log(`      voice: ${voiced.why}`);
     console.log(text.split('\n').map((l) => `        ${l}`).join('\n'));
     if (DRY) { proposed += 1; continue; }
 

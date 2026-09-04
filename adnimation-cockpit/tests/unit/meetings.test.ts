@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   asksForEvening, clockTime, decide, freeWindows, mayAnswer, maySend,
-  pickSlots, proposalText, settled, slotLine, wantsMeeting,
+  pickSlots, proposalText, sameOffer, settled, slotLine, wantsMeeting,
   type MeetingCandidate, type Slot,
 } from '@/lib/meetings/rules';
 import { FakeCalendar } from '@/lib/integrations/calendar';
@@ -274,5 +274,56 @@ describe('the calendar, through its fake', () => {
     });
     expect(result.ok).toBe(true);
     expect(cal.created[0]!.attendees).toEqual(['ravit@markito.com']);
+  });
+});
+
+describe('a rewrite in his voice is still the same offer', () => {
+  const slots = pickSlots(freeWindows([], { now: NOW, horizonDays: 6 }), { now: NOW });
+  const link = 'https://calendly.com/maor/30min';
+  const lines = slots.map((s) => slotLine(s));
+  const offer = { slots, calendlyUrl: link };
+
+  const voiced = (body: string) => `Hi Ravit,\n\n${body}\n\nBest,\nMaor`;
+  const good = voiced(
+    `Good to hear from you. Any of these suit?\n${lines.map((l) => `· ${l}`).join('\n')}\n\nOr grab a slot: ${link}`,
+  );
+
+  it('lets a genuine rewrite through', () => {
+    expect(sameOffer(good, offer)).toEqual({ ok: true, why: 'the offer survived the rewrite' });
+  });
+
+  it('refuses one that dropped a time', () => {
+    const short = voiced(`How about:\n· ${lines[0]}\n· ${lines[1]}\n\n${link}`);
+    expect(sameOffer(short, offer).ok).toBe(false);
+  });
+
+  it('refuses one that moved a time', () => {
+    const moved = good.replace(lines[0]!, lines[0]!.replace(/\d{2}:\d{2}/, '09:00'));
+    expect(sameOffer(moved, offer).ok).toBe(false);
+  });
+
+  it('refuses a time nobody offered, even with all three intact', () => {
+    const extra = `${good}\n\nOr 21:45 if that is easier.`;
+    const verdict = sameOffer(extra, offer);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.why).toContain('21:45');
+  });
+
+  it('refuses one that dropped the booking link', () => {
+    expect(sameOffer(good.replace(link, ''), offer).ok).toBe(false);
+  });
+
+  it('refuses a link of its own', () => {
+    expect(sameOffer(`${good}\n\nAlso: https://evil.example/pay`, offer).ok).toBe(false);
+  });
+
+  it('refuses an empty rewrite, and one that ran away with itself', () => {
+    expect(sameOffer('', offer).ok).toBe(false);
+    expect(sameOffer(`${good}${'x'.repeat(1300)}`, offer).ok).toBe(false);
+  });
+
+  it('holds when there is no link to keep', () => {
+    const noLink = voiced(`Any of these?\n${lines.map((l) => `· ${l}`).join('\n')}`);
+    expect(sameOffer(noLink, { slots, calendlyUrl: null }).ok).toBe(true);
   });
 });

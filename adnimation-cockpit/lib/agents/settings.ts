@@ -198,6 +198,28 @@ export const AGENT_SETTINGS: Record<string, SettingField[]> = {
     { key: 'horizonDays', label: 'How far ahead it looks (days)', type: 'number', default: 10, min: 3, max: 30 },
     { key: 'calendlyLink', label: 'Your booking link', help: 'Sent alongside the times, and on its own when the diary cannot be read.', type: 'text', default: '', placeholder: 'https://calendly.com/…' },
     { key: 'book', label: 'Put the meeting in the calendar itself', help: 'Off: it tells you they accepted and you add it.', type: 'boolean', default: true },
+    {
+      key: 'voice',
+      label: 'Write it in your voice',
+      help:
+        'On: the reply is rewritten to sound like you, from the way you write learned off your own ' +
+        'replies. The times and the link are checked afterwards — a rewrite that moved one is thrown ' +
+        'away and the plain wording goes instead.',
+      type: 'boolean',
+      default: true,
+    },
+    {
+      key: 'busyCalendars',
+      label: 'Count as busy',
+      help: 'A slot free on one calendar and taken on another is a double booking it made.',
+      type: 'select',
+      default: 'owned',
+      options: [
+        { value: 'owned', label: 'Every calendar you own' },
+        { value: 'primary', label: 'Your main calendar only' },
+        { value: 'all', label: 'Every calendar you can see, shared ones included' },
+      ],
+    },
     { key: 'signOff', label: 'Sign-off', type: 'text', default: 'Best,\nMaor', placeholder: 'Best,\nMaor' },
   ],
   'invoice-forwarder': [

@@ -57,7 +57,8 @@ const PLAYBOOK_HINTS: Record<string, string> = {
     '· Anything in the evening or at a weekend.\n' +
     '· Anyone you are not sure about — tell me who they are and what it is about.\n\n' +
     'HOW TO WRITE IT\n' +
-    '· Short. Three times, the link, nothing else. Never say what the meeting is about.',
+    '· Short. Three times, the link, nothing else. Never say what the meeting is about.\n' +
+    '· In my voice and my manners — paste two replies of mine here if you want it closer.',
   'marketing-writer':
     'HOW I SOUND\n' +
     'Paste in two or three posts of mine that worked. That is the strongest instruction there is.\n\n' +

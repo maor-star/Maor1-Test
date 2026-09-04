@@ -486,3 +486,48 @@ const TRANSIENT = [
 export function settled(why: string): boolean {
   return !TRANSIENT.some((t) => (why ?? '').includes(t));
 }
+
+/**
+ * A rewrite in his voice must still be the same offer.
+ *
+ * He asked for the reply to sound like him rather than like a form. The way
+ * that stays safe is to let the model rewrite the words and nothing else: the
+ * times and the booking link are handed to it as lines it must reproduce
+ * exactly, and this checks that it did. A rewrite that moved a meeting by half
+ * an hour, dropped one of the three, or invented a second link is refused and
+ * the plain version goes instead.
+ */
+export function sameOffer(
+  rewritten: string,
+  offer: { slots: Slot[]; calendlyUrl: string | null; timeZone?: string },
+): Verdict {
+  const text = (rewritten ?? '').trim();
+  if (text.length < 20) return { ok: false, why: 'the rewrite came back empty' };
+  if (text.length > 1200) return { ok: false, why: 'the rewrite grew too long to be a scheduling note' };
+
+  const tz = offer.timeZone ?? 'Asia/Jerusalem';
+  const lines = offer.slots.map((s) => slotLine(s, tz));
+  for (const line of lines) {
+    if (!text.includes(line)) return { ok: false, why: `it changed or dropped "${line}"` };
+  }
+
+  /*
+   * No time that was not offered. Every clock time in the reply has to belong
+   * to one of the lines above — otherwise something invented a slot, which is
+   * the one mistake here that costs him a meeting he never agreed to.
+   */
+  const offered = new Set<string>();
+  for (const line of lines) for (const m of line.matchAll(/\d{1,2}:\d{2}/g)) offered.add(m[0]);
+  for (const m of text.matchAll(/\d{1,2}:\d{2}/g)) {
+    if (!offered.has(m[0])) return { ok: false, why: `it added a time nobody offered (${m[0]})` };
+  }
+
+  const urls = [...text.matchAll(/https?:\/\/\S+/g)].map((m) => m[0].replace(/[.,;)]+$/, ''));
+  if (offer.calendlyUrl) {
+    if (!urls.includes(offer.calendlyUrl)) return { ok: false, why: 'it dropped your booking link' };
+  }
+  const strays = urls.filter((u) => u !== offer.calendlyUrl);
+  if (strays.length > 0) return { ok: false, why: `it added a link of its own (${strays[0]})` };
+
+  return { ok: true, why: 'the offer survived the rewrite' };
+}
