@@ -209,6 +209,16 @@ export const AGENT_SETTINGS: Record<string, SettingField[]> = {
       default: true,
     },
     {
+      key: 'inviteColleagues',
+      label: 'Put the right colleagues on it',
+      help:
+        'Anyone already on the thread is invited. Anyone else it thinks the meeting needs, it asks ' +
+        'you about in Slack first — a name, an address, or “just me”, and it books either way.',
+      type: 'boolean',
+      default: true,
+    },
+    { key: 'meet', label: 'Add a Google Meet link', type: 'boolean', default: true },
+    {
       key: 'busyCalendars',
       label: 'Count as busy',
       help: 'A slot free on one calendar and taken on another is a double booking it made.',

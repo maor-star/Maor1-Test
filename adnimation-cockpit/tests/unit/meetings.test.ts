@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   asksForEvening, clockTime, decide, freeWindows, mayAnswer, maySend,
-  pickSlots, proposalText, sameOffer, settled, slotLine, wantsMeeting,
+  emailsIn, isInternal, pickAttendees, pickSlots, proposalText, readPeopleAnswer,
+  sameOffer, settled, slotLine, wantsMeeting,
   type MeetingCandidate, type Slot,
 } from '@/lib/meetings/rules';
 import { FakeCalendar } from '@/lib/integrations/calendar';
@@ -325,5 +326,105 @@ describe('a rewrite in his voice is still the same offer', () => {
   it('holds when there is no link to keep', () => {
     const noLink = voiced(`Any of these?\n${lines.map((l) => `· ${l}`).join('\n')}`);
     expect(sameOffer(noLink, { slots, calendlyUrl: null }).ok).toBe(true);
+  });
+});
+
+describe('who goes on the invitation', () => {
+  const roster = [
+    { email: 'mor@adnimation.com', name: 'Mor Azagury', role: 'Chief of Staff' },
+    { email: 'treves@adnimation.com', name: 'Tomer Treves', role: 'Demand & Supply' },
+    { email: 'amir@adnimation.com', name: 'Amir Malka', role: 'Core Publishers' },
+  ];
+  const base = { requester: 'ravit@markito.com', mailbox: 'maor@adnimation.com', roster };
+
+  it('invites the person who asked, and never him — he is the calendar', () => {
+    const plan = pickAttendees({ ...base, threadAddresses: ['ravit@markito.com', 'maor@adnimation.com'] });
+    expect(plan.invite).toEqual(['ravit@markito.com']);
+    expect(plan.ask).toEqual([]);
+  });
+
+  it('invites a colleague already on the thread without asking', () => {
+    const plan = pickAttendees({
+      ...base,
+      threadAddresses: ['ravit@markito.com', 'maor@adnimation.com', 'treves@adnimation.com'],
+    });
+    expect(plan.invite).toContain('treves@adnimation.com');
+    expect(plan.ask).toEqual([]);
+    expect(plan.why).toContain('1 colleague');
+  });
+
+  it('asks about a colleague the model wants but the thread does not name', () => {
+    const plan = pickAttendees({
+      ...base,
+      threadAddresses: ['ravit@markito.com'],
+      suggested: ['mor@adnimation.com'],
+    });
+    expect(plan.ask).toEqual(['mor@adnimation.com']);
+    expect(plan.invite).not.toContain('mor@adnimation.com');
+  });
+
+  it('drops a name that is not on the roster — it is not even a question', () => {
+    const plan = pickAttendees({
+      ...base,
+      threadAddresses: ['ravit@markito.com'],
+      suggested: ['someone@adnimation.com', 'stranger@elsewhere.com'],
+    });
+    expect(plan.ask).toEqual([]);
+  });
+
+  it('never asks about somebody it is already inviting', () => {
+    const plan = pickAttendees({
+      ...base,
+      threadAddresses: ['ravit@markito.com', 'mor@adnimation.com'],
+      suggested: ['mor@adnimation.com'],
+    });
+    expect(plan.invite).toContain('mor@adnimation.com');
+    expect(plan.ask).toEqual([]);
+  });
+
+  it('knows the company from everyone else', () => {
+    expect(isInternal('mor@adnimation.com')).toBe(true);
+    expect(isInternal('ravit@markito.com')).toBe(false);
+  });
+
+  it('reads every address out of a header, however it was written', () => {
+    expect(emailsIn('Mor <MOR@adnimation.com>, "T" <treves@adnimation.com>')).toEqual([
+      'mor@adnimation.com',
+      'treves@adnimation.com',
+    ]);
+  });
+});
+
+describe('his answer about who should be on it', () => {
+  const roster = [
+    { email: 'mor@adnimation.com', name: 'Mor Azagury', role: 'Chief of Staff' },
+    { email: 'treves@adnimation.com', name: 'Tomer Treves', role: 'Demand & Supply' },
+  ];
+
+  it('takes a first name', () => {
+    expect(readPeopleAnswer('Mor', roster)).toEqual({
+      answered: true, emails: ['mor@adnimation.com'], unmatched: [],
+    });
+  });
+
+  it('takes an address, and ignores one that is nobody of ours', () => {
+    expect(readPeopleAnswer('treves@adnimation.com', roster).emails).toEqual(['treves@adnimation.com']);
+    expect(readPeopleAnswer('someone@elsewhere.com', roster).answered).toBe(false);
+  });
+
+  it('takes "just me" as an answer, not as silence', () => {
+    for (const said of ['just me', 'no one', 'רק אני', 'אף אחד']) {
+      expect(readPeopleAnswer(said, roster)).toEqual({ answered: true, emails: [], unmatched: [] });
+    }
+  });
+
+  it('treats anything else as no answer yet', () => {
+    expect(readPeopleAnswer('hmm let me think', roster).answered).toBe(false);
+    expect(readPeopleAnswer('', roster).answered).toBe(false);
+  });
+
+  it('takes two names at once', () => {
+    const answer = readPeopleAnswer('Mor and Tomer please', roster);
+    expect(answer.emails.sort()).toEqual(['mor@adnimation.com', 'treves@adnimation.com']);
   });
 });

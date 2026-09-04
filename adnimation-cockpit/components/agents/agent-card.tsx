@@ -55,7 +55,8 @@ const PLAYBOOK_HINTS: Record<string, string> = {
     '· Cold outreach, however polite. No reply at all — do not even ask me.\n\n' +
     'WHEN TO ASK ME FIRST\n' +
     '· Anything in the evening or at a weekend.\n' +
-    '· Anyone you are not sure about — tell me who they are and what it is about.\n\n' +
+    '· Anyone you are not sure about — tell me who they are and what it is about.\n' +
+    '· Who from the team should be on it, when the thread does not say.\n\n' +
     'HOW TO WRITE IT\n' +
     '· Short. Three times, the link, nothing else. Never say what the meeting is about.\n' +
     '· In my voice and my manners — paste two replies of mine here if you want it closer.',

@@ -226,6 +226,17 @@ export const TARGETS = [
         'export function sameOffer(rewritten, offer) {',
       ],
       ['  const offered = new Set<string>();', '  const offered = new Set();'],
+      ["export function isInternal(email: string, domain = INTERNAL_DOMAIN): boolean {", 'export function isInternal(email, domain = INTERNAL_DOMAIN) {'],
+      ['export function emailsIn(text: string): string[] {', 'export function emailsIn(text) {'],
+      [/export function pickAttendees\(input: \{[\s\S]*?\n\}\): AttendeePlan \{/, 'export function pickAttendees(input) {'],
+      [
+        'export function readPeopleAnswer(text: string, roster: Colleague[] = []): PeopleAnswer {',
+        'export function readPeopleAnswer(text, roster = []) {',
+      ],
+      ['  const unmatched: string[] = [];', '  const unmatched = [];'],
+      ['const clean = (email: string) =>', 'const clean = (email) =>'],
+      // The non-null assertions are TypeScript-only.
+      [/hits\[0\]!\.email/g, 'hits[0].email'],
       // Two `(type: string)` arrows are left, one in each date helper.
       [/\(type: string\) =>/g, '(type) =>'],
     ],

@@ -385,13 +385,17 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
       'diary cannot be read — files the thread under “Claude/Meetings” and tells you in Slack ' +
       'who it just put in your week. When they pick one of those times, it puts the meeting in ' +
       'your calendar. An evening, a weekend, or anything it is not certain about, it asks you ' +
-      'in Slack first — who it is and what it is about — and answers only if you say yes.',
+      'in Slack first — who it is and what it is about — and answers only if you say yes. Every ' +
+      'booking carries a Google Meet link, and whoever is already on the thread is on the ' +
+      'invitation; anyone else it thinks the meeting needs, it asks you about first.',
     rationale:
       'Three outcomes rather than two, because you drew the lines yourself: it answers people ' +
       'you deal with, it asks you about the ones you might not want, and it says nothing at all ' +
       'to machines, strangers and cold pitches — those get silence, not a question. It can only ' +
       'ever offer times your calendar says are free, and it can only ever book a time it itself ' +
-      'offered, to the address it offered it to.',
+      'offered. Who it may invite is bounded the same way: the thread, or a colleague from your ' +
+      'own roster that you said yes to — it cannot invent a person any more than it can invent ' +
+      'an hour.',
     triggerType: 'schedule',
     triggerConfig: { cron: '0 */2 * * *' },
     conditions: [

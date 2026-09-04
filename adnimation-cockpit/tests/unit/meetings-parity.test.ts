@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  decide, freeWindows, mayAnswer, maySend, pickSlots, proposalText, sameOffer, slotLine, wantsMeeting,
+  decide, freeWindows, mayAnswer, maySend, pickAttendees, pickSlots, proposalText,
+  readPeopleAnswer, sameOffer, slotLine, wantsMeeting,
   type MeetingCandidate, type Slot,
 } from '@/lib/meetings/rules';
 // @ts-expect-error — the generated job copy is plain ESM with no types.
@@ -88,6 +89,20 @@ describe('the screen and the meetings job agree', () => {
     const good = `Hi,\n\n${lines.map((l) => `· ${l}`).join('\n')}\n\n${link}\n\nBest,\nMaor`;
     for (const text of [good, good.replace(link, ''), `${good}\n\nor 21:45?`, '']) {
       expect(js.sameOffer(text, offer)).toEqual(sameOffer(text, offer));
+    }
+  });
+
+  it('agrees about who goes on the invitation', () => {
+    const roster = [{ email: 'mor@adnimation.com', name: 'Mor Azagury', role: 'Chief of Staff' }];
+    for (const input of [
+      { requester: 'ravit@markito.com', threadAddresses: ['ravit@markito.com', 'maor@adnimation.com'], mailbox: 'maor@adnimation.com', roster },
+      { requester: 'ravit@markito.com', threadAddresses: ['ravit@markito.com'], suggested: ['mor@adnimation.com'], mailbox: 'maor@adnimation.com', roster },
+      { requester: 'ravit@markito.com', threadAddresses: ['ravit@markito.com'], suggested: ['ghost@adnimation.com'], mailbox: 'maor@adnimation.com', roster },
+    ]) {
+      expect(js.pickAttendees(input)).toEqual(pickAttendees(input));
+    }
+    for (const said of ['Mor', 'just me', 'nothing here', 'mor@adnimation.com']) {
+      expect(js.readPeopleAnswer(said, roster)).toEqual(readPeopleAnswer(said, roster));
     }
   });
 

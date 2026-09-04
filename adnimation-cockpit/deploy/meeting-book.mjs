@@ -31,8 +31,9 @@
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import {
-  MEETINGS_LABEL, decide, freeWindows, mayAnswer, maySend, pickSlots,
-  proposalText, sameOffer, settled, slotLine, wantsMeeting,
+  MEETINGS_LABEL, decide, emailsIn, freeWindows, isInternal, mayAnswer, maySend,
+  pickAttendees, pickSlots, proposalText, readPeopleAnswer, sameOffer, settled,
+  slotLine, wantsMeeting,
 } from './meeting-rules.mjs';
 import { isInternalAddress } from './internal-mail.mjs';
 import { postAsBot, readReplies } from './bot-post.mjs';
@@ -270,10 +271,18 @@ async function busyBlocks(from, to, mode = 'owned') {
   );
 }
 
-async function putInCalendar({ summary, description, slot, attendee, timeZone }) {
+/**
+ * The event itself: everyone who belongs on it, and a Meet link on every one.
+ *
+ * `conferenceDataVersion=1` is the part that is easy to miss — without it
+ * Google accepts the request, creates the event, and silently ignores the
+ * conference, so the invitation goes out with no way to join it.
+ */
+async function putInCalendar({ summary, description, slot, attendees, timeZone, meet = true }) {
   const t = await calendarToken(true);
   const res = await fetch(
-    'https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all',
+    'https://www.googleapis.com/calendar/v3/calendars/primary/events' +
+      '?sendUpdates=all&conferenceDataVersion=1',
     {
       method: 'POST',
       headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
@@ -282,13 +291,28 @@ async function putInCalendar({ summary, description, slot, attendee, timeZone })
         description,
         start: { dateTime: slot.start, timeZone },
         end: { dateTime: slot.end, timeZone },
-        attendees: [{ email: attendee }],
+        attendees: attendees.map((email) => ({ email })),
+        ...(meet
+          ? {
+              conferenceData: {
+                createRequest: {
+                  requestId: `cockpit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                  conferenceSolutionKey: { type: 'hangoutsMeet' },
+                },
+              },
+            }
+          : {}),
       }),
     },
   );
   const body = await res.json().catch(() => null);
   if (!res.ok || !body?.id) throw new Error(body?.error?.message ?? `http_${res.status}`);
-  return { id: body.id, link: body.htmlLink };
+
+  const join =
+    body.hangoutLink ??
+    (body.conferenceData?.entryPoints ?? []).find((e) => e.entryPointType === 'video')?.uri ??
+    null;
+  return { id: body.id, link: body.htmlLink, join };
 }
 
 /**
@@ -477,6 +501,54 @@ async function whichSlot(offered, theirWords, apiKey) {
     : { slot: null, why: answer.why ?? 'they did not pick one of the offered times' };
 }
 
+/**
+ * Who from the company this meeting needs, in the model's view.
+ *
+ * It is given the roster and the thread and may only answer with addresses
+ * from the roster. Its answer is a suggestion and is treated as one: nothing
+ * it names gets an invitation without him, and a name that is not on the
+ * roster is dropped rather than asked about.
+ */
+async function whoElse(thread, roster, apiKey) {
+  if (roster.length === 0) return { emails: [], why: 'no roster to choose from' };
+  const people = roster.map((p) => `${p.email} — ${p.name}${p.role ? `, ${p.role}` : ''}`).join('\n');
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 400,
+        system:
+          'You are reading one email thread about a meeting with the CEO of Adnimation, and ' +
+          'saying which colleagues of his the meeting needs — nobody, usually.\n\n' +
+          'Name someone only when the thread itself shows the meeting is about their work: the ' +
+          'subject names it, or they are already part of the conversation. Do not add anyone ' +
+          'because they might be interested, because they are senior, or to be safe — an ' +
+          'invitation costs them the hour.\n\n' +
+          'You may only answer with addresses from this list, and an empty list is the right ' +
+          'answer most of the time:\n' + people,
+        messages: [{
+          role: 'user',
+          content: `${thread.slice(0, 6000)}\n\nAnswer as JSON: ` +
+            '{"emails": ["…"], "why": "one line naming what in the thread says so"}',
+        }],
+      }),
+    });
+    if (!res.ok) throw new Error(`http_${res.status}`);
+    const body = await res.json();
+    const text = (body.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join('');
+    const answer = JSON.parse(/\{[\s\S]*\}/.exec(text)?.[0] ?? text);
+    return {
+      emails: Array.isArray(answer.emails) ? answer.emails.map((e) => String(e).toLowerCase()) : [],
+      why: String(answer.why ?? ''),
+    };
+  } catch (e) {
+    return { emails: [], why: `could not ask: ${e.message}` };
+  }
+}
+
 /* ── His yes or no, read back out of Slack ─────────────────────────────── */
 
 const YES = /^\s*(yes|yep|yeah|ok|okay|sure|go ahead|do it|book it|כן|בסדר|אישור|תקבע|קבע|סבבה|יאללה)\b/i;
@@ -571,6 +643,20 @@ async function main() {
   const signOff = String(setting('signOff', 'Best,\nMaor'));
   const useVoice = setting('voice', true) !== false;
   const busyMode = String(setting('busyCalendars', 'owned'));
+  const inviteColleagues = setting('inviteColleagues', true) !== false;
+  const withMeet = setting('meet', true) !== false;
+
+  /*
+   * The company, as the cockpit knows it. The model may only ever name
+   * somebody from this list, so a colleague it invents is not a person it can
+   * even ask about.
+   */
+  const roster = (
+    await sql`
+      select name, email, role from people
+      where active = true and is_external = false and email is not null
+    `.catch(() => [])
+  ).filter((p) => isInternal(p.email));
 
   console.log(
     `working ${options.from}–${options.to} ${timeZone}, days ${options.days.join('')}, ` +
@@ -578,6 +664,8 @@ async function main() {
       `${calendly ? ', booking link set' : ', no booking link'}` +
       `, busy from ${busyMode === 'primary' ? 'your main calendar' : busyMode === 'all' ? 'every calendar you see' : 'every calendar you own'}` +
       `${useVoice ? (STYLE ? `, written in your voice (${STYLE.length} chars learned)` : ', your voice not learned yet') : ', plain wording'}` +
+      `${withMeet ? ', a Meet link on every booking' : ', no Meet link'}` +
+      `${inviteColleagues ? `, ${roster.length} colleague(s) it may suggest` : ', colleagues never added'}` +
       `${DRY ? ' (dry run)' : ''}`,
   );
 
@@ -660,6 +748,59 @@ async function main() {
     `;
     proposed += 1;
     told.push(`:calendar: You said yes — I offered ${row.from_name ?? row.from_email} ${slots.length || 'the booking link'} time(s).`);
+  }
+
+  /* ── And the ones waiting on his answer about who else should be on it ── */
+  const waitingWho = await sql`
+    select * from meeting_requests
+    where status = 'asking_who' and asked_at > now() - interval '4 days'
+  `.catch(() => []);
+
+  for (const row of waitingWho) {
+    const heard = await readReplies(BOT, row.ask_channel, row.ask_ts);
+    if (!heard.ok) {
+      console.log(`  cannot read who you want on "${row.subject}": ${heard.reason}`);
+      continue;
+    }
+    const answer = heard.messages.map((m) => readPeopleAnswer(m.text, roster)).find((a) => a.answered);
+    if (!answer) continue;
+
+    const slot = row.chosen_slot;
+    if (!slot) continue;
+    const invite = [...new Set([row.from_email, ...answer.emails])].filter(Boolean);
+    console.log(`  YOU ANSWERED: ${row.subject} — inviting ${invite.join(', ')}`);
+    if (answer.unmatched.length > 0) {
+      console.log(`      could not place: ${answer.unmatched.join(', ')}`);
+    }
+    if (DRY) { booked += 1; continue; }
+
+    try {
+      const event = await putInCalendar({
+        summary: `${row.from_name ?? row.from_email} — ${row.subject ?? 'Meeting'}`,
+        description: `Booked from the mail thread.\n\n${(row.reply ?? '').slice(0, 500)}`,
+        slot,
+        attendees: invite,
+        timeZone,
+        meet: withMeet,
+      });
+      await sql`
+        update meeting_requests
+        set status = 'booked', event_id = ${event.id}, answer = ${answer.emails.join(', ') || 'just you'}
+        where thread_id = ${row.thread_id}
+      `;
+      booked += 1;
+      told.push(
+        `:white_check_mark: *Booked: ${row.from_name ?? row.from_email}* — ${slotLine(slot, timeZone)}\n` +
+          `> ${row.subject ?? ''}\n> _with:_ ${invite.join(', ')}` +
+          `${event.join ? `\n> _Meet:_ ${event.join}` : ''}` +
+          `${answer.unmatched.length ? `\n> _I could not place:_ ${answer.unmatched.join(', ')}` : ''}`,
+      );
+    } catch (e) {
+      console.log(`      could not put it in the calendar: ${e.message}`);
+      told.push(
+        `:warning: I could not book *${row.from_name ?? row.from_email}* — ${e.message.slice(0, 140)}`,
+      );
+    }
   }
 
   /* ── Second: the new mail ─────────────────────────────────────────────── */
@@ -875,7 +1016,33 @@ async function main() {
       continue;
     }
 
+    /*
+     * Who else belongs on it. Everyone already on the thread goes on the
+     * invitation — he can see them, and leaving them off is the surprise.
+     * Anyone the model thinks should be there but is not on the thread is a
+     * question for him, never an invitation it sends by itself.
+     */
+    const addresses = (thread.messages ?? []).flatMap((m) => {
+      const hs = m.payload?.headers ?? [];
+      return ['from', 'to', 'cc'].flatMap((name) => emailsIn(header(hs, name) ?? ''));
+    });
+    const wholeThread = (thread.messages ?? [])
+      .map((m) => plainText(m.payload).join('\n').slice(0, 2500))
+      .join('\n\n---\n\n');
+    const suggested = inviteColleagues
+      ? await whoElse(`Subject: ${row.subject ?? ''}\n\n${wholeThread}`, roster, CLAUDE)
+      : { emails: [], why: 'you asked it not to add colleagues' };
+    const plan = pickAttendees({
+      requester: row.from_email,
+      threadAddresses: addresses,
+      suggested: suggested.emails,
+      roster,
+      mailbox: MAILBOX,
+    });
+
     console.log(`  ${DRY ? 'WOULD BOOK' : 'BOOKING'}: ${row.from_email} — ${slotLine(picked.slot, timeZone)}`);
+    console.log(`      inviting: ${plan.invite.join(', ')}`);
+    if (plan.ask.length > 0) console.log(`      would ask you about: ${plan.ask.join(', ')} (${suggested.why})`);
     if (DRY) { booked += 1; continue; }
     if (!bookItself) {
       told.push(
@@ -885,13 +1052,50 @@ async function main() {
       continue;
     }
 
+    /*
+     * A colleague it wants on the meeting and cannot stand behind: the
+     * question goes to Slack and the booking waits for his answer. It is one
+     * question — the next run reads what he said and books either way.
+     */
+    if (plan.ask.length > 0 && state.notify) {
+      const named = plan.ask
+        .map((e) => roster.find((p) => p.email.toLowerCase() === e))
+        .filter(Boolean)
+        .map((p) => `${p.name}${p.role ? ` (${p.role})` : ''} — ${p.email}`);
+      const question = [
+        ':grey_question: *Who should be on this with you?*',
+        `> *Meeting:* ${row.from_name ?? row.from_email} — ${row.subject ?? ''}`,
+        `> *When:* ${slotLine(picked.slot, timeZone)}`,
+        `> *I would add:* ${named.join(' · ')}`,
+        suggested.why ? `> *Because:* ${suggested.why}` : '',
+        '',
+        'Reply with a name, an address, or *just me* — I will book it either way.',
+      ].filter(Boolean).join('\n');
+
+      const sent = await postAsBot(BOT, question);
+      if (sent.ok) {
+        await sql`
+          update meeting_requests
+          set status = 'asking_who', chosen_slot = ${JSON.stringify(picked.slot)}::jsonb,
+              ask_channel = ${sent.channel}, ask_ts = ${sent.ts}, asked_at = now(),
+              why = ${suggested.why?.slice(0, 400) ?? null}
+          where thread_id = ${row.thread_id}
+        `;
+        asked += 1;
+        console.log('      asked you who else should be on it; it books once you answer');
+        continue;
+      }
+      console.log(`      could not ask you (${sent.reason}) — booking with the thread only`);
+    }
+
     try {
       const event = await putInCalendar({
         summary: `${row.from_name ?? row.from_email} — ${row.subject ?? 'Meeting'}`,
         description: `Booked from the mail thread.\n\n${(row.reply ?? '').slice(0, 500)}`,
         slot: picked.slot,
-        attendee: row.from_email,
+        attendees: plan.invite,
         timeZone,
+        meet: withMeet,
       });
       await sql`
         update meeting_requests
@@ -901,7 +1105,9 @@ async function main() {
       booked += 1;
       told.push(
         `:white_check_mark: *Booked: ${row.from_name ?? row.from_email}* — ${slotLine(picked.slot, timeZone)}\n` +
-          `> ${row.subject ?? ''}${event.link ? `\n> ${event.link}` : ''}`,
+          `> ${row.subject ?? ''}\n> _with:_ ${plan.invite.join(', ')}` +
+          `${event.join ? `\n> _Meet:_ ${event.join}` : '\n> _no Meet link — Calendar refused the conference_'}` +
+          `${event.link ? `\n> ${event.link}` : ''}`,
       );
     } catch (e) {
       console.log(`      could not put it in the calendar: ${e.message}`);

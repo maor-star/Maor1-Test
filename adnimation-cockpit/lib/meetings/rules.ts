@@ -531,3 +531,145 @@ export function sameOffer(
 
   return { ok: true, why: 'the offer survived the rewrite' };
 }
+
+/* ── Who else should be in the room ────────────────────────────────────────
+ *
+ * He asked for the right people from the company to be on every meeting it
+ * books, and to be asked when it does not know. "Does not know" is the whole
+ * of the design here: an address already on the thread is not a guess, and a
+ * name the model produced from nowhere is. Only the first gets an invitation.
+ */
+
+export const INTERNAL_DOMAIN = process.env.INTERNAL_DOMAIN ?? 'adnimation.com';
+
+export interface Colleague {
+  email: string;
+  name: string;
+  role: string | null;
+}
+
+const clean = (email: string) => (email ?? '').trim().toLowerCase();
+
+export function isInternal(email: string, domain = INTERNAL_DOMAIN): boolean {
+  return clean(email).endsWith(`@${domain.toLowerCase()}`);
+}
+
+/** Every address in a header line, however it was written. */
+export function emailsIn(text: string): string[] {
+  const found = String(text ?? '').match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) ?? [];
+  return [...new Set(found.map(clean))];
+}
+
+export interface AttendeePlan {
+  /** Addresses to put on the invitation, the other side included. */
+  invite: string[];
+  /** Colleagues it wants on it but cannot stand behind. */
+  ask: string[];
+  why: string;
+}
+
+/**
+ * Who goes on the invitation.
+ *
+ * Three sources, and only two of them are trusted without him: the person who
+ * asked for the meeting, and any colleague already on the thread — both are
+ * facts about the conversation. The third is the model's opinion about who
+ * else should be there, and that is never acted on alone: a colleague it
+ * names is put to him in Slack first, and only a name that matches the
+ * company roster is even worth asking about.
+ */
+export function pickAttendees(input: {
+  requester: string;
+  threadAddresses: string[];
+  suggested?: string[];
+  roster?: Colleague[];
+  mailbox: string;
+  domain?: string;
+}): AttendeePlan {
+  const domain = input.domain ?? INTERNAL_DOMAIN;
+  const mine = clean(input.mailbox);
+  const requester = clean(input.requester);
+
+  const onThread = [...new Set(input.threadAddresses.map(clean))]
+    .filter((e) => e.includes('@') && e !== mine);
+
+  // Colleagues already in the conversation. Nothing to ask about: he can see
+  // them on the thread, and leaving them off the invitation is the surprise.
+  const colleagues = onThread.filter((e) => isInternal(e, domain) && e !== requester);
+
+  const roster = input.roster ?? [];
+  const known = new Set(roster.map((p) => clean(p.email)));
+  const suggested = [...new Set((input.suggested ?? []).map(clean))]
+    .filter((e) => e && e !== mine && e !== requester)
+    .filter((e) => !colleagues.includes(e));
+
+  // A name the model produced that is not on the roster is not a person we
+  // know of, so it is not even a question — it is dropped.
+  const askable = suggested.filter((e) => known.has(e));
+
+  const invite = [...new Set([requester, ...onThread])].filter(Boolean);
+
+  return {
+    invite,
+    ask: askable,
+    why: colleagues.length
+      ? `${colleagues.length} colleague(s) already on the thread`
+      : 'nobody else from the company is on this thread',
+  };
+}
+
+/**
+ * His answer, when it asked who should be on it.
+ *
+ * He will type an address, or a first name, or "just me" — all three are
+ * answers, and anything else is not one, so the thread waits rather than
+ * guessing. Names are matched only against the roster: a name that resolves
+ * to nobody is reported back rather than silently dropped.
+ */
+export interface PeopleAnswer {
+  answered: boolean;
+  /** Empty with `answered` true means he said nobody. */
+  emails: string[];
+  unmatched: string[];
+}
+
+/*
+ * "Nobody" is an answer, and a different one from silence.
+ *
+ * The Hebrew forms carry no `\b`: a word boundary is defined on ASCII word
+ * characters, so one after "אני" never matches and "רק אני" read as no answer
+ * at all — which would leave the meeting waiting for him forever.
+ */
+const NOBODY = [
+  /^\s*(no ?one|nobody|just me|only me|alone|none|skip)\b/i,
+  /^\s*(אף אחד|רק אני|לבד|לא צריך)/,
+];
+
+export function readPeopleAnswer(text: string, roster: Colleague[] = []): PeopleAnswer {
+  const said = String(text ?? '').trim();
+  if (said === '') return { answered: false, emails: [], unmatched: [] };
+  if (NOBODY.some((p) => p.test(said))) return { answered: true, emails: [], unmatched: [] };
+
+  const emails = emailsIn(said).filter((e) => roster.length === 0 || roster.some((p) => clean(p.email) === e));
+  const matched = new Set(emails);
+  const unmatched: string[] = [];
+
+  /*
+   * A first name, which is how he will actually answer. Matched whole-word
+   * against the roster in both alphabets; two people sharing a first name is
+   * not a match, it is a question, so it counts as unmatched.
+   */
+  for (const word of said.split(/[\s,·]+/)) {
+    const token = word.replace(/[^\p{L}\p{N}.'-]/gu, '');
+    if (token.length < 2 || token.includes('@')) continue;
+    const hits = roster.filter((p) => {
+      const first = p.name.split(/\s+/)[0] ?? '';
+      return first.toLowerCase() === token.toLowerCase() || p.name.toLowerCase() === token.toLowerCase();
+    });
+    if (hits.length === 1) matched.add(clean(hits[0]!.email));
+    else if (hits.length > 1) unmatched.push(token);
+  }
+
+  const list = [...matched];
+  return { answered: list.length > 0 || emails.length > 0, emails: list, unmatched };
+}
