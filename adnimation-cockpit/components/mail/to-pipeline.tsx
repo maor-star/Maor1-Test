@@ -67,7 +67,7 @@ export function ToPipeline({ threadId }: { threadId: string }) {
     return (
       <Link
         href="/pipeline"
-        className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+        className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline"
       >
         In the pipeline ↗
       </Link>
@@ -81,7 +81,7 @@ export function ToPipeline({ threadId }: { threadId: string }) {
       </Button>
 
       {open ? (
-        <div className="mt-2 w-full border border-divider p-2">
+        <div className="mt-2 w-full border border-line p-2">
           {loading ? (
             <p className="text-[13px] text-neutral-500">Reading the conversation…</p>
           ) : error ? (
@@ -166,10 +166,10 @@ export function ToPipeline({ threadId }: { threadId: string }) {
 
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Button type="submit" size="sm">
-                  ADD TO THE PIPELINE
+                  Add to the pipeline
                 </Button>
-                <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-                  THE SUBJECT AND A LINK BACK TO THE THREAD GO IN WITH IT
+                <span className="font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
+                  The subject and a link back to the thread go in with it
                 </span>
               </div>
             </form>

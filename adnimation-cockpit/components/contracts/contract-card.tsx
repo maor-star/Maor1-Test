@@ -113,7 +113,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
   const unfiled = c.versions.filter((v) => v.uploadedAt === null).length;
 
   return (
-    <li className="border-t border-divider px-[18px] py-3">
+    <li className="border-t border-line px-[18px] py-3">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -130,12 +130,12 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
             {c.categoryConfirmed ? (
               <Tag tone="accent">{CATEGORY_TAG[c.category ?? 'general']}</Tag>
             ) : (
-              <Tag tone="warning">NO CATEGORY YET</Tag>
+              <Tag tone="warning">No category yet</Tag>
             )}
             {c.waitingOn === 'you' && c.status !== 'unclassified' ? (
-              <Tag tone="critical">YOUR MOVE</Tag>
+              <Tag tone="critical">Your move</Tag>
             ) : null}
-            {c.waitingOn === 'them' ? <Tag tone="outline">WITH THEM</Tag> : null}
+            {c.waitingOn === 'them' ? <Tag tone="outline">With them</Tag> : null}
             <Tag tone="neutral">FROM {c.source.toUpperCase()}</Tag>
             {unfiled > 0 ? (
               <Tag tone="warning" title="Recorded here, but the file is not in Drive yet">
@@ -144,7 +144,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
             ) : null}
           </div>
 
-          <p className="hud-label mt-1 whitespace-normal text-[9px]">
+          <p className="hud-label mt-1 whitespace-normal text-[11px]">
             {c.docType}
             {c.receivedAt ? (
               <>
@@ -155,13 +155,13 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
             {c.versions.length === 1 ? 'VERSION' : 'VERSIONS'}
             {c.drivePath ? (
               <>
-                {' '}· <span className="text-accent-700">{c.drivePath}</span>
+                {' '}· <span className="text-info">{c.drivePath}</span>
               </>
             ) : null}
           </p>
 
           {c.opportunityTitle || c.pipelineClientName ? (
-            <p className="hud-label mt-1 whitespace-normal text-[9px] text-accent-700">
+            <p className="hud-label mt-1 whitespace-normal text-[11px] text-info">
               LINKED TO {c.opportunityTitle ? `SUGGESTION: ${c.opportunityTitle}` : ''}
               {c.opportunityTitle && c.pipelineClientName ? ' · ' : ''}
               {c.pipelineClientName ? `DEAL: ${c.pipelineClientName}` : ''}
@@ -179,7 +179,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
             <ul className="mt-1.5 space-y-0.5">
               {c.versions.map((v) => (
                 <li key={v.id} className="flex flex-wrap items-center gap-2 text-[12px] text-neutral-500">
-                  <span className="font-semi text-accent-700">v{v.versionNo}</span>
+                  <span className="font-semi text-info">v{v.versionNo}</span>
                   <span className="min-w-0 break-all">{v.fileName}</span>
                   {v.driveFileId ? (
                     <>
@@ -190,7 +190,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
                             current === v.driveFileId ? null : v.driveFileId,
                           )
                         }
-                        className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+                        className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline"
                       >
                         {preview === v.driveFileId ? 'Hide' : 'Read it'}
                       </button>
@@ -222,7 +222,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
                             .catch(() => setSummaryError('Could not read it'))
                             .finally(() => setSummarising(false));
                         }}
-                        className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent disabled:opacity-50"
+                        className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline disabled:opacity-50"
                       >
                         {summarising ? 'Reading…' : 'Summarise it'}
                       </button>
@@ -236,7 +236,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
                         href={`https://drive.google.com/file/d/${v.driveFileId}/view`}
                         target="_blank"
                         rel="noreferrer"
-                        className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+                        className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline"
                       >
                         Drive ↗
                       </a>
@@ -250,13 +250,13 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
           ) : null}
 
           {preview ? (
-            <div className="mt-2 border border-divider">
-              <div className="flex items-center justify-between border-b border-divider px-2 py-1">
-                <span className="hud-label text-[9px]">READING THE DOCUMENT</span>
+            <div className="mt-2 border border-line">
+              <div className="flex items-center justify-between border-b border-line px-2 py-1">
+                <span className="hud-label text-[11px]">Reading the document</span>
                 <button
                   type="button"
                   onClick={() => setPreview(null)}
-                  className="font-semi text-[10px] uppercase tracking-[0.14em] text-neutral-500 hover:text-accent"
+                  className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-neutral-500 hover:text-accent"
                 >
                   Close
                 </button>
@@ -272,9 +272,9 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
                 className="h-[70vh] w-full bg-white"
                 allow="autoplay"
               />
-              <p className="border-t border-divider px-2 py-1 font-semi text-[9px] tracking-[0.1em] text-neutral-500">
-                IF THIS IS BLANK, OPEN IT WITH “DRIVE ↗” — THE VIEWER NEEDS YOU SIGNED IN TO THE
-                SAME GOOGLE ACCOUNT.
+              <p className="border-t border-line px-2 py-1 font-semi text-[11px] tracking-[0.1em] text-neutral-500">
+                If this is blank, open it with “DRIVE ↗” — the viewer needs you signed in to the
+                same Google account.
               </p>
             </div>
           ) : null}
@@ -283,14 +283,14 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
         <div className="flex shrink-0 items-start gap-5">
           {c.valueCents !== null ? (
             <div className="text-end">
-              <span className="hud-label block text-[9px]">VALUE</span>
+              <span className="hud-label block text-[11px]">Value</span>
               <span className="font-cond text-[19px] leading-none text-neutral-900">
                 <Num>{fmtMoney(c.valueCents)}</Num>
               </span>
             </div>
           ) : null}
           <div className="text-end">
-            <span className="hud-label block text-[9px]">IN THIS STATE</span>
+            <span className="hud-label block text-[11px]">In this state</span>
             <span
               className={`font-cond text-[19px] leading-none ${
                 needsClassifying && c.daysInStatus >= 2
@@ -420,7 +420,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
                 run(createLinkAction, data);
               }}
             >
-              + DEAL
+              + deal
             </Button>
           ) : null}
         </span>
@@ -461,7 +461,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
             href={c.sourceUrl}
             target="_blank"
             rel="noreferrer"
-            className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+            className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline"
           >
             {c.source === 'mail' ? 'Open in Gmail ↗' : 'Open in Slack ↗'}
           </a>
@@ -499,7 +499,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
             run(undoAction, data);
           }}
         >
-          UNDO
+          Undo
         </Button>
 
         {/* Archive is the one that makes a row disappear, so it asks first. */}
@@ -515,7 +515,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
             run(archiveContractAction, data);
           }}
         >
-          ARCHIVE
+          Archive
         </Button>
 
         {message ? <span className="text-2xs text-destructive">{message}</span> : null}
@@ -529,9 +529,9 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
       ) : null}
 
       {summary ? (
-        <div className="mt-2 border border-divider p-3">
-          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-divider pb-2">
-            <span className="hud-label text-[9px]">
+        <div className="mt-2 border border-line p-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-2">
+            <span className="hud-label text-[11px]">
               WHAT THIS CONTRACT SAYS
               {summary.versionNo ? (
                 <>
@@ -544,8 +544,8 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
               than no summary, and this one is read by a model from the newest
               version in Drive.
             */}
-            <span className="font-semi text-[9px] tracking-[0.1em] text-neutral-500">
-              READ BY CLAUDE · NOT LEGAL ADVICE · CHECK ANYTHING YOU ACT ON
+            <span className="font-semi text-[11px] tracking-[0.1em] text-neutral-500">
+              Read by Claude · not legal advice · check anything you act on
             </span>
           </div>
 
@@ -554,7 +554,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
 
           {summary.summary.watchOut.length > 0 ? (
             <div className="mt-3 border-s-2 border-sev-warning ps-2">
-              <span className="hud-label text-[9px] text-sev-warning">WORTH ARGUING ABOUT</span>
+              <span className="hud-label text-[11px] text-sev-warning">Worth arguing about</span>
               <ul className="mt-1 space-y-1">
                 {summary.summary.watchOut.map((w) => (
                   <li key={w.clause} className="text-[13px] text-neutral-700">
@@ -580,7 +580,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
 
       {open ? (
         <form
-          className="mt-2 border border-divider p-2"
+          className="mt-2 border border-line p-2"
           onSubmit={(e) => {
             e.preventDefault();
             const data = new FormData(e.currentTarget);
@@ -683,7 +683,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
                       }
                     });
                   }}
-                  className="mt-1 font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+                  className="mt-1 font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline"
                 >
                   + Create a deal for {c.counterpartyName}
                 </button>
@@ -701,9 +701,9 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
               {pending ? 'FILING…' : 'SAVE AND FILE IT'}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
-              CANCEL
+              Cancel
             </Button>
-            <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+            <span className="font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
               {links === null
                 ? 'LOOKING FOR WHAT THIS BELONGS TO…'
                 : (links.deals.length === 0
@@ -723,7 +723,7 @@ function SummaryList({ label, items }: { label: string; items: string[] }) {
   if (real.length === 0) return null;
   return (
     <div>
-      <span className="hud-label block text-[9px]">{label}</span>
+      <span className="hud-label block text-[11px]">{label}</span>
       <ul className="mt-1 space-y-0.5">
         {real.map((item) => (
           <li key={item} className="text-[13px] leading-snug text-neutral-700">

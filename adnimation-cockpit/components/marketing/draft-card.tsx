@@ -51,17 +51,17 @@ export function DraftCard({ draft, canPublish, missing }: { draft: Draft; canPub
   };
 
   return (
-    <li className="border-t border-divider px-[18px] py-4">
+    <li className="border-t border-line px-[18px] py-4">
       <div className="flex flex-wrap items-center gap-2">
         <Tag tone={open ? 'warning' : draft.status === 'posted' ? 'ok' : 'neutral'}>
           {open ? 'WAITING FOR YOU' : draft.status.toUpperCase()}
         </Tag>
         <Tag tone="outline">{SOURCE_LABEL[draft.sourceKind] ?? draft.sourceKind.toUpperCase()}</Tag>
-        <span className="hud-label text-[9px]">
+        <span className="hud-label text-[11px]">
           <Num>{fmtDateTime(draft.createdAt)}</Num>
         </span>
         {draft.postedUrl ? (
-          <a href={draft.postedUrl} target="_blank" rel="noreferrer" className="hud-label text-[9px] text-accent-700 hover:text-accent">
+          <a href={draft.postedUrl} target="_blank" rel="noreferrer" className="hud-label text-[11px] text-info hover:underline">
             OPEN ON LINKEDIN
           </a>
         ) : null}
@@ -101,11 +101,11 @@ export function DraftCard({ draft, canPublish, missing }: { draft: Draft; canPub
             <img
               src={`/api/marketing/image/${draft.id}?t=${draft.imageAt ? new Date(draft.imageAt).getTime() : 0}`}
               alt={draft.occasion}
-              className="w-full border border-divider"
+              className="w-full border border-line"
             />
           ) : open ? (
-            <div className="flex min-h-[80px] items-center justify-center border border-dashed border-divider p-3 text-center font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-              NO PICTURE YET
+            <div className="flex min-h-[80px] items-center justify-center border border-dashed border-line p-3 text-center font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+              No picture yet
             </div>
           ) : null}
           {open ? (
@@ -141,7 +141,7 @@ export function DraftCard({ draft, canPublish, missing }: { draft: Draft; canPub
                 </Button>
                 {draft.hasImage ? (
                   <Button type="button" size="xs" variant="ghost" disabled={pending} onClick={() => run(removeImageAction)}>
-                    NO PICTURE
+                    No picture
                   </Button>
                 ) : null}
               </div>
@@ -174,10 +174,10 @@ export function DraftCard({ draft, canPublish, missing }: { draft: Draft; canPub
                   setConfirming(false);
                 }}
               >
-                YES — PUBLISH IT
+                Yes — publish it
               </Button>
               <Button type="button" size="xs" variant="ghost" disabled={pending} onClick={() => setConfirming(false)}>
-                NOT YET
+                Not yet
               </Button>
               <span className="text-2xs text-neutral-600">
                 This goes out on LinkedIn now{draft.hasImage ? ', with the picture,' : ''} and cannot be taken back.
@@ -202,12 +202,12 @@ export function DraftCard({ draft, canPublish, missing }: { draft: Draft; canPub
             disabled={pending}
             onClick={() => navigator.clipboard?.writeText(body).then(() => setMessage('Copied.'), () => setMessage('Could not copy.'))}
           >
-            COPY
+            Copy
           </Button>
           <Button type="button" size="xs" variant="ghost" disabled={pending} onClick={() => run(declineDraftAction)}>
-            NOT THIS ONE
+            Not this one
           </Button>
-          <span className="hud-label text-[9px]">
+          <span className="hud-label text-[11px]">
             <Num>{body.length}</Num>/<Num>{MAX_POST_CHARS}</Num>
           </span>
           {message ? <span className="text-2xs text-neutral-600">{message}</span> : null}

@@ -95,14 +95,12 @@ export default async function TasksPage({
         kicker="TASKS / 03"
         title="Tasks"
         action={
-          <nav className="flex border border-divider">
+          <nav className="segmented">
             {VIEWS.map((v) => (
               <Link
                 key={v}
                 href={query({ view: v })}
-                className={`px-3 py-1 font-semi text-[11px] tracking-[0.16em] ${
-                  v === view ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
-                }`}
+                aria-current={v === view ? 'page' : undefined}
               >
                 {VIEW_LABEL[v]}
               </Link>

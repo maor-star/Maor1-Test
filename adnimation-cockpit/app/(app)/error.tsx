@@ -48,7 +48,7 @@ export default function CockpitError({
     <div className="mx-auto max-w-xl space-y-4 py-16">
       <div className="flex items-center gap-[10px] hud-kicker">
         <span className="inline-block h-px w-[22px] bg-accent" />
-        SOMETHING BROKE
+        Something broke
       </div>
 
       <h1 className="hud-title text-[30px] text-neutral-900">
@@ -65,14 +65,14 @@ export default function CockpitError({
         <button
           type="button"
           onClick={() => reset()}
-          className="border border-divider px-3 py-1.5 font-semi text-[10px] uppercase tracking-[0.16em] text-neutral-600 hover:border-accent hover:text-accent"
+          className="border border-line px-3 py-1.5 font-semi text-[11.5px] uppercase tracking-[0.16em] text-neutral-600 hover:border-accent hover:text-accent"
         >
           Try again
         </button>
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="border border-accent bg-accent px-3 py-1.5 font-semi text-[10px] uppercase tracking-[0.16em] text-ground"
+          className="border border-accent bg-accent px-3 py-1.5 font-semi text-[11.5px] uppercase tracking-[0.16em] text-white"
         >
           Reload the page
         </button>
@@ -87,7 +87,7 @@ export default function CockpitError({
       {!stale ? (
         <pre
           dir="ltr"
-          className="max-h-40 overflow-auto whitespace-pre-wrap border border-divider px-2 py-2 text-start text-[11px] text-neutral-500"
+          className="max-h-40 overflow-auto whitespace-pre-wrap border border-line px-2 py-2 text-start text-[11px] text-neutral-500"
         >
           {error.name}: {error.message}
           {error.digest ? `\n\nreference ${error.digest}` : ''}

@@ -1,8 +1,10 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * Tokens mirror the dark HUD design handoff. Radius is 0 by system rule and
- * borders are 1px hairlines; both are enforced in globals.css as well.
+ * Tokens mirror the Adnimation design package (adnimation_ui_design). Borders
+ * are 1px hairlines in one colour; corners are rounded in the five sizes the
+ * package names, and there are no shadows anywhere except the selected option
+ * of a segmented control.
  *
  * Every colour goes through `alpha()`. A theme colour given to Tailwind as a
  * bare `var(--x)` silently loses its opacity modifier: `bg-accent-500/70`
@@ -21,8 +23,15 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ['var(--font-barlow)', 'system-ui', 'sans-serif'],
-        cond: ['var(--font-barlow-condensed)', 'var(--font-barlow)', 'sans-serif'],
-        semi: ['var(--font-barlow-semi)', 'var(--font-barlow)', 'sans-serif'],
+        /*
+         * One text family and one figure family, as the package specifies.
+         * `cond` and `semi` are the old system's display and label faces; both
+         * are Barlow now, because the figures they used to carry are set in
+         * mono by <Num> rather than by the class on their container.
+         */
+        cond: ['var(--font-barlow)', 'system-ui', 'sans-serif'],
+        semi: ['var(--font-barlow)', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       colors: {
         paper: alpha('--paper'),
@@ -46,6 +55,23 @@ const config: Config = {
           700: alpha('--color-accent-700'), 800: alpha('--color-accent-800'),
           900: alpha('--color-accent-900'),
         },
+        brand: alpha('--brand'),
+        pos: { DEFAULT: alpha('--pos'), tint: alpha('--pos-tint') },
+        neg: { DEFAULT: alpha('--neg'), tint: alpha('--neg-tint') },
+        info: alpha('--info'),
+        warn: alpha('--warn'),
+        muted: alpha('--muted'),
+        line: 'var(--line)',
+        card: alpha('--card'),
+        tile: {
+          rose: { from: 'var(--tile-rose-from)', to: 'var(--tile-rose-to)', line: 'var(--tile-rose-line)', icon: 'var(--tile-rose-icon)' },
+          blue: { from: 'var(--tile-blue-from)', to: 'var(--tile-blue-to)', line: 'var(--tile-blue-line)', icon: 'var(--tile-blue-icon)' },
+          violet: { from: 'var(--tile-violet-from)', to: 'var(--tile-violet-to)', line: 'var(--tile-violet-line)', icon: 'var(--tile-violet-icon)' },
+          pink: { from: 'var(--tile-pink-from)', to: 'var(--tile-pink-to)', line: 'var(--tile-pink-line)', icon: 'var(--tile-pink-icon)' },
+          amber: { from: 'var(--tile-amber-from)', to: 'var(--tile-amber-to)', line: 'var(--tile-amber-line)', icon: 'var(--tile-amber-icon)' },
+          teal: { from: 'var(--tile-teal-from)', to: 'var(--tile-teal-to)', line: 'var(--tile-teal-line)', icon: 'var(--tile-teal-icon)' },
+          orange: { from: 'var(--tile-orange-from)', to: 'var(--tile-orange-to)', line: 'var(--tile-orange-line)', icon: 'var(--tile-orange-icon)' },
+        },
         sev: {
           critical: alpha('--sev-critical'),
           warning: alpha('--sev-warning'),
@@ -53,7 +79,11 @@ const config: Config = {
           ok: alpha('--sev-ok'),
         },
       },
-      borderRadius: { DEFAULT: '0', none: '0', sm: '0', md: '0', lg: '0', xl: '0', full: '0' },
+      /* The package's five radii, plus the pill. */
+      borderRadius: {
+        DEFAULT: '12px', none: '0', sm: '9px', md: '10px', lg: '12px',
+        xl: '14px', '2xl': '16px', full: '999px',
+      },
       fontSize: {
         '2xs': ['0.6875rem', { lineHeight: '1rem' }],
       },

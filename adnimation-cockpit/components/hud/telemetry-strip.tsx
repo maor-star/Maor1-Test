@@ -6,7 +6,7 @@ import { isStale } from '@/lib/integrations/staleness';
 import { Num } from '@/components/num';
 
 /**
- * The full-width telemetry band: six equal cells of live operating figures.
+ * The Adnimation Total strip: six equal cells of live operating figures.
  *
  * These read from the same reconciled company model the revenue page uses, so
  * the ticker and the page can never disagree — the previous version derived its
@@ -27,49 +27,41 @@ export async function TelemetryStrip() {
 
   const cells: { label: string; value: string; muted?: boolean }[] = [
     {
-      label: money ? `PROFIT / ${money.day}` : 'PROFIT / LAST FULL DAY',
+      label: money ? `Profit / ${money.day}` : 'Profit / last full day',
       value: money ? fmtMoney(money.profitCents) : '—',
     },
     {
-      label: 'GROSS',
+      label: 'Gross',
       value: money ? fmtMoney(money.grossCents) : '—',
     },
     {
-      label: 'MARGIN',
+      label: 'Margin',
       value: money?.marginPct != null ? `${(money.marginPct * 100).toFixed(1)}%` : '—',
     },
     {
-      label: 'PROFIT MTD',
+      label: 'Profit MTD',
       value: money ? fmtMoney(money.mtdProfitCents) : '—',
     },
     {
-      label: 'OPEN TASKS',
+      label: 'Open tasks',
       value: String(counts.open),
       muted: counts.overdue > 0,
     },
     {
-      label: 'LAST SYNC',
-      value: lastSync ? fmtTime(lastSync) : 'NEVER',
+      label: 'Last sync',
+      value: lastSync ? fmtTime(lastSync) : 'Never',
       muted: isStale(lastSync),
     },
   ];
 
   return (
-    <div
-      className="grid grid-cols-2 border-b border-divider text-paper sm:grid-cols-3 lg:grid-cols-6"
-      style={{ background: 'var(--strip-bg)' }}
-    >
+    <div className="hud-card grid grid-cols-2 divide-x divide-y divide-line overflow-hidden p-0 sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0">
       {cells.map((c) => (
-        <div
-          key={c.label}
-          className="flex min-w-0 flex-col gap-1 border-b border-e border-ground/[0.14] px-3 py-2 last:border-e-0 sm:border-b-0 sm:px-4 sm:py-[11px]"
-        >
-          <span className="truncate font-semi text-[9px] font-medium tracking-[0.14em] text-accent-300">
-            {c.label}
-          </span>
+        <div key={c.label} className="flex min-w-0 flex-col gap-[10px] px-[18px] py-[17px]">
+          <span className="hud-label truncate text-[11.5px]">{c.label}</span>
           <span
-            className={`truncate font-cond text-[17px] font-medium leading-none tracking-[0.01em] sm:text-[20px] ${
-              c.muted ? 'text-sev-warning' : ''
+            className={`truncate font-mono text-[19px] font-semibold leading-none tracking-[-0.03em] sm:text-[22px] ${
+              c.muted ? 'text-warn' : 'text-ink'
             }`}
           >
             <Num>{c.value}</Num>

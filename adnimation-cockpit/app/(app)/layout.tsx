@@ -11,8 +11,8 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 /**
- * The console shell from the design handoff: a 248px sticky rail beside the
- * blueprint ground, a top bar, and the full-width telemetry strip.
+ * The shell: a 248px sticky rail beside the gradient ground, and one padded
+ * column holding the Adnimation Total strip and the page.
  *
  * Below `lg` the rail is replaced by a top bar and a menu sheet — a phone has
  * no room for a 248px column, and the pages are read on one daily.
@@ -30,10 +30,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[248px_1fr]">
         <Rail userName={user.name} userRole={user.role} signOutAction={signOut} />
 
-        <main className="hud-ground min-w-0">
+        <main className="min-w-0">
           <MobileNav userName={user.name} userRole={user.role} signOutAction={signOut} />
-          <TelemetryStrip />
-          <div className="px-4 py-4 pb-14 sm:px-6 lg:px-[30px] lg:py-[22px]">{children}</div>
+          <div className="mx-auto flex max-w-[1340px] flex-col gap-[22px] px-4 py-4 pb-16 sm:px-6 lg:px-[30px] lg:py-[26px]">
+            <TelemetryStrip />
+            {children}
+          </div>
         </main>
       </div>
     </UndoProvider>

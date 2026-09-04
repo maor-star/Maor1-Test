@@ -88,14 +88,14 @@ export default async function AgentsPage({
         kicker="AGENTS / 14"
         title="Agents"
         action={
-          <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
-            EVERY AGENT STARTS AT LEVEL 1 — IT PROPOSES, YOU DECIDE
+          <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
+            Every agent starts at level 1 — it proposes, you decide
           </span>
         }
       />
 
       {installed.added.length > 0 ? (
-        <div className="border border-divider bg-accent/5 px-4 py-3 font-semi text-[12px] tracking-[0.06em] text-neutral-700">
+        <div className="border border-line bg-accent/5 px-4 py-3 font-semi text-[12px] tracking-[0.06em] text-neutral-700">
           Added <Num>{installed.added.length}</Num> agents that were not installed yet:{' '}
           {installed.added.join(', ')}. All at level 1 and all switched off.
         </div>
@@ -141,7 +141,7 @@ export default async function AgentsPage({
             active={show === 'irreversible'}
           />
           <div>
-            <span className="hud-label block text-[9px]">CLAUDE</span>
+            <span className="hud-label block text-[11px]">Claude</span>
             <span
               className={`font-cond text-[22px] leading-none ${
                 overview.claudeConnected ? 'text-neutral-900' : 'text-sev-warning'
@@ -152,9 +152,9 @@ export default async function AgentsPage({
           </div>
         </div>
 
-        <p className="border-t border-divider pt-3 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-          LEVEL 4 IS SILENT EXECUTION AND IS REFUSED TO ANY AGENT THAT CAN SIGN, SEND OR COMMIT ·
-          PROMOTION NEEDS <Num>20</Num> RUNS · EVERY RUN IS LOGGED AND THE LOG CANNOT BE REWRITTEN
+        <p className="border-t border-line pt-3 font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+          Level 4 is silent execution and is refused to any agent that can sign, send or commit ·
+          promotion needs <Num>20</Num> runs · every run is logged and the log cannot be rewritten
         </p>
       </HudCard>
 
@@ -164,26 +164,26 @@ export default async function AgentsPage({
             title="Who speaks in Slack"
             index="G02"
             action={
-              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+              <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
                 <Num>{bots.filter((b) => b.hasOwnToken).length}</Num> OF{' '}
-                <Num>{bots.length}</Num> HAVE THEIR OWN APP
+                <Num>{bots.length}</Num> have their own app
               </span>
             }
           />
         </div>
 
-        <ul className="border-t border-divider">
+        <ul className="border-t border-line">
           {bots.map((bot) => (
             <li
               key={bot.key}
-              className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-divider px-[18px] py-3 last:border-b-0"
+              className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line px-[18px] py-3 last:border-b-0"
             >
               <span className="font-cond text-[16px] leading-none text-neutral-900">
                 {bot.username}
               </span>
               <span className="font-semi text-[11px] text-neutral-500">{bot.purpose}</span>
-              <span className="ms-auto font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                <Num>{Object.values(AGENT_BOT).filter((k) => k === bot.key).length}</Num> AGENTS
+              <span className="ms-auto font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+                <Num>{Object.values(AGENT_BOT).filter((k) => k === bot.key).length}</Num> Agents
               </span>
               {/*
                 Three postures, named rather than blurred: its own app, another
@@ -191,7 +191,7 @@ export default async function AgentsPage({
                 first is genuinely a separate bot he can mute on its own.
               */}
               <span
-                className={`font-semi text-[10px] tracking-[0.12em] ${
+                className={`font-semi text-[11.5px] tracking-[0.12em] ${
                   bot.hasOwnToken
                     ? 'text-sev-ok'
                     : bot.postsAs
@@ -218,7 +218,7 @@ export default async function AgentsPage({
             action={
               <div className="flex flex-wrap items-center gap-3">
                 <SearchBox placeholder="Find an agent" />
-                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
                   <Num>{agents.length}</Num>
                   {agents.length === allAgents.length ? ' DEFINED' : ` OF ${allAgents.length}`}
                 </span>
@@ -226,22 +226,22 @@ export default async function AgentsPage({
             }
           />
           {show !== 'all' || q ? (
-            <p className="mt-2 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+            <p className="mt-2 font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
               SHOWING {show === 'on' ? 'THE ONES THAT ARE ON' : show === 'off' ? 'THE ONES THAT ARE OFF' : show === 'irreversible' ? 'THE ONES THAT CAN DO SOMETHING IRREVERSIBLE' : 'ALL'}
               {q ? ` MATCHING “${q}”` : ''} ·{' '}
-              <Link href="/agents" className="text-accent-700 underline">
-                SHOW EVERYTHING
+              <Link href="/agents" className="text-info underline">
+                Show everything
               </Link>
             </p>
           ) : null}
         </div>
 
         {agents.length === 0 && allAgents.length > 0 ? (
-          <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
-            Nothing here matches. <Link href="/agents" className="text-accent-700 underline">Show everything</Link>.
+          <p className="border-t border-line px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+            Nothing here matches. <Link href="/agents" className="text-info underline">Show everything</Link>.
           </p>
         ) : agents.length === 0 ? (
-          <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+          <p className="border-t border-line px-[18px] py-4 font-semi text-[12px] text-neutral-500">
             None yet. They install themselves when this page opens — all at level 1 and all
             switched off, so nothing runs until you have seen what it would do.
           </p>

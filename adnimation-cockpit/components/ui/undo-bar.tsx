@@ -125,7 +125,7 @@ export function UndoProvider({ children }: { children: React.ReactNode }) {
           role="status"
           aria-live="polite"
         >
-          <div className="hud-card pointer-events-auto flex items-center gap-3 border border-divider bg-ground px-3 py-2 shadow-lg">
+          <div className="hud-card pointer-events-auto flex items-center gap-3 border border-line bg-card px-3 py-2 shadow-lg">
             {pending ? (
               <>
                 <span className="hud-label text-neutral-500">{pending.label}</span>
@@ -133,7 +133,7 @@ export function UndoProvider({ children }: { children: React.ReactNode }) {
                   type="button"
                   onClick={run}
                   disabled={busy}
-                  className="font-semi text-[11px] uppercase tracking-[0.16em] text-accent hover:text-accent-700 disabled:opacity-50"
+                  className="font-semi text-[11px] uppercase tracking-[0.16em] text-accent hover:text-info disabled:opacity-50"
                 >
                   {busy ? 'Undoing…' : 'Undo'}
                 </button>

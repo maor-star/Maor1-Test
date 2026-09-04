@@ -42,8 +42,8 @@ export default async function MarketingPage() {
         kicker="MARKETING / 13"
         title="Posts"
         action={
-          <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
-            <Link href="/agents?q=marketing-writer" className="text-accent-700 hover:text-accent">
+          <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
+            <Link href="/agents?q=marketing-writer" className="text-info hover:underline">
               MARKETING-WRITER {agent?.enabled ? 'ON' : 'OFF'}
             </Link>
             {' · '}
@@ -58,19 +58,19 @@ export default async function MarketingPage() {
           <Figure label="PUBLISHED" value={counts.posted} />
           <Figure label="DECLINED" value={counts.declined} />
         </div>
-        <div className="border-t border-divider pt-3">
+        <div className="border-t border-line pt-3">
           <WriteNow />
         </div>
-        <p className="font-semi text-[10px] leading-relaxed tracking-[0.12em] text-neutral-500">
+        <p className="font-semi text-[11.5px] leading-relaxed tracking-[0.12em] text-neutral-500">
           NOTHING HERE GOES OUT UNTIL YOU PRESS PUBLISH. THE AGENT WRITES; PUBLISHING IS YOURS.
           {linkedIn.ready ? null : (
             <>
               {' '}
-              LINKEDIN IS NOT CONNECTED —{' '}
-              <Link href="/settings" className="text-accent-700 hover:text-accent">
+              LINKEDIN Is not connected —{' '}
+              <Link href="/settings" className="text-info hover:underline">
                 SET {linkedIn.missing.join(' AND ')} ON KEYS
               </Link>
-              . UNTIL THEN, COPY THE TEXT AND POST IT YOURSELF.
+              . Until then, copy the text and post it yourself.
             </>
           )}
         </p>
@@ -81,7 +81,7 @@ export default async function MarketingPage() {
           <HudCardHeader title="Waiting for you" index="M01" />
         </div>
         {waiting.length === 0 ? (
-          <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+          <p className="border-t border-line px-[18px] py-4 font-semi text-[12px] text-neutral-500">
             Nothing waiting. Press “Write what is worth posting” above, or switch the marketing-writer
             agent on and it writes every Sunday morning.
           </p>

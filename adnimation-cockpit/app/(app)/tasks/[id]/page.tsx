@@ -77,9 +77,9 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
             </div>
             <div>
               {isMirror ? (
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-divider pb-2">
-                  <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                    STATUS COMES FROM THIS TASK&apos;S OWN CLICKUP LIST
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
+                  <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+                    Status comes from this task&apos;s own ClickUp list
                   </span>
                   <ClickUpStatus taskId={task.id} status={task.status} />
                 </div>
@@ -87,7 +87,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
 
               {/* The files the team hung on it in ClickUp, openable here. */}
               {isMirror ? (
-                <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-divider pb-2">
+                <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-line pb-2">
                   <Attachments kind="task" id={task.id} label="ATTACHED FILES" />
                 </div>
               ) : null}

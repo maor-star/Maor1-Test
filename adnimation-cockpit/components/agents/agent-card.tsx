@@ -185,7 +185,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
   };
 
   return (
-    <li className="border-t border-divider px-[18px] py-3">
+    <li className="border-t border-line px-[18px] py-3">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -212,7 +212,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
                 tone="critical"
                 title={`Holds ${irreversible.map((x) => x.type).join(', ')} — can never run silently`}
               >
-                IRREVERSIBLE
+                Irreversible
               </Tag>
             ) : null}
           </div>
@@ -226,7 +226,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
             </p>
           ) : null}
 
-          <p className="hud-label mt-1.5 whitespace-normal text-[9px]">
+          <p className="hud-label mt-1.5 whitespace-normal text-[11px]">
             {a.triggerType.toUpperCase()}
             {typeof a.triggerConfig.cron === 'string' ? ` · ${a.triggerConfig.cron}` : ''}
             {typeof a.triggerConfig.event === 'string' ? ` · ${a.triggerConfig.event}` : ''}
@@ -247,7 +247,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
         </div>
 
         <div className="shrink-0 text-end">
-          <span className="hud-label block text-[9px]">TODAY</span>
+          <span className="hud-label block text-[11px]">Today</span>
           <span className="font-cond text-[19px] leading-none text-neutral-900">
             <Num>{a.runsToday}</Num>
           </span>
@@ -396,34 +396,34 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
         </Select>
 
         {a.lastRanAt ? (
-          <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-            LAST RAN <Num>{fmtDateTime(a.lastRanAt)}</Num>
+          <span className="font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
+            Last ran <Num>{fmtDateTime(a.lastRanAt)}</Num>
           </span>
         ) : null}
 
         {!canPromote && a.autonomyLevel === 1 ? (
-          <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-            <Num>{PROMOTION_MIN_RUNS - a.runCount}</Num> MORE RUNS BEFORE IT CAN BE PROMOTED
+          <span className="font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
+            <Num>{PROMOTION_MIN_RUNS - a.runCount}</Num> more runs before it can be promoted
           </span>
         ) : null}
 
         {message ? (
-          <span className="font-semi text-[10px] tracking-[0.1em] text-accent-700">{message}</span>
+          <span className="font-semi text-[11.5px] tracking-[0.1em] text-info">{message}</span>
         ) : null}
       </div>
 
       {preview ? (
-        <div className="mt-2 border border-divider">
-          <div className="flex items-center justify-between gap-3 border-b border-divider px-2 py-1">
-            <span className="hud-label text-[9px]">
-              WHAT IT WOULD HAVE DONE — NOTHING WAS TOUCHED
+        <div className="mt-2 border border-line">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-2 py-1">
+            <span className="hud-label text-[11px]">
+              What it would have done — nothing was touched
             </span>
             <button
               type="button"
               onClick={() => setPreview(null)}
-              className="font-semi text-[10px] tracking-[0.14em] text-neutral-500 hover:text-accent"
+              className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500 hover:text-accent"
             >
-              CLOSE
+              Close
             </button>
           </div>
           <pre
@@ -443,39 +443,39 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
         so they are in one list, newest first, and each one opens.
       */}
       {a.jobRuns.length > 0 ? (
-        <div className="mt-2 border border-divider">
-          <div className="border-b border-divider px-2 py-1">
-            <span className="hud-label text-[9px]">
-              WHAT IT DID, RUN BY RUN — <Num>{a.jobRuns.length}</Num> MOST RECENT
+        <div className="mt-2 border border-line">
+          <div className="border-b border-line px-2 py-1">
+            <span className="hud-label text-[11px]">
+              What it did, run by run — <Num>{a.jobRuns.length}</Num> Most recent
             </span>
           </div>
           <ul>
             {a.jobRuns.map((r) => (
-              <li key={r.id} className="border-b border-divider last:border-b-0">
+              <li key={r.id} className="border-b border-line last:border-b-0">
                 <button
                   type="button"
                   onClick={() => setOpenRun((v) => (v === r.id ? null : r.id))}
                   className="flex w-full flex-wrap items-baseline gap-x-3 gap-y-1 px-2 py-1.5 text-start hover:bg-accent/5"
                 >
-                  <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                  <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
                     <Num>{fmtDateTime(r.startedAt)}</Num>
                   </span>
                   <span
-                    className={`font-semi text-[10px] tracking-[0.12em] ${
-                      r.dry ? 'text-neutral-500' : 'text-accent-700'
+                    className={`font-semi text-[11.5px] tracking-[0.12em] ${
+                      r.dry ? 'text-neutral-500' : 'text-info'
                     }`}
                   >
                     {r.dry ? 'DRY RUN' : 'FOR REAL'}
                   </span>
                   <span className="text-[12px] text-neutral-600">{summarise(r)}</span>
-                  <span className="ms-auto font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                  <span className="ms-auto font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
                     {openRun === r.id ? 'CLOSE' : 'OPEN'}
                   </span>
                 </button>
                 {openRun === r.id ? (
                   <pre
                     dir="ltr"
-                    className="max-h-96 overflow-auto whitespace-pre-wrap border-t border-divider px-2 py-2 text-start text-[12px] leading-relaxed text-neutral-700"
+                    className="max-h-96 overflow-auto whitespace-pre-wrap border-t border-line px-2 py-2 text-start text-[12px] leading-relaxed text-neutral-700"
                   >
                     {r.output || 'It printed nothing.'}
                   </pre>
@@ -493,14 +493,14 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
         trusts a draft.
       */}
       {a.learning && (a.learning.profile || a.learning.error || a.learning.running) ? (
-        <div className="mt-2 border border-divider">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-divider px-2 py-1">
-            <span className="hud-label text-[9px]">
+        <div className="mt-2 border border-line">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-2 py-1">
+            <span className="hud-label text-[11px]">
               HOW YOU WRITE
               {a.learning.editedByHim ? ' · YOUR WORDS' : ''}
               {a.learning.threadsRead > 0 ? (
                 <>
-                  {' '}· FROM <Num>{a.learning.threadsRead}</Num> OF YOUR REPLIES
+                  {' '}· FROM <Num>{a.learning.threadsRead}</Num> Of your replies
                 </>
               ) : null}
               {a.learning.learnedAt ? (
@@ -513,7 +513,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
               <button
                 type="button"
                 onClick={() => setEditingVoice((v) => !v)}
-                className="font-semi text-[10px] tracking-[0.14em] text-neutral-500 hover:text-accent"
+                className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500 hover:text-accent"
               >
                 {editingVoice ? 'CLOSE' : 'CORRECT IT'}
               </button>
@@ -545,11 +545,11 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
               />
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Button type="submit" size="sm" disabled={pending}>
-                  SAVE
+                  Save
                 </Button>
-                <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-                  ONCE YOU EDIT THIS IT IS YOURS — TRAINING WILL LEAVE IT ALONE. CLEAR IT TO LET IT
-                  LEARN AGAIN.
+                <span className="font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
+                  Once you edit this it is yours — training will leave it alone. clear it to let it
+                  learn again.
                 </span>
               </div>
             </form>
@@ -559,9 +559,9 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
                 {a.learning.profile}
               </pre>
               {a.learning.facts.medianLength ? (
-                <p className="border-t border-divider px-2 py-1 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-                  YOUR TYPICAL REPLY IS <Num>{a.learning.facts.medianLength}</Num> CHARACTERS ·{' '}
-                  <Num>{a.learning.facts.hebrewShare ?? 0}%</Num> HAVE HEBREW IN THEM
+                <p className="border-t border-line px-2 py-1 font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
+                  Your typical reply is <Num>{a.learning.facts.medianLength}</Num> CHARACTERS ·{' '}
+                  <Num>{a.learning.facts.hebrewShare ?? 0}%</Num> have hebrew in them
                 </p>
               ) : null}
             </>
@@ -597,7 +597,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
 
       {teaching ? (
         <form
-          className="mt-2 border border-divider p-2"
+          className="mt-2 border border-line p-2"
           onSubmit={(e) => {
             e.preventDefault();
             const data = new FormData(e.currentTarget);
@@ -626,12 +626,12 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
           />
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button type="submit" size="sm" disabled={pending}>
-              SAVE THE BRIEF
+              Save the brief
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setTeaching(false)}>
-              CANCEL
+              Cancel
             </Button>
-            <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+            <span className="font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
               THIS GOES TO THE AGENT AS ITS OWN INSTRUCTIONS, NOT AS A FILTER ON WHAT IT PRODUCES
               {a.instructionsUpdatedAt ? (
                 <>

@@ -62,9 +62,9 @@ export function TaskListView({
           ))}
         </tbody>
       </table>
-      <div className="border-t border-divider px-3 py-2 font-semi text-[11px] tracking-[0.1em] text-neutral-500">
+      <div className="border-t border-line px-3 py-2 font-semi text-[11px] tracking-[0.1em] text-neutral-500">
         <Num>{rows.length}</Num> TASKS ·{' '}
-        <Link href="/delegations" className="text-accent-700 hover:text-accent">Delegation Tracker</Link>
+        <Link href="/delegations" className="text-info hover:underline">Delegation Tracker</Link>
       </div>
     </div>
   );

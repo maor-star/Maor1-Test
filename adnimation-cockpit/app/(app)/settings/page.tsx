@@ -37,7 +37,7 @@ export default async function SettingsPage() {
         kicker="SETTINGS"
         title="Keys"
         action={
-          <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
+          <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
             {missing === 0 ? (
               'EVERYTHING IS SET'
             ) : (

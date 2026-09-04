@@ -67,10 +67,10 @@ export default async function MailPage({
         kicker="MAIL / 07"
         title="Mail"
         action={
-          <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
+          <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
             {counts.lastSyncedAt ? (
               <>
-                SYNCED <Num>{fmtDateTime(counts.lastSyncedAt)}</Num>
+                Synced <Num>{fmtDateTime(counts.lastSyncedAt)}</Num>
               </>
             ) : (
               'NEVER SYNCED'
@@ -112,26 +112,24 @@ export default async function MailPage({
           />
         </div>
 
-        <p className="border-t border-divider pt-3 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-          WAITING MEANS THE LAST MESSAGE IS THEIRS. IMPORTANT MEANS SOMEBODY IN THE CRM OR THE
-          TEAM — NOT GMAIL&apos;S GUESS. REPLYING HAPPENS IN GMAIL; THE COCKPIT ONLY READS.
+        <p className="border-t border-line pt-3 font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+          Waiting means the last message is theirs. Important means somebody in the CRM or the
+          team — not Gmail&apos;s guess. Replying happens in Gmail; The cockpit only reads.
         </p>
       </HudCard>
 
-      <p className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-        EVERY CONVERSATION THE MIRROR HOLDS — <Num>{fmtNumber(counts.mirrored)}</Num> OF THEM,
-        NEWEST FIRST. GMAIL&apos;S INBOX LABEL IS ONE FILTER AMONG THESE, NOT THE SCREEN: MAIL YOU
-        HAVE READ AND REPLIED TO OFTEN CARRIES NO INBOX LABEL AT ALL.
+      <p className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+        Every conversation the mirror holds — <Num>{fmtNumber(counts.mirrored)}</Num> Of them,
+        newest first. Gmail&apos;s inbox label is one filter among these, not the screen: Mail you
+        have read and replied to often carries no inbox label at all.
       </p>
 
-      <nav className="flex flex-wrap border border-divider">
+      <nav className="segmented flex-wrap">
         {MAIL_VIEWS.map((v) => (
           <Link
             key={v}
             href={to(v)}
-            className={`px-3 py-1 font-semi text-[11px] uppercase tracking-[0.16em] ${
-              v === view ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
-            }`}
+            aria-current={v === view ? 'page' : undefined}
           >
             {MAIL_VIEW_LABEL[v]}
           </Link>
@@ -146,7 +144,7 @@ export default async function MailPage({
             action={
               <div className="flex flex-wrap items-center gap-3">
                 <SearchBox placeholder="Find a conversation" />
-                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
                   <Num>{fmtNumber(rows.length)}</Num>
                   {rows.length === all.length
                     ? rows.length === 1 ? ' THREAD' : ' THREADS'
@@ -158,7 +156,7 @@ export default async function MailPage({
         </div>
 
         {rows.length === 0 ? (
-          <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+          <p className="border-t border-line px-[18px] py-4 font-semi text-[12px] text-neutral-500">
             {q
               ? `Nothing in this view matches “${q}”.`
               : counts.total === 0

@@ -47,7 +47,7 @@ export function OverdueChip({ days }: { days: number }) {
   return (
     <Tag tone={days > 7 ? 'critical' : 'warning'}>
       <Num>{days}</Num>
-      <span className="ms-1">D LATE</span>
+      <span className="ms-1">D late</span>
     </Tag>
   );
 }
@@ -75,10 +75,10 @@ export function TaskTitleLink({
           href={clickupUrl}
           target="_blank"
           rel="noreferrer"
-          className="font-semi text-[10px] tracking-[0.12em] text-neutral-500 hover:text-accent"
+          className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500 hover:text-accent"
           title="Open in ClickUp"
         >
-          CLICKUP ↗
+          Clickup ↗
         </a>
       ) : null}
     </span>

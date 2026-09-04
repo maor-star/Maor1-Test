@@ -52,14 +52,12 @@ export default async function RevenuePage({
         kicker="REVENUE / 02"
         title="Revenue"
         action={
-          <nav className="flex flex-wrap border border-divider">
+          <nav className="segmented flex-wrap">
             {PERIODS.map((p) => (
               <Link
                 key={p}
                 href={`/revenue?period=${p}&cut=${cut}`}
-                className={`px-[9px] py-1 font-semi text-[11px] tracking-[0.12em] ${
-                  p === period ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
-                }`}
+                aria-current={p === period ? 'page' : undefined}
               >
                 {PERIOD_TAB[p]}
               </Link>
@@ -76,12 +74,12 @@ export default async function RevenuePage({
             <span className="flex flex-wrap items-center gap-2">
               {s.range.partial ? (
                 <Tag tone="watch" title="The source is still receiving this day; it will keep rising">
-                  PARTIAL DAY
+                  Partial day
                 </Tag>
               ) : null}
-              <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
+              <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
                 <Num>{s.range.current.from}</Num> — <Num>{s.range.current.to}</Num> ·{' '}
-                <Num>{s.company.days}</Num> DAYS
+                <Num>{s.company.days}</Num> Days
               </span>
             </span>
           }
@@ -98,18 +96,18 @@ export default async function RevenuePage({
           <Figure label="IMPRESSIONS" value={fmtNumber(s.company.impressions)} />
 
           <div>
-            <p className="hud-label text-[9px]">{COMPARISON_LABEL[period].toUpperCase()}</p>
+            <p className="hud-label text-[11px]">{COMPARISON_LABEL[period].toUpperCase()}</p>
             <p className="mt-1">
               <DeltaPct delta={{ pct: s.deltaPct, absCents: null }} />
             </p>
-            <p className="mt-1 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+            <p className="mt-1 font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
               {s.previous.days > 0 ? (
                 <>
-                  WAS <Num>{fmtMoney(s.previous.profitCents)}</Num> OVER{' '}
-                  <Num>{s.previous.days}</Num> DAYS
+                  Was <Num>{fmtMoney(s.previous.profitCents)}</Num> OVER{' '}
+                  <Num>{s.previous.days}</Num> Days
                 </>
               ) : (
-                'NO COMPARABLE PERIOD IN THE DATA'
+                'No comparable period in the data'
               )}
             </p>
           </div>
@@ -117,31 +115,29 @@ export default async function RevenuePage({
 
         <Sparkline
           values={s.series.map((d) => d.profitCents)}
-          className="mt-1 h-14 w-full text-accent-500"
+          className="mt-1 h-14 w-full text-info"
         />
-        <div className="flex justify-between font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+        <div className="flex justify-between font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
           <Num>{s.range.current.from}</Num>
-          <span>DAILY PROFIT</span>
+          <span>Daily profit</span>
           <Num>{s.range.current.to}</Num>
         </div>
 
-        <p className="font-semi text-[10px] leading-relaxed tracking-[0.06em] text-neutral-500">
-          PROFIT IS ADNIMATION&rsquo;S OWN MONEY — AFTER THE SOURCE FEE, THE PUBLISHER REV SHARE,
-          THE PARTNER PAYOUT AND THE DSP COST. COMPUTED WITH THE SOURCE&rsquo;S OWN FORMULAS, SO
-          THESE FIGURES MATCH THE AD OPS ARCHITECT APP.
+        <p className="text-[13.5px] leading-relaxed text-muted">
+          Profit is Adnimation&rsquo;s own money — after the source fee, the publisher rev share,
+          the partner payout and the DSP cost. Computed with the source&rsquo;s own formulas, so
+          these figures match the Ad Ops Architect app.
         </p>
       </HudCard>
 
       <nav className="flex flex-wrap items-center gap-2">
-        <span className="hud-label text-[9px]">BREAK DOWN BY</span>
-        <span className="flex flex-wrap border border-divider">
+        <span className="hud-label text-[11px]">Break down by</span>
+        <span className="segmented flex-wrap">
           {CUTS.map((c) => (
             <Link
               key={c}
               href={`/revenue?period=${period}&cut=${c}`}
-              className={`px-3 py-1 font-semi text-[10px] tracking-[0.14em] ${
-                c === cut ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
-              }`}
+              aria-current={c === cut ? 'page' : undefined}
             >
               {CUT_LABEL[c]}
             </Link>
@@ -178,8 +174,8 @@ function ByLine({
           title="By business line"
           index="F02"
           action={
-            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-              EACH LINE ON ITS OWN DEFINITION
+            <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+              Each line on its own definition
             </span>
           }
         />
@@ -187,7 +183,7 @@ function ByLine({
 
       <ul className="lg:hidden">
         {summary.lines.map((l) => (
-          <li key={`m:${l.line}`} className="border-t border-divider px-[18px] py-3">
+          <li key={`m:${l.line}`} className="border-t border-line px-[18px] py-3">
             <div className="flex items-start justify-between gap-3">
               <p className="font-cond text-[16px] text-neutral-900">{l.label}</p>
               <DeltaPct delta={{ pct: l.deltaPct, absCents: null }} />
@@ -200,7 +196,7 @@ function ByLine({
                 value={l.marginPct === null ? '—' : `${(l.marginPct * 100).toFixed(0)}%`}
               />
             </div>
-            <p className="mt-1 font-semi text-[10px] leading-relaxed text-neutral-500">
+            <p className="mt-1 font-semi text-[11.5px] leading-relaxed text-neutral-500">
               {LINE_NOTE[l.line]}
             </p>
           </li>
@@ -226,7 +222,7 @@ function ByLine({
               <tr key={l.line}>
                 <td className="whitespace-normal">
                   <span className="font-cond text-[16px] text-neutral-900">{l.label}</span>
-                  <p className="hud-label mt-0.5 whitespace-normal text-[9px] normal-case tracking-normal">
+                  <p className="hud-label mt-0.5 whitespace-normal text-[11px] normal-case tracking-normal">
                     {LINE_NOTE[l.line]}
                   </p>
                 </td>
@@ -243,7 +239,7 @@ function ByLine({
                   <span className="flex items-center gap-2">
                     <span className="hud-gauge w-20">
                       <span
-                        className="block h-full bg-accent"
+                        className="block h-full rounded-full bg-info"
                         style={{ width: `${Math.round(l.shareOfProfit * 100)}%` }}
                       />
                     </span>
@@ -277,8 +273,8 @@ async function ByCategory({ period }: { period: Period }) {
           title="By demand category"
           index="F03"
           action={
-            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-              PUBLISHER BUSINESS · GROSS
+            <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+              Publisher business · gross
             </span>
           }
         />
@@ -309,7 +305,7 @@ async function ByCategory({ period }: { period: Period }) {
                   <span className="flex items-center gap-2">
                     <span className="hud-gauge w-20">
                       <span
-                        className="block h-full bg-accent"
+                        className="block h-full rounded-full bg-info"
                         style={{ width: `${Math.round(d.share * 100)}%` }}
                       />
                     </span>
@@ -325,9 +321,9 @@ async function ByCategory({ period }: { period: Period }) {
         </table>
       </div>
 
-      <p className="border-t border-divider px-[18px] py-2 font-semi text-[10px] leading-relaxed tracking-[0.06em] text-neutral-500">
-        GROSS ONLY. THE REV SHARE THAT TURNS GROSS INTO PROFIT IS SET PER SITE, NOT PER CATEGORY,
-        SO A PER-CATEGORY PROFIT WOULD BE AN INVENTION RATHER THAN A MEASUREMENT.
+      <p className="border-t border-line px-[18px] py-2 font-semi text-[11.5px] leading-relaxed tracking-[0.06em] text-neutral-500">
+        Gross only. the rev share that turns gross into profit is set per site, not per category,
+        so a per-category profit would be an invention rather than a measurement.
       </p>
     </HudCard>
   );
@@ -363,7 +359,7 @@ async function ByWindow({ active }: { active: Period }) {
                   <Link href={`/revenue?period=${p.period}&cut=window`} className="hover:text-accent">
                     {PERIOD_LABEL[p.period]}
                   </Link>
-                  {p.range.partial ? <Tag tone="watch" className="ms-2">PARTIAL</Tag> : null}
+                  {p.range.partial ? <Tag tone="watch" className="ms-2">Partial</Tag> : null}
                 </td>
                 <td className="text-[11px] text-neutral-500">
                   <Num>{p.range.current.from}</Num> → <Num>{p.range.current.to}</Num>
@@ -387,8 +383,8 @@ async function ByWindow({ active }: { active: Period }) {
           </tbody>
         </table>
       </div>
-      <p className="border-t border-divider px-[18px] py-2 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-        EVERY ROW IS SUMMED FROM DAILY SOURCE ROWS — NO ESTIMATES, NO PRORATING
+      <p className="border-t border-line px-[18px] py-2 font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+        Every row is summed from daily source rows — no estimates, no prorating
       </p>
     </HudCard>
   );
@@ -397,7 +393,7 @@ async function ByWindow({ active }: { active: Period }) {
 function Figure({ label, value, big }: { label: string; value: string; big?: boolean }) {
   return (
     <div className="min-w-0">
-      <p className="hud-label text-[9px]">{label}</p>
+      <p className="hud-label text-[11px]">{label}</p>
       <p
         className={
           big
@@ -414,7 +410,7 @@ function Figure({ label, value, big }: { label: string; value: string; big?: boo
 function Cell({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <span className="hud-label text-[9px]">{label}</span>
+      <span className="hud-label text-[11px]">{label}</span>
       <p className="font-cond text-[16px] leading-none text-neutral-900">
         <Num>{value}</Num>
       </p>

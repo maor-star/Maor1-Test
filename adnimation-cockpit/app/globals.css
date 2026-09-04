@@ -3,250 +3,283 @@
 @tailwind utilities;
 
 /*
- * Adnimation CEO Cockpit — dark HUD design system.
+ * Adnimation CEO Cockpit — the design package he sent (adnimation_ui_design).
  *
- * Tokens taken verbatim from the design handoff (design_handoff_ceo_cockpit).
- * The handoff's shell is LTR English; the product brief (CLAUDE.md §7) requires
- * a Hebrew RTL interface, so the visual system is applied — palette, Barlow
- * families, square corners, hairlines, registration marks, blueprint ground —
- * while content stays Hebrew and the rail sits on the inline-start edge, which
- * RTL renders on the right.
+ * Tokens are taken verbatim from its README: Barlow for words, IBM Plex Mono
+ * for every figure, white cards on a pastel gradient ground, one hairline
+ * colour, and rounded corners in five sizes. Two rules from the package are
+ * absolute and are why the old system is gone rather than tinted: no corner
+ * marks, and no drop shadows — the single exception being the selected option
+ * of a segmented control.
+ *
+ * The class names from the previous system are kept (hud-card, hud-label,
+ * hud-numeral …) because they are the vocabulary the screens are written in.
+ * What each one draws is now the new language, so a screen written months ago
+ * renders in the new design without being rewritten line by line.
  */
 
 @layer base {
   :root {
-    --paper: #eaf2fb;
-    --color-bg: #0f1a24;
-    --color-surface: #16232f;
-    --color-text: #e6eef7;
-    --color-divider: rgba(196, 218, 240, 0.2);
+    /* The package's palette, unchanged. */
+    --ink: #16181d;
+    --muted: #6b7280;
+    --line: #ececf0;
+    --card: #ffffff;
+    --pos: #16a34a;
+    --pos-tint: #e9f6ee;
+    --neg: #dc2626;
+    --neg-tint: #fdecec;
+    --info: #0ea5e9;
+    --warn: #f97316;
+    --brand: #e11d2f;
 
-    --color-neutral-100: #1a2734;
-    --color-neutral-200: #22303d;
-    --color-neutral-300: #33465a;
-    --color-neutral-400: #4a6076;
-    --color-neutral-500: #8ba4bd;
-    --color-neutral-600: #9db4ca;
-    --color-neutral-700: #c2d3e4;
-    --color-neutral-800: #d7e4f1;
-    --color-neutral-900: #eaf2fb;
+    --paper: #ffffff;
+    --color-bg: #fbfcfd;
+    --color-surface: #ffffff;
+    --color-text: var(--ink);
+    --color-divider: var(--line);
 
-    --color-accent: #7cabdd;
-    --color-accent-100: #17293a;
-    --color-accent-200: #1f354a;
-    --color-accent-300: #9cc3e8;
-    --color-accent-400: #8ab6e2;
-    --color-accent-500: #6f9fcc;
-    --color-accent-600: #86b3dc;
-    --color-accent-700: #a8cbea;
-    --color-accent-800: #c2dbf2;
-    --color-accent-900: #dcecfb;
+    /*
+     * The neutral ramp, lightest fill to darkest ink. The order is the one the
+     * screens already assume — a higher number is stronger against the ground —
+     * so `text-neutral-700` still means "secondary body text" and
+     * `bg-neutral-100` still means "the faintest fill there is".
+     */
+    --color-neutral-100: #f6f7f9;
+    --color-neutral-200: #f2f4f7;
+    --color-neutral-300: #e6e8ec;
+    --color-neutral-400: #c9ccd3;
+    --color-neutral-500: #9aa0ab;
+    --color-neutral-600: #6b7280;
+    --color-neutral-700: #565b66;
+    --color-neutral-800: #33373f;
+    --color-neutral-900: #16181d;
 
-    --rail-from: #142330;
-    --rail-to: #0c151d;
-    --strip-bg: #0b141c;
+    /* Accent is the brand mark: the primary button, the selected thing. */
+    --color-accent: #e11d2f;
+    --color-accent-100: #fdeeef;
+    --color-accent-200: #fbdde0;
+    --color-accent-300: #f4b4ba;
+    --color-accent-400: #ec7e88;
+    --color-accent-500: #e64753;
+    --color-accent-600: #e11d2f;
+    --color-accent-700: #c4172a;
+    --color-accent-800: #a01324;
+    --color-accent-900: #7d0f1c;
 
-    /* Severity, mapped onto the HUD palette rather than stock red/amber. */
-    --sev-critical: #e8919a;
-    --sev-warning: #e0b183;
-    --sev-watch: #d6cf8e;
-    --sev-ok: #9cc3e8;
+    /* The pastel tile skins from the package's Ops Dashboard. */
+    --tile-rose-from: #fdeeee; --tile-rose-to: #fdf6f4; --tile-rose-line: #f6e2e0; --tile-rose-icon: #dc4c47;
+    --tile-blue-from: #edf3fd; --tile-blue-to: #f5f7fd; --tile-blue-line: #e2e9f7; --tile-blue-icon: #3b6fd4;
+    --tile-violet-from: #f2eefd; --tile-violet-to: #f7f5fd; --tile-violet-line: #e7e2f7; --tile-violet-icon: #7c5cd6;
+    --tile-pink-from: #fdeef5; --tile-pink-to: #fdf5f8; --tile-pink-line: #f7e2ec; --tile-pink-icon: #c9498a;
+    --tile-amber-from: #fdf6e6; --tile-amber-to: #fdfaf1; --tile-amber-line: #f5ecd6; --tile-amber-icon: #c68a1a;
+    --tile-teal-from: #e9f7f6; --tile-teal-to: #f3fbfa; --tile-teal-line: #dcefed; --tile-teal-icon: #1e8f86;
+    --tile-orange-from: #fdf1e8; --tile-orange-to: #fdf8f3; --tile-orange-line: #f7e6d8; --tile-orange-icon: #d9722c;
+
+    /* Severity, mapped onto the package's semantic colours. */
+    --sev-critical: #dc2626;
+    --sev-warning: #f97316;
+    --sev-watch: #c68a1a;
+    --sev-ok: #16a34a;
   }
 
   * {
-    border-color: var(--color-divider);
+    border-color: var(--line);
   }
 
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {
     margin: 0;
-    background: var(--color-bg);
-    color: var(--color-text);
+    /* The ground is the gradient, not a flat colour. */
+    background: linear-gradient(135deg, #f3fbf7 0%, #fbfcfd 38%, #fdf9f2 100%);
+    background-attachment: fixed;
+    color: var(--ink);
     font-family: var(--font-barlow), system-ui, sans-serif;
-    font-size: 14px;
-    /* Tabular numerals everywhere: columns of figures must align. */
-    font-variant-numeric: tabular-nums;
+    font-size: 15px;
     text-wrap: pretty;
     -webkit-font-smoothing: antialiased;
   }
 
-  /* Square corners are the system's rule — no radius anywhere. */
-  * {
-    border-radius: 0 !important;
+  /*
+   * A default radius for the controls. The old system forced every corner
+   * square, so the screens ask for no radius at all; this sits in the base
+   * layer, where any `rounded-*` a component states itself still wins.
+   */
+  button,
+  input,
+  select,
+  textarea {
+    border-radius: 9px;
   }
 
-  /* Focus is always the accent ring, never the browser default. */
   :where(a, button, input, select, textarea, [tabindex]):focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid var(--info);
     outline-offset: 2px;
+    border-radius: 9px;
   }
 
-  /* Numbers, currency and ad-tech terms read LTR inside RTL text. */
+  /*
+   * Every figure in the product goes through <Num>, so this is the one place
+   * the package's second family is applied: words are Barlow, figures are IBM
+   * Plex Mono, and no screen has to remember which is which.
+   */
   .ltr-num {
     direction: ltr;
     unicode-bidi: isolate;
     display: inline-block;
-    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: -0.025em;
   }
 }
 
 @layer components {
-  /* The blueprint ground: scanlines, corner wash, 48px grid. */
+  /* The page ground, for anything that paints its own background. */
   .hud-ground {
-    background-color: var(--color-bg);
-    background-image:
-      repeating-linear-gradient(to bottom, rgba(196, 218, 240, 0.035) 0 1px, transparent 1px 4px),
-      radial-gradient(120% 80% at 78% -10%, rgba(124, 171, 221, 0.14) 0%, transparent 60%),
-      linear-gradient(to right, color-mix(in srgb, var(--color-text) 7%, transparent) 1px, transparent 1px),
-      linear-gradient(to bottom, color-mix(in srgb, var(--color-text) 7%, transparent) 1px, transparent 1px);
-    background-size: 100% 4px, 100% 100%, 48px 48px, 48px 48px;
+    background: linear-gradient(135deg, #f3fbf7 0%, #fbfcfd 38%, #fdf9f2 100%);
   }
 
-  /* Card pattern: hairline, inset highlight, deep drop shadow. */
+  /* A card: white, one hairline, a real radius, and nothing else. */
   .hud-card {
     position: relative;
-    border: 1px solid var(--color-divider);
-    background: color-mix(in srgb, var(--color-bg) 84%, transparent);
-    box-shadow:
-      inset 0 0 0 1px rgba(196, 218, 240, 0.055),
-      0 18px 40px rgba(4, 9, 13, 0.45);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
   }
 
-  /* Four registration crosshairs, one per corner. */
-  .hud-card::before,
-  .hud-card::after,
-  .hud-marks::before,
-  .hud-marks::after {
-    content: '';
-    position: absolute;
-    width: 11px;
-    height: 11px;
-    color: color-mix(in srgb, var(--color-text) 55%, transparent);
-    background-image:
-      linear-gradient(currentColor, currentColor),
-      linear-gradient(currentColor, currentColor);
-    background-size: 100% 1px, 1px 100%;
-    background-position: center center;
-    background-repeat: no-repeat;
-    pointer-events: none;
+  /*
+   * The registration crosshairs of the old system. Kept as a name so the
+   * screens that ask for them still compile, and deliberately empty: the
+   * package says no corner marks, and a mark drawn "quietly" is still a mark.
+   */
+  .hud-marks {
+    /* nothing — see above */
   }
-  .hud-card::before { inset-block-start: -6px; inset-inline-start: -6px; }
-  .hud-card::after  { inset-block-start: -6px; inset-inline-end: -6px; }
-  .hud-marks::before { inset-block-end: -6px; inset-inline-start: -6px; }
-  .hud-marks::after  { inset-block-end: -6px; inset-inline-end: -6px; }
 
-  /* Technical label: uppercase, tracked, condensed. */
+  /* Uppercase tracked label, the package's 12px/700. */
   .hud-label {
-    font-family: var(--font-barlow-semi), var(--font-barlow), sans-serif;
-    font-weight: 500;
+    font-family: var(--font-barlow), sans-serif;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--color-neutral-600);
+    letter-spacing: 0.09em;
+    color: var(--muted);
     white-space: nowrap;
   }
 
   .hud-kicker {
-    font-family: var(--font-barlow-semi), var(--font-barlow), sans-serif;
-    font-weight: 500;
-    font-size: 10px;
-    letter-spacing: 0.3em;
+    font-family: var(--font-barlow), sans-serif;
+    font-weight: 700;
+    font-size: 11.5px;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--color-accent-700);
+    color: var(--muted);
   }
 
-  /* Display numerals — the big figures. */
+  /* Display figures — mono, tight, ink. */
   .hud-numeral {
-    font-family: var(--font-barlow-condensed), var(--font-barlow), sans-serif;
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
     font-weight: 600;
-    line-height: 0.9;
-    letter-spacing: -0.02em;
-    color: var(--color-accent-900);
-    text-shadow: 0 0 22px rgba(124, 171, 221, 0.35);
+    line-height: 1;
+    letter-spacing: -0.035em;
+    color: var(--ink);
   }
 
   .hud-title {
-    font-family: var(--font-barlow-condensed), var(--font-barlow), sans-serif;
-    font-weight: 600;
-    line-height: 0.92;
-    letter-spacing: -0.012em;
-    text-shadow: 0 0 28px rgba(124, 171, 221, 0.22);
+    font-family: var(--font-barlow), sans-serif;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    color: var(--ink);
   }
 
   .hud-heading {
-    font-family: var(--font-barlow-condensed), var(--font-barlow), sans-serif;
-    font-weight: 600;
-    line-height: 1;
+    font-family: var(--font-barlow), sans-serif;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    color: var(--ink);
   }
 
   /* Dense data table. */
   .cockpit-table {
     width: 100%;
     text-align: start;
-    font-family: var(--font-barlow-semi), var(--font-barlow), sans-serif;
-    font-size: 14px;
+    font-family: var(--font-barlow), sans-serif;
+    font-size: 14.5px;
   }
-  /* On a narrow screen a table scrolls inside its own container rather than
-     pushing the page sideways — so the columns stay readable at full size and
-     the body never scrolls horizontally. */
   @media (max-width: 640px) {
-    .cockpit-table {
-      font-size: 13px;
-    }
+    .cockpit-table { font-size: 13.5px; }
     .cockpit-table th,
-    .cockpit-table td {
-      padding: 8px;
-    }
+    .cockpit-table td { padding: 8px; }
   }
   .cockpit-table th {
-    padding: 8px 10px;
-    font-size: 11px;
-    font-weight: 500;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--color-neutral-600);
-    border-bottom: 1px solid var(--color-divider);
+    letter-spacing: 0.09em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
     white-space: nowrap;
     text-align: start;
   }
   .cockpit-table td {
-    padding: 9px 10px;
-    border-top: 1px solid color-mix(in srgb, var(--color-text) 9%, transparent);
+    padding: 11px 12px;
+    border-top: 1px solid var(--line);
     vertical-align: middle;
     white-space: nowrap;
   }
   .cockpit-table tbody tr:hover {
-    background: color-mix(in srgb, var(--color-text) 4%, transparent);
+    background: #f6f7f9;
   }
 
-  /* Segmented gauge under a KPI. */
+  /*
+   * The segmented control: a tray, and the selected option lifted out of it.
+   * The one shadow the package allows.
+   */
+  .segmented {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    background: #f4f5f7;
+    border-radius: 999px;
+  }
+  .segmented > * {
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .segmented > [aria-current='page'],
+  .segmented > [data-selected='true'] {
+    background: var(--card);
+    color: var(--ink);
+    box-shadow: 0 1px 3px rgba(20, 25, 40, 0.12);
+  }
+
+  /* A progress rail, replacing the old segmented gauge. */
   .hud-gauge {
-    height: 8px;
-    background-image: repeating-linear-gradient(
-      90deg,
-      rgba(196, 218, 240, 0.16) 0 2px,
-      transparent 2px 5px
-    );
+    height: 6px;
+    border-radius: 999px;
+    background: #eef0f3;
+    overflow: hidden;
   }
   .hud-gauge-fill {
     height: 100%;
-    background-image: repeating-linear-gradient(
-      90deg,
-      var(--color-accent-300) 0 2px,
-      transparent 2px 5px
-    );
+    border-radius: 999px;
+    background: var(--info);
   }
 }
 
 @layer utilities {
-  @keyframes ledPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.2; }
-  }
+  /* The status dot. It no longer blinks: nothing in the package moves on its own. */
   .animate-led {
-    animation: ledPulse 2.6s ease-in-out infinite;
+    animation: none;
   }
 
   @keyframes barPulse {
@@ -259,6 +292,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .animate-led, .animate-bar { animation: none; }
+    .animate-bar { animation: none; }
   }
 }

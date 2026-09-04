@@ -90,14 +90,14 @@ export function CloseDeal({
 
       {open ? (
         <form
-          className="mt-2 w-full border border-divider p-2"
+          className="mt-2 w-full border border-line p-2"
           onSubmit={(e) => {
             e.preventDefault();
             send(new FormData(e.currentTarget));
           }}
         >
           {suggestion ? (
-            <p className="mb-2 font-semi text-[11px] tracking-[0.06em] text-accent-700">{suggestion}</p>
+            <p className="mb-2 font-semi text-[11px] tracking-[0.06em] text-info">{suggestion}</p>
           ) : null}
           <div className="flex flex-wrap items-end gap-2">
             <div>
@@ -114,7 +114,7 @@ export function CloseDeal({
               {pending ? 'CLOSING…' : 'CLOSE IT'}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
-              CANCEL
+              Cancel
             </Button>
           </div>
           <div className="mt-2">

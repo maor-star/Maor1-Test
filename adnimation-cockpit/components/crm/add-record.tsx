@@ -32,7 +32,7 @@ export function AddCrmRecord({
   }
 
   return (
-    <div className="border border-divider p-3">
+    <div className="border border-line p-3">
       {view === 'companies' ? (
         <CompanyForm vocab={vocab} onDone={() => setOpen(false)} />
       ) : (

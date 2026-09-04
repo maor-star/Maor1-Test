@@ -1,26 +1,22 @@
 import type { Metadata, Viewport } from 'next';
-import { Barlow, Barlow_Condensed, Barlow_Semi_Condensed } from 'next/font/google';
+import { Barlow, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 
-/** The three Barlow families the design system is built on. */
+/**
+ * Two families, as the design package specifies: Barlow for words, IBM Plex
+ * Mono for every figure. Nothing on a screen is set in anything else.
+ */
 const barlow = Barlow({
   subsets: ['latin'],
-  weight: ['400', '500', '600'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-barlow',
   display: 'swap',
 });
 
-const barlowCondensed = Barlow_Condensed({
+const plexMono = IBM_Plex_Mono({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-barlow-condensed',
-  display: 'swap',
-});
-
-const barlowSemi = Barlow_Semi_Condensed({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  variable: '--font-barlow-semi',
+  weight: ['500', '600'],
+  variable: '--font-mono',
   display: 'swap',
 });
 
@@ -33,7 +29,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0f1a24',
+  themeColor: '#fbfcfd',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -41,7 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="en"
       dir="ltr"
-      className={`${barlow.variable} ${barlowCondensed.variable} ${barlowSemi.variable}`}
+      className={`${barlow.variable} ${plexMono.variable}`}
     >
       <body className="min-h-dvh">{children}</body>
     </html>

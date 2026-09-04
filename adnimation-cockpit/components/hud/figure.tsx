@@ -4,9 +4,12 @@ import { Num } from '@/components/num';
 /**
  * One number in the strip at the top of a screen.
  *
- * Give it an href and it becomes the way into what it counts: "SWITCHED ON 1"
+ * Give it an href and it becomes the way into what it counts: "switched ON 1"
  * is not a fact to read, it is the question "which one?". The strip is where
  * he looks first, so it is also where he should be able to click first.
+ *
+ * The package's metric cell: a 12px uppercase label above a mono figure, the
+ * figure tinted only when it carries a state.
  */
 export function Figure({
   label,
@@ -25,26 +28,26 @@ export function Figure({
 }) {
   const toneClass =
     tone === 'warn'
-      ? 'text-sev-warning'
+      ? 'text-warn'
       : tone === 'critical'
-        ? 'text-sev-critical'
+        ? 'text-neg'
         : tone === 'ok'
-          ? 'text-sev-ok'
-          : 'text-neutral-900';
+          ? 'text-pos'
+          : 'text-ink';
 
   const body = (
     <>
       <span
-        className={`hud-label block text-[9px] ${
-          active ? 'text-accent-700' : href ? 'group-hover:text-accent' : ''
+        className={`hud-label block text-[11.5px] ${
+          active ? 'text-accent' : href ? 'group-hover:text-ink' : ''
         }`}
       >
         {label}
       </span>
       <span
-        className={`font-cond leading-none ${big ? 'text-[30px]' : 'text-[22px]'} ${toneClass} ${
-          href ? 'group-hover:text-accent' : ''
-        }`}
+        className={`mt-[6px] block font-mono font-semibold leading-none tracking-[-0.035em] ${
+          big ? 'text-[27px]' : 'text-[21px]'
+        } ${toneClass}`}
       >
         <Num>{value}</Num>
       </span>
@@ -56,8 +59,8 @@ export function Figure({
   return (
     <Link
       href={href}
-      className={`group block border-b-2 pb-1 ${
-        active ? 'border-accent' : 'border-transparent hover:border-accent/40'
+      className={`group block rounded-[10px] px-2 py-1 transition-colors ${
+        active ? 'bg-accent-100' : 'hover:bg-neutral-100'
       }`}
     >
       {body}

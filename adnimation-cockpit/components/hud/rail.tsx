@@ -1,14 +1,16 @@
 import Link from 'next/link';
-import { Led } from './card';
 import { NAV } from './nav-items';
 
-/** 22 decorative telemetry bars, deterministic so server and client agree. */
-const BARS = Array.from({ length: 22 }, (_, i) => ({
-  height: 30 + ((i * 37) % 60),
-  duration: 1.6 + ((i * 13) % 15) / 10,
-  delay: ((i * 7) % 11) / 10,
-}));
-
+/**
+ * The rail, in the design package's language: a white column against the
+ * gradient ground, one hairline separating it from the page, and the modules
+ * as rounded rows that fill in on hover.
+ *
+ * Gone with the dark system: the telemetry bars, the numbered index beside
+ * every module, the glowing dividers. The package's sidebar is a list of
+ * places, and the only thing that carries colour is the brand mark and
+ * whichever row he is on.
+ */
 export function Rail({
   userName,
   userRole,
@@ -19,86 +21,70 @@ export function Rail({
   signOutAction: () => Promise<void>;
 }) {
   return (
-    <aside
-      className="sticky top-0 hidden h-dvh flex-col gap-[26px] overflow-hidden border-e border-divider py-6 text-paper lg:flex"
-      style={{ background: 'linear-gradient(180deg, var(--rail-from) 0%, var(--rail-to) 100%)' }}
-    >
-      <div className="px-[18px]">
-        <div className="font-cond text-[25px] font-semibold leading-none tracking-[0.2em]">
-          ADNIMATION
-        </div>
-        <div className="mt-2 flex items-center gap-2 font-semi text-[10px] font-medium tracking-[0.3em] text-accent-300">
-          <Led />
-          CEO COCKPIT
+    <aside className="sticky top-0 hidden h-dvh flex-col gap-6 overflow-y-auto border-e border-line bg-card py-6 lg:flex">
+      <div className="flex items-center gap-3 px-5">
+        <span
+          className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-[10px] bg-brand text-[17px] font-bold text-white"
+          aria-hidden="true"
+        >
+          A
+        </span>
+        <div className="min-w-0">
+          <div className="truncate text-[17px] font-bold leading-tight tracking-[-0.01em]">
+            Adnimation
+          </div>
+          <div className="truncate text-[12.5px] text-muted">CEO Cockpit</div>
         </div>
       </div>
 
-      <nav className="flex flex-col">
+      <nav className="flex flex-col gap-[2px] px-3">
         {NAV.map((item) =>
           item.ready ? (
             <Link
               key={item.href}
               href={item.href}
-              className="grid grid-cols-[1fr_auto] items-center gap-3 border-t border-paper/[0.12] border-s-2 border-s-transparent px-[18px] py-[14px] font-semi text-[15px] tracking-[0.06em] text-paper hover:bg-paper/[0.14] hover:border-s-accent-300"
+              className="rounded-[10px] px-3 py-[10px] text-[15px] font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-ink"
             >
-              <span>{item.label}</span>
-              <span className="font-cond text-[11px] tracking-[0.16em] opacity-45">{item.num}</span>
+              {label(item.label)}
             </Link>
           ) : (
             <span
               key={item.href}
               title="Ships with a later milestone"
-              className="grid cursor-not-allowed grid-cols-[1fr_auto] items-center gap-3 border-t border-paper/[0.12] border-s-2 border-s-transparent px-[18px] py-[14px] font-semi text-[15px] tracking-[0.06em] text-paper/35"
+              className="cursor-not-allowed rounded-[10px] px-3 py-[10px] text-[15px] font-semibold text-neutral-400"
             >
-              <span>{item.label}</span>
-              <span className="font-cond text-[11px] tracking-[0.16em] opacity-45">{item.num}</span>
+              {label(item.label)}
             </span>
           ),
         )}
       </nav>
 
-      <div className="px-[18px]">
-        <div className="font-semi text-[9px] font-medium tracking-[0.28em] text-accent-300">
-          TELEMETRY
-        </div>
-        <div className="mt-2 flex h-[34px] items-end gap-[2px]" aria-hidden="true">
-          {BARS.map((b, i) => (
-            <div
-              key={i}
-              className="flex-1 animate-bar bg-accent-500"
-              style={{
-                height: `${b.height}%`,
-                animationDuration: `${b.duration}s`,
-                animationDelay: `${b.delay}s`,
-              }}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-auto flex flex-col gap-[10px] px-[18px] font-semi text-[10px] tracking-[0.16em] text-accent-300">
-        <div className="flex justify-between gap-2">
-          <span>FEEDS</span>
-          <span className="text-paper">ARS · CLICKUP · SLACK</span>
-        </div>
-        <div className="h-px bg-paper/[0.16]" />
-        <div className="flex items-center gap-[10px]">
-          <span className="inline-flex h-[30px] w-[30px] items-center justify-center border border-paper/30 font-cond text-[11px] tracking-[0.12em] text-paper">
+      <div className="mt-auto flex flex-col gap-3 px-5">
+        <div className="h-px bg-line" />
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-full bg-neutral-200 text-[11.5px] font-bold text-neutral-700">
             {userRole === 'owner' ? 'CEO' : 'COS'}
           </span>
-          <span className="min-w-0 flex-1 truncate text-[10px] tracking-[0.18em] text-paper">
-            {userName}
-          </span>
+          <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{userName}</span>
           <form action={signOutAction}>
             <button
               type="submit"
-              className="font-semi text-[10px] tracking-[0.16em] text-accent-300 hover:text-paper"
+              className="rounded-[9px] px-2 py-1 text-[13.5px] font-semibold text-muted hover:bg-neutral-100 hover:text-ink"
             >
-              EXIT
+              Sign out
             </button>
           </form>
         </div>
       </div>
     </aside>
   );
+}
+
+/**
+ * The module names are stored uppercase from the old system, where every label
+ * was set in tracked capitals. This design sets them as words, so they are
+ * written back as words here rather than in fifteen places.
+ */
+function label(name: string): string {
+  return name.charAt(0) + name.slice(1).toLowerCase();
 }

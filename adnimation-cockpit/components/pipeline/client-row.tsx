@@ -49,7 +49,7 @@ export function PipelineClientRow({
   const verdict = looksDone(client.stage, client.integration);
 
   return (
-    <li className="border-t border-divider px-[18px] py-3">
+    <li className="border-t border-line px-[18px] py-3">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -72,11 +72,11 @@ export function PipelineClientRow({
               </Tag>
             ) : null}
             {verdict.done && client.closedAt === null ? (
-              <Tag tone="ok" title={verdict.why}>LOOKS FINISHED</Tag>
+              <Tag tone="ok" title={verdict.why}>Looks finished</Tag>
             ) : null}
           </div>
 
-          <p className="hud-label mt-1 text-[9px]">
+          <p className="hud-label mt-1 text-[11px]">
             {[
               client.domain,
               client.ownerName ? `OWNER ${client.ownerName}` : 'OWNER ME',
@@ -89,7 +89,7 @@ export function PipelineClientRow({
           <p className="mt-1.5 text-[13px] text-neutral-700">
             {client.nextStep ? (
               <>
-                <span className="hud-label me-1.5 text-[9px]">NEXT</span>
+                <span className="hud-label me-1.5 text-[11px]">Next</span>
                 {client.nextStep}
                 {client.nextStepDate ? (
                   <span
@@ -110,19 +110,19 @@ export function PipelineClientRow({
 
         <div className="flex shrink-0 items-start gap-5">
           <div className="text-end">
-            <span className="hud-label block text-[9px]">VALUE / MO</span>
+            <span className="hud-label block text-[11px]">VALUE / MO</span>
             <span className="font-cond text-[19px] leading-none text-neutral-900">
               <Num>{client.valueCents != null ? fmtMoney(client.valueCents) : '—'}</Num>
             </span>
             {client.probability != null ? (
-              <span className="mt-0.5 block font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+              <span className="mt-0.5 block font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
                 <Num>{client.probability}%</Num>
               </span>
             ) : null}
           </div>
 
           <div className="text-end">
-            <span className="hud-label block text-[9px]">LAST TOUCH</span>
+            <span className="hud-label block text-[11px]">Last touch</span>
             <span
               className={`font-cond text-[19px] leading-none ${
                 quiet ? 'text-sev-warning' : 'text-neutral-900'
@@ -130,8 +130,8 @@ export function PipelineClientRow({
             >
               <Num>{client.quietDays === null ? 'NEVER' : `${client.quietDays}d`}</Num>
             </span>
-            <span className="mt-0.5 block font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-              <Num>{client.touches}</Num> LOGGED
+            <span className="mt-0.5 block font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+              <Num>{client.touches}</Num> Logged
             </span>
           </div>
         </div>
@@ -165,13 +165,13 @@ export function PipelineClientRow({
       {showSteps ? <IntegrationChecklist clientId={client.id} progress={client.integration} /> : null}
 
       {logging ? (
-        <div className="mt-2 border border-divider p-2">
+        <div className="mt-2 border border-line p-2">
           <TouchForm clientId={client.id} onDone={() => setLogging(false)} />
         </div>
       ) : null}
 
       {editing ? (
-        <div className="mt-2 border border-divider p-2">
+        <div className="mt-2 border border-line p-2">
           <PipelineClientForm owners={owners} client={client} onDone={() => setEditing(false)} />
         </div>
       ) : null}
@@ -180,7 +180,7 @@ export function PipelineClientRow({
         <ul className="mt-2 space-y-0.5">
           {touches.map((t, i) => (
             <li key={i} className="text-[12px] text-neutral-600">
-              <span className="hud-label me-1.5 text-[9px]">{t.kind.toUpperCase()}</span>
+              <span className="hud-label me-1.5 text-[11px]">{t.kind.toUpperCase()}</span>
               <span className="me-1.5 text-neutral-500">
                 <Num>{fmtDate(t.happenedAt)}</Num>
               </span>

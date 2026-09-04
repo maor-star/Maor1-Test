@@ -143,7 +143,7 @@ export function ContractReply({
         type="button"
         onClick={() => (open && result ? setOpen(false) : run())}
         disabled={working}
-        className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent disabled:opacity-50"
+        className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline disabled:opacity-50"
       >
         {working ? 'Reading it…' : open && result ? 'Hide the reply' : 'Answer this one'}
       </button>
@@ -152,13 +152,13 @@ export function ContractReply({
         <div
           className={
             full
-              ? 'fixed inset-0 z-50 flex flex-col overflow-auto bg-ground'
-              : 'mt-2 w-full border border-divider'
+              ? 'fixed inset-0 z-50 flex flex-col overflow-auto bg-card'
+              : 'mt-2 w-full border border-line'
           }
         >
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-divider px-2 py-1">
-            <span className="hud-label text-[9px]">
-              THE REPLY TO {fileName.toUpperCase()}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-2 py-1">
+            <span className="hud-label text-[11px]">
+              The reply to {fileName.toUpperCase()}
               {result?.versionNo ? ` · V${result.versionNo}` : ''}
               {result?.usedBrief === false ? ' · NO STANDING POSITIONS SET' : ''}
             </span>
@@ -167,7 +167,7 @@ export function ContractReply({
               <button
                 type="button"
                 onClick={() => setFull((v) => !v)}
-                className="font-semi text-[10px] tracking-[0.14em] text-accent-700 hover:text-accent"
+                className="font-semi text-[11.5px] tracking-[0.14em] text-info hover:underline"
               >
                 {full ? 'SHRINK' : 'FULL SCREEN'}
               </button>
@@ -177,9 +177,9 @@ export function ContractReply({
                   setFull(false);
                   setOpen(false);
                 }}
-                className="font-semi text-[10px] tracking-[0.14em] text-neutral-500 hover:text-accent"
+                className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500 hover:text-accent"
               >
-                CLOSE
+                Close
               </button>
             </div>
           </div>
@@ -201,10 +201,10 @@ export function ContractReply({
 
               {runs ? (
                 <div className={full ? 'grid gap-3 lg:grid-cols-2' : 'grid gap-3'}>
-                  <div className="border border-divider">
-                    <div className="border-b border-divider px-2 py-1">
-                      <span className="hud-label text-[9px]">
-                        THEIR DRAFT · <Num>{redline.changes.length}</Num> PASSAGES MARKED
+                  <div className="border border-line">
+                    <div className="border-b border-line px-2 py-1">
+                      <span className="hud-label text-[11px]">
+                        THEIR DRAFT · <Num>{redline.changes.length}</Num> Passages marked
                       </span>
                     </div>
                     <pre
@@ -221,7 +221,7 @@ export function ContractReply({
                             onClick={() => setFocused(run.index)}
                             className={`cursor-pointer ${
                               focused === run.index
-                                ? 'bg-accent text-ground'
+                                ? 'bg-brand text-white'
                                 : 'bg-sev-warning/25 text-neutral-900'
                             }`}
                             title="What we would send back instead"
@@ -233,9 +233,9 @@ export function ContractReply({
                     </pre>
                   </div>
 
-                  <div className="border border-divider">
-                    <div className="border-b border-divider px-2 py-1">
-                      <span className="hud-label text-[9px]">WHAT WE SEND BACK</span>
+                  <div className="border border-line">
+                    <div className="border-b border-line px-2 py-1">
+                      <span className="hud-label text-[11px]">What we send back</span>
                     </div>
                     <div
                       className={`overflow-auto px-2 py-2 ${full ? 'max-h-[70vh]' : 'max-h-96'}`}
@@ -245,7 +245,7 @@ export function ContractReply({
                           key={`${c.clause}-${i}`}
                           onClick={() => setFocused(i)}
                           className={`mb-2 cursor-pointer border-s-2 ps-2 ${
-                            focused === i ? 'border-accent bg-accent/5' : 'border-divider'
+                            focused === i ? 'border-accent bg-accent/5' : 'border-line'
                           }`}
                         >
                           <div className="flex flex-wrap items-center gap-2">
@@ -274,27 +274,27 @@ export function ContractReply({
 
               {redline.changes.length > 0 ? (
                 <div>
-                  <span className="hud-label text-[9px]">
+                  <span className="hud-label text-[11px]">
                     {runs ? 'EVERY CHANGE, CLAUSE BY CLAUSE' : 'WHAT TO CHANGE — THEIRS LEFT, OURS RIGHT'}
                   </span>
                   <ul className="mt-1 space-y-2">
                     {redline.changes.map((c, i) => (
-                      <li key={`${c.clause}-${i}`} className="border border-divider">
-                        <div className="flex flex-wrap items-center gap-2 border-b border-divider px-2 py-1">
+                      <li key={`${c.clause}-${i}`} className="border border-line">
+                        <div className="flex flex-wrap items-center gap-2 border-b border-line px-2 py-1">
                           <span className="font-semi text-[12px] text-neutral-900">{c.clause}</span>
                           <Tag tone={SEVERITY_TONE[c.severity]}>{c.severity.toUpperCase()}</Tag>
                           <span className="text-[12px] text-neutral-500">{c.why}</span>
                         </div>
                         <div className="grid gap-0 sm:grid-cols-2">
-                          <div className="border-b border-divider p-2 sm:border-b-0 sm:border-e">
-                            <span className="hud-label text-[9px] text-neutral-500">AS IT STANDS</span>
+                          <div className="border-b border-line p-2 sm:border-b-0 sm:border-e">
+                            <span className="hud-label text-[11px] text-neutral-500">As it stands</span>
                             <p className="mt-1 whitespace-pre-wrap text-[13px] text-neutral-600">
                               {c.original}
                             </p>
                           </div>
                           <div className="bg-accent/5 p-2">
-                            <span className="hud-label text-[9px] text-accent-700">
-                              WHAT WE SEND BACK
+                            <span className="hud-label text-[11px] text-info">
+                              What we send back
                             </span>
                             <p className="mt-1 whitespace-pre-wrap text-[13px] text-neutral-900">
                               {c.proposed}
@@ -309,7 +309,7 @@ export function ContractReply({
 
               {redline.additions.length > 0 ? (
                 <div>
-                  <span className="hud-label text-[9px]">WHAT TO ADD</span>
+                  <span className="hud-label text-[11px]">WHAT TO ADD</span>
                   <ul className="mt-1 space-y-1">
                     {redline.additions.map((a, i) => (
                       <li key={`${a.clause}-${i}`} className="border-s-2 border-accent ps-2">
@@ -327,7 +327,7 @@ export function ContractReply({
 
               {redline.questions.length > 0 ? (
                 <div>
-                  <span className="hud-label text-[9px]">WORTH ASKING RATHER THAN REDRAFTING</span>
+                  <span className="hud-label text-[11px]">Worth asking rather than redrafting</span>
                   <ul className="mt-1 list-inside list-disc text-[13px] text-neutral-700">
                     {redline.questions.map((q) => (
                       <li key={q}>{q}</li>
@@ -336,10 +336,10 @@ export function ContractReply({
                 </div>
               ) : null}
 
-              <div className="border border-divider">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-divider px-2 py-1">
-                  <span className="hud-label text-[9px]">
-                    THE EMAIL TO {counterparty.toUpperCase()} — NOTHING IS SENT FROM HERE
+              <div className="border border-line">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-2 py-1">
+                  <span className="hud-label text-[11px]">
+                    The email to {counterparty.toUpperCase()} — nothing is sent from here
                   </span>
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -364,7 +364,7 @@ export function ContractReply({
                       )}&body=${encodeURIComponent(redline.email.body)}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="border border-divider px-2 py-1 font-semi text-[10px] uppercase tracking-[0.16em] text-accent-700 hover:border-accent hover:text-accent"
+                      className="border border-line px-2 py-1 font-semi text-[11.5px] uppercase tracking-[0.16em] text-info hover:border-accent hover:text-accent"
                     >
                       Open in Gmail ↗
                     </a>
@@ -373,21 +373,21 @@ export function ContractReply({
                 <p className="px-2 py-1 font-semi text-[12px] text-neutral-900">
                   {redline.email.subject}
                 </p>
-                <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-divider px-2 py-2 text-[13px] leading-relaxed text-neutral-700">
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-line px-2 py-2 text-[13px] leading-relaxed text-neutral-700">
                   {redline.email.body}
                 </pre>
               </div>
 
               {remembered ? (
-                <p className="font-semi text-[10px] tracking-[0.1em] text-accent-700">
-                  {remembered.toUpperCase()} — THE NEXT CONTRACT STARTS FROM IT
+                <p className="font-semi text-[11.5px] tracking-[0.1em] text-info">
+                  {remembered.toUpperCase()} — The next contract starts from it
                 </p>
               ) : null}
 
-              <p className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-                THE DOCUMENT ITSELF IS NOT REWRITTEN. A CONTRACT REGENERATED BY A MODEL CANNOT BE
-                DIFFED AGAINST THE ONE THEY SENT — THESE ARE THE CHANGES TO MAKE IN THEIR FILE, IN
-                THEIR WORDS.
+              <p className="font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
+                The document itself is not rewritten. a contract regenerated by a model cannot be
+                diffed against the one they sent — these are the changes to make in their file, in
+                their words.
               </p>
             </div>
           ) : null}
@@ -451,7 +451,7 @@ function MyFix({
         title="Make this a standing position, so the next contract starts from it"
         onClick={() => onRemember(instruction)}
       >
-        ALWAYS ASK FOR THIS
+        Always ask for this
       </Button>
     </div>
   );

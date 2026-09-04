@@ -2,17 +2,22 @@ import { cn } from '@/lib/utils';
 
 type Tone = 'accent' | 'neutral' | 'outline' | 'critical' | 'warning' | 'watch' | 'ok';
 
+/**
+ * The status pill from the design package: fully rounded, a tinted ground, no
+ * border, 12px/700 with a little tracking. Severity carries its own tint —
+ * green for good, red for bad, orange for a warning — rather than a coloured
+ * outline on a white pill, which reads as decoration rather than a state.
+ */
 const TONE: Record<Tone, string> = {
-  accent: 'bg-accent-100 text-accent-800 border border-transparent',
-  neutral: 'bg-neutral-200 text-neutral-700 border border-transparent',
-  outline: 'border border-divider text-neutral-600',
-  critical: 'border border-sev-critical/60 text-sev-critical',
-  warning: 'border border-sev-warning/60 text-sev-warning',
-  watch: 'border border-sev-watch/60 text-sev-watch',
-  ok: 'bg-accent-100 text-accent-800 border border-transparent',
+  accent: 'bg-accent-100 text-accent-800',
+  neutral: 'bg-neutral-200 text-neutral-700',
+  outline: 'border border-line text-muted',
+  critical: 'bg-neg-tint text-neg',
+  warning: 'bg-[#fdf1e4] text-[#b45309]',
+  watch: 'bg-[#fdf6e6] text-[#a16207]',
+  ok: 'bg-pos-tint text-[#157a45]',
 };
 
-/** Status pill. Square, hairline, uppercase — per the design system. */
 export function Tag({
   tone = 'neutral',
   children,
@@ -28,7 +33,7 @@ export function Tag({
     <span
       title={title}
       className={cn(
-        'inline-flex items-center px-[7px] py-[3px] font-semi text-[10px] font-medium uppercase leading-none tracking-[0.12em]',
+        'inline-flex items-center rounded-full px-3 py-[5px] text-[12px] font-bold uppercase leading-none tracking-[0.06em]',
         TONE[tone],
         className,
       )}

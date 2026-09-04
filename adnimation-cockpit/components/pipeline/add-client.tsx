@@ -11,13 +11,13 @@ export function AddPipelineClient({ owners }: { owners: { id: string; name: stri
   if (!open) {
     return (
       <Button type="button" size="sm" onClick={() => setOpen(true)}>
-        ADD CLIENT
+        Add client
       </Button>
     );
   }
 
   return (
-    <div className="w-full border border-divider p-3">
+    <div className="w-full border border-line p-3">
       <PipelineClientForm owners={owners} onDone={() => setOpen(false)} />
     </div>
   );

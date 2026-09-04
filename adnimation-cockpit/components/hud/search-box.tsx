@@ -89,16 +89,18 @@ export function SearchBox({
         }}
         className={
           size === 'lg'
-            ? 'h-11 w-full border border-divider bg-ground ps-3 pe-16 text-[16px] text-ink placeholder:text-neutral-500'
-            : 'h-8 w-full border border-divider bg-ground ps-2 pe-14 text-[13px] text-ink placeholder:text-neutral-500 sm:w-64'
+            ? 'h-[42px] w-full rounded-full border border-line bg-card ps-4 pe-16 text-[15.5px] text-ink placeholder:text-neutral-500'
+            : 'h-[38px] w-full rounded-full border border-line bg-card ps-4 pe-14 text-[14.5px] text-ink placeholder:text-neutral-500 sm:w-64'
         }
       />
       <span
-        className={`pointer-events-none absolute inset-y-0 flex items-center font-semi tracking-[0.14em] ${
-          size === 'lg' ? 'end-3 text-[10px]' : 'end-2 text-[9px]'
-        } ${pending ? 'text-accent-700' : 'text-neutral-500'}`}
+        className={`pointer-events-none absolute inset-y-0 end-3 flex items-center font-mono text-[12px] ${
+          pending ? 'text-info' : 'text-muted'
+        }`}
       >
-        {pending ? 'FINDING' : value ? 'ESC' : '/'}
+        <span className="rounded-md bg-neutral-200 px-[7px] py-[3px]">
+          {pending ? 'finding' : value ? 'esc' : '/'}
+        </span>
       </span>
     </div>
   );

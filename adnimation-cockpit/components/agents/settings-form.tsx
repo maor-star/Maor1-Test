@@ -43,7 +43,7 @@ export function AgentSettingsForm({
 
   return (
     <form
-      className="mt-2 border border-divider p-3"
+      className="mt-2 border border-line p-3"
       onSubmit={(e) => {
         e.preventDefault();
         const data = new FormData(e.currentTarget);
@@ -59,7 +59,7 @@ export function AgentSettingsForm({
         });
       }}
     >
-      <p className="hud-label mb-3 text-[9px]">ITS DIALS — READ AT THE TOP OF EVERY RUN</p>
+      <p className="hud-label mb-3 text-[11px]">Its dials — read at the top of every run</p>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {fields.map((f) => (
@@ -72,10 +72,10 @@ export function AgentSettingsForm({
           {pending ? 'SAVING…' : 'SAVE THE DIALS'}
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={onClose}>
-          CANCEL
+          Cancel
         </Button>
         {message ? (
-          <span className="font-semi text-[10px] tracking-[0.1em] text-accent-700">{message}</span>
+          <span className="font-semi text-[11.5px] tracking-[0.1em] text-info">{message}</span>
         ) : null}
       </div>
     </form>

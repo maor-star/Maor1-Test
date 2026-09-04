@@ -76,9 +76,9 @@ export function AgentPlaybook({
   };
 
   return (
-    <div className="mt-2 border border-divider p-3">
+    <div className="mt-2 border border-line p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="hud-label text-[9px]">
+        <p className="hud-label text-[11px]">
           ITS PLAYBOOK — READ AT THE TOP OF EVERY RUN
           {playbookName ? ` · ${playbookName}` : ''}
           {updatedAt ? (
@@ -88,8 +88,8 @@ export function AgentPlaybook({
             </>
           ) : null}
         </p>
-        <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-          <Num>{text.length}</Num> CHARACTERS
+        <span className="font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
+          <Num>{text.length}</Num> Characters
         </span>
       </div>
 
@@ -123,7 +123,7 @@ export function AgentPlaybook({
           }}
         />
         <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => fileRef.current?.click()}>
-          LOAD A DOCUMENT
+          Load a document
         </Button>
 
         {playbook ? (
@@ -138,22 +138,22 @@ export function AgentPlaybook({
               save('', '');
             }}
           >
-            REMOVE IT
+            Remove it
           </Button>
         ) : null}
 
         <Button type="button" size="sm" variant="ghost" onClick={onClose}>
-          CLOSE
+          Close
         </Button>
 
         {message ? (
-          <span className="font-semi text-[10px] tracking-[0.1em] text-accent-700">{message}</span>
+          <span className="font-semi text-[11.5px] tracking-[0.1em] text-info">{message}</span>
         ) : null}
       </div>
 
-      <p className="mt-2 font-semi text-[10px] leading-relaxed tracking-[0.06em] text-neutral-500">
-        THE DIALS ARE VALUES THE CODE OBEYS. THE BRIEF IS YOUR CORRECTIONS. THIS IS THE JOB ITSELF —
-        IT GOES INTO EVERY RUN, SO SAY WHAT MATTERS AND LEAVE OUT WHAT DOES NOT.
+      <p className="mt-2 font-semi text-[11.5px] leading-relaxed tracking-[0.06em] text-neutral-500">
+        The dials are values the code obeys. the brief is your corrections. this is the job itself —
+        it goes into every run, so say what matters and leave out what does not.
       </p>
     </div>
   );

@@ -41,20 +41,18 @@ export default async function TradingPage({
         kicker="EXCHANGE / 13"
         title="TRADING"
         action={
-          <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
+          <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
             <Num>{view.from}</Num> → <Num>{view.to}</Num>
           </span>
         }
       />
 
-      <nav className="flex border border-divider">
+      <nav className="segmented">
         {TRADING_PERIODS.map((p) => (
           <Link
             key={p}
             href={`/trading?period=${p}`}
-            className={`px-3 py-1 font-semi text-[11px] uppercase tracking-[0.16em] ${
-              p === period ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
-            }`}
+            aria-current={p === period ? 'page' : undefined}
           >
             {TRADING_PERIOD_LABEL[p]}
           </Link>
@@ -66,7 +64,7 @@ export default async function TradingPage({
           title="The desk"
           index="T01"
           action={
-            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+            <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
               <Num>{view.days}</Num> {view.days === 1 ? 'DAY' : 'DAYS'}
             </span>
           }
@@ -79,9 +77,9 @@ export default async function TradingPage({
           <Figure label="IMPRESSIONS" value={fmtNumber(view.totals.impressions)} />
           <Figure label="REQUESTS" value={fmtNumber(view.totals.requests)} />
         </div>
-        <p className="border-t border-divider pt-3 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-          TOTALS FROM THE EXCHANGE&apos;S OWN DAILY ACCOUNTING. THE RANKINGS BELOW ARE THE TOP OF
-          THE BUNDLE LEDGER, NOT ALL OF IT.
+        <p className="border-t border-line pt-3 font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+          Totals from the exchange&apos;s own daily accounting. The rankings below are the top of
+          the bundle ledger, not all of it.
         </p>
       </HudCard>
 
@@ -91,25 +89,25 @@ export default async function TradingPage({
             title="Bundles that made the money"
             index="T02"
             action={
-              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                SOLD BY · BOUGHT BY · THROUGH
+              <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+                Sold by · bought by · through
               </span>
             }
           />
         </div>
 
         {topBundles.length === 0 ? (
-          <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+          <p className="border-t border-line px-[18px] py-4 font-semi text-[12px] text-neutral-500">
             No bundle cleared the floor in this window.
           </p>
         ) : (
           <ul>
             {topBundles.map((b, i) => (
-              <li key={b.bundle} className="border-t border-divider px-[18px] py-3">
+              <li key={b.bundle} className="border-t border-line px-[18px] py-3">
                 <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-cond text-[10px] tracking-[0.16em] text-accent-700">
+                      <span className="font-cond text-[11.5px] tracking-[0.16em] text-info">
                         <Num>{String(i + 1).padStart(2, '0')}</Num>
                       </span>
                       <p className="break-all font-cond text-[17px] leading-none text-neutral-900">
@@ -121,13 +119,13 @@ export default async function TradingPage({
                     </div>
 
                     <p className="mt-1.5 break-words text-[13px] text-neutral-700">
-                      <span className="hud-label me-1.5 text-[9px]">SOLD BY</span>
+                      <span className="hud-label me-1.5 text-[11px]">Sold by</span>
                       {b.sellers.map((s) => s.name).join(', ')}
-                      <span className="hud-label mx-1.5 text-[9px]">BOUGHT BY</span>
+                      <span className="hud-label mx-1.5 text-[11px]">Bought by</span>
                       {b.buyers.map((s) => s.name).join(', ')}
                     </p>
 
-                    <p className="hud-label mt-1 whitespace-normal break-words text-[9px]">
+                    <p className="hud-label mt-1 whitespace-normal break-words text-[11px]">
                       THROUGH {b.topRoute.sellerEndpoint} → {b.topRoute.buyerEndpoint}
                       {b.routes > 1 ? ` · +${b.routes - 1} MORE ROUTE${b.routes > 2 ? 'S' : ''}` : ''}
                     </p>
@@ -142,7 +140,7 @@ export default async function TradingPage({
 
                 <div className="mt-2 h-[3px] w-full bg-neutral-200">
                   <div
-                    className="h-full bg-accent"
+                    className="h-full rounded-full bg-info"
                     style={{ width: `${Math.max(2, (b.profitCents / maxBundleProfit) * 100)}%` }}
                   />
                 </div>
@@ -163,8 +161,8 @@ export default async function TradingPage({
             title="Routes"
             index="T05"
             action={
-              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                SUPPLY ENDPOINT → DEMAND ENDPOINT
+              <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+                Supply endpoint → demand endpoint
               </span>
             }
           />
@@ -173,14 +171,14 @@ export default async function TradingPage({
           {view.routes.slice(0, 12).map((r) => (
             <li
               key={`${r.sellerEndpoint}-${r.buyerEndpoint}`}
-              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-divider px-[18px] py-2.5"
+              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-line px-[18px] py-2.5"
             >
               <div className="min-w-0">
                 <p className="break-words text-[13px] text-neutral-800">
-                  {r.sellerEndpoint} <span className="text-accent-700">→</span> {r.buyerEndpoint}
+                  {r.sellerEndpoint} <span className="text-info">→</span> {r.buyerEndpoint}
                 </p>
-                <p className="hud-label mt-0.5 whitespace-normal break-words text-[9px]">
-                  {r.sellerCompany} → {r.buyerCompany} · <Num>{fmtNumber(r.bundles)}</Num> BUNDLES
+                <p className="hud-label mt-0.5 whitespace-normal break-words text-[11px]">
+                  {r.sellerCompany} → {r.buyerCompany} · <Num>{fmtNumber(r.bundles)}</Num> Bundles
                 </p>
               </div>
               <div className="flex w-full flex-wrap items-center gap-x-5 gap-y-1 sm:w-auto sm:shrink-0">
@@ -198,7 +196,7 @@ export default async function TradingPage({
             title="Requests going nowhere"
             index="T06"
             action={
-              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+              <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
                 <Num>{view.waste.date}</Num>
               </span>
             }
@@ -209,9 +207,9 @@ export default async function TradingPage({
             under <Num>{fmtMoney(DEAD_REVENUE_PER_M_CENTS)}</Num> per million is flagged — the
             demand endpoint is taking the traffic and paying nothing for it.
           </p>
-          <p className="hud-label mt-2 whitespace-normal text-[9px]">
+          <p className="hud-label mt-2 whitespace-normal text-[11px]">
             <Num>{fmtNumber(view.waste.deadRequests)}</Num> OF{' '}
-            <Num>{fmtNumber(view.waste.totalRequests)}</Num> REQUESTS ON FLAGGED PATHS ·{' '}
+            <Num>{fmtNumber(view.waste.totalRequests)}</Num> requests on flagged paths ·{' '}
             <Num>
               {((view.waste.deadRequests / Math.max(1, view.waste.totalRequests)) * 100).toFixed(0)}
               %
@@ -223,14 +221,14 @@ export default async function TradingPage({
           {wasteRows.map((w) => (
             <li
               key={`${w.sellerCompany}-${w.buyerCompany}`}
-              className="border-t border-divider px-[18px] py-2.5"
+              className="border-t border-line px-[18px] py-2.5"
             >
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <p className="break-words text-[13px] text-neutral-800">
-                    {w.sellerCompany} <span className="text-accent-700">→</span> {w.buyerCompany}
+                    {w.sellerCompany} <span className="text-info">→</span> {w.buyerCompany}
                   </p>
-                  {w.dead ? <Tag tone="critical">NOT BUYING</Tag> : null}
+                  {w.dead ? <Tag tone="critical">Not buying</Tag> : null}
                 </div>
                 <div className="flex w-full flex-wrap items-center gap-x-5 gap-y-1 sm:w-auto sm:shrink-0">
                   <Cell label="PER MILLION REQ" value={fmtMoney(w.revenuePerMillionCents)} />
@@ -249,8 +247,8 @@ export default async function TradingPage({
         </ul>
       </HudCard>
 
-      <p className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-        SOURCE: <span className="normal-case tracking-normal">{view.meta.source}</span> · PULLED{' '}
+      <p className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+        Source: <span className="normal-case tracking-normal">{view.meta.source}</span> · PULLED{' '}
         <Num>{view.meta.pulledAt.slice(0, 16).replace('T', ' ')}</Num> UTC
       </p>
     </div>
@@ -275,7 +273,7 @@ function SideCard({
       </div>
       <ul>
         {rows.slice(0, 10).map((r) => (
-          <li key={r.name} className="border-t border-divider px-[18px] py-2.5">
+          <li key={r.name} className="border-t border-line px-[18px] py-2.5">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
               <p className="min-w-0 break-words font-cond text-[15px] text-neutral-900">{r.name}</p>
               <div className="flex w-full flex-wrap items-center gap-x-5 gap-y-1 sm:w-auto sm:shrink-0">
@@ -285,7 +283,7 @@ function SideCard({
             </div>
             <div className="mt-1.5 h-[3px] w-full bg-neutral-200">
               <div
-                className="h-full bg-accent"
+                className="h-full rounded-full bg-info"
                 style={{ width: `${Math.max(2, (r.profitCents / max) * 100)}%` }}
               />
             </div>
@@ -299,7 +297,7 @@ function SideCard({
 function Cell({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="text-end">
-      <span className="hud-label block text-[9px]">{label}</span>
+      <span className="hud-label block text-[11px]">{label}</span>
       <span
         className={`font-cond leading-none ${
           strong ? 'text-[19px] text-neutral-900' : 'text-[16px] text-neutral-700'
@@ -314,7 +312,7 @@ function Cell({ label, value, strong = false }: { label: string; value: string; 
 function Figure({ label, value, big = false }: { label: string; value: string; big?: boolean }) {
   return (
     <div>
-      <span className="hud-label block text-[9px]">{label}</span>
+      <span className="hud-label block text-[11px]">{label}</span>
       <span
         className={`font-cond leading-none text-neutral-900 ${big ? 'text-[30px]' : 'text-[22px]'}`}
       >

@@ -118,30 +118,30 @@ async function TopSeatsCard({ side }: { side: 'demand' | 'supply' }) {
           action={
             <Link
               href={`/seats/${side}`}
-              className="font-semi text-[10px] tracking-[0.14em] text-accent-700 hover:text-accent"
+              className="font-semi text-[11.5px] tracking-[0.14em] text-info hover:underline"
             >
-              ALL SEATS
+              All seats
             </Link>
           }
         />
       </div>
 
       {seats.length === 0 ? (
-        <p className="border-t border-divider px-[18px] py-3 font-semi text-[12px] text-neutral-500">
+        <p className="border-t border-line px-[18px] py-3 font-semi text-[12px] text-neutral-500">
           No seat data in the last 30 days.
         </p>
       ) : (
         <ol>
           {seats.map((s, i) => (
-            <li key={s.seat} className="border-t border-divider px-[18px] py-3">
+            <li key={s.seat} className="border-t border-line px-[18px] py-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-3">
-                  <span className="mt-0.5 font-cond text-[19px] leading-none text-accent-700">
+                  <span className="mt-0.5 font-cond text-[19px] leading-none text-info">
                     <Num>{String(i + 1).padStart(2, '0')}</Num>
                   </span>
                   <div className="min-w-0">
                     <p className="truncate font-cond text-[16px] text-neutral-900">{s.seat}</p>
-                    <p className="hud-label mt-0.5 text-[9px]">
+                    <p className="hud-label mt-0.5 text-[11px]">
                       {s.company} · <Num>{s.activeDays}</Num>/30 DAYS LIVE
                     </p>
                   </div>
@@ -149,11 +149,11 @@ async function TopSeatsCard({ side }: { side: 'demand' | 'supply' }) {
                 <div className="text-end">
                   <p className="font-cond text-[18px] leading-none text-neutral-900">
                     <Num>{fmtMoney(s.revPerDayCents)}</Num>
-                    <span className="ms-1 text-[10px] text-neutral-500">/DAY</span>
+                    <span className="ms-1 text-[11.5px] text-neutral-500">/day</span>
                   </p>
-                  <p className="mt-0.5 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-                    PROFIT <Num>{fmtMoney(s.profitPerDayCents)}</Num> ·{' '}
-                    <Num>{(s.targetRatio * 100).toFixed(0)}%</Num> OF TARGET
+                  <p className="mt-0.5 font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
+                    Profit <Num>{fmtMoney(s.profitPerDayCents)}</Num> ·{' '}
+                    <Num>{(s.targetRatio * 100).toFixed(0)}%</Num> Of target
                   </p>
                 </div>
               </div>
@@ -162,7 +162,7 @@ async function TopSeatsCard({ side }: { side: 'demand' | 'supply' }) {
         </ol>
       )}
 
-      <div className="border-t border-divider px-[18px] py-2 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+      <div className="border-t border-line px-[18px] py-2 font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
         30 DAYS TO <Num>{top.meta.lastCompleteDay}</Num> · BY REVENUE
       </div>
     </HudCard>
@@ -186,10 +186,10 @@ async function UrgentCard() {
           title="Urgent"
           index="O04"
           action={
-            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-              <Num>{overdue}</Num> OVERDUE · <Num>{burning}</Num> P0/P1 ·{' '}
-              <Link href="/tasks" className="text-accent-700 hover:text-accent">
-                ALL <Num>{total}</Num>
+            <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+              <Num>{overdue}</Num> Overdue · <Num>{burning}</Num> P0/P1 ·{' '}
+              <Link href="/tasks" className="text-info hover:underline">
+                All <Num>{total}</Num>
               </Link>
             </span>
           }
@@ -197,13 +197,13 @@ async function UrgentCard() {
       </div>
 
       {rows.length === 0 ? (
-        <p className="border-t border-divider px-[18px] py-3 font-semi text-[12px] text-neutral-500">
+        <p className="border-t border-line px-[18px] py-3 font-semi text-[12px] text-neutral-500">
           Nothing overdue and nothing burning. An empty panel here is a healthy state.
         </p>
       ) : (
         <ul>
           {rows.map((t) => (
-            <li key={t.id} className="border-t border-divider px-[18px] py-2.5">
+            <li key={t.id} className="border-t border-line px-[18px] py-2.5">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <Link
@@ -212,7 +212,7 @@ async function UrgentCard() {
                   >
                     {t.title}
                   </Link>
-                  <p className="hud-label mt-0.5 text-[9px]">
+                  <p className="hud-label mt-0.5 text-[11px]">
                     {t.deptCode ?? 'NO DEPARTMENT'} · {t.ownerName ?? 'UNOWNED'}
                   </p>
                 </div>
@@ -223,7 +223,7 @@ async function UrgentCard() {
                   {t.daysOverdue > 0 ? (
                     <Tag tone="critical">
                       <Num>{t.daysOverdue}</Num>
-                      <span className="ms-1">D LATE</span>
+                      <span className="ms-1">D late</span>
                     </Tag>
                   ) : null}
                   {/*
@@ -259,26 +259,26 @@ async function ClientsCard() {
           action={
             <Link
               href="/pipeline"
-              className="font-semi text-[10px] tracking-[0.14em] text-accent-700 hover:text-accent"
+              className="font-semi text-[11.5px] tracking-[0.14em] text-info hover:underline"
             >
-              PIPELINE
+              Pipeline
             </Link>
           }
         />
       </div>
 
       {rows.length === 0 ? (
-        <p className="border-t border-divider px-[18px] py-3 font-semi text-[12px] text-neutral-500">
+        <p className="border-t border-line px-[18px] py-3 font-semi text-[12px] text-neutral-500">
           Nobody is overdue a conversation.
         </p>
       ) : (
         <ul>
           {rows.map((c) => (
-            <li key={c.key} className="border-t border-divider px-[18px] py-2.5">
+            <li key={c.key} className="border-t border-line px-[18px] py-2.5">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate font-cond text-[15px] text-neutral-900">{c.name}</p>
-                  <p className="mt-0.5 font-semi text-[10px] leading-relaxed text-neutral-500">
+                  <p className="mt-0.5 font-semi text-[11.5px] leading-relaxed text-neutral-500">
                     {c.because}
                   </p>
                 </div>
@@ -316,10 +316,10 @@ async function WaitingOnTeamCard() {
           title="Waiting on the team"
           index="O02"
           action={
-            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+            <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
               <Num>{rows.length}</Num> UNANSWERED ·{' '}
-              <Link href="/delegations?view=waiting" className="text-accent-700 hover:text-accent">
-                ALL
+              <Link href="/delegations?view=waiting" className="text-info hover:underline">
+                All
               </Link>
             </span>
           }
@@ -327,7 +327,7 @@ async function WaitingOnTeamCard() {
       </div>
 
       {top.length === 0 ? (
-        <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+        <p className="border-t border-line px-[18px] py-4 font-semi text-[12px] text-neutral-500">
           Nothing handed over is waiting for an answer.
         </p>
       ) : (
@@ -335,17 +335,17 @@ async function WaitingOnTeamCard() {
           {top.map((d) => (
             <li
               key={d.id}
-              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-divider px-[18px] py-2.5"
+              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-line px-[18px] py-2.5"
             >
               <div className="min-w-0">
                 <p className="break-words font-cond text-[15px] text-neutral-900">{d.title}</p>
-                <p className="hud-label mt-0.5 whitespace-normal text-[9px]">
+                <p className="hud-label mt-0.5 whitespace-normal text-[11px]">
                   {d.personName}
                   {d.nudgeCount > 0 ? ` · CHASED ${d.nudgeCount}×` : ''}
                 </p>
               </div>
               <div className="text-end">
-                <span className="hud-label block text-[9px]">QUIET</span>
+                <span className="hud-label block text-[11px]">Quiet</span>
                 <span
                   className={`font-cond text-[19px] leading-none ${
                     d.stuck ? 'text-sev-warning' : 'text-neutral-900'
@@ -376,10 +376,10 @@ async function WaitingOnYouCard() {
           title="Waiting on you"
           index="O03"
           action={
-            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+            <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
               <Num>{counts.important}</Num> IMPORTANT ·{' '}
-              <Link href="/mail" className="text-accent-700 hover:text-accent">
-                ALL MAIL
+              <Link href="/mail" className="text-info hover:underline">
+                All mail
               </Link>
             </span>
           }
@@ -387,7 +387,7 @@ async function WaitingOnYouCard() {
       </div>
 
       {rows.length === 0 ? (
-        <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+        <p className="border-t border-line px-[18px] py-4 font-semi text-[12px] text-neutral-500">
           {counts.lastSyncedAt
             ? 'No important mail is waiting on a reply.'
             : 'The mailbox has not been read yet — the sync runs every fifteen minutes.'}
@@ -397,7 +397,7 @@ async function WaitingOnYouCard() {
           {rows.map((t) => (
             <li
               key={t.threadId}
-              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-divider px-[18px] py-2.5"
+              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-line px-[18px] py-2.5"
             >
               <div className="min-w-0">
                 <a
@@ -408,14 +408,14 @@ async function WaitingOnYouCard() {
                 >
                   {t.subject || '(no subject)'}
                 </a>
-                <p className="hud-label mt-0.5 whitespace-normal text-[9px]">
+                <p className="hud-label mt-0.5 whitespace-normal text-[11px]">
                   {t.counterpartName || t.counterpartEmail}
                   {t.knownCompany ? ` · ${t.knownCompany}` : ''} ·{' '}
                   <Num>{fmtDateTime(t.lastMessageAt)}</Num>
                 </p>
               </div>
               <div className="text-end">
-                <span className="hud-label block text-[9px]">WAITING</span>
+                <span className="hud-label block text-[11px]">Waiting</span>
                 <span
                   className={`font-cond text-[19px] leading-none ${
                     t.daysWaiting >= 3 ? 'text-sev-warning' : 'text-neutral-900'
@@ -464,13 +464,13 @@ async function SlippingAwayCard() {
         title="Slipping away"
         index="O04"
         action={
-          <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-            <Link href="/pipeline?attention=1" className="text-accent-700 hover:text-accent">
-              <Num>{attention.length}</Num> NEED ATTENTION
+          <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+            <Link href="/pipeline?attention=1" className="text-info hover:underline">
+              <Num>{attention.length}</Num> Need attention
             </Link>
             {' · '}
-            <Link href="/pipeline#inbox" className="text-accent-700 hover:text-accent">
-              <Num>{inbox.length}</Num> SUGGESTED
+            <Link href="/pipeline#inbox" className="text-info hover:underline">
+              <Num>{inbox.length}</Num> Suggested
             </Link>
           </span>
         }
@@ -485,7 +485,7 @@ async function SlippingAwayCard() {
       ) : (
         <ul className="space-y-2">
           {rows.map((d) => (
-            <li key={d.id} className="border-t border-divider pt-2 first:border-0 first:pt-0">
+            <li key={d.id} className="border-t border-line pt-2 first:border-0 first:pt-0">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <Link
                   href={`/pipeline?q=${encodeURIComponent(d.name)}`}
@@ -495,7 +495,7 @@ async function SlippingAwayCard() {
                 </Link>
                 <span className="font-cond text-[15px] leading-none text-sev-warning">
                   {d.stepOverdue ? (
-                    <>DUE <Num>{d.nextStepDate}</Num></>
+                    <>Due <Num>{d.nextStepDate}</Num></>
                   ) : d.quietDays === null ? (
                     'NO CONVERSATION'
                   ) : (
@@ -503,7 +503,7 @@ async function SlippingAwayCard() {
                   )}
                 </span>
               </div>
-              <p className="hud-label mt-1 whitespace-normal text-[9px]">
+              <p className="hud-label mt-1 whitespace-normal text-[11px]">
                 {STAGE_LABEL[d.stage]}
                 {d.nextStep ? ` · ${d.nextStep}` : ' · NO NEXT STEP'}
                 {d.valueCents !== null ? <> · <Num>{fmtMoney(d.valueCents)}</Num></> : ''}

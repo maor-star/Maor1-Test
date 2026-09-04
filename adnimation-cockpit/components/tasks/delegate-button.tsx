@@ -34,7 +34,7 @@ export function DelegateButton({
   if (!open) {
     return (
       <Button size="xs" variant="ghost" onClick={() => setOpen(true)} title="Delegate to the team">
-        DELEGATE
+        Delegate
       </Button>
     );
   }
@@ -108,7 +108,7 @@ export function DelegateButton({
               {pending ? 'SENDING…' : 'SEND'}
             </Button>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              CANCEL
+              Cancel
             </Button>
           </div>
         </form>

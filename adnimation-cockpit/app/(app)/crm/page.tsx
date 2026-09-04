@@ -90,8 +90,8 @@ export default async function CrmPage({
         kicker="SALES / 10"
         title="CRM"
         action={
-          <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
-            THE BOOK LIVES HERE · HUBSPOT IS ONLY WHERE IT CAME FROM
+          <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
+            The book lives here · HubSpot is only where it came from
           </span>
         }
       />
@@ -101,10 +101,10 @@ export default async function CrmPage({
           title="The book"
           index="C01"
           action={
-            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+            <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
               {summary.lastSyncedAt ? (
                 <>
-                  SYNCED <Num>{fmtDateTime(summary.lastSyncedAt)}</Num>
+                  Synced <Num>{fmtDateTime(summary.lastSyncedAt)}</Num>
                 </>
               ) : (
                 'NEVER SYNCED'
@@ -121,14 +121,14 @@ export default async function CrmPage({
         </div>
 
         {summary.byStage.length > 0 ? (
-          <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-divider pt-3">
+          <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-line pt-3">
             {summary.byStage.map((s) => (
               <Link
                 key={s.stage}
                 href={keep(sp, 'companies', { stage: s.stage })}
                 className="group"
               >
-                <span className="hud-label block text-[9px] group-hover:text-accent">{s.label}</span>
+                <span className="hud-label block text-[11px] group-hover:text-accent">{s.label}</span>
                 <span className="font-cond text-[20px] leading-none text-neutral-800 group-hover:text-accent">
                   <Num>{fmtNumber(s.companies)}</Num>
                 </span>
@@ -139,14 +139,12 @@ export default async function CrmPage({
       </HudCard>
 
       <div className="flex flex-wrap items-center gap-3">
-        <nav className="flex border border-divider">
+        <nav className="segmented">
           {VIEWS.map((v) => (
             <Link
               key={v}
               href={keep(sp, v)}
-              className={`px-3 py-1 font-semi text-[11px] uppercase tracking-[0.16em] ${
-                v === view ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
-              }`}
+              aria-current={v === view ? 'page' : undefined}
             >
               {v}
             </Link>
@@ -168,7 +166,7 @@ export default async function CrmPage({
           {filtered ? (
             <Link
               href={`/crm?view=${view}`}
-              className="font-semi text-[10px] uppercase tracking-[0.16em] text-accent-700 hover:text-accent"
+              className="font-semi text-[11.5px] uppercase tracking-[0.16em] text-info hover:underline"
             >
               Clear
             </Link>
@@ -213,15 +211,15 @@ async function Companies({
           title="Companies"
           index="C02"
           action={
-            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-              <Num>{fmtNumber(total)}</Num> MATCHING
+            <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+              <Num>{fmtNumber(total)}</Num> Matching
             </span>
           }
         />
       </div>
 
       {rows.length === 0 ? (
-        <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+        <p className="border-t border-line px-[18px] py-4 font-semi text-[12px] text-neutral-500">
           Nothing matches.
         </p>
       ) : (
@@ -229,7 +227,7 @@ async function Companies({
           {rows.map((c) => {
             const people = contacts.get(c.hubspotId) ?? [];
             return (
-              <li key={c.hubspotId} className="border-t border-divider px-[18px] py-3">
+              <li key={c.hubspotId} className="border-t border-line px-[18px] py-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     {/* The name is the way in: everyone there, everything
@@ -241,18 +239,18 @@ async function Companies({
                     >
                       {c.name}
                     </Link>
-                    <p className="hud-label mt-0.5 text-[9px]">
+                    <p className="hud-label mt-0.5 text-[11px]">
                       {[c.domain, c.city, c.country].filter(Boolean).join(' · ') || 'NO DOMAIN'}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {c.source === 'local' ? (
                       <Tag tone="accent" title="Created here, never in HubSpot">
-                        ADDED HERE
+                        Added here
                       </Tag>
                     ) : c.editedAt ? (
                       <Tag tone="outline" title="Edited here — no sync will overwrite it">
-                        EDITED HERE
+                        Edited here
                       </Tag>
                     ) : null}
                     {c.ownerName ? <Tag tone="outline">{c.ownerName}</Tag> : null}
@@ -273,7 +271,7 @@ async function Companies({
                         >
                           {contactName(p)}
                         </Link>
-                        <p className="truncate font-semi text-[10px] tracking-[0.06em] text-neutral-500">
+                        <p className="truncate font-semi text-[11.5px] tracking-[0.06em] text-neutral-500">
                           {[p.jobTitle, p.email, p.phone].filter(Boolean).join(' · ') ||
                             'NO CONTACT DETAILS'}
                         </p>
@@ -298,9 +296,9 @@ async function Companies({
                     ))}
                   </ul>
                 ) : c.contactCount > 0 ? (
-                  <p className="mt-1 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-                    <Num>{c.contactCount}</Num> CONTACT{c.contactCount === 1 ? '' : 'S'} IN HUBSPOT,
-                    NOT YET COPIED
+                  <p className="mt-1 font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
+                    <Num>{c.contactCount}</Num> Contact{c.contactCount === 1 ? '' : 'S'} in HUBSPOT,
+                    not yet copied
                   </p>
                 ) : null}
 
@@ -347,8 +345,8 @@ async function Contacts({
           title="Contacts"
           index="C03"
           action={
-            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-              <Num>{fmtNumber(total)}</Num> MATCHING
+            <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+              <Num>{fmtNumber(total)}</Num> Matching
             </span>
           }
         />
@@ -358,7 +356,7 @@ async function Contacts({
           A table would scan better but cannot hold an edit form inside a row. */}
       <ul>
         {rows.map((p) => (
-          <li key={p.hubspotId} className="border-t border-divider px-[18px] py-3">
+          <li key={p.hubspotId} className="border-t border-line px-[18px] py-3">
             <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -370,20 +368,20 @@ async function Contacts({
                   </Link>
                   {p.source === 'local' ? (
                     <Tag tone="accent" title="Created here, never in HubSpot">
-                      ADDED HERE
+                      Added here
                     </Tag>
                   ) : p.editedAt ? (
                     <Tag tone="outline" title="Edited here — no sync will overwrite it">
-                      EDITED HERE
+                      Edited here
                     </Tag>
                   ) : null}
                   <Tag tone="neutral">{stageLabel(p.lifecycleStage)}</Tag>
                 </div>
-                <p className="hud-label mt-1 whitespace-normal text-[9px]">
+                <p className="hud-label mt-1 whitespace-normal text-[11px]">
                   {p.companyId && p.companyName ? (
                     <Link
                       href={`/crm/company/${encodeURIComponent(p.companyId)}`}
-                      className="text-accent-700 hover:text-accent"
+                      className="text-info hover:underline"
                     >
                       {p.companyName}
                     </Link>
@@ -412,9 +410,9 @@ async function Contacts({
               const said = p.email ? talk.get(p.email.toLowerCase()) : undefined;
               if (!said || said.recent.length === 0) return null;
               return (
-                <div className="mt-2 border-s-2 border-divider ps-2">
-                  <span className="hud-label text-[9px]">
-                    WHAT YOU TALKED ABOUT · <Num>{said.total}</Num>{' '}
+                <div className="mt-2 border-s-2 border-line ps-2">
+                  <span className="hud-label text-[11px]">
+                    What you talked about · <Num>{said.total}</Num>{' '}
                     {said.total === 1 ? 'CONVERSATION' : 'CONVERSATIONS'}
                   </span>
                   <ul className="mt-1 space-y-1">
@@ -455,7 +453,7 @@ async function Contacts({
       </ul>
 
       {rows.length === 0 ? (
-        <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+        <p className="border-t border-line px-[18px] py-4 font-semi text-[12px] text-neutral-500">
           Nothing matches.
         </p>
       ) : null}
@@ -482,19 +480,19 @@ function Pager({
   const href = (p: number) => `${keep(sp, view)}&page=${p}`;
 
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-divider px-[18px] py-2 font-semi text-[10px] tracking-[0.14em] text-neutral-500">
+    <div className="flex items-center justify-between gap-3 border-t border-line px-[18px] py-2 font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
       <span>
-        PAGE <Num>{page + 1}</Num> OF <Num>{fmtNumber(pages)}</Num>
+        Page <Num>{page + 1}</Num> OF <Num>{fmtNumber(pages)}</Num>
       </span>
       <span className="flex gap-4">
         {page > 0 ? (
-          <Link href={href(page - 1)} className="text-accent-700 hover:text-accent">
-            PREVIOUS
+          <Link href={href(page - 1)} className="text-info hover:underline">
+            Previous
           </Link>
         ) : null}
         {page + 1 < pages ? (
-          <Link href={href(page + 1)} className="text-accent-700 hover:text-accent">
-            NEXT
+          <Link href={href(page + 1)} className="text-info hover:underline">
+            Next
           </Link>
         ) : null}
       </span>
@@ -505,7 +503,7 @@ function Pager({
 function Figure({ label, value, big }: { label: string; value: string; big?: boolean }) {
   return (
     <div className="min-w-0">
-      <p className="hud-label text-[9px]">{label}</p>
+      <p className="hud-label text-[11px]">{label}</p>
       <p
         className={
           big
@@ -539,7 +537,7 @@ function CrmFilters({
   const stages = [...STAGE_ORDER];
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border border-divider p-2">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border border-line p-2">
       <FilterChips
         label="TYPE"
         options={stages.map((s) => ({ value: s, label: stageLabel(s) }))}
@@ -587,10 +585,10 @@ function CrmFilters({
       {view === 'companies' ? (
         <Link
           href={keep(sp, view, { people: sp.people === '1' ? undefined : '1' })}
-          className={`px-2 py-1 font-semi text-[10px] uppercase tracking-[0.14em] ${
+          className={`inline-flex items-center rounded-full px-[13px] py-[6px] text-[13.5px] font-semibold ${
             sp.people === '1'
-              ? 'bg-accent text-ground'
-              : 'border border-divider text-neutral-500 hover:text-accent'
+              ? 'bg-brand text-white'
+              : 'border border-line bg-card text-neutral-700 hover:bg-neutral-100'
           }`}
         >
           Has a contact
@@ -599,11 +597,11 @@ function CrmFilters({
 
       <Link
         href={keep(sp, view, { archived: sp.archived === '1' ? undefined : '1' })}
-        className={`px-2 py-1 font-semi text-[10px] uppercase tracking-[0.14em] ${
-          sp.archived === '1'
-            ? 'bg-accent text-ground'
-            : 'border border-divider text-neutral-500 hover:text-accent'
-        }`}
+        className={`inline-flex items-center rounded-full px-[13px] py-[6px] text-[13.5px] font-semibold ${
+            sp.archived === '1'
+              ? 'bg-brand text-white'
+              : 'border border-line bg-card text-neutral-700 hover:bg-neutral-100'
+          }`}
       >
         Archived
       </Link>
@@ -624,15 +622,15 @@ function FilterChips({
 }) {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1">
-      <span className="hud-label me-1 text-[9px]">{label}</span>
+      <span className="hud-label me-1 text-[11px]">{label}</span>
       {options.map((o) => (
         <Link
           key={o.value}
           href={hrefFor(active === o.value ? undefined : o.value)}
-          className={`px-2 py-0.5 font-semi text-[10px] uppercase tracking-[0.1em] ${
+          className={`inline-flex items-center rounded-full px-[13px] py-[6px] text-[13.5px] font-semibold ${
             active === o.value
-              ? 'bg-accent text-ground'
-              : 'border border-divider text-neutral-500 hover:text-accent'
+              ? 'bg-brand text-white'
+              : 'border border-line bg-card text-neutral-700 hover:bg-neutral-100'
           }`}
         >
           {o.label}

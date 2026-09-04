@@ -46,31 +46,31 @@ export function SecretField({ spec, status }: { spec: SecretSpec; status: Secret
   };
 
   return (
-    <li className="border-t border-divider px-[18px] py-3">
+    <li className="border-t border-line px-[22px] py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <p className="font-cond text-[16px] leading-none text-neutral-900">{spec.label}</p>
+        <p className="text-[16px] font-semibold leading-none text-ink">{spec.label}</p>
         <span className="flex flex-wrap items-center gap-2">
           {fromEnv ? (
             <Tag tone="outline" title="Set on the server by a deploy — not editable here">
-              SET ON THE SERVER
+              Set on the server
             </Tag>
           ) : status.set ? (
             <Tag tone="ok">
               SET{status.hint ? ` · ${status.hint}` : ''}
             </Tag>
           ) : (
-            <Tag tone="watch">NOT SET</Tag>
+            <Tag tone="watch">Not set</Tag>
           )}
           {status.updatedAt ? (
-            <span className="hud-label text-[9px]">
+            <span className="hud-label text-[11px]">
               <Num>{fmtDateTime(status.updatedAt)}</Num>
             </span>
           ) : null}
         </span>
       </div>
 
-      <p className="mt-1 text-[13px] leading-relaxed text-neutral-600">{spec.unlocks}</p>
-      <p className="hud-label mt-1 whitespace-normal text-[9px]">WHERE: {spec.where}</p>
+      <p className="mt-2 text-[14px] leading-relaxed text-neutral-700">{spec.unlocks}</p>
+      <p className="hud-label mt-1 whitespace-normal text-[11px]">WHERE: {spec.where}</p>
 
       {fromEnv ? null : (
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -82,7 +82,7 @@ export function SecretField({ spec, status }: { spec: SecretSpec; status: Secret
             dir="ltr"
             autoComplete="off"
             spellCheck={false}
-            className="min-w-[18rem] flex-1 font-mono text-[12px]"
+            className="min-w-[18rem] flex-1 font-mono text-[13.5px]"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && value.trim()) save(value);
             }}
@@ -92,11 +92,11 @@ export function SecretField({ spec, status }: { spec: SecretSpec; status: Secret
           </Button>
           {status.set ? (
             <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => save('')}>
-              REMOVE
+              Remove
             </Button>
           ) : null}
           {message ? (
-            <span className="font-semi text-[10px] tracking-[0.1em] text-accent-700">{message}</span>
+            <span className="font-semi text-[11.5px] tracking-[0.1em] text-info">{message}</span>
           ) : null}
         </div>
       )}

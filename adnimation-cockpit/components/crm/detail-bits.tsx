@@ -26,14 +26,14 @@ export function Field({
   const body = ltr ? <Num>{value}</Num> : value;
   return (
     <div className="min-w-0">
-      <p className="hud-label text-[9px]">{label}</p>
+      <p className="hud-label text-[11px]">{label}</p>
       <p className="mt-0.5 break-words text-[13px] text-neutral-800">
         {href ? (
           <a
             href={href}
             target={href.startsWith('http') ? '_blank' : undefined}
             rel="noreferrer"
-            className="text-accent-700 hover:text-accent"
+            className="text-info hover:underline"
           >
             {body}
           </a>
@@ -63,7 +63,7 @@ export function Conversations({
 }) {
   if (conversations.length === 0) {
     return (
-      <p className="border-t border-divider px-[18px] py-3 font-semi text-[12px] text-neutral-500">
+      <p className="border-t border-line px-[18px] py-3 font-semi text-[12px] text-neutral-500">
         {emptyNote}
       </p>
     );
@@ -72,7 +72,7 @@ export function Conversations({
   return (
     <ul>
       {conversations.map((t) => (
-        <li key={t.threadId} className="border-t border-divider px-[18px] py-2.5">
+        <li key={t.threadId} className="border-t border-line px-[18px] py-2.5">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3">
             <a
               href={t.url}
@@ -82,12 +82,12 @@ export function Conversations({
             >
               {t.subject || '(no subject)'}
             </a>
-            <span className="shrink-0 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+            <span className="shrink-0 font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
               <Num>{fmtDate(t.lastMessageAt)}</Num>
               {t.messageCount > 1 ? (
                 <>
                   {' · '}
-                  <Num>{t.messageCount}</Num> MESSAGES
+                  <Num>{t.messageCount}</Num> Messages
                 </>
               ) : null}
               {t.lastFromMe ? ' · YOU ANSWERED' : ' · WAITING ON YOU'}
@@ -99,8 +99,8 @@ export function Conversations({
         </li>
       ))}
       {total > conversations.length ? (
-        <li className="border-t border-divider px-[18px] py-2 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-          SHOWING <Num>{conversations.length}</Num> OF <Num>{total}</Num>
+        <li className="border-t border-line px-[18px] py-2 font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+          Showing <Num>{conversations.length}</Num> OF <Num>{total}</Num>
         </li>
       ) : null}
     </ul>
@@ -110,7 +110,7 @@ export function Conversations({
 /** The way back, and the way to the other record. */
 export function CrumbLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link href={href} className="font-semi text-[10px] tracking-[0.14em] text-accent-700 hover:text-accent">
+    <Link href={href} className="font-semi text-[11.5px] tracking-[0.14em] text-info hover:underline">
       {children}
     </Link>
   );

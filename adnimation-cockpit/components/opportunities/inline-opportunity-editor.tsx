@@ -49,7 +49,7 @@ export function InlineOpportunityEditor({ id }: { id: string }) {
       </Button>
 
       {open ? (
-        <div className="mt-2 w-full border border-divider">
+        <div className="mt-2 w-full border border-line">
           {loading ? (
             <p className="px-2 py-2 text-[13px] text-neutral-500">Opening it…</p>
           ) : error ? (

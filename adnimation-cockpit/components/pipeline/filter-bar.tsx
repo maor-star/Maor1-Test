@@ -37,12 +37,10 @@ export interface FilterGroup {
 
 export function PipelineFilterBar({ groups }: { groups: FilterGroup[] }) {
   return (
-    <div className="hud-card hud-marks flex min-w-0 flex-col divide-y divide-divider p-0">
+    <div className="hud-card flex min-w-0 flex-col divide-y divide-line p-0">
       {groups.map((group) => (
-        <div key={group.label} className="flex flex-wrap items-center gap-x-4 gap-y-2 p-[14px]">
-          <span className="hud-label w-[62px] shrink-0 text-[9px] text-neutral-400">
-            {group.label}
-          </span>
+        <div key={group.label} className="flex flex-wrap items-center gap-x-4 gap-y-2 p-[16px]">
+          <span className="hud-label w-[70px] shrink-0 text-[11.5px]">{group.label}</span>
           <div className="flex flex-wrap gap-1.5">
             {group.chips.map((chip) => (
               <Chip key={chip.key} chip={chip} />
@@ -64,24 +62,24 @@ function Chip({ chip }: { chip: FilterChip }) {
       className={[
         'group inline-flex min-h-[34px] items-center gap-2 border px-3 transition-colors',
         chip.active
-          ? 'border-accent bg-accent text-ground'
+          ? 'border-accent bg-brand text-white'
           : empty
-            ? 'border-divider text-neutral-400 hover:border-accent hover:text-accent'
-            : 'border-divider text-neutral-700 hover:border-accent hover:text-accent',
+            ? 'border-line text-neutral-400 hover:border-accent hover:text-accent'
+            : 'border-line text-neutral-700 hover:border-accent hover:text-accent',
       ].join(' ')}
     >
       <span className="font-semi text-[11px] uppercase tracking-[0.14em]">{chip.label}</span>
       {chip.count !== null && chip.count !== undefined ? (
         <span
           className={[
-            'font-cond text-[16px] leading-none',
+            'font-mono text-[14px] font-semibold leading-none',
             chip.active
-              ? 'text-ground'
+              ? 'text-white'
               : chip.tone === 'warn' && chip.count > 0
-                ? 'text-sev-warning'
+                ? 'text-warn'
                 : empty
-                  ? 'text-neutral-300'
-                  : 'text-accent-700 group-hover:text-accent',
+                  ? 'text-neutral-400'
+                  : 'text-muted',
           ].join(' ')}
         >
           <Num>{chip.count}</Num>

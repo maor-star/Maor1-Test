@@ -42,7 +42,7 @@ export function CheckReplies() {
       </Button>
       {message ? (
         <span
-          className={`font-semi text-[10px] tracking-[0.1em] ${
+          className={`font-semi text-[11.5px] tracking-[0.1em] ${
             failed ? 'text-sev-warning' : 'text-neutral-500'
           }`}
         >

@@ -37,13 +37,13 @@ export function NewDelegation({
   if (!open) {
     return (
       <Button type="button" size="sm" onClick={() => setOpen(true)}>
-        HAND SOMETHING OVER
+        Hand something over
       </Button>
     );
   }
 
   return (
-    <div className="w-full border border-divider p-3">
+    <div className="w-full border border-line p-3">
       <form
         ref={formRef}
         className="space-y-2"
@@ -128,7 +128,7 @@ export function NewDelegation({
           <div className="flex items-end">
             <label className="flex items-center gap-2 pb-1.5 font-semi text-[11px] tracking-[0.1em] text-neutral-600">
               <input type="checkbox" name="alsoClickUp" value="1" defaultChecked />
-              ALSO CREATE A CLICKUP TASK
+              Also create a ClickUp task
             </label>
           </div>
 
@@ -148,9 +148,9 @@ export function NewDelegation({
             {pending ? 'SENDING…' : 'SEND IT'}
           </Button>
           <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
-            CANCEL
+            Cancel
           </Button>
-          <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+          <span className="font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
             {sharedThreads
               ? 'SENT AS A SLACK THREAD WITH BOTH OF YOU — IT APPEARS IN YOUR SLACK TOO'
               : 'SENT AS A SLACK DM TO THEM — READ IT UNDER “CONVERSATION” BELOW'}

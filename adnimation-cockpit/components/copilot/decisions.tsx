@@ -60,23 +60,23 @@ export function DecisionLog({ decisions, canReview }: { decisions: DecisionRow[]
       </div>
 
       {decisions.length === 0 ? (
-        <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+        <p className="border-t border-line px-[18px] py-4 font-semi text-[12px] text-neutral-500">
           No review yet. Press the button, or switch the autopilot agent on and it runs every morning.
         </p>
       ) : (
         <ul>
           {decisions.map((d) => (
-            <li key={d.id} className="border-t border-divider px-[18px] py-3">
+            <li key={d.id} className="border-t border-line px-[18px] py-3">
               <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <Tag tone="outline">{d.area.toUpperCase()}</Tag>
                     <StatusTag status={d.status} />
-                    <span className="hud-label text-[9px]"><Num>{fmtDateTime(d.createdAt)}</Num></span>
+                    <span className="hud-label text-[11px]"><Num>{fmtDateTime(d.createdAt)}</Num></span>
                   </div>
                   <p className="mt-1 font-cond text-[16px] leading-tight text-neutral-900">{d.title}</p>
                   <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-neutral-600">{d.reasoning}</p>
-                  <p className="hud-label mt-1 whitespace-normal text-[9px]">
+                  <p className="hud-label mt-1 whitespace-normal text-[11px]">
                     WOULD {String(d.action.kind ?? 'none').toUpperCase()}
                     {d.action.kind === 'task' && d.action.title ? `: ${String(d.action.title)}` : ''}
                     {d.action.kind === 'stage' ? `: → ${String(d.action.stage ?? '')}` : ''}
@@ -87,7 +87,7 @@ export function DecisionLog({ decisions, canReview }: { decisions: DecisionRow[]
                   {/* A Slack message is the one thing here the whole company
                       reads, so he sees the words before he approves them. */}
                   {d.action.kind === 'slack' && d.action.text ? (
-                    <p className="mt-1 whitespace-pre-wrap border-s-2 border-divider ps-2 text-[13px] leading-relaxed text-neutral-800">
+                    <p className="mt-1 whitespace-pre-wrap border-s-2 border-line ps-2 text-[13px] leading-relaxed text-neutral-800">
                       {String(d.action.text)}
                     </p>
                   ) : null}

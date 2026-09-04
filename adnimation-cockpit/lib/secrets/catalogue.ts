@@ -94,10 +94,10 @@ export const SECRETS: SecretSpec[] = [
 ];
 
 export const GROUP_LABEL: Record<SecretSpec['group'], string> = {
-  models: 'MODELS',
-  data: 'THE DATA SOURCE',
-  publishing: 'PUBLISHING',
-  scheduling: 'MEETINGS',
+  models: 'Models',
+  data: 'The data source',
+  publishing: 'Publishing',
+  scheduling: 'Meetings',
 };
 
 export const SECRET_KEYS = SECRETS.map((s) => s.key);

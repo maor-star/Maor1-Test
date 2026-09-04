@@ -87,11 +87,11 @@ export function CopilotChat({
         ) : (
           all.map((m) => <Message key={m.id} m={m} />)
         )}
-        {pending ? <p className="font-semi text-[11px] tracking-[0.1em] text-neutral-500">READING THE COCKPIT…</p> : null}
+        {pending ? <p className="font-semi text-[11px] tracking-[0.1em] text-neutral-500">Reading the cockpit…</p> : null}
         <div ref={endRef} />
       </div>
 
-      <div className="border-t border-divider px-[18px] py-3">
+      <div className="border-t border-line px-[18px] py-3">
         {nothingConnected ? (
           <p className="mb-2 text-[12px] text-sev-warning">
             No model is connected. Set ANTHROPIC_API_KEY or GEMINI_API_KEY on the server (deploy/set-secret.mjs) and restart.
@@ -132,25 +132,25 @@ function Message({ m }: { m: StoredMessage }) {
   const mine = m.role === 'user';
   return (
     <div className={mine ? 'flex justify-end' : 'flex justify-start'}>
-      <div className={`max-w-[85%] border px-3 py-2 ${mine ? 'border-accent/40 bg-accent/5' : 'border-divider bg-ground'}`}>
+      <div className={`max-w-[85%] border px-3 py-2 ${mine ? 'border-accent/40 bg-accent/5' : 'border-line bg-card'}`}>
         <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-neutral-900">{m.content || (mine ? '' : '—')}</p>
         {!mine && (m.toolCalls.length > 0 || m.model) ? (
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            {m.model ? <span className="hud-label text-[9px]">{m.provider === 'gemini' ? 'GEMINI' : 'CLAUDE'} · {m.model}</span> : null}
+            {m.model ? <span className="hud-label text-[11px]">{m.provider === 'gemini' ? 'GEMINI' : 'CLAUDE'} · {m.model}</span> : null}
             {m.toolCalls.length > 0 ? (
-              <button type="button" onClick={() => setOpen((v) => !v)} className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent">
+              <button type="button" onClick={() => setOpen((v) => !v)} className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline">
                 {open ? 'Hide' : 'Show'} what it read · {m.toolCalls.length}
               </button>
             ) : null}
           </div>
         ) : null}
         {open ? (
-          <ul className="mt-2 space-y-1 border-t border-divider pt-2">
+          <ul className="mt-2 space-y-1 border-t border-line pt-2">
             {m.toolCalls.map((t, i) => (
               <li key={i} className="text-[11px] text-neutral-600">
-                <span className="font-semi text-accent-700">{t.name}</span>
+                <span className="font-semi text-info">{t.name}</span>
                 {Object.keys(t.args).length ? <span dir="ltr" className="ms-1 text-neutral-500">{JSON.stringify(t.args)}</span> : null}
-                <pre dir="ltr" className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap text-start text-[10px] leading-snug text-neutral-500">{t.output.slice(0, 1500)}</pre>
+                <pre dir="ltr" className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap text-start text-[11.5px] leading-snug text-neutral-500">{t.output.slice(0, 1500)}</pre>
               </li>
             ))}
           </ul>

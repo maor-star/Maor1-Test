@@ -35,23 +35,23 @@ export function Freshness({
 
   return (
     <p
-      className={`font-semi text-[10px] tracking-[0.12em] ${
+      className={`font-semi text-[11.5px] tracking-[0.12em] ${
         stale ? 'text-sev-warning' : 'text-neutral-500'
       }`}
     >
       SOURCE: AD OPS ARCHITECT (LOVABLE) · READ-ONLY ·{' '}
       {ageHours === null ? (
-        <>PULLED <Num>{pulledAt}</Num></>
+        <>Pulled <Num>{pulledAt}</Num></>
       ) : ageHours < 1 ? (
         'UPDATED IN THE LAST HOUR'
       ) : (
         <>
-          UPDATED <Num>{ageHours}h</Num> AGO
+          Updated <Num>{ageHours}h</Num> Ago
         </>
       )}
       {live === false ? ' · FROM THE BUILT-IN SNAPSHOT, NOT A LIVE SYNC' : ''}
-      {stale ? ' · THE SYNC HAS NOT RUN' : ''} · LAST COMPLETE DAY{' '}
-      <Num>{lastCompleteDay}</Num> · <Num>{partialDay}</Num> IS STILL PARTIAL
+      {stale ? ' · THE SYNC HAS NOT RUN' : ''} · Last complete day{' '}
+      <Num>{lastCompleteDay}</Num> · <Num>{partialDay}</Num> Is still partial
     </p>
   );
 }

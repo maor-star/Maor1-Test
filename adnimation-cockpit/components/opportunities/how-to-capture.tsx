@@ -21,8 +21,8 @@ export function HowToCapture({
   const live = labelHealth?.filter((h) => h.threadsCarrying > 0) ?? [];
   const dead = labelHealth?.filter((h) => h.threadsCarrying === 0) ?? [];
   return (
-    <div className="border border-divider p-4">
-      <p className="hud-label mb-3 text-[9px]">THREE WAYS IN — ALL FROM WHERE YOU ALREADY ARE</p>
+    <div className="border border-line p-4">
+      <p className="hud-label mb-3 text-[11px]">Three ways in — all from where you already are</p>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Step
@@ -34,7 +34,7 @@ export function HowToCapture({
               {gmailLabels.map((l, i) => (
                 <span key={l}>
                   {i > 0 ? ' or ' : ''}
-                  <span className="font-semi text-accent-700">{l}</span>
+                  <span className="font-semi text-info">{l}</span>
                 </span>
               ))}{' '}
               to any conversation. It appears here within the hour, with the thread linked. Create
@@ -48,7 +48,7 @@ export function HowToCapture({
           title="In Slack"
           body={
             <>
-              Send it to the <span className="font-semi text-accent-700">cockpit bot</span> in a
+              Send it to the <span className="font-semi text-info">cockpit bot</span> in a
               DM — forward a message to it, or just type a line. Anything you send it becomes an
               opportunity, and it replies to confirm. Nothing to set up.
             </>
@@ -68,7 +68,7 @@ export function HowToCapture({
 
       {labelHealth && labelHealth.length > 0 ? (
         <p
-          className={`mt-3 border-t border-divider pt-2 font-semi text-[10px] tracking-[0.1em] ${
+          className={`mt-3 border-t border-line pt-2 font-semi text-[11.5px] tracking-[0.1em] ${
             live.length === 0 ? 'text-sev-warning' : 'text-neutral-500'
           }`}
         >
@@ -83,9 +83,9 @@ export function HowToCapture({
         </p>
       ) : null}
 
-      <p className="mt-3 border-t border-divider pt-2 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-        MAIL IS ALSO READ HOURLY FOR CANDIDATES — THOSE ARRIVE UNDER “SUGGESTED” AND WAIT FOR YOUR
-        YES OR NO. WHEN ONE BECOMES A REAL DEAL, “<Num>→</Num> PIPELINE” MOVES IT ACROSS.
+      <p className="mt-3 border-t border-line pt-2 font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
+        Mail is also read hourly for candidates — those arrive under “suggested” and wait for your
+        yes or no. when one becomes a real deal, “<Num>→</Num> Pipeline” moves it across.
       </p>
     </div>
   );
@@ -94,7 +94,7 @@ export function HowToCapture({
 function Step({ num, title, body }: { num: string; title: string; body: React.ReactNode }) {
   return (
     <div>
-      <p className="hud-label text-[9px] text-accent-700">
+      <p className="hud-label text-[11px] text-info">
         <Num>{num}</Num> · {title.toUpperCase()}
       </p>
       <p className="mt-1 text-[13px] leading-snug text-neutral-600">{body}</p>

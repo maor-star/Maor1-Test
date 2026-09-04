@@ -43,7 +43,7 @@ export function TaskBoardView({
               <li className="px-1 py-2 text-2xs text-neutral-500">ריק</li>
             ) : (
               items.map((t) => (
-                <li key={t.id} className="border border-divider bg-ground p-1.5">
+                <li key={t.id} className="border border-line bg-card p-1.5">
                   <TaskTitleLink id={t.id} title={t.title} clickupUrl={t.clickupUrl} />
                   <div className="mt-1 flex items-center justify-between gap-1">
                     <PriorityBadge priority={t.priority} />

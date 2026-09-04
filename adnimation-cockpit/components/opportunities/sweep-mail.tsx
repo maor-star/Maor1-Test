@@ -34,7 +34,7 @@ export function SweepMail() {
         {pending ? 'READING THE MAIL…' : 'SCAN MAIL NOW'}
       </Button>
       {message ? (
-        <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">{message}</span>
+        <span className="font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">{message}</span>
       ) : null}
     </div>
   );

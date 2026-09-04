@@ -47,7 +47,7 @@ export function QuickTaskActions({
   const done = status === 'done';
 
   return (
-    <span className="inline-flex flex-wrap items-center gap-1">
+    <span className="inline-flex flex-nowrap items-center gap-1 whitespace-nowrap">
       {/*
         The status, on the row. Closing and reopening are the two things he
         does most from a list he is working through, and walking into the task
@@ -60,7 +60,7 @@ export function QuickTaskActions({
         id={`row-status-${taskId}`}
         value={status}
         disabled={pending}
-        className="h-7 w-auto text-[12px]"
+        className="h-[30px] w-auto text-[13px]"
         onChange={(e) => run(updateTaskAction, { status: e.target.value })}
       >
         {TASK_STATUSES.map((s) => (
@@ -76,7 +76,7 @@ export function QuickTaskActions({
           onClick={() => run(updateTaskAction, { status: 'open' })}
           title="Put it back on the list"
         >
-          REOPEN
+          Reopen
         </Button>
       ) : (
         <Button
@@ -86,7 +86,7 @@ export function QuickTaskActions({
           onClick={() => run(completeTaskAction)}
           title="Close this task"
         >
-          DONE
+          Done
         </Button>
       )}
       <Button
@@ -96,7 +96,7 @@ export function QuickTaskActions({
         onClick={() => run(snoozeTaskAction, { days: '7' })}
         title="Snooze a week — counts toward the Zombie rule"
       >
-        SNOOZE
+        Snooze
       </Button>
       {/*
         Removing a task he never wanted. It archives rather than deletes —
@@ -113,7 +113,7 @@ export function QuickTaskActions({
         }}
         title="Remove it from every view"
       >
-        DELETE
+        Delete
       </Button>
     </span>
   );

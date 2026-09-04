@@ -58,10 +58,10 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
         kicker="COPILOT / 00"
         title="Copilot"
         action={
-          <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
+          <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
             {providers.auto ? `ANSWERING WITH ${providers.auto === 'gemini' ? 'GEMINI' : 'CLAUDE'}` : 'NO MODEL CONNECTED'}
             {' · '}
-            <Link href="/agents?q=autopilot" className="text-accent-700 hover:text-accent">
+            <Link href="/agents?q=autopilot" className="text-info hover:underline">
               AUTOPILOT {autopilot?.enabled ? 'ON' : 'OFF'} · LEVEL {autopilot?.autonomyLevel ?? 1}
             </Link>
           </span>
@@ -74,7 +74,7 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
           <Figure label="CARRIED OUT" value={counts.executed} />
           <Figure label="DECISIONS TODAY" value={counts.today} />
           <div className="min-w-0">
-            <p className="hud-label text-[9px]">LAST REVIEW</p>
+            <p className="hud-label text-[11px]">Last review</p>
             <p className="mt-1 font-cond text-[20px] leading-none text-neutral-800">
               {reviewedAt ? <Num>{fmtDateTime(reviewedAt)}</Num> : 'NEVER'}
             </p>
@@ -83,24 +83,24 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
         {/* What it can see of Slack, said out loud: a chat that answers
             "nothing in Slack" because it was never invited anywhere is worse
             than one that says it cannot look. */}
-        <p className="border-t border-divider pt-3 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+        <p className="border-t border-line pt-3 font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
           SLACK —{' '}
           {slack.channels === null ? (
             <>
-              CANNOT READ IT YET. <Link href="/settings" className="text-accent-700 hover:text-accent">PASTE A SLACK USER TOKEN ON KEYS</Link>{' '}
-              AND IT READS EVERY CHANNEL YOU SEE. IT ALWAYS POSTS AS THE COCKPIT, NEVER AS YOU.
+              Cannot read it yet. <Link href="/settings" className="text-info hover:underline">Paste a Slack user token on keys</Link>{' '}
+              and it reads every channel you see. it always posts as the cockpit, never as you.
             </>
           ) : (
             <>
               READING {slack.asUser ? 'AS YOU' : 'AS THE COCKPIT BOT'} · <Num>{slack.channels}</Num> CHANNEL
               {slack.channels === 1 ? '' : 'S'}
-              {slack.asUser ? '' : <> · <Link href="/settings" className="text-accent-700 hover:text-accent">PASTE A USER TOKEN ON KEYS</Link> TO READ ALL OF IT</>}
+              {slack.asUser ? '' : <> · <Link href="/settings" className="text-info hover:underline">Paste a user token on keys</Link> To read all of it</>}
             </>
           )}
         </p>
-        <p className="border-t border-divider pt-3 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-          THE AUTOPILOT IS AT LEVEL {autopilot?.autonomyLevel ?? 1} — {AUTONOMY_LABEL[autopilot?.autonomyLevel ?? 1]}.
-          IT CAN NEVER SEND, SIGN, PAY OR TOUCH ANYTHING OUTSIDE THE COCKPIT. WHAT IT MAY DO ON ITS OWN IS SET ON ITS DIALS.
+        <p className="border-t border-line pt-3 font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+          The autopilot is at level {autopilot?.autonomyLevel ?? 1} — {AUTONOMY_LABEL[autopilot?.autonomyLevel ?? 1]}.
+          it can never send, sign, pay or touch anything outside the cockpit. what it may do on its own is set on its dials.
         </p>
       </HudCard>
 
@@ -111,8 +111,8 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
               title={current ? current.title : 'Talk to it'}
               index="X01"
               action={
-                <span className="flex flex-wrap items-center gap-3 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                  <Link href="/copilot?thread=new" className="text-accent-700 hover:text-accent">NEW</Link>
+                <span className="flex flex-wrap items-center gap-3 font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+                  <Link href="/copilot?thread=new" className="text-info hover:underline">New</Link>
                   {threads.slice(0, 6).filter((t) => t.id !== threadId).map((t) => (
                     <Link key={t.id} href={`/copilot?thread=${t.id}`} className="max-w-[10rem] truncate hover:text-accent" title={t.title}>
                       {t.title}
@@ -122,7 +122,7 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
               }
             />
           </div>
-          <div className="border-t border-divider">
+          <div className="border-t border-line">
             <CopilotChat
               threadId={sp.thread === 'new' ? null : threadId}
               messages={sp.thread === 'new' ? [] : messages}
@@ -138,8 +138,8 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
               title="What it decided"
               index="X02"
               action={
-                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                  <Num>{decisions.length}</Num> MOST RECENT
+                <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+                  <Num>{decisions.length}</Num> Most recent
                 </span>
               }
             />

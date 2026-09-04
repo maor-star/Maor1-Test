@@ -69,7 +69,7 @@ export function InlineTaskEditor({
       </Button>
 
       {open ? (
-        <div className="mt-2 w-full border border-divider p-2">
+        <div className="mt-2 w-full border border-line p-2">
           {loading ? (
             <p className="text-[13px] text-neutral-500">Opening it…</p>
           ) : error ? (

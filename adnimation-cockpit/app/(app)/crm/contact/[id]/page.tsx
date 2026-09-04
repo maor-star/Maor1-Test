@@ -57,18 +57,18 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                 <span className="flex flex-wrap items-center gap-2">
                   <Tag tone="neutral">{stageLabel(c.lifecycleStage)}</Tag>
                   {c.source === 'mail' ? (
-                    <Tag tone="accent" title="Read out of your mailbox">FROM THE MAIL</Tag>
+                    <Tag tone="accent" title="Read out of your mailbox">From the mail</Tag>
                   ) : c.source === 'local' ? (
-                    <Tag tone="accent">ADDED HERE</Tag>
+                    <Tag tone="accent">Added here</Tag>
                   ) : (
-                    <Tag tone="outline">HUBSPOT</Tag>
+                    <Tag tone="outline">Hubspot</Tag>
                   )}
                 </span>
               }
             />
           </div>
 
-          <div className="grid gap-3 border-t border-divider p-[18px] sm:grid-cols-2">
+          <div className="grid gap-3 border-t border-line p-[18px] sm:grid-cols-2">
             <Field label="EMAIL" value={c.email} href={c.email ? `mailto:${c.email}` : null} ltr />
             <Field label="TITLE" value={c.jobTitle} />
             <Field label="PHONE" value={c.phone} href={c.phone ? `tel:${c.phone}` : null} ltr />
@@ -92,8 +92,8 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
           </div>
 
           {c.notes ? (
-            <div className="border-t border-divider p-[18px]">
-              <p className="hud-label text-[9px]">NOTES</p>
+            <div className="border-t border-line p-[18px]">
+              <p className="hud-label text-[11px]">Notes</p>
               <p className="mt-1 whitespace-pre-wrap text-[13px] text-neutral-700">{c.notes}</p>
             </div>
           ) : null}
@@ -104,8 +104,8 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
             code does not know how to read yet is still here to read.
           */}
           {c.signature ? (
-            <div className="border-t border-divider p-[18px]">
-              <p className="hud-label text-[9px]">
+            <div className="border-t border-line p-[18px]">
+              <p className="hud-label text-[11px]">
                 THEIR SIGNATURE
                 {c.signatureAt ? (
                   <>
@@ -120,16 +120,16 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                       href={`https://mail.google.com/mail/u/0/#all/${c.sourceThreadId}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-accent-700 hover:text-accent"
+                      className="text-info hover:underline"
                     >
-                      THE MAIL IT CAME FROM ↗
+                      The mail it came from ↗
                     </a>
                   </>
                 ) : null}
               </p>
               <pre
                 dir="ltr"
-                className="mt-1 whitespace-pre-wrap border-s-2 border-divider ps-2 text-start text-[12px] leading-relaxed text-neutral-600"
+                className="mt-1 whitespace-pre-wrap border-s-2 border-line ps-2 text-start text-[12px] leading-relaxed text-neutral-600"
               >
                 {c.signature}
               </pre>
@@ -137,8 +137,8 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
           ) : null}
 
           {colleagues.length > 0 ? (
-            <div className="border-t border-divider p-[18px]">
-              <p className="hud-label text-[9px]">
+            <div className="border-t border-line p-[18px]">
+              <p className="hud-label text-[11px]">
                 ALSO AT {(c.companyName ?? 'THE SAME COMPANY').toUpperCase()} ·{' '}
                 <Num>{colleagues.length}</Num>
               </p>
@@ -147,7 +147,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                   <li key={p.hubspotId} className="text-[13px]">
                     <Link
                       href={`/crm/contact/${encodeURIComponent(p.hubspotId)}`}
-                      className="text-accent-700 hover:text-accent"
+                      className="text-info hover:underline"
                     >
                       {p.name}
                     </Link>
@@ -165,7 +165,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
               title="What you talked about"
               index="K02"
               action={
-                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
                   <Num>{conversationCount}</Num>{' '}
                   {conversationCount === 1 ? 'CONVERSATION' : 'CONVERSATIONS'}
                 </span>

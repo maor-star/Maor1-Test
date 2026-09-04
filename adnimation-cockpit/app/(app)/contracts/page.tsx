@@ -85,8 +85,8 @@ export default async function ContractsPage({
         kicker="CONTRACTS / 08"
         title="Contracts"
         action={
-          <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
-            <Num>{board.totals.open}</Num> OPEN · <Num>{fmtMoney(board.totals.openValueCents)}</Num> AT
+          <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
+            <Num>{board.totals.open}</Num> Open · <Num>{fmtMoney(board.totals.openValueCents)}</Num> AT
             STAKE
           </span>
         }
@@ -102,8 +102,8 @@ export default async function ContractsPage({
           title="Arriving from mail and Slack"
           index="C00"
           action={
-            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-              CLASSIFY IT AND IT IS FILED
+            <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+              Classify it and it is filed
             </span>
           }
         />
@@ -149,22 +149,20 @@ export default async function ContractsPage({
           <div className="border border-sev-warning/40 bg-sev-warning/10 px-3 py-2 font-semi text-[11px] tracking-[0.06em] text-sev-warning">
             Drive is not authorised, so contracts are recorded here with their versions and links
             but the files are not filed yet. Add{' '}
-            <span className="text-accent-700">https://www.googleapis.com/auth/drive</span> to the
+            <span className="text-info">https://www.googleapis.com/auth/drive</span> to the
             service account under domain-wide delegation and set{' '}
-            <span className="text-accent-700">DRIVE_CONTRACTS_ROOT_ID</span>. Nothing is lost in the
+            <span className="text-info">DRIVE_CONTRACTS_ROOT_ID</span>. Nothing is lost in the
             meantime — press “file to Drive” once it is on.
           </div>
         ) : null}
       </HudCard>
 
-      <nav className="flex flex-wrap border border-divider">
+      <nav className="segmented flex-wrap">
         {CONTRACT_VIEWS.map((v) => (
           <Link
             key={v}
             href={view(v)}
-            className={`px-3 py-1 font-semi text-[11px] uppercase tracking-[0.16em] ${
-              v === intakeView ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
-            }`}
+            aria-current={v === intakeView ? 'page' : undefined}
           >
             {CONTRACT_VIEW_LABEL[v]}
             {v === 'classify' && counts.needsClassifying > 0 ? ` (${counts.needsClassifying})` : ''}
@@ -180,7 +178,7 @@ export default async function ContractsPage({
             action={
               <div className="flex flex-wrap items-center gap-3">
                 <SearchBox placeholder="Find a contract" />
-                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
                   <Num>{rows.length}</Num>
                   {rows.length === intake.length
                     ? ` ${intake.length === 1 ? 'CONTRACT' : 'CONTRACTS'}`
@@ -192,7 +190,7 @@ export default async function ContractsPage({
         </div>
 
         {rows.length === 0 ? (
-          <p className="border-t border-divider px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+          <p className="border-t border-line px-[18px] py-4 font-semi text-[12px] text-neutral-500">
             {q
               ? `Nothing in this view matches “${q}”.`
               : intakeView === 'classify'
@@ -213,8 +211,8 @@ export default async function ContractsPage({
           title="New contract"
           index="C00"
           action={
-            <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
-              FILED TO <Num>/{DRIVE_ROOT}</Num>
+            <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
+              Filed to <Num>/{DRIVE_ROOT}</Num>
             </span>
           }
         />
@@ -259,17 +257,17 @@ function LaneCard({ lane, items, index }: { lane: Lane; items: ContractView[]; i
       </p>
 
       {items.length === 0 ? (
-        <p className="border-t border-divider px-[18px] py-3 font-semi text-[12px] text-neutral-500">
+        <p className="border-t border-line px-[18px] py-3 font-semi text-[12px] text-neutral-500">
           Nothing here.
         </p>
       ) : (
         <ul>
           {items.map((c) => (
-            <li key={c.id} id={c.id} className="border-t border-divider px-[18px] py-3">
+            <li key={c.id} id={c.id} className="border-t border-line px-[18px] py-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-cond text-[17px] text-neutral-900">{c.counterparty}</p>
-                  <p className="hud-label mt-0.5 text-[9px]">
+                  <p className="hud-label mt-0.5 text-[11px]">
                     {c.docTypeLabel} · {STATUS_LABEL[c.status]} ·{' '}
                     <Num>{c.daysInStatus}</Num> DAYS
                     {c.deptCode ? <> · {c.deptCode}</> : null}
@@ -299,13 +297,13 @@ function LaneCard({ lane, items, index }: { lane: Lane; items: ContractView[]; i
                 </p>
               ) : null}
 
-              <p className="mt-2 truncate font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+              <p className="mt-2 truncate font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
                 <Num>{c.filing.path}</Num>
               </p>
 
               {c.needsReview ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <Tag tone="watch">FILING UNCONFIRMED</Tag>
+                  <Tag tone="watch">Filing unconfirmed</Tag>
                   <ConfirmFiling id={c.id} category={c.category} />
                 </div>
               ) : null}
@@ -319,8 +317,8 @@ function LaneCard({ lane, items, index }: { lane: Lane; items: ContractView[]; i
       )}
 
       {lane === 'on_them' ? (
-        <div className="border-t border-divider px-[18px] py-2 font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-          LADDER: <Num>{ESCALATION_DAYS.join(' / ')}</Num> DAYS
+        <div className="border-t border-line px-[18px] py-2 font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+          Ladder: <Num>{ESCALATION_DAYS.join(' / ')}</Num> Days
         </div>
       ) : null}
     </HudCard>
@@ -336,8 +334,8 @@ function RenewalsCard({ items }: { items: ContractView[] }) {
           title="Renewals ahead"
           index="C04"
           action={
-            <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-              NOTICE AT <Num>{RENEWAL_NOTICE_DAYS.join(' / ')}</Num> DAYS
+            <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+              Notice at <Num>{RENEWAL_NOTICE_DAYS.join(' / ')}</Num> Days
             </span>
           }
         />
@@ -364,7 +362,7 @@ function RenewalsCard({ items }: { items: ContractView[] }) {
                 <tr key={c.id}>
                   <td className="whitespace-normal">
                     <span className="font-cond text-[15px] text-neutral-900">{c.counterparty}</span>
-                    <p className="hud-label mt-0.5 text-[9px]">{c.docTypeLabel}</p>
+                    <p className="hud-label mt-0.5 text-[11px]">{c.docTypeLabel}</p>
                   </td>
                   <td><Num>{c.endDate ?? '—'}</Num></td>
                   <td><Num>{c.renewal.daysToExpiry ?? '—'}</Num></td>
@@ -372,12 +370,12 @@ function RenewalsCard({ items }: { items: ContractView[] }) {
                   <td className="text-end">
                     {c.renewal.noticeDeadlinePassed ? (
                       <Tag tone="critical" title="The window to cancel has closed — it renews unless decided now">
-                        AUTO-RENEWS
+                        Auto-renews
                       </Tag>
                     ) : (
                       <Tag tone="outline">
                         <Num>{c.renewal.noticeWindow}</Num>
-                        <span className="ms-1">DAY NOTICE</span>
+                        <span className="ms-1">Day notice</span>
                       </Tag>
                     )}
                   </td>
@@ -409,10 +407,10 @@ function FilingCard({
             unconfirmed.length > 0 ? (
               <Tag tone="watch">
                 <Num>{unconfirmed.length}</Num>
-                <span className="ms-1">TO CONFIRM</span>
+                <span className="ms-1">To confirm</span>
               </Tag>
             ) : (
-              <Tag tone="ok">ALL CONFIRMED</Tag>
+              <Tag tone="ok">All confirmed</Tag>
             )
           }
         />
@@ -426,14 +424,14 @@ function FilingCard({
       </p>
 
       {tree.length === 0 ? (
-        <p className="border-t border-divider px-[18px] py-3 font-semi text-[12px] text-neutral-500">
+        <p className="border-t border-line px-[18px] py-3 font-semi text-[12px] text-neutral-500">
           No contracts filed yet.
         </p>
       ) : (
-        <ul className="border-t border-divider">
+        <ul className="border-t border-line">
           {tree.map((node) => (
-            <li key={node.label} className="border-b border-divider px-[18px] py-3 last:border-b-0">
-              <p className="font-semi text-[11px] tracking-[0.16em] text-accent-700">
+            <li key={node.label} className="border-b border-line px-[18px] py-3 last:border-b-0">
+              <p className="font-semi text-[11px] tracking-[0.16em] text-info">
                 <Num>/{node.label}</Num>
               </p>
               <ul className="mt-1 space-y-0.5">
@@ -445,7 +443,7 @@ function FilingCard({
                     <span className="truncate">
                       <Num>{c.path}</Num>
                     </span>
-                    <span className="shrink-0 text-[10px] tracking-[0.12em] text-neutral-500">
+                    <span className="shrink-0 text-[11.5px] tracking-[0.12em] text-neutral-500">
                       <Num>{c.count}</Num> DOC{c.count === 1 ? '' : 'S'}
                       {c.confirmed ? '' : ' · UNCONFIRMED'}
                     </span>

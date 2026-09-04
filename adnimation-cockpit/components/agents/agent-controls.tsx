@@ -42,7 +42,7 @@ export function AgentControls({ killed }: { killed: boolean }) {
           router.refresh();
         })}
       >
-        INSTALL THE BUILT-IN AGENTS
+        Install the built-in agents
       </Button>
 
       <Button
@@ -61,7 +61,7 @@ export function AgentControls({ killed }: { killed: boolean }) {
       </Button>
 
       {message ? (
-        <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">{message}</span>
+        <span className="font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">{message}</span>
       ) : null}
     </div>
   );

@@ -38,7 +38,7 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
   const stale = !t.lastFromMe && t.daysWaiting >= 3;
 
   return (
-    <li className="border-t border-divider px-[18px] py-3">
+    <li className="border-t border-line px-[18px] py-3">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -51,18 +51,18 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
               {t.subject || '(no subject)'}
             </a>
             {t.knownCompany ? <Tag tone="accent">{t.knownCompany}</Tag> : null}
-            {t.unread ? <Tag tone="outline">UNREAD</Tag> : null}
-            {t.starred ? <Tag tone="outline">STARRED</Tag> : null}
-            {dismissed ? <Tag tone="neutral">HANDLED</Tag> : null}
+            {t.unread ? <Tag tone="outline">Unread</Tag> : null}
+            {t.starred ? <Tag tone="outline">Starred</Tag> : null}
+            {dismissed ? <Tag tone="neutral">Handled</Tag> : null}
           </div>
 
-          <p className="hud-label mt-1 whitespace-normal text-[9px]">
+          <p className="hud-label mt-1 whitespace-normal text-[11px]">
             {t.counterpartName || t.counterpartEmail || 'UNKNOWN'}
             {t.counterpartName && t.counterpartEmail ? ` · ${t.counterpartEmail}` : ''} ·{' '}
             <Num>{fmtDateTime(t.lastMessageAt)}</Num>
             {t.messageCount > 1 ? (
               <>
-                {' '}· <Num>{t.messageCount}</Num> MESSAGES
+                {' '}· <Num>{t.messageCount}</Num> Messages
               </>
             ) : null}
           </p>
@@ -74,7 +74,7 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
 
         <div className="flex shrink-0 items-start gap-5">
           <div className="text-end">
-            <span className="hud-label block text-[9px]">
+            <span className="hud-label block text-[11px]">
               {t.lastFromMe ? 'YOU ANSWERED' : 'WAITING'}
             </span>
             <span
@@ -95,8 +95,8 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
           </Button>
         ) : null}
         {sent ? (
-          <span className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700">
-            SENT ✓
+          <span className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-info">
+            Sent ✓
           </span>
         ) : null}
 
@@ -106,7 +106,7 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
           href={t.url}
           target="_blank"
           rel="noreferrer"
-          className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+          className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline"
         >
           Open in Gmail ↗
         </a>
@@ -205,7 +205,7 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
         {taskId ? (
           <Link
             href={`/tasks?q=${encodeURIComponent(t.subject ?? '')}`}
-            className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+            className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline"
           >
             Open it ↗
           </Link>
@@ -216,7 +216,7 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
 
       {replying ? (
         <form
-          className="mt-2 flex flex-wrap items-end gap-2 border border-divider p-2"
+          className="mt-2 flex flex-wrap items-end gap-2 border border-line p-2"
           onSubmit={(e) => {
             e.preventDefault();
             const data = new FormData(e.currentTarget);
@@ -246,8 +246,8 @@ export function ThreadRow({ thread }: { thread: MailRow }) {
           <Button type="submit" size="sm" disabled={pending}>
             {pending ? 'SENDING…' : 'SEND'}
           </Button>
-          <span className="pb-1.5 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-            GOES OUT FROM YOUR ADDRESS, IN THIS THREAD
+          <span className="pb-1.5 font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
+            Goes out from your address, in this thread
           </span>
         </form>
       ) : null}

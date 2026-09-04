@@ -99,7 +99,7 @@ function StageSelect({
   const known = stages.some((s) => s.value === value);
   return (
     <Select id={id} name="lifecycleStage" defaultValue={value ?? ''} className="w-full">
-      <option value="">UNSTAGED</option>
+      <option value="">Unstaged</option>
       {!known && value ? <option value={value}>{value.toUpperCase()}</option> : null}
       {stages.map((s) => (
         <option key={s.value} value={s.value}>
@@ -332,12 +332,12 @@ function Actions({
       </Button>
       {onDone ? (
         <Button type="button" variant="ghost" size="sm" onClick={onDone}>
-          CANCEL
+          Cancel
         </Button>
       ) : null}
       {editing ? (
-        <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-          SAVING MARKS THIS RECORD AS YOURS — NO FUTURE SYNC WILL OVERWRITE IT
+        <span className="font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
+          Saving marks this record as yours — no future sync will overwrite it
         </span>
       ) : null}
       {formError ? <span className="text-2xs text-destructive">{formError}</span> : null}
@@ -402,13 +402,13 @@ export function EditCompany({ company, vocab }: { company: CompanyRecord; vocab:
   if (!open) {
     return (
       <Button type="button" size="xs" variant="outline" onClick={() => setOpen(true)}>
-        EDIT
+        Edit
       </Button>
     );
   }
 
   return (
-    <div className="mt-2 border border-divider p-2">
+    <div className="mt-2 border border-line p-2">
       <CompanyForm company={company} vocab={vocab} onDone={() => setOpen(false)} />
     </div>
   );
@@ -428,13 +428,13 @@ export function EditContact({
   if (!open) {
     return (
       <Button type="button" size="xs" variant="outline" onClick={() => setOpen(true)}>
-        EDIT
+        Edit
       </Button>
     );
   }
 
   return (
-    <div className="mt-2 border border-divider p-2">
+    <div className="mt-2 border border-line p-2">
       <ContactForm
         contact={contact}
         vocab={vocab}

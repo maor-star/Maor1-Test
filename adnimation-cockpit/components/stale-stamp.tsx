@@ -10,16 +10,16 @@ import { Num } from '@/components/num';
 export function StaleStamp({ at }: { at: Date | null }) {
   if (!at) {
     return (
-      <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">NO DATA YET</span>
+      <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">NO DATA YET</span>
     );
   }
 
   const stale = isStale(at);
   return (
     <span
-      className={`font-semi text-[10px] tracking-[0.14em] ${stale ? 'text-sev-warning' : 'text-neutral-500'}`}
+      className={`font-semi text-[11.5px] tracking-[0.14em] ${stale ? 'text-sev-warning' : 'text-neutral-500'}`}
     >
-      SYNCED <Num>{fmtTime(at)}</Num>
+      Synced <Num>{fmtTime(at)}</Num>
       {stale ? (
         <span className="ms-1">
           · STALE &gt;<Num>{INTEGRATION_STALE_HOURS}</Num>H

@@ -241,7 +241,7 @@ export function PipelineClientForm({
         </Button>
         {onDone ? (
           <Button type="button" variant="ghost" size="sm" onClick={onDone}>
-            CANCEL
+            Cancel
           </Button>
         ) : null}
         {formError ? <span className="text-2xs text-destructive">{formError}</span> : null}

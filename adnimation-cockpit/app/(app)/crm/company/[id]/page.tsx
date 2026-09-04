@@ -43,7 +43,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                 href={`https://${co.domain}`}
                 target="_blank"
                 rel="noreferrer"
-                className="font-semi text-[10px] tracking-[0.14em] text-accent-700 hover:text-accent"
+                className="font-semi text-[11.5px] tracking-[0.14em] text-info hover:underline"
               >
                 <Num>{co.domain}</Num> ↗
               </a>
@@ -62,12 +62,12 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                 action={
                   <span className="flex flex-wrap items-center gap-2">
                     <Tag tone="neutral">{stageLabel(co.lifecycleStage)}</Tag>
-                    {co.source === 'local' ? <Tag tone="accent">ADDED HERE</Tag> : null}
+                    {co.source === 'local' ? <Tag tone="accent">Added here</Tag> : null}
                   </span>
                 }
               />
             </div>
-            <div className="grid gap-3 border-t border-divider p-[18px] sm:grid-cols-2">
+            <div className="grid gap-3 border-t border-line p-[18px] sm:grid-cols-2">
               <Field label="DOMAIN" value={co.domain} href={co.domain ? `https://${co.domain}` : null} ltr />
               <Field label="INDUSTRY" value={co.industry} />
               <Field label="PHONE" value={co.phone} href={co.phone ? `tel:${co.phone}` : null} ltr />
@@ -80,8 +80,8 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
               <Field label="LAST SYNCED" value={fmtDateTime(co.syncedAt)} ltr />
             </div>
             {co.notes ? (
-              <div className="border-t border-divider p-[18px]">
-                <p className="hud-label text-[9px]">NOTES</p>
+              <div className="border-t border-line p-[18px]">
+                <p className="hud-label text-[11px]">Notes</p>
                 <p className="mt-1 whitespace-pre-wrap text-[13px] text-neutral-700">{co.notes}</p>
               </div>
             ) : null}
@@ -93,14 +93,14 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                 <HudCardHeader title="Elsewhere in the cockpit" index="M02" />
               </div>
               {deals.map((d) => (
-                <div key={d.id} className="border-t border-divider px-[18px] py-2.5">
+                <div key={d.id} className="border-t border-line px-[18px] py-2.5">
                   <Link
                     href={`/pipeline?q=${encodeURIComponent(d.name)}`}
                     className="font-cond text-[15px] text-neutral-900 hover:text-accent"
                   >
                     {d.name}
                   </Link>
-                  <p className="hud-label mt-0.5 whitespace-normal text-[9px]">
+                  <p className="hud-label mt-0.5 whitespace-normal text-[11px]">
                     DEAL · {STAGE_LABEL[d.stage as keyof typeof STAGE_LABEL] ?? d.stage.toUpperCase()}
                     {d.nextStep ? ` · ${d.nextStep}` : ''}
                     {d.valueCents !== null ? (
@@ -113,11 +113,11 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                 </div>
               ))}
               {contracts.map((k) => (
-                <div key={k.id} className="border-t border-divider px-[18px] py-2.5">
+                <div key={k.id} className="border-t border-line px-[18px] py-2.5">
                   <Link href="/contracts" className="font-cond text-[15px] text-neutral-900 hover:text-accent">
                     {k.docType || k.counterparty}
                   </Link>
-                  <p className="hud-label mt-0.5 text-[9px]">
+                  <p className="hud-label mt-0.5 text-[11px]">
                     CONTRACT · {STATUS_LABEL[k.status as keyof typeof STATUS_LABEL] ?? k.status.toUpperCase()}
                   </p>
                 </div>
@@ -131,7 +131,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                 title="Who is there"
                 index="M03"
                 action={
-                  <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                  <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
                     <Num>{contacts.length}</Num>{' '}
                     {contacts.length === 1 ? 'PERSON' : 'PEOPLE'}
                   </span>
@@ -139,13 +139,13 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
               />
             </div>
             {contacts.length === 0 ? (
-              <p className="border-t border-divider px-[18px] py-3 font-semi text-[12px] text-neutral-500">
+              <p className="border-t border-line px-[18px] py-3 font-semi text-[12px] text-neutral-500">
                 Nobody attached to this company yet.
               </p>
             ) : (
               <ul>
                 {contacts.map((p) => (
-                  <li key={p.hubspotId} className="border-t border-divider px-[18px] py-2.5">
+                  <li key={p.hubspotId} className="border-t border-line px-[18px] py-2.5">
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                       <Link
                         href={`/crm/contact/${encodeURIComponent(p.hubspotId)}`}
@@ -154,12 +154,12 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                         {nameOf(p)}
                       </Link>
                       {p.lastActivityAt ? (
-                        <span className="shrink-0 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
-                          LAST HEARD <Num>{fmtDateTime(p.lastActivityAt)}</Num>
+                        <span className="shrink-0 font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
+                          Last heard <Num>{fmtDateTime(p.lastActivityAt)}</Num>
                         </span>
                       ) : null}
                     </div>
-                    <p className="hud-label mt-0.5 whitespace-normal text-[9px]">
+                    <p className="hud-label mt-0.5 whitespace-normal text-[11px]">
                       {[p.jobTitle, p.email, p.mobile ?? p.phone].filter(Boolean).join(' · ') ||
                         'NO DETAILS YET'}
                     </p>
@@ -176,8 +176,8 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
               title="Everything you have said to them"
               index="M04"
               action={
-                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                  <Num>{conversationCount}</Num> ACROSS <Num>{contacts.length}</Num>{' '}
+                <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+                  <Num>{conversationCount}</Num> Across <Num>{contacts.length}</Num>{' '}
                   {contacts.length === 1 ? 'PERSON' : 'PEOPLE'}
                 </span>
               }

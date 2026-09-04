@@ -28,16 +28,17 @@ export function MobileNav({
 
   return (
     <div className="lg:hidden">
-      <div
-        className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-divider px-4 py-3 text-paper"
-        style={{ background: 'linear-gradient(180deg, var(--rail-from) 0%, var(--rail-to) 100%)' }}
-      >
-        <div className="min-w-0">
-          <div className="font-cond text-[17px] font-semibold leading-none tracking-[0.18em]">
-            ADNIMATION
-          </div>
-          <div className="mt-1 truncate font-semi text-[9px] tracking-[0.24em] text-accent-300">
-            {current?.label ?? 'CEO COCKPIT'}
+      <div className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-line bg-card px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span
+            className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-[10px] bg-brand text-[15px] font-bold text-white"
+            aria-hidden="true"
+          >
+            A
+          </span>
+          <div className="min-w-0">
+            <div className="truncate text-[15.5px] font-bold leading-tight">Adnimation</div>
+            <div className="truncate text-[12.5px] text-muted">{word(current?.label)}</div>
           </div>
         </div>
 
@@ -46,18 +47,14 @@ export function MobileNav({
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-controls="mobile-nav-sheet"
-          className="border border-paper/30 px-3 py-2 font-semi text-[10px] tracking-[0.16em] text-paper"
+          className="rounded-[10px] border border-line px-3 py-2 text-[13.5px] font-semibold text-neutral-800"
         >
-          {open ? 'CLOSE' : 'MENU'}
+          {open ? 'Close' : 'Menu'}
         </button>
       </div>
 
       {open ? (
-        <nav
-          id="mobile-nav-sheet"
-          className="sticky top-[57px] z-30 border-b border-divider text-paper"
-          style={{ background: 'var(--rail-to)' }}
-        >
+        <nav id="mobile-nav-sheet" className="sticky top-[61px] z-30 border-b border-line bg-card">
           <ul className="grid grid-cols-2">
             {NAV.map((item) =>
               item.ready ? (
@@ -65,26 +62,20 @@ export function MobileNav({
                   <Link
                     href={item.href}
                     onClick={() => setOpen(false)}
-                    className={`flex items-center justify-between gap-2 border-b border-paper/[0.12] px-4 py-3 font-semi text-[13px] tracking-[0.06em] ${
-                      item.href === pathname ? 'bg-paper/[0.16] text-accent-300' : 'text-paper'
+                    className={`flex items-center gap-2 border-b border-line px-4 py-3 text-[14.5px] font-semibold ${
+                      item.href === pathname ? 'bg-accent-100 text-accent-800' : 'text-neutral-800'
                     }`}
                   >
-                    <span>{item.label}</span>
-                    <span className="font-cond text-[10px] tracking-[0.16em] opacity-45">
-                      {item.num}
-                    </span>
+                    <span>{word(item.label)}</span>
                   </Link>
                 </li>
               ) : (
                 <li key={item.href}>
                   <span
                     title="Ships with a later milestone"
-                    className="flex items-center justify-between gap-2 border-b border-paper/[0.12] px-4 py-3 font-semi text-[13px] tracking-[0.06em] text-paper/35"
+                    className="flex items-center gap-2 border-b border-line px-4 py-3 text-[14.5px] font-semibold text-neutral-400"
                   >
-                    <span>{item.label}</span>
-                    <span className="font-cond text-[10px] tracking-[0.16em] opacity-45">
-                      {item.num}
-                    </span>
+                    <span>{word(item.label)}</span>
                   </span>
                 </li>
               ),
@@ -92,18 +83,15 @@ export function MobileNav({
           </ul>
 
           <div className="flex items-center justify-between gap-3 px-4 py-3">
-            <span className="flex items-center gap-2 font-semi text-[10px] tracking-[0.16em] text-accent-300">
-              <span className="inline-flex h-[26px] w-[26px] items-center justify-center border border-paper/30 font-cond text-[10px] text-paper">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="inline-flex h-7 w-7 flex-none items-center justify-center rounded-full bg-neutral-200 text-[11px] font-bold text-neutral-700">
                 {userRole === 'owner' ? 'CEO' : 'COS'}
               </span>
-              <span className="truncate text-paper">{userName}</span>
+              <span className="truncate text-[14px] font-semibold">{userName}</span>
             </span>
             <form action={signOutAction}>
-              <button
-                type="submit"
-                className="font-semi text-[10px] tracking-[0.16em] text-accent-300"
-              >
-                EXIT
+              <button type="submit" className="text-[13.5px] font-semibold text-muted">
+                Sign out
               </button>
             </form>
           </div>
@@ -111,4 +99,10 @@ export function MobileNav({
       ) : null}
     </div>
   );
+}
+
+/** The module names are stored uppercase; this design sets them as words. */
+function word(name?: string): string {
+  if (!name) return 'CEO Cockpit';
+  return name.charAt(0) + name.slice(1).toLowerCase();
 }

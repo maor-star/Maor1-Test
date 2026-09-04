@@ -105,7 +105,7 @@ export function NewContractForm({ departments }: { departments: { id: string; la
       </div>
 
       {expanded ? (
-        <div className="grid gap-2 border-t border-divider pt-2 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid gap-2 border-t border-line pt-2 md:grid-cols-3 xl:grid-cols-6">
           <div>
             <Label htmlFor="new-contract-dept">Department</Label>
             <Select id="new-contract-dept" name="deptId" defaultValue="" className="w-full">

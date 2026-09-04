@@ -72,7 +72,7 @@ export function OpportunityCard({
   const suggestion = o.status === 'suggested';
 
   return (
-    <li className="border-t border-divider px-[18px] py-3">
+    <li className="border-t border-line px-[18px] py-3">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -83,20 +83,20 @@ export function OpportunityCard({
             <Tag tone="neutral">{KIND_LABEL[o.kind]}</Tag>
             {o.state.cold ? (
               <Tag tone="warning" title="Open, no next step, and nothing has happened to it">
-                GONE COLD
+                Gone cold
               </Tag>
             ) : null}
-            {o.state.dueToRevisit ? <Tag tone="warning">DUE TO REVISIT</Tag> : null}
-            {o.state.overdue ? <Tag tone="critical">NEXT STEP OVERDUE</Tag> : null}
+            {o.state.dueToRevisit ? <Tag tone="warning">Due to revisit</Tag> : null}
+            {o.state.overdue ? <Tag tone="critical">Next step overdue</Tag> : null}
             {o.state.needsNextStep && !o.state.cold ? (
-              <Tag tone="outline">NO NEXT STEP</Tag>
+              <Tag tone="outline">No next step</Tag>
             ) : null}
             {o.source !== 'manual' ? (
               <Tag tone="neutral">FROM {o.source.toUpperCase()}</Tag>
             ) : null}
           </div>
 
-          <p className="hud-label mt-1 whitespace-normal text-[9px]">
+          <p className="hud-label mt-1 whitespace-normal text-[11px]">
             {o.counterparty ? `${o.counterparty} · ` : ''}
             ADDED <Num>{fmtDateTime(o.createdAt)}</Num>
             {o.nextStep ? (
@@ -125,7 +125,7 @@ export function OpportunityCard({
             link he had just made was invisible.
           */}
           {contracts.length > 0 ? (
-            <p className="hud-label mt-1 whitespace-normal text-[9px] text-accent-700">
+            <p className="hud-label mt-1 whitespace-normal text-[11px] text-info">
               {contracts.length === 1 ? 'CONTRACT' : 'CONTRACTS'}:{' '}
               {contracts
                 .map(
@@ -139,7 +139,7 @@ export function OpportunityCard({
                 )
                 .join(' · ')}{' '}
               <Link href="/contracts?view=all" className="underline">
-                OPEN
+                Open
               </Link>
             </p>
           ) : null}
@@ -151,7 +151,7 @@ export function OpportunityCard({
           ) : null}
 
           {suggestion && o.detectReasons.length > 0 ? (
-            <p className="hud-label mt-1 whitespace-normal text-[9px] text-neutral-500">
+            <p className="hud-label mt-1 whitespace-normal text-[11px] text-neutral-500">
               PROPOSED BECAUSE: {o.detectReasons.join(' · ')}
             </p>
           ) : null}
@@ -164,14 +164,14 @@ export function OpportunityCard({
         <div className="flex shrink-0 items-start gap-5">
           {o.valueCents !== null ? (
             <div className="text-end">
-              <span className="hud-label block text-[9px]">WORTH</span>
+              <span className="hud-label block text-[11px]">Worth</span>
               <span className="font-cond text-[19px] leading-none text-neutral-900">
                 <Num>{fmtMoney(o.valueCents)}</Num>
               </span>
             </div>
           ) : null}
           <div className="text-end">
-            <span className="hud-label block text-[9px]">QUIET</span>
+            <span className="hud-label block text-[11px]">Quiet</span>
             <span
               className={`font-cond text-[19px] leading-none ${
                 o.state.cold ? 'text-sev-warning' : 'text-neutral-900'
@@ -192,7 +192,7 @@ export function OpportunityCard({
               disabled={pending}
               onClick={() => run(decideSuggestionAction, withId({ accept: '1' }))}
             >
-              YES, IT IS ONE
+              Yes, it is one
             </Button>
             <Button
               type="button"
@@ -201,7 +201,7 @@ export function OpportunityCard({
               disabled={pending}
               onClick={() => run(decideSuggestionAction, withId({ accept: '0' }))}
             >
-              NOT AN OPPORTUNITY
+              Not an opportunity
             </Button>
 
             {/*
@@ -264,14 +264,14 @@ export function OpportunityCard({
             onClick={() => setPromoting((v) => !v)}
             title="It is a real deal now — move it into the pipeline"
           >
-            → PIPELINE
+            → pipeline
           </Button>
         ) : null}
 
         {o.pipelineClientId ? (
           <a
             href="/pipeline"
-            className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+            className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline"
           >
             In the pipeline ↗
           </a>
@@ -288,7 +288,7 @@ export function OpportunityCard({
             href={o.sourceUrl}
             target="_blank"
             rel="noreferrer"
-            className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+            className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline"
           >
             {o.source === 'mail' ? 'Open in Gmail ↗' : 'Open in Slack ↗'}
           </a>
@@ -302,7 +302,7 @@ export function OpportunityCard({
             disabled={pending}
             onClick={() => run(archiveOpportunityAction, withId())}
           >
-            ARCHIVE
+            Archive
           </Button>
         ) : null}
 
@@ -311,7 +311,7 @@ export function OpportunityCard({
 
       {deciding ? (
         <form
-          className="mt-2 flex flex-wrap items-center gap-2 border border-divider p-2"
+          className="mt-2 flex flex-wrap items-center gap-2 border border-line p-2"
           onSubmit={(e) => {
             e.preventDefault();
             const data = new FormData(e.currentTarget);
@@ -320,8 +320,8 @@ export function OpportunityCard({
           }}
         >
           <Select name="status" defaultValue="won" className="h-8 text-[12px]">
-            <option value="won">TAKEN</option>
-            <option value="lost">MISSED</option>
+            <option value="won">Taken</option>
+            <option value="lost">Missed</option>
           </Select>
           <Input
             name="decidedNote"
@@ -329,17 +329,17 @@ export function OpportunityCard({
             className="min-w-0 flex-1"
           />
           <Button type="submit" size="sm" disabled={pending}>
-            RECORD IT
+            Record it
           </Button>
           <Button type="button" size="sm" variant="ghost" onClick={() => setDeciding(false)}>
-            CANCEL
+            Cancel
           </Button>
         </form>
       ) : null}
 
       {promoting ? (
         <form
-          className="mt-2 flex flex-wrap items-end gap-2 border border-divider p-2"
+          className="mt-2 flex flex-wrap items-end gap-2 border border-line p-2"
           onSubmit={(e) => {
             e.preventDefault();
             const data = new FormData(e.currentTarget);
@@ -376,9 +376,9 @@ export function OpportunityCard({
             {pending ? 'MOVING…' : 'MOVE IT'}
           </Button>
           <Button type="button" size="sm" variant="ghost" onClick={() => setPromoting(false)}>
-            CANCEL
+            Cancel
           </Button>
-          <span className="pb-1.5 font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+          <span className="pb-1.5 font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
             {o.counterparty
               ? `CREATES “${o.counterparty}” IN THE PIPELINE`
               : 'ADD A COUNTERPARTY FIRST — THE PIPELINE NEEDS A NAME'}
@@ -388,7 +388,7 @@ export function OpportunityCard({
 
       {editing ? (
         <form
-          className="mt-2 border border-divider p-2"
+          className="mt-2 border border-line p-2"
           onSubmit={(e) => {
             e.preventDefault();
             const data = new FormData(e.currentTarget);
@@ -472,7 +472,7 @@ export function OpportunityCard({
               {pending ? 'SAVING…' : 'SAVE'}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
-              CANCEL
+              Cancel
             </Button>
           </div>
         </form>

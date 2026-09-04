@@ -56,14 +56,12 @@ export default async function SeatsPage({
         kicker={meta.kicker}
         title={meta.title}
         action={
-          <nav className="flex flex-wrap border border-divider">
+          <nav className="segmented flex-wrap">
             {available.map((p) => (
               <Link
                 key={p}
                 href={`/seats/${side}?period=${p}`}
-                className={`px-[9px] py-1 font-semi text-[11px] tracking-[0.12em] ${
-                  p === period ? 'bg-accent text-ground' : 'text-neutral-500 hover:text-accent'
-                }`}
+                aria-current={p === period ? 'page' : undefined}
               >
                 {PERIOD_TAB[p]}
               </Link>
@@ -74,7 +72,7 @@ export default async function SeatsPage({
 
       {view.empty ? (
         <HudCard>
-          <HudCardHeader title={PERIOD_LABEL[period]} index="S00" action={<Tag tone="watch">NO DATA</Tag>} />
+          <HudCardHeader title={PERIOD_LABEL[period]} index="S00" action={<Tag tone="watch">No data</Tag>} />
           <p className="font-semi text-[12px] leading-relaxed text-neutral-500">
             The exchange economics tables start on <Num>{view.meta.coverageFrom}</Num>, so this
             window has no rows. Pick a shorter window rather than reading an empty one as a
@@ -112,10 +110,10 @@ export default async function SeatsPage({
             </div>
 
             <p className="font-semi text-[11px] leading-relaxed text-neutral-500">{meta.blurb}</p>
-            <p className="font-semi text-[10px] leading-relaxed tracking-[0.06em] text-neutral-500">
+            <p className="font-semi text-[11.5px] leading-relaxed tracking-[0.06em] text-neutral-500">
               PER-DAY FIGURES DIVIDE THE WINDOW&rsquo;S TOTAL BY ITS{' '}
-              <Num>{view.windowDays}</Num> DAYS, SO EVERY WINDOW IS COMPARABLE AGAINST THE SAME{' '}
-              <Num>{fmtMoney(SEAT_REVENUE_TARGET_CENTS)}</Num> A DAY TARGET.
+              <Num>{view.windowDays}</Num> days, so every window is comparable against the same{' '}
+              <Num>{fmtMoney(SEAT_REVENUE_TARGET_CENTS)}</Num> A day target.
             </p>
           </HudCard>
 
@@ -124,8 +122,8 @@ export default async function SeatsPage({
               title="Seat map"
               index={side === 'demand' ? 'D02' : 'U02'}
               action={
-                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                  SIZED BY REVENUE · COLOURED BY HEALTH
+                <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+                  Sized by revenue · coloured by health
                 </span>
               }
             />
@@ -141,10 +139,10 @@ export default async function SeatsPage({
         </>
       )}
 
-      <p className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-        SOURCE: AD OPS ARCHITECT (LOVABLE) · READ-ONLY · PULLED <Num>{view.meta.pulledAt}</Num> ·
-        LAST COMPLETE DAY <Num>{view.meta.lastCompleteDay}</Num> · SPEND ON A SUPPLY SEAT IS WHAT IS
-        PAID OUT TO THAT PARTNER
+      <p className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+        Source: Ad Ops Architect (Lovable) · read-only · pulled <Num>{view.meta.pulledAt}</Num> ·
+        Last complete day <Num>{view.meta.lastCompleteDay}</Num> · Spend on a supply seat is what is
+        paid out to that partner
       </p>
     </div>
   );
@@ -153,7 +151,7 @@ export default async function SeatsPage({
 function Figure({ label, value, big }: { label: string; value: string; big?: boolean }) {
   return (
     <div className="min-w-0">
-      <p className="hud-label text-[9px]">{label}</p>
+      <p className="hud-label text-[11px]">{label}</p>
       <p
         className={
           big

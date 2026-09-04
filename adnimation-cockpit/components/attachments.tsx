@@ -74,7 +74,7 @@ export function Attachments({
       </Button>
 
       {open ? (
-        <div className="mt-1.5 w-full border border-divider p-2">
+        <div className="mt-1.5 w-full border border-line p-2">
           {loading ? (
             <p className="text-[13px] text-neutral-500">Looking for attachments…</p>
           ) : error ? (
@@ -90,11 +90,11 @@ export function Attachments({
                     <img
                       src={a.thumbnailHref}
                       alt={a.name}
-                      className="h-12 w-12 cursor-zoom-in border border-divider object-cover"
+                      className="h-12 w-12 cursor-zoom-in border border-line object-cover"
                       onClick={() => setShowing(a)}
                     />
                   ) : (
-                    <span className="flex h-12 w-12 items-center justify-center border border-divider text-[10px] uppercase text-neutral-500">
+                    <span className="flex h-12 w-12 items-center justify-center border border-line text-[11.5px] uppercase text-neutral-500">
                       {(a.name.split('.').pop() ?? 'file').slice(0, 4)}
                     </span>
                   )}
@@ -104,7 +104,7 @@ export function Attachments({
                       href={a.href}
                       target="_blank"
                       rel="noreferrer"
-                      className="block break-all text-[13px] text-accent-700 hover:text-accent"
+                      className="block break-all text-[13px] text-info hover:underline"
                     >
                       {a.name}
                     </a>
@@ -117,7 +117,7 @@ export function Attachments({
                       <button
                         type="button"
                         onClick={() => setShowing(showing === a ? null : a)}
-                        className="ms-2 font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+                        className="ms-2 font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline"
                       >
                         {showing === a ? 'Close' : 'View'}
                       </button>
@@ -134,13 +134,13 @@ export function Attachments({
             question that made him click.
           */}
           {showing ? (
-            <div className="mt-2 border border-divider">
-              <div className="flex items-center justify-between border-b border-divider px-2 py-1">
-                <span className="hud-label text-[9px] break-all">{showing.name}</span>
+            <div className="mt-2 border border-line">
+              <div className="flex items-center justify-between border-b border-line px-2 py-1">
+                <span className="hud-label text-[11px] break-all">{showing.name}</span>
                 <button
                   type="button"
                   onClick={() => setShowing(null)}
-                  className="font-semi text-[10px] uppercase tracking-[0.14em] text-neutral-500 hover:text-accent"
+                  className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-neutral-500 hover:text-accent"
                 >
                   Close
                 </button>

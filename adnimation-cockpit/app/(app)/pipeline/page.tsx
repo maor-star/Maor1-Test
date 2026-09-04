@@ -187,8 +187,8 @@ export default async function PipelinePage({
         kicker="DEALS / 05"
         title="DEALS"
         action={
-          <span className="font-semi text-[10px] tracking-[0.14em] text-neutral-500">
-            FROM FIRST MENTION TO LIVE · MY OWN BOOK, NOT SYNCED FROM HUBSPOT
+          <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
+            From first mention to live · my own book, not synced from HubSpot
           </span>
         }
       />
@@ -238,15 +238,15 @@ export default async function PipelinePage({
             action={
               <div className="flex flex-wrap items-center gap-3">
                 <SweepMail />
-                <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-                  <Num>{inbox.length}</Num> WAITING
+                <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+                  <Num>{inbox.length}</Num> Waiting
                 </span>
               </div>
             }
           />
         </div>
         {inbox.length === 0 ? (
-          <div className="border-t border-divider px-[18px] py-3">
+          <div className="border-t border-line px-[18px] py-3">
             <p className="mb-3 font-semi text-[12px] text-neutral-500">
               Nothing proposed that you have not already decided on.
             </p>
@@ -267,10 +267,10 @@ export default async function PipelinePage({
       ) : null}
 
       {sp.q ? (
-        <p className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+        <p className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
           FILTERED BY “{sp.q}” ·{' '}
-          <Link href={href({ q: undefined })} className="text-accent-700 hover:text-accent">
-            CLEAR
+          <Link href={href({ q: undefined })} className="text-info hover:underline">
+            Clear
           </Link>
         </p>
       ) : null}
@@ -293,7 +293,7 @@ export default async function PipelinePage({
                 title={STAGE_LABEL[group.stage]}
                 index={`P${String(i + 3).padStart(2, '0')}`}
                 action={
-                  <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+                  <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
                     <Num>{fmtNumber(group.rows.length)}</Num> ·{' '}
                     <Num>{fmtMoney(group.valueCents)}</Num> / MO
                   </span>
@@ -314,9 +314,9 @@ export default async function PipelinePage({
         ))
       )}
 
-      <p className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-        QUIET = NO LOGGED CONVERSATION IN <Num>{QUIET_DAYS}</Num> DAYS. EVERY OPEN DEAL CARRIES A
-        NEXT STEP AND A DATE — ONE IS FILLED IN FOR YOU IF YOU LEAVE THEM EMPTY.
+      <p className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+        Quiet = no logged conversation in <Num>{QUIET_DAYS}</Num> days. every open deal carries a
+        next step and a date — one is filled in for you if you leave them empty.
       </p>
     </div>
   );
@@ -335,14 +335,14 @@ function Figure({
 }) {
   return (
     <div>
-      <span className="hud-label block text-[9px]">{label}</span>
+      <span className="hud-label block text-[11px]">{label}</span>
       <span
         className={`font-cond leading-none text-neutral-900 ${big ? 'text-[30px]' : 'text-[22px]'}`}
       >
         <Num>{value}</Num>
       </span>
       {hint ? (
-        <span className="mt-0.5 block font-semi text-[9px] tracking-[0.12em] text-neutral-500">
+        <span className="mt-0.5 block font-semi text-[11px] tracking-[0.12em] text-neutral-500">
           {hint}
         </span>
       ) : null}

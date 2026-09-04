@@ -20,10 +20,10 @@ function band(seat: Seat): { bg: string; text: string; label: string } {
   if (seat.status === 'dormant') {
     return { bg: 'bg-neutral-300', text: 'text-neutral-700', label: 'DORMANT' };
   }
-  if (seat.health >= 70) return { bg: 'bg-accent', text: 'text-ground', label: 'HEALTHY' };
-  if (seat.health >= 45) return { bg: 'bg-accent-500/70', text: 'text-ground', label: 'STEADY' };
-  if (seat.health >= 25) return { bg: 'bg-sev-warning/80', text: 'text-ground', label: 'WATCH' };
-  return { bg: 'bg-sev-critical/85', text: 'text-ground', label: 'ACTION' };
+  if (seat.health >= 70) return { bg: 'bg-accent', text: 'text-white', label: 'HEALTHY' };
+  if (seat.health >= 45) return { bg: 'bg-accent-500/70', text: 'text-white', label: 'STEADY' };
+  if (seat.health >= 25) return { bg: 'bg-sev-warning/80', text: 'text-white', label: 'WATCH' };
+  return { bg: 'bg-sev-critical/85', text: 'text-white', label: 'ACTION' };
 }
 
 /**
@@ -65,12 +65,12 @@ export function SeatMap({ seats, side }: { seats: Seat[]; side: 'demand' | 'supp
               className={`${b.bg} ${b.text} flex min-w-0 flex-col justify-between overflow-hidden p-2`}
               style={{ gridColumn: `span ${cols} / span ${cols}` }}
             >
-              <span className="truncate font-semi text-[10px] leading-tight tracking-[0.06em]">
+              <span className="truncate font-semi text-[11.5px] leading-tight tracking-[0.06em]">
                 {s.seat}
               </span>
               <span className="truncate font-cond text-[15px] leading-none">
                 <Num>{fmtMoney(s.revPerDayCents)}</Num>
-                <span className="ms-1 text-[9px] opacity-80">/DAY</span>
+                <span className="ms-1 text-[11px] opacity-80">/day</span>
               </span>
             </div>
           );
@@ -93,9 +93,9 @@ function TargetRail({ seats }: { seats: Seat[] }) {
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between">
-        <span className="hud-label text-[9px]">AGAINST THE $15K / DAY TARGET</span>
-        <span className="font-semi text-[9px] tracking-[0.12em] text-neutral-500">
-          TOP <Num>{shown.length}</Num> BY REVENUE
+        <span className="hud-label text-[11px]">Against the $15K / day target</span>
+        <span className="font-semi text-[11px] tracking-[0.12em] text-neutral-500">
+          Top <Num>{shown.length}</Num> By revenue
         </span>
       </div>
       {shown.map((s) => {
@@ -104,7 +104,7 @@ function TargetRail({ seats }: { seats: Seat[] }) {
         return (
           <div key={`rail:${s.seat}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
             <span className="grid grid-cols-[minmax(88px,132px)_minmax(0,1fr)] items-center gap-2">
-              <span className="truncate font-semi text-[10px] tracking-[0.06em] text-neutral-600">
+              <span className="truncate font-semi text-[11.5px] tracking-[0.06em] text-neutral-600">
                 {s.seat}
               </span>
               <span className="relative block h-[9px] bg-neutral-200">
@@ -117,8 +117,8 @@ function TargetRail({ seats }: { seats: Seat[] }) {
           </div>
         );
       })}
-      <p className="font-semi text-[9px] tracking-[0.1em] text-neutral-500">
-        FULL BAR = <Num>{fmtMoney(SEAT_REVENUE_TARGET_CENTS)}</Num> PER DAY
+      <p className="font-semi text-[11px] tracking-[0.1em] text-neutral-500">
+        FULL BAR = <Num>{fmtMoney(SEAT_REVENUE_TARGET_CENTS)}</Num> Per day
       </p>
     </div>
   );
@@ -137,7 +137,7 @@ function Legend() {
       {items.map((i) => (
         <span key={i.label} className="inline-flex items-center gap-[6px]">
           <span className={`inline-block h-[9px] w-[14px] ${i.cls}`} />
-          <span className="font-semi text-[9px] tracking-[0.12em] text-neutral-500">{i.label}</span>
+          <span className="font-semi text-[11px] tracking-[0.12em] text-neutral-500">{i.label}</span>
         </span>
       ))}
     </div>

@@ -85,9 +85,9 @@ export function SignInForm({
       {googleEnabled ? (
         <>
           <div className="my-5 flex items-center gap-3">
-            <span className="h-px flex-1 bg-divider" />
-            <span className="hud-label text-[9px]">OR</span>
-            <span className="h-px flex-1 bg-divider" />
+            <span className="h-px flex-1 bg-line" />
+            <span className="hud-label text-[11px]">OR</span>
+            <span className="h-px flex-1 bg-line" />
           </div>
           <Button
             type="button"
@@ -95,7 +95,7 @@ export function SignInForm({
             className="w-full"
             onClick={() => signIn('google', { callbackUrl: '/' })}
           >
-            SIGN IN WITH GOOGLE
+            Sign in with Google
           </Button>
         </>
       ) : null}

@@ -75,7 +75,7 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
   };
 
   return (
-    <li className="border-t border-divider px-[18px] py-3">
+    <li className="border-t border-line px-[18px] py-3">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -88,17 +88,17 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
             ) : null}
             {d.undelivered ? (
               <Tag tone="critical" title="Slack never accepted this — nobody was told">
-                NOT DELIVERED
+                Not delivered
               </Tag>
             ) : null}
             {d.nudgeCount > 0 ? (
               <Tag tone="outline">
-                CHASED <Num>{d.nudgeCount}</Num>×
+                Chased <Num>{d.nudgeCount}</Num>×
               </Tag>
             ) : null}
           </div>
 
-          <p className="hud-label mt-1 whitespace-normal text-[9px]">
+          <p className="hud-label mt-1 whitespace-normal text-[11px]">
             {d.slackShared ? 'SLACK THREAD WITH' : 'SLACK DM TO'} {d.personName} · HANDED OVER{' '}
             <Num>{fmtDateTime(d.delegatedAt)}</Num>
             {d.dueDate ? (
@@ -121,7 +121,7 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
 
         <div className="flex shrink-0 items-start gap-5">
           <div className="text-end">
-            <span className="hud-label block text-[9px]">QUIET</span>
+            <span className="hud-label block text-[11px]">Quiet</span>
             <span
               className={`font-cond text-[19px] leading-none ${
                 d.stuck ? 'text-sev-warning' : 'text-neutral-900'
@@ -150,7 +150,7 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
               run(nudgeAction, data);
             }}
           >
-            CHASE
+            Chase
           </Button>
         ) : null}
 
@@ -185,7 +185,7 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
             href={d.slackMessageUrl}
             target="_blank"
             rel="noreferrer"
-            className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+            className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline"
           >
             Slack ↗
           </a>
@@ -195,7 +195,7 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
             href={`https://app.clickup.com/t/${d.clickupTaskId}`}
             target="_blank"
             rel="noreferrer"
-            className="font-semi text-[10px] uppercase tracking-[0.14em] text-accent-700 hover:text-accent"
+            className="font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline"
           >
             ClickUp ↗
           </a>
@@ -212,7 +212,7 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
             run(archiveDelegationAction, data);
           }}
         >
-          ARCHIVE
+          Archive
         </Button>
 
         {message ? <span className="text-2xs text-destructive">{message}</span> : null}
@@ -220,7 +220,7 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
 
       {closing ? (
         <form
-          className="mt-2 flex flex-wrap items-center gap-2 border border-divider p-2"
+          className="mt-2 flex flex-wrap items-center gap-2 border border-line p-2"
           onSubmit={(e) => {
             e.preventDefault();
             const data = new FormData(e.currentTarget);
@@ -236,19 +236,19 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
             className="min-w-0 flex-1"
           />
           <Button type="submit" size="sm" disabled={pending}>
-            MARK DONE
+            Mark done
           </Button>
           <Button type="button" size="sm" variant="ghost" onClick={() => setClosing(false)}>
-            CANCEL
+            Cancel
           </Button>
         </form>
       ) : null}
 
       {open ? (
-        <div className="mt-2 border border-divider p-2">
+        <div className="mt-2 border border-line p-2">
           {loading ? (
             <p className="font-semi text-[11px] tracking-[0.12em] text-neutral-500">
-              READING THE THREAD…
+              Reading the thread…
             </p>
           ) : threadError ? (
             <p className="font-semi text-[11px] text-sev-warning">{threadError}</p>
@@ -256,7 +256,7 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
             <ul className="space-y-2">
               {thread.map((m) => (
                 <li key={m.ts} className={m.fromCockpit ? 'ps-0' : 'ps-4'}>
-                  <p className="hud-label text-[9px]">
+                  <p className="hud-label text-[11px]">
                     {m.authorName} · <Num>{fmtDateTime(m.at)}</Num>
                   </p>
                   <p className="whitespace-pre-wrap text-[13px] text-neutral-700">{m.text}</p>
@@ -269,7 +269,7 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
 
           {!threadError ? (
             <form
-              className="mt-2 flex flex-wrap items-end gap-2 border-t border-divider pt-2"
+              className="mt-2 flex flex-wrap items-end gap-2 border-t border-line pt-2"
               onSubmit={(e) => {
                 e.preventDefault();
                 send(e.currentTarget, replyAction);

@@ -40,7 +40,7 @@ export function SeatTable({
           action={
             <div className="flex flex-wrap items-center gap-3">
               <SearchBox placeholder="Find a seat" />
-              <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
+              <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
                 {total !== undefined && total !== seats.length ? (
                   <>
                     <Num>{seats.length}</Num> OF <Num>{total}</Num> ·{' '}
@@ -49,7 +49,7 @@ export function SeatTable({
                 TARGET <Num>{fmtMoney(SEAT_REVENUE_TARGET_CENTS)}</Num>/DAY
                 {side === 'supply' ? (
                   <>
-                    {' '}· SPEND FLOOR <Num>{fmtMoney(SUPPLY_SPEND_FLOOR_CENTS)}</Num>/DAY
+                    {' '}· SPEND FLOOR <Num>{fmtMoney(SUPPLY_SPEND_FLOOR_CENTS)}</Num>/day
                   </>
                 ) : null}
               </span>
@@ -61,11 +61,11 @@ export function SeatTable({
       {/* Phone: one card per seat. */}
       <ul className="lg:hidden">
         {seats.map((s) => (
-          <li key={`m:${s.seat}`} className="border-t border-divider px-[18px] py-3">
+          <li key={`m:${s.seat}`} className="border-t border-line px-[18px] py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate font-cond text-[16px] text-neutral-900">{s.seat}</p>
-                <p className="hud-label mt-0.5 text-[9px]">{s.company}</p>
+                <p className="hud-label mt-0.5 text-[11px]">{s.company}</p>
               </div>
               <Tag tone={STATUS_TONE[s.status]}>{STATUS_LABEL[s.status]}</Tag>
             </div>
@@ -79,7 +79,7 @@ export function SeatTable({
             <div className="mt-2">
               <HealthBar seat={s} />
             </div>
-            <p className="mt-1 font-semi text-[10px] text-neutral-500">{s.because}</p>
+            <p className="mt-1 font-semi text-[11.5px] text-neutral-500">{s.because}</p>
           </li>
         ))}
       </ul>
@@ -105,11 +105,11 @@ export function SeatTable({
               <tr key={s.seat}>
                 <td className="whitespace-normal">
                   <span className="font-cond text-[15px] text-neutral-900">{s.seat}</span>
-                  <p className="hud-label mt-0.5 text-[9px]">
+                  <p className="hud-label mt-0.5 text-[11px]">
                     {s.company}
                     {s.endpoints > 1 ? (
                       <>
-                        {' '}· <Num>{s.endpoints}</Num> ENDPOINTS
+                        {' '}· <Num>{s.endpoints}</Num> Endpoints
                       </>
                     ) : null}
                   </p>
@@ -128,7 +128,7 @@ export function SeatTable({
                   <span className="flex items-center gap-2">
                     <span className="hud-gauge w-16">
                       <span
-                        className="block h-full bg-accent"
+                        className="block h-full rounded-full bg-info"
                         style={{ width: `${Math.max(1, Math.min(100, s.targetRatio * 100))}%` }}
                       />
                     </span>
@@ -159,7 +159,7 @@ export function SeatTable({
 function Cell({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <span className="hud-label text-[9px]">{label}</span>
+      <span className="hud-label text-[11px]">{label}</span>
       <p className="font-cond text-[16px] leading-none text-neutral-900">
         <Num>{value}</Num>
       </p>

@@ -36,9 +36,9 @@ export async function RevenueStrip({ basis = 'net' }: { basis?: 'net' | 'gross' 
           <div className="flex items-center gap-3">
             <Link
               href="/revenue"
-              className="font-semi text-[11px] tracking-[0.16em] text-accent-700 hover:text-accent"
+              className="font-semi text-[11px] tracking-[0.16em] text-info hover:underline"
             >
-              FULL BREAKDOWN
+              Full breakdown
             </Link>
           </div>
         }
@@ -46,7 +46,7 @@ export async function RevenueStrip({ basis = 'net' }: { basis?: 'net' | 'gross' 
 
       <div className="flex flex-wrap items-end gap-x-10 gap-y-4">
         <div>
-          <p className="hud-label text-[10px]">
+          <p className="hud-label text-[11.5px]">
             {basis === 'net' ? 'NET' : 'GROSS'} · <Num>{date}</Num>
           </p>
           <p className="hud-numeral mt-1 text-[38px]">
@@ -76,16 +76,16 @@ export async function RevenueStrip({ basis = 'net' }: { basis?: 'net' | 'gross' 
             <Link
               key={code}
               href={`/revenue?dept=${code}`}
-              className="relative overflow-hidden border border-divider bg-ground p-3 hover:border-accent/60 hover:bg-ink/[0.04]"
+              className="relative overflow-hidden border border-line bg-card p-3 hover:border-accent/60 hover:bg-ink/[0.04]"
             >
               <Sparkline
                 values={d.spark}
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 w-full text-accent-500/25"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 w-full text-info/25"
               />
               <div className="relative">
-                <p className="flex items-center gap-2 hud-label text-[9px] tracking-[0.14em]">
+                <p className="flex items-center gap-2 hud-label text-[11px] tracking-[0.14em]">
                   {DEPT_LABEL[code] ?? code}
-                  {d.deptCode === null ? <Tag tone="watch">NO RULE</Tag> : null}
+                  {d.deptCode === null ? <Tag tone="watch">No rule</Tag> : null}
                 </p>
                 <p className="hud-numeral mt-1 text-[26px]">
                   <Num>{fmtMoney(value)}</Num>
@@ -101,7 +101,7 @@ export async function RevenueStrip({ basis = 'net' }: { basis?: 'net' | 'gross' 
       </div>
 
       {summary.anomalies.length > 0 ? (
-        <ul className="border-t border-divider pt-3">
+        <ul className="border-t border-line pt-3">
           {summary.anomalies.slice(0, 3).map((a) => (
             <li
               key={`${a.scopeId}-${a.kind}`}
@@ -122,7 +122,7 @@ export async function RevenueStrip({ basis = 'net' }: { basis?: 'net' | 'gross' 
                 </p>
                 <p className="mt-0.5 text-[13px] leading-[1.45] text-neutral-700">{a.whatHappened}</p>
                 <p className="mt-0.5 font-semi text-[11px] tracking-[0.1em] text-neutral-500">
-                  IMPACT <Num>{fmtMoney(a.moneyImpactCents)}</Num> · {a.recommendedAction}
+                  Impact <Num>{fmtMoney(a.moneyImpactCents)}</Num> · {a.recommendedAction}
                 </p>
               </div>
             </li>
@@ -142,7 +142,7 @@ function Comparison({
 }) {
   return (
     <div>
-      <p className="hud-label text-[9px]">{label}</p>
+      <p className="hud-label text-[11px]">{label}</p>
       <p className="mt-1">
         <DeltaPct delta={delta} />
       </p>
@@ -153,7 +153,7 @@ function Comparison({
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="hud-label text-[9px]">{label}</p>
+      <p className="hud-label text-[11px]">{label}</p>
       <p className="mt-1 font-cond text-[20px] font-medium leading-none text-neutral-800">
         <Num>{value}</Num>
       </p>

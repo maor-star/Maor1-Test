@@ -21,7 +21,7 @@ export default async function LoginPage({
     <main className="hud-ground flex min-h-dvh items-center justify-center p-6">
       <div className="hud-card hud-marks w-full max-w-sm p-8">
         <div className="font-cond text-[25px] font-semibold leading-none tracking-[0.2em] text-neutral-900">
-          ADNIMATION
+          Adnimation
         </div>
         <div className="mt-2 hud-kicker">CEO COCKPIT</div>
 

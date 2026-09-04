@@ -85,8 +85,8 @@ export function ClickUpStatus({
 
   if (options.length === 0) {
     return (
-      <span className="font-semi text-[10px] tracking-[0.12em] text-neutral-500">
-        NO STATUSES FROM CLICKUP
+      <span className="font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+        No statuses from ClickUp
       </span>
     );
   }

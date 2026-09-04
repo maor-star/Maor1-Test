@@ -48,12 +48,12 @@ export function IntegrationChecklist({
   };
 
   return (
-    <div className="mt-2 border border-divider p-2">
+    <div className="mt-2 border border-line p-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="hud-label text-[9px]">
+        <span className="hud-label text-[11px]">
           GOING LIVE · <Num>{progress.done}</Num>/<Num>{progress.total}</Num>
         </span>
-        <span className="font-semi text-[10px] tracking-[0.1em] text-neutral-500">
+        <span className="font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
           {progress.complete ? (
             'EVERY STEP DONE'
           ) : progress.waitingOn ? (
@@ -88,7 +88,7 @@ export function IntegrationChecklist({
                 <span className={`text-[13px] ${s.done ? 'text-neutral-500 line-through' : 'text-neutral-800'}`}>
                   {s.label}
                 </span>
-                <span className="hud-label ms-2 whitespace-normal text-[9px]">
+                <span className="hud-label ms-2 whitespace-normal text-[11px]">
                   {s.done && s.at ? <Num>{fmtDate(new Date(s.at))}</Num> : s.meaning}
                 </span>
               </span>
@@ -115,7 +115,7 @@ export function IntegrationChecklist({
                   <button
                     type="button"
                     onClick={() => setBlocking(s.key)}
-                    className="font-semi text-[10px] uppercase tracking-[0.12em] text-neutral-500 hover:text-accent"
+                    className="font-semi text-[11.5px] uppercase tracking-[0.12em] text-neutral-500 hover:text-accent"
                   >
                     {s.blockedOn ? `WAITING ON ${s.blockedOn}` : '+ WHO IS IT WAITING ON'}
                   </button>

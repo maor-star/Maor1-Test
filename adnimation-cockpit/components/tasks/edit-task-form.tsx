@@ -237,7 +237,7 @@ export function EditTaskForm({
             });
           }}
         >
-          ARCHIVE
+          Archive
         </Button>
       </div>
     </form>
