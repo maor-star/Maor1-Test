@@ -104,6 +104,16 @@ export function triage(candidate: ReplyCandidate): Triage {
  * Separate from drafting on purpose: the thing that decides to send must be
  * readable on its own, and must not be the thing that wanted to send.
  */
+const OWNER_NAME = process.env.OWNER_NAME ?? 'Maor Davidovich';
+
+/** His name is in it, in either alphabet. Mirrors lib/meetings/rules.ts. */
+function signedByHim(text: string): boolean {
+  const first = (OWNER_NAME ?? '').trim().split(/\s+/)[0] ?? '';
+  if (first === '') return true;
+  const hebrew = first.toLowerCase() === 'maor' ? 'מאור' : first;
+  return (text ?? '').toLowerCase().includes(first.toLowerCase()) || (text ?? '').includes(hebrew);
+}
+
 export function maySend(triaged: Triage, draft: Draft): { send: boolean; why: string } {
   if (!triaged.answerable) return { send: false, why: triaged.reason };
   if (!draft.shouldReply) return { send: false, why: draft.reasoning };
@@ -112,6 +122,15 @@ export function maySend(triaged: Triage, draft: Draft): { send: boolean; why: st
   }
   if (draft.reply.trim().length < 10) return { send: false, why: 'the draft is empty' };
   if (draft.reply.length > 1200) return { send: false, why: 'the draft is too long to be simple' };
+  /*
+   * His name, on anything sent over his address.
+   *
+   * A reply that arrives from him and is signed by nobody reads as sent by a
+   * machine — which it was — and the person reading it should not have to work
+   * that out. The model is told to sign as him; this is what happens when it
+   * does not.
+   */
+  if (!signedByHim(draft.reply)) return { send: false, why: 'the draft is not signed with your name' };
   return { send: true, why: triaged.reason };
 }
 

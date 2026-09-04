@@ -109,3 +109,27 @@ describe('the send gate, on both sides', () => {
     expect(theirs.send, 'the two gates disagree about whether to send').toBe(mine.send);
   });
 });
+
+/**
+ * The signature gate is the newest way a reply can be held back, and it is one
+ * the job runs rather than the app — so the two must agree about it exactly.
+ */
+describe('the screen and the job agree about the sign-off', () => {
+  const candidate = {
+    subject: 'Quick one',
+    snippet: 'who should I speak to?',
+    fromEmail: 'ravit@markito.com',
+    fromName: 'Ravit',
+    messages: [{ fromMe: false, text: 'who should I speak to?' }],
+    knownCompany: 'Markito',
+  };
+
+  it.each([
+    'Talk to Mor.\n\nBest,\nMaor',
+    'Talk to Mor.\n\nThanks',
+    'דבר עם מור.\n\nתודה,\nמאור',
+  ])('agrees on %j', (reply) => {
+    const draft = { shouldReply: true, reasoning: 'simple', reply, confidence: 'high' as const };
+    expect(js.maySend(js.triage(candidate), draft)).toEqual(maySend(triage(candidate), draft));
+  });
+});

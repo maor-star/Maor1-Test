@@ -183,3 +183,31 @@ describe('mail that is only worth showing him', () => {
       .toBeGreaterThan(0);
   });
 });
+
+describe('the mail answerer signs as him too', () => {
+  const triaged = triage({
+    subject: 'Quick one',
+    snippet: 'Can you point me at the right person?',
+    fromEmail: 'ravit@markito.com',
+    fromName: 'Ravit',
+    messages: [{ fromMe: false, text: 'Can you point me at the right person?' }],
+    knownCompany: 'Markito',
+  });
+
+  const draft = (reply: string) => ({
+    shouldReply: true,
+    reasoning: 'simple',
+    reply,
+    confidence: 'high' as const,
+  });
+
+  it('sends one that is signed', () => {
+    expect(maySend(triaged, draft('Sure — talk to Mor.\n\nBest,\nMaor')).send).toBe(true);
+  });
+
+  it('holds one that is not', () => {
+    const verdict = maySend(triaged, draft('Sure — talk to our chief of staff.\n\nThanks'));
+    expect(verdict.send).toBe(false);
+    expect(verdict.why).toContain('name');
+  });
+});

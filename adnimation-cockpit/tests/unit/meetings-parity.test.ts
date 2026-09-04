@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   decide, freeWindows, mayAnswer, maySend, pickAttendees, pickSlots, proposalText,
-  readPeopleAnswer, sameOffer, slotLine, wantsMeeting,
+  readPeopleAnswer, sameOffer, signedByHim, slotLine, wantsMeeting,
   type MeetingCandidate, type Slot,
 } from '@/lib/meetings/rules';
 // @ts-expect-error — the generated job copy is plain ESM with no types.
@@ -104,6 +104,22 @@ describe('the screen and the meetings job agree', () => {
     for (const said of ['Mor', 'just me', 'nothing here', 'mor@adnimation.com']) {
       expect(js.readPeopleAnswer(said, roster)).toEqual(readPeopleAnswer(said, roster));
     }
+  });
+
+  it('agrees that his name has to be on it', () => {
+    const slots = pickSlots(freeWindows([], { now: NOW, horizonDays: 6 }), { now: NOW });
+    const read = { wants: true, why: 'they asked to meet' };
+    const allowed = { ok: true, why: 'someone you deal with' };
+    for (const reply of [
+      'Any of these work?\n· Monday 7 September, 10:30–11:00\n\nBest,\nMaor',
+      'Any of these work?\n· Monday 7 September, 10:30–11:00\n\nThanks',
+      'תודה,\nמאור — אחד מהמועדים האלה מתאים?',
+    ]) {
+      const has = { slots: 3, calendly: false };
+      expect(js.maySend(read, allowed, reply, has)).toEqual(maySend(read, allowed, reply, has));
+      expect(js.signedByHim(reply)).toEqual(signedByHim(reply));
+    }
+    expect(js.sameOffer('x', { slots, calendlyUrl: null })).toEqual(sameOffer('x', { slots, calendlyUrl: null }));
   });
 
   it('agrees at the last gate', () => {

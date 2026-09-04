@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   asksForEvening, clockTime, decide, freeWindows, mayAnswer, maySend,
-  emailsIn, isInternal, pickAttendees, pickSlots, proposalText, readPeopleAnswer,
-  sameOffer, settled, slotLine, wantsMeeting,
+  emailsIn, firstName, isInternal, pickAttendees, pickSlots, proposalText, readPeopleAnswer,
+  sameOffer, settled, signedByHim, slotLine, wantsMeeting,
   type MeetingCandidate, type Slot,
 } from '@/lib/meetings/rules';
 import { FakeCalendar } from '@/lib/integrations/calendar';
@@ -426,5 +426,39 @@ describe('his answer about who should be on it', () => {
   it('takes two names at once', () => {
     const answer = readPeopleAnswer('Mor and Tomer please', roster);
     expect(answer.emails.sort()).toEqual(['mor@adnimation.com', 'treves@adnimation.com']);
+  });
+});
+
+describe('anything sent in his name carries his name', () => {
+  const slots = pickSlots(freeWindows([], { now: NOW, horizonDays: 6 }), { now: NOW });
+  const read = { wants: true, why: 'they asked to meet' };
+  const allowed = { ok: true, why: 'someone you deal with' };
+
+  it('knows his name in either alphabet', () => {
+    expect(firstName('Maor Davidovich')).toBe('Maor');
+    expect(signedByHim('Best,\nMaor')).toBe(true);
+    expect(signedByHim('תודה,\nמאור')).toBe(true);
+    expect(signedByHim('Any of these work?\n\nThanks')).toBe(false);
+  });
+
+  it('refuses a reply that lost the sign-off', () => {
+    const unsigned = 'Any of these work?\n· Monday\n· Tuesday\n\nThanks';
+    expect(maySend(read, allowed, unsigned, { slots: 3, calendly: false })).toEqual({
+      ok: false,
+      why: 'it is not signed with your name',
+    });
+  });
+
+  it('lets the signed one through', () => {
+    const signed = proposalText({ toName: 'Ravit', slots, calendlyUrl: null });
+    expect(maySend(read, allowed, signed, { slots: 3, calendly: false }).ok).toBe(true);
+  });
+
+  it('refuses a rewrite that dropped his name, however well it kept the times', () => {
+    const lines = slots.map((s) => slotLine(s));
+    const stripped = `Hi Ravit,\n\n${lines.map((l) => `· ${l}`).join('\n')}\n\nCheers`;
+    const verdict = sameOffer(stripped, { slots, calendlyUrl: null });
+    expect(verdict.ok).toBe(false);
+    expect(verdict.why).toContain('name');
   });
 });

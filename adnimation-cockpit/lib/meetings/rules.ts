@@ -23,6 +23,30 @@
 /** Where the answered threads are filed, under the same parent as the rest. */
 export const MEETINGS_LABEL = process.env.MEETINGS_LABEL ?? 'Claude/Meetings';
 
+/**
+ * Whose name goes on the bottom of anything sent in his name.
+ *
+ * Not a nicety. Mail that goes out over his address without his name on it
+ * reads as sent by a machine, which is exactly what it is — and the person
+ * receiving it should not have to wonder. So it is a gate rather than a
+ * template: a reply that has lost his name does not go.
+ */
+export const OWNER_NAME = process.env.OWNER_NAME ?? 'Maor Davidovich';
+
+export function firstName(full = OWNER_NAME): string {
+  return (full ?? '').trim().split(/\s+/)[0] ?? '';
+}
+
+/** His name is in it, in either alphabet. */
+export function signedByHim(text: string, name = OWNER_NAME): boolean {
+  const first = firstName(name).toLowerCase();
+  if (first === '') return true;
+  const body = (text ?? '').toLowerCase();
+  // The Hebrew spelling of the same name, for a reply written in Hebrew.
+  const hebrew = first === 'maor' ? 'מאור' : first;
+  return body.includes(first) || (text ?? '').includes(hebrew);
+}
+
 export interface MeetingCandidate {
   subject: string | null;
   snippet: string | null;
@@ -282,6 +306,8 @@ export function maySend(
   }
   if (reply.trim().length < 20) return { ok: false, why: 'the reply is empty' };
   if (reply.length > 1200) return { ok: false, why: 'the reply grew too long to be a scheduling note' };
+  // Anything sent over his address carries his name. No exceptions, no dial.
+  if (!signedByHim(reply)) return { ok: false, why: 'it is not signed with your name' };
   return { ok: true, why: allowed.why };
 }
 
@@ -528,6 +554,9 @@ export function sameOffer(
   }
   const strays = urls.filter((u) => u !== offer.calendlyUrl);
   if (strays.length > 0) return { ok: false, why: `it added a link of its own (${strays[0]})` };
+
+  // A rewrite is free to change the sign-off. It is not free to remove it.
+  if (!signedByHim(text)) return { ok: false, why: 'it dropped your name from the sign-off' };
 
   return { ok: true, why: 'the offer survived the rewrite' };
 }

@@ -72,6 +72,7 @@ export const TARGETS = [
       ['const NEVER: [RegExp, string][] = [', 'const NEVER = ['],
       ['const SIMPLE: [RegExp, string][] = [', 'const SIMPLE = ['],
       ['export function triage(candidate: ReplyCandidate): Triage {', 'export function triage(candidate) {'],
+      ['function signedByHim(text: string): boolean {', 'function signedByHim(text) {'],
       [
         'export function maySend(triaged: Triage, draft: Draft): { send: boolean; why: string } {',
         'export function maySend(triaged, draft) {',
@@ -221,6 +222,11 @@ export const TARGETS = [
       ['export function asksForEvening(text: string): boolean {', 'export function asksForEvening(text) {'],
       [/export function decide\(input: \{[\s\S]*?\n\}\): Decision \{/, 'export function decide(input) {'],
       ['export function settled(why: string): boolean {', 'export function settled(why) {'],
+      ['export function firstName(full = OWNER_NAME): string {', 'export function firstName(full = OWNER_NAME) {'],
+      [
+        'export function signedByHim(text: string, name = OWNER_NAME): boolean {',
+        'export function signedByHim(text, name = OWNER_NAME) {',
+      ],
       [
         /export function sameOffer\(\n  rewritten: string,\n  offer: \{ slots: Slot\[\]; calendlyUrl: string \| null; timeZone\?: string \},\n\): Verdict \{/,
         'export function sameOffer(rewritten, offer) {',

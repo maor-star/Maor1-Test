@@ -175,15 +175,23 @@ async function labelId(name) {
   return created.id;
 }
 
-async function file(messageId, labelIdValue) {
+/**
+ * File a whole thread: every message out of the inbox and under the label.
+ *
+ * The propose path had the message in hand and filed that one. The other two
+ * paths — the reply after he says yes, and the booking — knew only the thread,
+ * and so left it sitting in his inbox after the agent had finished with it.
+ * A thread this agent has answered is handled; it does not belong in there.
+ */
+async function fileThread(threadId, labelIdValue) {
   if (!labelIdValue) return false;
-  return gmail(`/messages/${messageId}/modify`, MODIFY, {
+  return gmail(`/threads/${threadId}/modify`, MODIFY, {
     method: 'POST',
     body: JSON.stringify({ addLabelIds: [labelIdValue], removeLabelIds: ['INBOX'] }),
   })
     .then(() => true)
     .catch((e) => {
-      console.log(`      could not file it: ${e.message}`);
+      console.log(`      could not file the thread: ${e.message}`);
       return false;
     });
 }
@@ -740,14 +748,20 @@ async function main() {
       { subject: row.subject, fromEmail: row.from_email, threadId: row.thread_id, messageId: null },
       text,
     );
+    const filedNow = await fileThread(row.thread_id, meetingsLabel);
     await sql`
       update meeting_requests
       set status = 'proposed', answer = 'yes', kind = ${slots.length ? 'propose' : 'calendly'},
-          proposed_slots = ${JSON.stringify(slots)}::jsonb, reply = ${text}, replied_at = now()
+          proposed_slots = ${JSON.stringify(slots)}::jsonb, reply = ${text}, replied_at = now(),
+          filed_at = ${filedNow ? sql`now()` : null}
       where thread_id = ${row.thread_id}
     `;
     proposed += 1;
-    told.push(`:calendar: You said yes — I offered ${row.from_name ?? row.from_email} ${slots.length || 'the booking link'} time(s).`);
+    told.push(
+      `:calendar: *You said yes* — I offered ${row.from_name ?? row.from_email} ` +
+        `${slots.length ? `${slots.length} time(s)` : 'the booking link'}\n` +
+        `> _The mail:_ ${filedNow ? `filed under ${MEETINGS_LABEL}, out of your inbox` : 'still in your inbox'}`,
+    );
   }
 
   /* ── And the ones waiting on his answer about who else should be on it ── */
@@ -783,16 +797,20 @@ async function main() {
         timeZone,
         meet: withMeet,
       });
+      const filedNow = await fileThread(row.thread_id, meetingsLabel);
       await sql`
         update meeting_requests
-        set status = 'booked', event_id = ${event.id}, answer = ${answer.emails.join(', ') || 'just you'}
+        set status = 'booked', event_id = ${event.id},
+            answer = ${answer.emails.join(', ') || 'just you'},
+            filed_at = coalesce(filed_at, ${filedNow ? sql`now()` : null})
         where thread_id = ${row.thread_id}
       `;
       booked += 1;
       told.push(
         `:white_check_mark: *Booked: ${row.from_name ?? row.from_email}* — ${slotLine(slot, timeZone)}\n` +
           `> ${row.subject ?? ''}\n> _with:_ ${invite.join(', ')}` +
-          `${event.join ? `\n> _Meet:_ ${event.join}` : ''}` +
+          `${event.join ? `\n> _Meet:_ ${event.join}` : '\n> _no Meet link — Calendar refused the conference_'}` +
+          `\n> _The mail:_ ${filedNow ? `filed under ${MEETINGS_LABEL}, out of your inbox` : 'still in your inbox'}` +
           `${answer.unmatched.length ? `\n> _I could not place:_ ${answer.unmatched.join(', ')}` : ''}`,
       );
     } catch (e) {
@@ -976,7 +994,7 @@ async function main() {
     if (DRY) { proposed += 1; continue; }
 
     await reply(candidate, text);
-    const filedOk = await file(ref.id, meetingsLabel);
+    const filedOk = await fileThread(candidate.threadId, meetingsLabel);
     await sql`
       insert into meeting_requests
         (thread_id, from_email, from_name, subject, kind, status, proposed_slots, reply, why, replied_at, filed_at)
@@ -988,7 +1006,8 @@ async function main() {
     proposed += 1;
     told.push(
       `:calendar: *${verdict.who ?? candidate.fromName}* — ${verdict.about ?? subject}\n` +
-        `> I offered: ${slots.length ? slots.map((x) => slotLine(x, timeZone)).join(' · ') : 'the booking link'}`,
+        `> _I offered:_ ${slots.length ? slots.map((x) => slotLine(x, timeZone)).join(' · ') : 'the booking link'}\n` +
+        `> _The mail:_ ${filedOk ? `filed under ${MEETINGS_LABEL}, out of your inbox` : 'still in your inbox — I could not file it'}`,
     );
   }
 
@@ -1097,9 +1116,11 @@ async function main() {
         timeZone,
         meet: withMeet,
       });
+      const filedNow = await fileThread(row.thread_id, meetingsLabel);
       await sql`
         update meeting_requests
-        set status = 'booked', chosen_slot = ${JSON.stringify(picked.slot)}::jsonb, event_id = ${event.id}
+        set status = 'booked', chosen_slot = ${JSON.stringify(picked.slot)}::jsonb,
+            event_id = ${event.id}, filed_at = coalesce(filed_at, ${filedNow ? sql`now()` : null})
         where thread_id = ${row.thread_id}
       `;
       booked += 1;
@@ -1107,6 +1128,7 @@ async function main() {
         `:white_check_mark: *Booked: ${row.from_name ?? row.from_email}* — ${slotLine(picked.slot, timeZone)}\n` +
           `> ${row.subject ?? ''}\n> _with:_ ${plan.invite.join(', ')}` +
           `${event.join ? `\n> _Meet:_ ${event.join}` : '\n> _no Meet link — Calendar refused the conference_'}` +
+          `\n> _The mail:_ ${filedNow ? `filed under ${MEETINGS_LABEL}, out of your inbox` : 'still in your inbox'}` +
           `${event.link ? `\n> ${event.link}` : ''}`,
       );
     } catch (e) {
