@@ -50,13 +50,30 @@ describe('what he set, over the defaults', () => {
 describe('from the form to the row', () => {
   it('stores only what differs from the default', () => {
     const stored = settingsFromForm('deal-mover', {
-      overdueDays: '2', quietDays: '30', draftFollowUp: 'on', proposeStage: '',
+      overdueDays: '2', quietDays: '30', draftFollowUp: 'on', draftFollowUp__shown: '1',
+      proposeStage__shown: '1',
       stages: ['negotiation'], language: 'match', tone: 'direct', maxItems: '10',
     });
     expect(stored).toEqual({ quietDays: 30, proposeStage: false, stages: ['negotiation'] });
   });
-  it('treats an absent checkbox as off', () => {
-    expect(settingsFromForm('renewal-warner', { warnDays: '45' })).toEqual({ createTask: false });
+  it('leaves a dial the form never showed exactly as it was', () => {
+    // A browser holding yesterday's page posts nothing for a dial that shipped
+    // this morning. Reading that as "off" is how the meetings agent stopped
+    // writing in his voice an hour after the voice existed.
+    const saved = settingsFromForm('meeting-booker', { to: '21:00' });
+    expect('voice' in saved).toBe(false);
+    expect('meet' in saved).toBe(false);
+    expect(saved.to).toBe('21:00');
+  });
+
+  it('takes an unticked box as off when the form did show it', () => {
+    const saved = settingsFromForm('meeting-booker', { to: '21:00', voice__shown: '1' });
+    expect(saved.voice).toBe(false);
+  });
+
+  it('treats an unticked checkbox as off — its marker says the form had it', () => {
+    expect(settingsFromForm('renewal-warner', { warnDays: '45', createTask__shown: '1' }))
+      .toEqual({ createTask: false });
   });
   it('round-trips through effectiveSettings to a complete object', () => {
     // A real form posts every field it shows; a multi-select with nothing

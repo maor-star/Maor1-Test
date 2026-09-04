@@ -16,7 +16,12 @@ export type SettingField =
   | { key: string; label: string; help?: string; type: 'number'; default: number; min?: number; max?: number; step?: number; unit?: string }
   | { key: string; label: string; help?: string; type: 'boolean'; default: boolean }
   | { key: string; label: string; help?: string; type: 'select'; default: string; options: { value: string; label: string }[] }
-  | { key: string; label: string; help?: string; type: 'text'; default: string; placeholder?: string }
+  | {
+      key: string; label: string; help?: string; type: 'text'; default: string;
+      placeholder?: string;
+      /** A value with a line break in it — a sign-off — needs a box, not a line. */
+      multiline?: boolean;
+    }
   | { key: string; label: string; help?: string; type: 'multi'; default: string[]; options: { value: string; label: string }[] };
 
 export type Settings = Record<string, number | boolean | string | string[]>;
@@ -172,7 +177,7 @@ export const AGENT_SETTINGS: Record<string, SettingField[]> = {
     { key: 'maxSentences', label: 'Longest reply (sentences)', type: 'number', default: 3, min: 1, max: 8 },
     { key: 'onlyKnown', label: 'Only answer people the company deals with', type: 'boolean', default: false },
     { key: 'neverTopics', label: 'Never touch mail about', type: 'text', default: 'money, contracts, legal, staff, commitments', placeholder: 'comma separated' },
-    { key: 'signOff', label: 'Sign-off', type: 'text', default: 'Best,\nMaor', placeholder: 'Best,\nMaor' },
+    { key: 'signOff', label: 'Sign-off', type: 'text', multiline: true, default: 'Best,\nMaor', placeholder: 'Best,\nMaor' },
     LANGUAGE, TONE, MAX_ITEMS(15, 'Most replies per run'),
   ],
   'meeting-booker': [
@@ -230,7 +235,7 @@ export const AGENT_SETTINGS: Record<string, SettingField[]> = {
         { value: 'all', label: 'Every calendar you can see, shared ones included' },
       ],
     },
-    { key: 'signOff', label: 'Sign-off', type: 'text', default: 'Best,\nMaor', placeholder: 'Best,\nMaor' },
+    { key: 'signOff', label: 'Sign-off', type: 'text', multiline: true, default: 'Best,\nMaor', placeholder: 'Best,\nMaor' },
   ],
   'invoice-forwarder': [
     { key: 'to', label: 'Forward to', type: 'text', default: 'finance@adnimation.com', placeholder: 'someone@adnimation.com' },
@@ -403,13 +408,28 @@ export function settingsFromForm(agentName: string, form: Record<string, string 
   return out;
 }
 
+/**
+ * The marker a checkbox posts alongside itself, so "off" and "not on this
+ * page" can be told apart.
+ *
+ * A checkbox that is off is simply absent from the form, which is fine until
+ * a new dial ships: a browser still holding yesterday's page posts nothing for
+ * it, and the save reads that as him switching it off. It happened to the
+ * meetings agent's voice within an hour of the dial existing — he saved his
+ * working hours from a page that predated it, and the reply stopped sounding
+ * like him. A field the form did not show is now left exactly as it was.
+ */
+export const SHOWN_SUFFIX = '__shown';
+
 function normaliseForm(agentName: string, form: Record<string, string | string[]>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const f of settingsFor(agentName)) {
     const v = form[f.key];
     if (f.type === 'boolean') {
-      // A checkbox that is off is simply absent from the form.
-      out[f.key] = v !== undefined && v !== '' && v !== '0' && v !== 'false';
+      const shown = form[`${f.key}${SHOWN_SUFFIX}`] !== undefined;
+      const on = v !== undefined && v !== '' && v !== '0' && v !== 'false';
+      // Off only when the form actually carried the field. Otherwise: silence.
+      if (shown || on) out[f.key] = on;
     } else if (f.type === 'multi') {
       out[f.key] = v === undefined ? [] : Array.isArray(v) ? v : [v];
     } else if (v !== undefined) {

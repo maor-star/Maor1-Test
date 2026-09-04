@@ -4,9 +4,9 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { setSettingsAction } from '@/app/actions/agents';
 import { Button } from '@/components/ui/button';
-import { Input, Label, Select } from '@/components/ui/input';
+import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { useUndo } from '@/components/ui/undo-bar';
-import type { SettingField, Settings } from '@/lib/agents/settings';
+import { SHOWN_SUFFIX, type SettingField, type Settings } from '@/lib/agents/settings';
 
 /**
  * An agent's dials, as a form built from what the agent declares.
@@ -118,6 +118,13 @@ function Field({
     case 'boolean':
       return (
         <div className="flex items-start gap-2 pt-5">
+          {/*
+            The marker that says this checkbox was on the page. Without it an
+            unticked box and a box the browser never rendered post the same
+            thing — nothing — and a dial that shipped after his tab was opened
+            gets switched off by a save that had nothing to do with it.
+          */}
+          <input type="hidden" name={`${f.key}${SHOWN_SUFFIX}`} value="1" />
           <input
             id={id}
             name={f.key}
@@ -150,7 +157,22 @@ function Field({
       return (
         <div className="sm:col-span-2 xl:col-span-3">
           <Label htmlFor={id}>{f.label}</Label>
-          <Input id={id} name={f.key} defaultValue={typeof value === 'string' ? value : f.default} placeholder={f.placeholder} />
+          {/*
+            A sign-off is two lines. Put one in an <input> and the browser
+            strips the break on the way in and on the way out, so what he saved
+            went out as "Best,Maor".
+          */}
+          {f.multiline ? (
+            <Textarea
+              id={id}
+              name={f.key}
+              rows={2}
+              defaultValue={typeof value === 'string' ? value : f.default}
+              placeholder={f.placeholder}
+            />
+          ) : (
+            <Input id={id} name={f.key} defaultValue={typeof value === 'string' ? value : f.default} placeholder={f.placeholder} />
+          )}
           {help}
         </div>
       );
