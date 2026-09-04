@@ -233,6 +233,38 @@ async function putInCalendar({ summary, description, slot, attendee, timeZone })
   return { id: body.id, link: body.htmlLink };
 }
 
+/**
+ * His booking link, from the Calendly token.
+ *
+ * /users/me needs the `user:read` scope, which his token does not carry — but
+ * the token's own payload holds the user uuid, and the uuid is the whole of
+ * the user URI. So the identity comes from the token and the link comes from
+ * his first active event type. Nothing about the token is logged.
+ */
+async function calendlyLink(token) {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+    if (!payload.user_uuid) return null;
+    const uri = `https://api.calendly.com/users/${payload.user_uuid}`;
+
+    const me = await fetch('https://api.calendly.com/users/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (me?.resource?.scheduling_url) return me.resource.scheduling_url;
+
+    const types = await fetch(
+      `https://api.calendly.com/event_types?user=${encodeURIComponent(uri)}&active=true`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const list = types?.collection ?? [];
+    // The generic one before the conference-specific ones, when it can tell.
+    const generic = list.find((t) => /meet|call|intro|30/i.test(t.name ?? '')) ?? list[0];
+    return generic?.scheduling_url ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /* ── The model, as the second gate ─────────────────────────────────────── */
 
 const SYSTEM = `You are reading one email thread for Maor Davidovich, CEO of
@@ -371,7 +403,7 @@ async function main() {
   }
   if (!DRY) await markRan(sql, AGENT);
 
-  const filled = await loadSecrets(sql, ['ANTHROPIC_API_KEY', 'CALENDLY_LINK']);
+  const filled = await loadSecrets(sql, ['ANTHROPIC_API_KEY', 'CALENDLY_LINK', 'CALENDLY_TOKEN']);
   if (filled.length > 0) console.log(`keys from the Keys screen: ${filled.join(', ')}`);
 
   const CLAUDE = process.env.ANTHROPIC_API_KEY;
@@ -400,7 +432,16 @@ async function main() {
   const eveningFrom = String(setting('eveningFrom', '18:00'));
   const offerCount = Number(setting('offers', 3));
   const minLeadHours = Number(setting('minLeadHours', 18));
-  const calendly = String(setting('calendlyLink', process.env.CALENDLY_LINK ?? '')).trim() || null;
+  /*
+   * His booking link. He may type it on the agent's card or paste it on the
+   * Keys screen — and if he has given the cockpit a Calendly token instead, it
+   * asks Calendly rather than making him paste the same thing twice.
+   */
+  let calendly = String(setting('calendlyLink', process.env.CALENDLY_LINK ?? '')).trim() || null;
+  if (!calendly && process.env.CALENDLY_TOKEN) {
+    calendly = await calendlyLink(process.env.CALENDLY_TOKEN);
+    if (calendly) console.log(`booking link read from your Calendly account: ${calendly}`);
+  }
   const bookItself = setting('book', true) !== false;
   const signOff = String(setting('signOff', 'Best,\nMaor'));
 
