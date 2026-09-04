@@ -107,6 +107,26 @@ const MODIFY = 'https://www.googleapis.com/auth/gmail.modify';
 const CAL_READ = 'https://www.googleapis.com/auth/calendar.readonly';
 const CAL = 'https://www.googleapis.com/auth/calendar';
 
+/**
+ * A calendar token, from whichever scope the delegation actually grants.
+ *
+ * His delegation carries the full `calendar` scope and neither of the narrow
+ * ones — asking for `calendar.readonly` is refused outright with
+ * unauthorized_client, which read as "no calendar at all" until the scopes
+ * were listed one by one. So the narrow scope is tried first, because reading
+ * a diary should ask for reading, and the full one is the fallback rather than
+ * the assumption.
+ */
+async function calendarToken(write = false) {
+  if (write) return token(CAL);
+  try {
+    return await token(CAL_READ);
+  } catch (e) {
+    if (!String(e.message).includes('unauthorized_client')) throw e;
+    return token(CAL);
+  }
+}
+
 async function gmail(path, scope = READ, init) {
   const t = await token(scope);
   const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
@@ -195,7 +215,7 @@ async function reply(candidate, text) {
 /* ── The diary ─────────────────────────────────────────────────────────── */
 
 async function busyBlocks(from, to) {
-  const t = await token(CAL_READ);
+  const t = await calendarToken();
   const res = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
     method: 'POST',
     headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
@@ -205,7 +225,17 @@ async function busyBlocks(from, to) {
       items: [{ id: 'primary' }],
     }),
   });
-  if (!res.ok) throw new Error(`freeBusy: http_${res.status}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const message = body?.error?.message ?? `http_${res.status}`;
+    // Two different failures read the same from here, so they are named apart:
+    // a scope the delegation withheld, and an API nobody switched on.
+    throw new Error(
+      message.includes('has not been used in project')
+        ? 'the Google Calendar API is not switched on in the Cloud project yet'
+        : `freeBusy: ${message}`,
+    );
+  }
   const body = await res.json();
   return Object.values(body.calendars ?? {}).flatMap((c) =>
     (c.busy ?? []).map((b) => ({ start: b.start, end: b.end })),
@@ -213,7 +243,7 @@ async function busyBlocks(from, to) {
 }
 
 async function putInCalendar({ summary, description, slot, attendee, timeZone }) {
-  const t = await token(CAL);
+  const t = await calendarToken(true);
   const res = await fetch(
     'https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all',
     {

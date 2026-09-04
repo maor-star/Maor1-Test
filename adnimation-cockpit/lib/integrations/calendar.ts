@@ -144,9 +144,24 @@ async function token(
   return { token: body.access_token };
 }
 
+/**
+ * A token for reading the diary, from whichever scope the delegation grants.
+ *
+ * His delegation carries the full `calendar` scope and neither narrow one, so
+ * asking for `calendar.readonly` is refused with unauthorized_client — which
+ * looked exactly like "no calendar access" until every scope was tried in
+ * turn. Reading asks for the reading scope first and falls back rather than
+ * assuming the wider one.
+ */
+async function readToken(): Promise<{ token: string } | { error: string; needsScope: boolean }> {
+  const narrow = await token(CALENDAR_READ_SCOPE);
+  if (!('error' in narrow) || !narrow.needsScope) return narrow;
+  return token(CALENDAR_SCOPE);
+}
+
 export async function calendarStatus(): Promise<CalendarStatus> {
   if (!credentials()) return { configured: false, authorised: false, reason: 'No service account' };
-  const auth = await token(CALENDAR_READ_SCOPE);
+  const auth = await readToken();
   return 'error' in auth
     ? { configured: true, authorised: false, needsScope: auth.needsScope, reason: auth.error }
     : { configured: true, authorised: true };
@@ -165,7 +180,7 @@ const busySchema = z.object({
 /** The real thing. Throws only on a network failure; a missing scope is a message. */
 export const googleCalendar: CalendarAdapter = {
   async busy(from, to) {
-    const auth = await token(CALENDAR_READ_SCOPE);
+    const auth = await readToken();
     if ('error' in auth) throw new Error(auth.error);
 
     const res = await fetch(`${API}/freeBusy`, {
@@ -177,7 +192,16 @@ export const googleCalendar: CalendarAdapter = {
         items: [{ id: 'primary' }],
       }),
     });
-    if (!res.ok) throw new Error(`calendar freeBusy: http_${res.status}`);
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+      const message = body?.error?.message ?? `http_${res.status}`;
+      throw new Error(
+        message.includes('has not been used in project')
+          ? 'The Google Calendar API is not switched on in the Cloud project yet — ' +
+            'console.developers.google.com → APIs → Google Calendar API → Enable.'
+          : `calendar freeBusy: ${message}`,
+      );
+    }
 
     const parsed = busySchema.safeParse(await res.json());
     if (!parsed.success) throw new Error('calendar freeBusy: unexpected shape');
