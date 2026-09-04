@@ -24,6 +24,7 @@ import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import {
   ANSWERED_LABEL, CLAUDE_LABEL, FILED_LABEL, PROMO_LABEL, isSpentAuthCode, looksPromotional,
+  mayLeaveInbox,
 } from './mailbox-rules.mjs';
 import { postAsBot } from './bot-post.mjs';
 import {
@@ -106,22 +107,34 @@ async function gmail(path, scope = READ, init) {
 const header = (headers, name) =>
   headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? null;
 
-/** Resolve the promo label, creating it once if it is not there. */
-async function promoLabelId() {
-  const { labels } = await gmail('/labels');
-  const found = labels?.find((l) => l.name === PROMO_LABEL);
-  if (found) return found.id;
+/** Where a spent login code goes now that nothing is trashed. */
+const CODES_LABEL = process.env.CODES_LABEL ?? `${CLAUDE_LABEL}/Spent codes`;
 
+/**
+ * Resolve a label, creating it once if it is not there.
+ *
+ * Gmail nests by name and will not create "Claude/Spent codes" while there is
+ * no "Claude", so the parent is made first.
+ */
+async function labelId(name) {
+  const { labels } = await gmail('/labels');
+  const found = labels?.find((l) => l.name === name);
+  if (found) return found.id;
   if (DRY) return null;
+
+  const parent = name.includes('/') ? name.slice(0, name.lastIndexOf('/')) : null;
+  if (parent && !labels?.some((l) => l.name === parent)) {
+    await gmail('/labels', MODIFY, {
+      method: 'POST',
+      body: JSON.stringify({ name: parent, labelListVisibility: 'labelShow', messageListVisibility: 'show' }),
+    }).catch(() => {});
+  }
+
   const created = await gmail('/labels', MODIFY, {
     method: 'POST',
-    body: JSON.stringify({
-      name: PROMO_LABEL,
-      labelListVisibility: 'labelShow',
-      messageListVisibility: 'show',
-    }),
+    body: JSON.stringify({ name, labelListVisibility: 'labelShow', messageListVisibility: 'show' }),
   });
-  console.log(`created the label "${PROMO_LABEL}"`);
+  console.log(`created the label "${name}"`);
   return created.id;
 }
 
@@ -162,7 +175,7 @@ async function ensureLabels() {
   const { labels } = await gmail('/labels');
   const existing = new Map((labels ?? []).map((l) => [l.name, l.id]));
 
-  for (const name of [PROMO_LABEL, CLAUDE_LABEL, ANSWERED_LABEL, FILED_LABEL]) {
+  for (const name of [PROMO_LABEL, CODES_LABEL, CLAUDE_LABEL, ANSWERED_LABEL, FILED_LABEL]) {
     if (existing.has(name)) {
       console.log(`  "${name}" already exists`);
       continue;
@@ -192,7 +205,22 @@ async function main() {
   const [replied, known] = await Promise.all([repliedTo(), knownContacts()]);
   console.log(`${known.size} known addresses, ${replied.size} you have replied to`);
 
-  const labelId = await promoLabelId();
+  /*
+   * Both folders this job uses, checked against the rule before anything is
+   * moved. A label that is not under Claude/ stops the whole job rather than
+   * quietly moving his mail somewhere he does not look.
+   */
+  for (const name of [PROMO_LABEL, CODES_LABEL]) {
+    const allowed = mayLeaveInbox(name);
+    if (!allowed.ok) {
+      console.error(`refusing to run: ${allowed.why}`);
+      await sql.end();
+      process.exit(1);
+    }
+  }
+
+  const promoLabel = await labelId(PROMO_LABEL);
+  const codesLabel = await labelId(CODES_LABEL);
 
   // The inbox only. Anything he has already filed is already handled.
   const { messages } = await gmail(`/messages?maxResults=${MAX}&q=${encodeURIComponent('in:inbox')}`);
@@ -251,14 +279,24 @@ async function main() {
       ageHours,
     };
 
+    /*
+     * A spent login code used to go to the trash. It does not any more: his
+     * first rule about his own mailbox is that nothing leaves the inbox except
+     * into a folder under Claude/, and the trash is the furthest thing from
+     * one. A code nobody can use again is worth nothing either way, so filing
+     * it costs him nothing and keeps the rule whole.
+     */
     const code = isSpentAuthCode(facts);
     if (code.isExpiredCode && (DRY || mayTrash.act)) {
-      console.log(`  ${DRY ? 'WOULD TRASH' : 'trashing'}: ${subject}`);
+      console.log(`  ${DRY ? 'WOULD FILE' : 'filing'} a spent code: ${subject}`);
       console.log(`      ${code.reasons.join(', ')}`);
-      if (!DRY) {
-        await gmail(`/messages/${ref.id}/trash`, MODIFY, { method: 'POST', body: '{}' });
+      if (!DRY && codesLabel) {
+        await gmail(`/messages/${ref.id}/modify`, MODIFY, {
+          method: 'POST',
+          body: JSON.stringify({ addLabelIds: [codesLabel], removeLabelIds: ['INBOX'] }),
+        });
         trashed += 1;
-        did.push(`• trashed a spent code: ${subject}`);
+        did.push(`• filed a spent code to ${CODES_LABEL}: ${subject}`);
       }
       continue;
     }
@@ -281,12 +319,12 @@ async function main() {
       console.log(`  ${DRY ? 'WOULD FILE' : 'filing'}: ${subject}`);
       console.log(`      from ${from}`);
       console.log(`      ${promo.reasons.join(', ')}`);
-      if (!DRY && labelId) {
+      if (!DRY && promoLabel) {
         // Add the label and take it out of the inbox in one call, so a mail is
         // never unlabelled and out of sight between two requests.
         await gmail(`/messages/${ref.id}/modify`, MODIFY, {
           method: 'POST',
-          body: JSON.stringify({ addLabelIds: [labelId], removeLabelIds: ['INBOX'] }),
+          body: JSON.stringify({ addLabelIds: [promoLabel], removeLabelIds: ['INBOX'] }),
         });
         filed += 1;
         did.push(`• filed to ${PROMO_LABEL}: ${subject}`);
@@ -303,7 +341,7 @@ async function main() {
   console.log(
     DRY
       ? `dry run — nothing touched, in ${Math.round((Date.now() - started) / 1000)}s.`
-      : `filed ${filed} to "${PROMO_LABEL}", trashed ${trashed} spent codes, ` +
+      : `filed ${filed} to "${PROMO_LABEL}", ${trashed} spent codes to "${CODES_LABEL}", ` +
         `${held} held back by your brief, ` +
         `in ${Math.round((Date.now() - started) / 1000)}s.`,
   );

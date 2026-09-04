@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CODE_EXPIRY_HOURS, isSpentAuthCode, looksPromotional, type MailFacts,
+  CLAUDE_LABEL, CODE_EXPIRY_HOURS, PROMO_LABEL, isSpentAuthCode, looksPromotional,
+  mayLeaveInbox, type MailFacts,
 } from '@/lib/agents/mailbox';
 
 /**
@@ -116,5 +117,45 @@ describe('mailbox — throwing out spent one-time codes', () => {
     expect(
       isSpentAuthCode(code({ subject: 'Lunch Thursday?', snippet: 'Does 1pm work' })).isExpiredCode,
     ).toBe(false);
+  });
+});
+
+/**
+ * His first rule about his own mailbox, and the only one with no exception:
+ * nothing leaves the inbox except into a folder under Claude/.
+ *
+ * He reads those folders. Mail an agent moved anywhere else is mail he has to
+ * know is missing before he can go looking for it — and the job that trashed
+ * spent login codes was written before the rule existed, which is exactly why
+ * the rule is a function and not a habit.
+ */
+describe('what may take mail out of his inbox', () => {
+  it('allows the Claude folders and their children', () => {
+    expect(mayLeaveInbox('Claude/Meetings').ok).toBe(true);
+    expect(mayLeaveInbox('Claude/Answered').ok).toBe(true);
+    expect(mayLeaveInbox('Claude/Sent to Finance').ok).toBe(true);
+    expect(mayLeaveInbox(CLAUDE_LABEL).ok).toBe(true);
+  });
+
+  it('every folder the agents actually file into is one of them', () => {
+    expect(mayLeaveInbox(PROMO_LABEL).ok).toBe(true);
+  });
+
+  it('refuses a folder of his own, however sensible', () => {
+    expect(mayLeaveInbox('Sales & Marketing').ok).toBe(false);
+    expect(mayLeaveInbox('Archive').ok).toBe(false);
+    expect(mayLeaveInbox('Claude-ish').ok).toBe(false);
+  });
+
+  it('refuses the trash and the absence of a folder', () => {
+    expect(mayLeaveInbox('TRASH').ok).toBe(false);
+    expect(mayLeaveInbox('').ok).toBe(false);
+    expect(mayLeaveInbox(null).ok).toBe(false);
+    expect(mayLeaveInbox(undefined).ok).toBe(false);
+  });
+
+  it('says why, in words he would use', () => {
+    expect(mayLeaveInbox('Archive').why).toContain('not under Claude/');
+    expect(mayLeaveInbox('').why).toContain('without a folder to go to');
   });
 });

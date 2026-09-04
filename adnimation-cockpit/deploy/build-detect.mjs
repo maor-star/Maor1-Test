@@ -95,6 +95,10 @@ export const TARGETS = [
       ['const PROMO_SIGNALS: [RegExp, string][] = [', 'const PROMO_SIGNALS = ['],
       ['export function looksPromotional(mail: MailFacts): PromoGuess {', 'export function looksPromotional(mail) {'],
       ['export function isSpentAuthCode(mail: MailFacts, expiryHours = CODE_EXPIRY_HOURS): CodeGuess {', 'export function isSpentAuthCode(mail, expiryHours = CODE_EXPIRY_HOURS) {'],
+      [
+        'export function mayLeaveInbox(label: string | null | undefined): { ok: boolean; why: string } {',
+        'export function mayLeaveInbox(label) {',
+      ],
       ['  const reasons: string[] = [];', '  const reasons = [];'],
     ],
   },

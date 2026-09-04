@@ -29,7 +29,12 @@
  */
 
 /** Where sales and marketing mail is filed. */
-export const PROMO_LABEL = process.env.PROMO_LABEL ?? 'Sales & Marketing';
+/*
+ * Under Claude/, like everything else an agent files. It was a top-level
+ * label, which put mail an agent had moved in the same place as the folders he
+ * made himself — see mayLeaveInbox below for why that matters.
+ */
+export const PROMO_LABEL = process.env.PROMO_LABEL ?? 'Claude/Sales & Marketing';
 
 /**
  * Where the assistant's own work is filed, under one parent so it is one place
@@ -40,6 +45,28 @@ export const PROMO_LABEL = process.env.PROMO_LABEL ?? 'Sales & Marketing';
 export const CLAUDE_LABEL = process.env.CLAUDE_LABEL ?? 'Claude';
 export const ANSWERED_LABEL = process.env.ANSWERED_LABEL ?? 'Claude/Answered';
 export const FILED_LABEL = process.env.FILED_LABEL ?? 'Claude/Filed';
+
+/**
+ * His first rule about his own mailbox, and the one that outranks the rest:
+ * nothing leaves his inbox except into a folder under Claude/.
+ *
+ * The reason is that he reads those folders. Mail an agent moved is mail he
+ * can still find in one place, by looking where the agents put things — and a
+ * thread that went anywhere else is a thread he has to know is missing before
+ * he can go looking for it. So the trash is out, spam is out, a label of his
+ * own is out, and no label at all is very much out.
+ *
+ * Enforced here rather than trusted at each call site: there are five jobs
+ * that move mail, and the one that trashed spent login codes was written
+ * before this rule existed and did exactly what it says on the tin.
+ */
+export function mayLeaveInbox(label) {
+  const name = (label ?? '').trim();
+  if (name === '') return { ok: false, why: 'nothing may leave the inbox without a folder to go to' };
+  if (name === CLAUDE_LABEL) return { ok: true, why: `it goes to ${CLAUDE_LABEL}` };
+  if (name.startsWith(`${CLAUDE_LABEL}/`)) return { ok: true, why: `it goes to ${name}` };
+  return { ok: false, why: `"${name}" is not under ${CLAUDE_LABEL}/, so nothing goes there from the inbox` };
+}
 /**
  * Where an invoice goes once finance has it — the record of the forward, kept
  * with the original mail rather than as a line in a log. English, like its

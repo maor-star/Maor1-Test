@@ -24,7 +24,7 @@
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { assertInternalRecipients, looksLikeInvoice } from './internal-mail.mjs';
-import { CLAUDE_LABEL, FORWARDED_LABEL } from './mailbox-rules.mjs';
+import { CLAUDE_LABEL, FORWARDED_LABEL, mayLeaveInbox } from './mailbox-rules.mjs';
 import { postAsBot } from './bot-post.mjs';
 import {
   agentState, briefVeto, markRan, mayAct, recordRun, startLog,
@@ -128,13 +128,23 @@ async function fileLabelId() {
  * scope should not make a delivered invoice look like a failed run.
  */
 async function file(messageId) {
+  /*
+   * His first rule about his own mailbox: nothing leaves the inbox except into
+   * a folder under Claude/. This function used to remove INBOX whether or not
+   * it had a label to add, which is the one case that rule exists for — mail
+   * out of the inbox and into nothing at all.
+   */
+  const allowed = mayLeaveInbox(FORWARDED_LABEL);
+  if (!allowed.ok) return { ok: false, reason: allowed.why };
+
   try {
     const labelId = await fileLabelId();
+    if (!labelId) return { ok: false, reason: 'no folder to file it in, so it stays in your inbox' };
     await gmailWrite(`/messages/${messageId}/modify`, {
       removeLabelIds: ['INBOX'],
-      addLabelIds: labelId ? [labelId] : [],
+      addLabelIds: [labelId],
     });
-    return { ok: true, labelled: Boolean(labelId) };
+    return { ok: true, labelled: true };
   } catch (e) {
     return { ok: false, reason: e.message ?? 'could not file' };
   }

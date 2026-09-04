@@ -51,6 +51,22 @@ const JOBS = [
     boot: '12min',
   },
   {
+    /*
+     * Learning how he writes, from his own sent mail.
+     *
+     * It ran once by hand when it was built and then never again, so the voice
+     * both answering agents write in was three months old and getting older.
+     * Weekly: his way of writing does not change in a day, and the job reads a
+     * year of sent mail each time it runs. A profile he has edited himself is
+     * left alone by the job, so this cannot overwrite his own words.
+     */
+    name: 'mail-learn',
+    script: 'mail-learn.mjs',
+    description: 'Learn how he writes, from a year of his own replies',
+    every: '1w',
+    boot: '40min',
+  },
+  {
     name: 'invoice-forward',
     script: 'invoice-forward.mjs',
     description: 'Send invoices on to finance',

@@ -27,6 +27,7 @@
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { mayFile, maySend, triage } from './autoreply-rules.mjs';
+import { mayLeaveInbox } from './mailbox-rules.mjs';
 import { isInternalAddress } from './internal-mail.mjs';
 import { postAsBot } from './bot-post.mjs';
 import { agentState, markRan, mayAct, recordRun, startLog } from './agent-brief.mjs';
@@ -218,6 +219,30 @@ async function draft(candidate) {
  * changed either yet: a gate that decides whether mail leaves the building is
  * the last thing that should exist in two versions.
  */
+
+/**
+ * Out of the inbox, into a folder under Claude/ — and nowhere else.
+ *
+ * His first rule about his own mailbox. One helper for both paths here, so
+ * neither can be changed later without the other.
+ */
+async function outOfInbox(messageId, labelName, labelIdValue) {
+  const allowed = mayLeaveInbox(labelName);
+  if (!allowed.ok) {
+    console.log(`      leaving it in your inbox: ${allowed.why}`);
+    return false;
+  }
+  if (!labelIdValue) return false;
+  return gmail(`/messages/${messageId}/modify`, MODIFY, {
+    method: 'POST',
+    body: JSON.stringify({ addLabelIds: [labelIdValue], removeLabelIds: ['INBOX'] }),
+  })
+    .then(() => true)
+    .catch((e) => {
+      console.log(`      could not file it: ${e.message}`);
+      return false;
+    });
+}
 
 async function labelId(name) {
   const { labels } = await gmail('/labels');
@@ -440,12 +465,7 @@ async function main() {
       console.log('      nothing is being asked of you, so it would not answer');
       if (DRY) continue;
 
-      if (filedLabel) {
-        await gmail(`/messages/${ref.id}/modify`, MODIFY, {
-          method: 'POST',
-          body: JSON.stringify({ addLabelIds: [filedLabel], removeLabelIds: ['INBOX'] }),
-        }).catch((e) => console.log(`      could not file it: ${e.message}`));
-      }
+      await outOfInbox(ref.id, FILED_LABEL, filedLabel);
       await sql`
         insert into mail_answers (thread_id, subject, to_email, reply, outcome)
         values (${message.threadId}, ${subject}, ${fromEmail}, ${line}, 'filed')
@@ -482,12 +502,7 @@ async function main() {
       on conflict (thread_id) do nothing
     `;
 
-    if (answeredLabel) {
-      await gmail(`/messages/${ref.id}/modify`, MODIFY, {
-        method: 'POST',
-        body: JSON.stringify({ addLabelIds: [answeredLabel], removeLabelIds: ['INBOX'] }),
-      }).catch((e) => console.log(`      could not file it: ${e.message}`));
-    }
+    await outOfInbox(ref.id, ANSWERED_LABEL, answeredLabel);
 
     answered += 1;
     told.push(

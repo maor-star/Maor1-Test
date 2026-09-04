@@ -36,6 +36,7 @@ import {
   slotLine, wantsMeeting,
 } from './meeting-rules.mjs';
 import { isInternalAddress } from './internal-mail.mjs';
+import { mayLeaveInbox } from './mailbox-rules.mjs';
 import { postAsBot, readReplies } from './bot-post.mjs';
 import { agentState, briefVeto, markRan, mayAct, recordRun, startLog } from './agent-brief.mjs';
 import { loadSecrets } from './job-secrets.mjs';
@@ -185,6 +186,16 @@ async function labelId(name) {
  */
 async function fileThread(threadId, labelIdValue) {
   if (!labelIdValue) return false;
+  /*
+   * His first rule about his own mailbox: nothing leaves the inbox except into
+   * a folder under Claude/. Checked here, on the label this job was given,
+   * rather than assumed from the constant at the top of the file.
+   */
+  const allowed = mayLeaveInbox(MEETINGS_LABEL);
+  if (!allowed.ok) {
+    console.log(`      not moving anything: ${allowed.why}`);
+    return false;
+  }
   return gmail(`/threads/${threadId}/modify`, MODIFY, {
     method: 'POST',
     body: JSON.stringify({ addLabelIds: [labelIdValue], removeLabelIds: ['INBOX'] }),

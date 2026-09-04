@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSpentAuthCode, looksPromotional, type MailFacts } from '@/lib/agents/mailbox';
+import { isSpentAuthCode, looksPromotional, type MailFacts, mayLeaveInbox } from '@/lib/agents/mailbox';
 // @ts-expect-error — the generated job copy is plain ESM with no types.
 import * as js from '@/deploy/mailbox-rules.mjs';
 
@@ -56,4 +56,13 @@ describe('the screen and the mailbox job agree', () => {
   it.each(CASES.map((c, i) => [i, c] as const))('agrees on discarding case %i', (_i, mail) => {
     expect(js.isSpentAuthCode(mail)).toEqual(isSpentAuthCode(mail));
   });
+});
+
+describe('the screen and the job agree about what may leave the inbox', () => {
+  it.each(['Claude/Meetings', 'Claude', 'Sales & Marketing', 'TRASH', '', null])(
+    'agrees about %j',
+    (label) => {
+      expect(js.mayLeaveInbox(label)).toEqual(mayLeaveInbox(label));
+    },
+  );
 });
