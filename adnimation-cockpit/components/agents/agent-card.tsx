@@ -47,6 +47,17 @@ const PLAYBOOK_HINTS: Record<string, string> = {
     '· Tone, length, and the words you do and do not use.\n\n' +
     'WHEN IN DOUBT\n' +
     '· What to do when none of the above fits.',
+  'meeting-booker':
+    'WHO I MEET\n' +
+    '· Partners, publishers, people I am already talking to.\n' +
+    '· Anyone inside Adnimation, always.\n\n' +
+    'WHO I NEVER MEET\n' +
+    '· Cold outreach, however polite. No reply at all — do not even ask me.\n\n' +
+    'WHEN TO ASK ME FIRST\n' +
+    '· Anything in the evening or at a weekend.\n' +
+    '· Anyone you are not sure about — tell me who they are and what it is about.\n\n' +
+    'HOW TO WRITE IT\n' +
+    '· Short. Three times, the link, nothing else. Never say what the meeting is about.',
   'marketing-writer':
     'HOW I SOUND\n' +
     'Paste in two or three posts of mine that worked. That is the strongest instruction there is.\n\n' +

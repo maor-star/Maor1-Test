@@ -42,6 +42,8 @@ describe('the agent gate', () => {
       brief: 'be careful',
       // The document behind it, empty when he has not written one.
       playbook: '',
+      // The dials from its card. Empty means every one is at its default.
+      settings: {},
       everyMinutes: null,
       lastRanAt: null,
       killed: false,

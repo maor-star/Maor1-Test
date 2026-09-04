@@ -15,7 +15,7 @@ export interface SecretSpec {
   unlocks: string;
   /** Where the value comes from. */
   where: string;
-  group: 'models' | 'publishing' | 'data';
+  group: 'models' | 'publishing' | 'data' | 'scheduling';
   /** A value that is not a secret — an id, a URN — and can be shown back. */
   public?: boolean;
   placeholder?: string;
@@ -49,6 +49,26 @@ export const SECRETS: SecretSpec[] = [
     placeholder: 'xoxp-…',
   },
   {
+    key: 'CALENDLY_LINK',
+    label: 'Your Calendly link',
+    unlocks:
+      'The meetings agent sending a booking link. It is what it sends when the calendar scope ' +
+      'is not delegated yet, and what it puts under the three times it offers when it is.',
+    where: 'calendly.com → your event type → Copy link. Any booking link works, not only Calendly.',
+    group: 'scheduling',
+    public: true,
+    placeholder: 'https://calendly.com/maor/30min',
+  },
+  {
+    key: 'CALENDLY_TOKEN',
+    label: 'Calendly API token',
+    unlocks:
+      'Optional. Lets the cockpit see bookings made through the link — who booked and when — ' +
+      'instead of only sending it. Nothing breaks without it.',
+    where: 'calendly.com → Integrations → API & Webhooks → Personal access token.',
+    group: 'scheduling',
+  },
+  {
     key: 'GEMINI_API_KEY',
     label: 'Gemini API key',
     unlocks: 'Gemini as a second model in the Copilot, and image generation for the marketing agent.',
@@ -77,6 +97,7 @@ export const GROUP_LABEL: Record<SecretSpec['group'], string> = {
   models: 'MODELS',
   data: 'THE DATA SOURCE',
   publishing: 'PUBLISHING',
+  scheduling: 'MEETINGS',
 };
 
 export const SECRET_KEYS = SECRETS.map((s) => s.key);

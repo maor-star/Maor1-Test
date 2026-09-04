@@ -24,6 +24,7 @@ export const JOB_FOR: Record<string, string> = {
   'mail-answerer': 'mail-answer.mjs',
   'invoice-forwarder': 'invoice-forward.mjs',
   'contact-harvester': 'crm-harvest.mjs',
+  'meeting-booker': 'meeting-book.mjs',
 };
 
 export function jobFor(agentName: string): string | null {

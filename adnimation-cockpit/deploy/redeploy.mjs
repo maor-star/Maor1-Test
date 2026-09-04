@@ -97,6 +97,8 @@ async function main() {
     'agent-brief.mjs',
     // Learning how he writes, from a year of his own replies.
     'mail-learn.mjs',
+    // The meetings agent and the generated copy of its rules.
+    'meeting-book.mjs', 'meeting-rules.mjs',
   ];
 
   /*

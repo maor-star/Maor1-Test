@@ -183,6 +183,48 @@ export const TARGETS = [
       [/export function categoriseCounterparty\(signals: \{[\s\S]*?\n\}\): ContractCategory \| null \{/, 'export function categoriseCounterparty(signals) {'],
     ],
   },
+  {
+    src: new URL('../lib/meetings/rules.ts', import.meta.url),
+    out: new URL('./meeting-rules.mjs', import.meta.url),
+    from: 'lib/meetings/rules.ts',
+    test: 'tests/unit/meetings-parity.test.ts',
+    rewrites: [
+      ['export function wantsMeeting(candidate: MeetingCandidate): MeetingRead {', 'export function wantsMeeting(candidate) {'],
+      ['export function mayAnswer(candidate: MeetingCandidate): Verdict {', 'export function mayAnswer(candidate) {'],
+      [
+        /export function pickSlots\(\n  free: Slot\[\],\n  options: \{[^}]*\} = \{\},\n\): Slot\[\] \{/,
+        'export function pickSlots(free, options = {}) {',
+      ],
+      ["export function slotLine(slot: Slot, timeZone = 'Asia/Jerusalem'): string {", "export function slotLine(slot, timeZone = 'Asia/Jerusalem') {"],
+      ['  const parts = (d: Date) =>', '  const parts = (d) =>'],
+      ['  const get = (ps: Intl.DateTimeFormatPart[], type: string) =>', '  const get = (ps, type) =>'],
+      ['export function proposalText(input: ProposalInput): string {', 'export function proposalText(input) {'],
+      [
+        /export function maySend\(\n  read: MeetingRead,\n  allowed: Verdict,\n  reply: string,\n  has: \{ slots: number; calendly: boolean \},\n\): Verdict \{/,
+        'export function maySend(read, allowed, reply, has) {',
+      ],
+      ['export function offsetMinutes(at: Date, timeZone: string): number {', 'export function offsetMinutes(at, timeZone) {'],
+      ['export function instantAt(day: string, hour: number, minute: number, timeZone: string): Date {', 'export function instantAt(day, hour, minute, timeZone) {'],
+      ['  const pad = (n: number) =>', '  const pad = (n) =>'],
+      ['export function dayKey(at: Date, timeZone: string): string {', 'export function dayKey(at, timeZone) {'],
+      ['export function weekdayIn(at: Date, timeZone: string): number {', 'export function weekdayIn(at, timeZone) {'],
+      [
+        'export function clockTime(value: string, fallback: string): { hour: number; minute: number } {',
+        'export function clockTime(value, fallback) {',
+      ],
+      ['export function freeWindows(busy: Slot[], options: WorkingHours = {}): Slot[] {', 'export function freeWindows(busy, options = {}) {'],
+      ['  const clashes = (start: number, end: number) =>', '  const clashes = (start, end) =>'],
+      [
+        "export function isEvening(slot: Slot, eveningFrom = '18:00', timeZone = 'Asia/Jerusalem'): boolean {",
+        "export function isEvening(slot, eveningFrom = '18:00', timeZone = 'Asia/Jerusalem') {",
+      ],
+      ['export function asksForEvening(text: string): boolean {', 'export function asksForEvening(text) {'],
+      [/export function decide\(input: \{[\s\S]*?\n\}\): Decision \{/, 'export function decide(input) {'],
+      ['export function settled(why: string): boolean {', 'export function settled(why) {'],
+      // Two `(type: string)` arrows are left, one in each date helper.
+      [/\(type: string\) =>/g, '(type) =>'],
+    ],
+  },
 ];
 
 const header = (from, test) => `/**
@@ -228,8 +270,14 @@ function stripTypeDeclarations(source) {
   );
 }
 
+/*
+ * Deliberately not including `Date`: `{ start: Date.parse(x) }` is an object
+ * literal, not an annotation, and the guard cannot tell them apart. A `: Date`
+ * that survived is a syntax error in the generated file, which the parity test
+ * catches the moment it imports it.
+ */
 const SURVIVING_ANNOTATION =
-  /:\s*(string|number|boolean|RegExp|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget|InvoiceInput|InvoiceGuess|MailFacts|PromoGuess|CodeGuess|ReplyCandidate|Triage|Draft|BotIdentity|BotStatus|EnvLike|HarvestCandidate|HarvestedContact)\b/;
+  /:\s*(string|number|boolean|RegExp|Slot|MeetingCandidate|MeetingRead|Verdict|ProposalInput|WorkingHours|Decision|Detection|ContractGuess|AttachmentInput|ContractCategory|FilingStage|FilingTarget|InvoiceInput|InvoiceGuess|MailFacts|PromoGuess|CodeGuess|ReplyCandidate|Triage|Draft|BotIdentity|BotStatus|EnvLike|HarvestCandidate|HarvestedContact)\b/;
 
 /**
  * What the generated copy of one target should be, byte for byte.

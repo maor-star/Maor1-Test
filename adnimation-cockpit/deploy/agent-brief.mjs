@@ -27,7 +27,7 @@ export async function agentState(sql, name) {
 
   // A row we cannot read is not permission to run either.
   const [row] = await sql`
-    select enabled, instructions, playbook, notify_slack, run_every_minutes, last_ran_at
+    select enabled, instructions, playbook, notify_slack, run_every_minutes, last_ran_at, settings
     from agents where name = ${name} limit 1
   `.catch(() => []);
 
@@ -42,6 +42,13 @@ export async function agentState(sql, name) {
      * than the brief and read the same way — before anything is decided.
      */
     playbook: (row?.playbook ?? '').trim(),
+    /**
+     * The dials from the agent's card — lib/agents/settings.ts names them and
+     * carries their defaults, so what is stored here is only what he changed.
+     * A job reads them directly, which is what makes them binding rather than
+     * advisory the way the brief is.
+     */
+    settings: row?.settings ?? {},
     /** Minutes he asked it to wait between runs. Null: every timer firing. */
     everyMinutes: row?.run_every_minutes ?? null,
     lastRanAt: row?.last_ran_at ? new Date(row.last_ran_at) : null,

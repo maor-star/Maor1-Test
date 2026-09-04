@@ -99,6 +99,8 @@ export const AGENT_BOT = {
   'autopilot': 'work',
   // A post about a win is sales news, and Rainmaker is where sales news goes.
   'marketing-writer': 'sales',
+  // His diary is his week, which is what Foreman already reports on.
+  'meeting-booker': 'work',
 };
 
 export function botFor(agentName) {

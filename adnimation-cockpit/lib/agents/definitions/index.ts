@@ -378,6 +378,37 @@ export const SEED_AGENTS: (AgentInput & { rationale: string })[] = [
     enabled: false,
   },
   {
+    name: 'meeting-booker',
+    description:
+      'Books your meetings. When someone you deal with asks for a time, it reads your diary, ' +
+      'offers three that are actually free from 10:30 on — or sends your booking link when the ' +
+      'diary cannot be read — files the thread under “Claude/Meetings” and tells you in Slack ' +
+      'who it just put in your week. When they pick one of those times, it puts the meeting in ' +
+      'your calendar. An evening, a weekend, or anything it is not certain about, it asks you ' +
+      'in Slack first — who it is and what it is about — and answers only if you say yes.',
+    rationale:
+      'Three outcomes rather than two, because you drew the lines yourself: it answers people ' +
+      'you deal with, it asks you about the ones you might not want, and it says nothing at all ' +
+      'to machines, strangers and cold pitches — those get silence, not a question. It can only ' +
+      'ever offer times your calendar says are free, and it can only ever book a time it itself ' +
+      'offered, to the address it offered it to.',
+    triggerType: 'schedule',
+    triggerConfig: { cron: '0 */2 * * *' },
+    conditions: [
+      { name: 'Claude is connected', check: 'claude_configured', config: {} },
+      { name: 'Someone you deal with asked to meet', check: 'meeting_requested', config: {} },
+    ],
+    actions: [
+      { type: 'draft_reply', config: {} },
+      { type: 'book_meeting', config: {} },
+      { type: 'update_record', config: { label: 'Claude/Meetings', removeFromInbox: true } },
+      { type: 'post_slack_internal', config: {} },
+    ],
+    autonomyLevel: 1,
+    maxRunsPerHour: 6,
+    enabled: false,
+  },
+  {
     name: 'autopilot',
     description:
       'The daily review of the whole company. Reads the control panel, the core clients, the ' +

@@ -175,6 +175,31 @@ export const AGENT_SETTINGS: Record<string, SettingField[]> = {
     { key: 'signOff', label: 'Sign-off', type: 'text', default: 'Best,\nMaor', placeholder: 'Best,\nMaor' },
     LANGUAGE, TONE, MAX_ITEMS(15, 'Most replies per run'),
   ],
+  'meeting-booker': [
+    { key: 'from', label: 'Earliest you start a meeting', help: 'Israel time. Offers step every half hour from here.', type: 'text', default: '10:30', placeholder: '10:30' },
+    { key: 'to', label: 'Latest a meeting may end', type: 'text', default: '18:00', placeholder: '18:00' },
+    {
+      key: 'eveningFrom',
+      label: 'An evening starts at',
+      help: 'It never offers a time from here on by itself — it asks you in Slack first, with who it is and what it is about.',
+      type: 'text', default: '18:00', placeholder: '18:00',
+    },
+    {
+      key: 'days', label: 'Days you take meetings', type: 'multi', default: ['0', '1', '2', '3', '4'],
+      options: [
+        { value: '0', label: 'Sunday' }, { value: '1', label: 'Monday' }, { value: '2', label: 'Tuesday' },
+        { value: '3', label: 'Wednesday' }, { value: '4', label: 'Thursday' }, { value: '5', label: 'Friday' },
+        { value: '6', label: 'Saturday' },
+      ],
+    },
+    { key: 'minutes', label: 'How long a meeting is (minutes)', type: 'number', default: 30, min: 15, max: 120, step: 15 },
+    { key: 'offers', label: 'How many times to offer', type: 'number', default: 3, min: 1, max: 5 },
+    { key: 'minLeadHours', label: 'Nothing sooner than (hours from now)', type: 'number', default: 18, min: 2, max: 96 },
+    { key: 'horizonDays', label: 'How far ahead it looks (days)', type: 'number', default: 10, min: 3, max: 30 },
+    { key: 'calendlyLink', label: 'Your booking link', help: 'Sent alongside the times, and on its own when the diary cannot be read.', type: 'text', default: '', placeholder: 'https://calendly.com/…' },
+    { key: 'book', label: 'Put the meeting in the calendar itself', help: 'Off: it tells you they accepted and you add it.', type: 'boolean', default: true },
+    { key: 'signOff', label: 'Sign-off', type: 'text', default: 'Best,\nMaor', placeholder: 'Best,\nMaor' },
+  ],
   'invoice-forwarder': [
     { key: 'to', label: 'Forward to', type: 'text', default: 'finance@adnimation.com', placeholder: 'someone@adnimation.com' },
     { key: 'needsDocument', label: 'Only when a document is attached', type: 'boolean', default: true },

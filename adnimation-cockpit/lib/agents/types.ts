@@ -55,6 +55,14 @@ export const ACTION_TYPES = [
    * screen, and there is no action here that does it for him.
    */
   'draft_linkedin_posts',
+  /*
+   * Putting a meeting in the calendar, with the person it was agreed with on
+   * it. Reversible in the way that matters — an event can be moved or
+   * cancelled and both sides are told — and bounded twice over: the agent may
+   * only book a time it itself offered, and only to the address it offered it
+   * to. It cannot invent a time, and it cannot invite anyone else.
+   */
+  'book_meeting',
   ...IRREVERSIBLE_ACTIONS,
 ] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];

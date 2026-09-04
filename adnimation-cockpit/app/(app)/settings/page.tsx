@@ -26,7 +26,7 @@ export default async function SettingsPage() {
   const byKey = new Map(statuses.map((s) => [s.key, s]));
   const missing = statuses.filter((s) => !s.set).length;
 
-  const groups = (['data', 'models', 'publishing'] as const).map((group) => ({
+  const groups = (['data', 'models', 'scheduling', 'publishing'] as const).map((group) => ({
     group,
     specs: SECRETS.filter((s) => s.group === group),
   }));
@@ -63,7 +63,9 @@ export default async function SettingsPage() {
           <div className="p-[18px] pb-3">
             <HudCardHeader
               title={GROUP_LABEL[group]}
-              index={group === 'data' ? 'S01' : group === 'models' ? 'S02' : 'S03'}
+              index={
+                group === 'data' ? 'S01' : group === 'models' ? 'S02' : group === 'scheduling' ? 'S03' : 'S04'
+              }
             />
           </div>
           <ul>

@@ -44,6 +44,13 @@ const JOBS = [
     boot: '25min',
   },
   {
+    name: 'meeting-book',
+    script: 'meeting-book.mjs',
+    description: 'Offer times, ask about the doubtful ones, and book what was agreed',
+    every: '30min',
+    boot: '12min',
+  },
+  {
     name: 'invoice-forward',
     script: 'invoice-forward.mjs',
     description: 'Send invoices on to finance',
