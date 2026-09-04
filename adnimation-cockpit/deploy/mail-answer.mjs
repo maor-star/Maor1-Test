@@ -27,6 +27,7 @@
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { mayFile, maySend, triage } from './autoreply-rules.mjs';
+import { isInternalAddress } from './internal-mail.mjs';
 import { postAsBot } from './bot-post.mjs';
 import { agentState, markRan, mayAct, recordRun, startLog } from './agent-brief.mjs';
 
@@ -372,7 +373,7 @@ async function main() {
     }));
 
     const [known] = await sql`
-      select known_company from mail_threads where thread_id = ${message.threadId}
+      select known_company, known_contact from mail_threads where thread_id = ${message.threadId}
     `;
 
     const candidate = {
@@ -394,7 +395,17 @@ async function main() {
      * worth showing him — one line in Slack, out of the inbox, filed. That is
      * decided below, by the model, and only for the cases mayFile allows.
      */
-    const filable = mayFile(triaged);
+    /*
+     * Whether he deals with the sender is a fact, not a judgement, so it is
+     * decided here rather than by the model. It filed a thread from his head
+     * of demand and a meeting invitation from his chief of staff before this
+     * was passed in.
+     */
+    const filable = mayFile(triaged, {
+      internal: isInternalAddress(fromEmail),
+      knownContact: Boolean(known?.known_contact),
+      knownCompany: known?.known_company ?? null,
+    });
     if (!triaged.answerable && !filable.consider) {
       declined += 1;
       console.log(`  LEFT FOR YOU: ${subject}`);

@@ -133,3 +133,24 @@ describe('the screen and the job agree about the sign-off', () => {
     expect(js.maySend(js.triage(candidate), draft)).toEqual(maySend(triage(candidate), draft));
   });
 });
+
+describe('the screen and the job agree about what leaves his inbox', () => {
+  const triaged = triage({
+    subject: 'Your weekly digest',
+    snippet: 'Here is what happened in ad tech this week.',
+    fromEmail: 'news@adtechbrief.com',
+    fromName: 'AdTech Brief',
+    messages: [{ fromMe: false, text: 'Here is what happened in ad tech this week.' }],
+    knownCompany: null,
+  });
+
+  it.each([
+    ['a stranger', { internal: false }],
+    ['a colleague', { internal: true }],
+    ['a contact', { knownContact: true }],
+    ['a client', { knownCompany: 'Markito' }],
+    ['nothing known', undefined],
+  ])('agrees about %s', (_label, sender) => {
+    expect(js.mayFile(triaged, sender)).toEqual(mayFile(triaged, sender));
+  });
+});

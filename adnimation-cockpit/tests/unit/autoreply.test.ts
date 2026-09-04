@@ -211,3 +211,41 @@ describe('the mail answerer signs as him too', () => {
     expect(verdict.why).toContain('name');
   });
 });
+
+describe('what it may take out of his inbox', () => {
+  const informational = (over = {}) =>
+    triage(mail({
+      subject: 'Your weekly digest',
+      snippet: 'Here is what happened in ad tech this week.',
+      fromEmail: 'news@adtechbrief.com',
+      fromName: 'AdTech Brief',
+      messages: [{ fromMe: false, text: 'Here is what happened in ad tech this week.' }],
+      knownCompany: null,
+      ...over,
+    }));
+
+  it('files a newsletter from nobody in particular', () => {
+    expect(mayFile(informational(), { internal: false }).consider).toBe(true);
+  });
+
+  it('never files mail from inside the company', () => {
+    // It filed "RE: תכנית קדימה" from his head of demand, because the model
+    // read it as information — which it was, and it still belonged in his inbox.
+    const verdict = mayFile(informational(), { internal: true });
+    expect(verdict).toEqual({ consider: false, why: 'it is from inside the company' });
+  });
+
+  it('never files mail from someone he deals with', () => {
+    expect(mayFile(informational(), { knownContact: true }).consider).toBe(false);
+    expect(mayFile(informational(), { knownCompany: 'Markito' }).consider).toBe(false);
+  });
+
+  it('still refuses what a rule held back, whoever it came from', () => {
+    const money = triage(mail({
+      subject: 'Invoice 4471',
+      snippet: 'Please confirm the payment terms and the rev share.',
+      messages: [{ fromMe: false, text: 'Please confirm the payment terms and the rev share.' }],
+    }));
+    expect(mayFile(money, { internal: false }).consider).toBe(false);
+  });
+});

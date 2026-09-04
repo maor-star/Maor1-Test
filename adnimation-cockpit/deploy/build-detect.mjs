@@ -78,8 +78,8 @@ export const TARGETS = [
         'export function maySend(triaged, draft) {',
       ],
       [
-        'export function mayFile(triaged: Triage): { consider: boolean; why: string } {',
-        'export function mayFile(triaged) {',
+        /export function mayFile\(\n  triaged: Triage,\n  sender\?: \{[^}]*\},\n\): \{ consider: boolean; why: string \} \{/,
+        'export function mayFile(triaged, sender) {',
       ],
     ],
   },

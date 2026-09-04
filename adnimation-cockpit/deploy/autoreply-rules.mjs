@@ -138,10 +138,23 @@ export function maySend(triaged, draft) {
  * anything sensitive, and only where the reason it was not answered is that it
  * was not a simple question — never because the thread has history, never
  * because the last word is already his, and never because a NEVER rule fired.
+ *
+ * And never from a person. This path exists for the newsletters, the receipts
+ * and the notices — mail nobody is waiting on an answer to. It filed a thread
+ * from his own head of demand and a meeting invitation from his chief of staff,
+ * because the model read both as "only telling him something", which they
+ * were, and as unimportant, which they were not. A model's judgement is the
+ * wrong instrument for that: whether he deals with the sender is a fact the
+ * cockpit already holds, so it decides here instead.
  */
-export function mayFile(triaged) {
+export function mayFile(triaged, sender) {
   if (triaged.answerable) return { consider: false, why: 'it is being answered' };
   if (triaged.matched.length > 0) return { consider: false, why: `it is ${triaged.matched[0]}` };
+
+  if (sender?.internal) return { consider: false, why: 'it is from inside the company' };
+  if (sender?.knownContact || sender?.knownCompany) {
+    return { consider: false, why: 'it is from someone you deal with' };
+  }
 
   const fileable = ['not obviously simple', 'too long to be a simple question'];
   if (!fileable.includes(triaged.reason)) return { consider: false, why: triaged.reason };
