@@ -73,8 +73,11 @@ export async function createDelegationAction(formData: FormData): Promise<Action
     note: str(formData.get('note')),
     dueDate: str(formData.get('dueDate')),
     priority: (str(formData.get('priority')) || 'P2') as (typeof TASK_PRIORITIES)[number],
-    alsoClickUp: str(formData.get('alsoClickUp')) === '1',
-    clickupListId: str(formData.get('clickupListId')),
+    // How it reaches them: a direct message, a channel, or an email.
+    targetKind: (str(formData.get('targetKind')) || 'person') as 'person' | 'channel' | 'email',
+    targetRef: str(formData.get('targetRef')),
+    // ClickUp is no longer part of a hand-over — it all stays in the cockpit.
+    alsoClickUp: false,
   };
 
   try {
@@ -83,15 +86,10 @@ export async function createDelegationAction(formData: FormData): Promise<Action
 
     // Recorded either way, but say plainly when it did not actually arrive.
     if (!result.slackOk) {
+      const how = input.targetKind === 'email' ? 'The mail' : 'Slack';
       return {
         ok: true,
-        warning: `Recorded, but Slack did not accept it: ${result.slackError ?? 'unknown'}. Nobody has been told yet.`,
-      };
-    }
-    if (input.alsoClickUp && !result.clickupOk) {
-      return {
-        ok: true,
-        warning: `Sent on Slack, but the ClickUp task was not created: ${result.clickupError ?? 'unknown'}.`,
+        warning: `Recorded, but ${how} did not accept it: ${result.slackError ?? 'unknown'}. Nobody has been told yet.`,
       };
     }
     return { ok: true };

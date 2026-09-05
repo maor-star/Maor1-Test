@@ -39,6 +39,8 @@ export class AdOpsSource {
   #email;
   #password;
   #token = null;
+  /** The sign-in in flight, so ten parallel reads share one. */
+  #signingIn = null;
 
   constructor({ url, anonKey, email, password }) {
     if (!url || !anonKey || !email || !password) {
@@ -50,10 +52,26 @@ export class AdOpsSource {
     this.#password = password;
   }
 
-  /** Signs in once and keeps the token for the life of the job. */
+  /**
+   * Signs in once and keeps the token for the life of the job.
+   *
+   * Single-flight on purpose. The reads run ten at a time, and without this
+   * all ten find no token, all ten POST to the token endpoint at once, and the
+   * provider throttles the burst — after which some of them carry on with no
+   * token at all and the source answers "permission denied for table", which
+   * reads like a permissions problem and is really a stampede.
+   */
   async #auth() {
     if (this.#token) return this.#token;
+    if (this.#signingIn) return this.#signingIn;
 
+    this.#signingIn = this.#signIn().finally(() => {
+      this.#signingIn = null;
+    });
+    return this.#signingIn;
+  }
+
+  async #signIn() {
     const res = await fetch(`${this.#url}/auth/v1/token?grant_type=password`, {
       method: 'POST',
       headers: { apikey: this.#key, 'Content-Type': 'application/json' },

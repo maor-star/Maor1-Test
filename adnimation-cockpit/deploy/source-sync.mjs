@@ -106,8 +106,16 @@ async function main() {
     process.exit(78); // EX_CONFIG — systemd records it without flapping the unit.
   }
 
-  const from = day(DAYS);
-  const to = day(0);
+  /*
+   * A window, or an explicit range for a backfill.
+   *
+   * A year in one run holds one sign-in open for longer than a session lasts
+   * and keeps every row of it in memory. Walking the history in chunks is both
+   * safer and restartable — each chunk is a whole, correct pull of its own
+   * days, and one that fails costs only itself.
+   */
+  const from = process.env.SOURCE_SYNC_FROM ?? day(DAYS);
+  const to = process.env.SOURCE_SYNC_TO ?? day(0);
   const pulledAt = new Date();
   /** The window, as the pair of conditions PostgREST wants on one column. */
   const window = [

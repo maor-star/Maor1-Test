@@ -6,7 +6,7 @@ import { createDelegationAction } from '@/app/actions/delegations';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { PRIORITY_META, TASK_PRIORITIES } from '@/lib/tasks/types';
-import { CLICKUP_LIST_DEPTS } from '@/lib/sync/departments';
+import { DELEGATION_TARGETS, TARGET_LABEL } from '@/lib/delegation/rules';
 
 /**
  * Handing something over.
@@ -25,6 +25,9 @@ export function NewDelegation({
   sharedThreads: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // Which of the three ways it goes out, so the form can ask for the one
+  // extra thing a channel or an address needs.
+  const [how, setHow] = useState<string>('person');
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -114,23 +117,45 @@ export function NewDelegation({
             </Select>
           </div>
 
+          {/*
+            Where it is delivered. A direct message is what most of these are;
+            a channel is for work that belongs to a team rather than a name;
+            email is for the people who have no Slack at all.
+
+            The ClickUp list and the "also create a task" tick used to sit here.
+            Both are gone: he no longer keeps ClickUp up to date, and most of
+            the team never had it, so the ticket was tracking nothing.
+          */}
           <div>
-            <Label htmlFor="dl-list">ClickUp list</Label>
-            <Select id="dl-list" name="clickupListId" defaultValue="901817617786" className="w-full">
-              {CLICKUP_LIST_DEPTS.map((l) => (
-                <option key={l.listId} value={l.listId}>
-                  {l.listName}
+            <Label htmlFor="dl-how">How it reaches them</Label>
+            <Select
+              id="dl-how"
+              name="targetKind"
+              value={how}
+              onChange={(e) => setHow(e.target.value)}
+              className="w-full"
+            >
+              {DELEGATION_TARGETS.map((t) => (
+                <option key={t} value={t}>
+                  {TARGET_LABEL[t]}
                 </option>
               ))}
             </Select>
           </div>
 
-          <div className="flex items-end">
-            <label className="flex items-center gap-2 pb-1.5 font-semi text-[11px] tracking-[0.1em] text-neutral-600">
-              <input type="checkbox" name="alsoClickUp" value="1" defaultChecked />
-              Also create a ClickUp task
-            </label>
-          </div>
+          {how === 'person' ? null : (
+            <div>
+              <Label htmlFor="dl-where">
+                {how === 'channel' ? 'Which channel' : 'Which address'}
+              </Label>
+              <Input
+                id="dl-where"
+                name="targetRef"
+                dir="ltr"
+                placeholder={how === 'channel' ? '#trading, or C01ABCDEF' : 'their@company.com'}
+              />
+            </div>
+          )}
 
           <div className="sm:col-span-2 xl:col-span-4">
             <Label htmlFor="dl-note">Context</Label>
