@@ -122,15 +122,26 @@ export const SECRETS: SecretSpec[] = [
   {
     key: 'LINKEDIN_ACCESS_TOKEN',
     label: 'LinkedIn access token',
-    unlocks: 'The marketing agent posting to LinkedIn. Without it, it still drafts — you copy and paste.',
-    where: 'LinkedIn Developers → your app → Auth → a token with w_member_social.',
+    unlocks:
+      'Publishing to your own LinkedIn profile. Without it the cockpit still drafts — you copy ' +
+      'and paste. This is the only LinkedIn value you need: who the post goes out as is worked ' +
+      'out from the token.',
+    where:
+      'linkedin.com/developers → Create app. It makes you attach a Company Page to create the ' +
+      'app at all — that is a requirement of the app, not of the post; posts still go to your ' +
+      'own profile. Any page you admin will do, and you can make one in a minute if you have ' +
+      'none. Then Products → request "Share on LinkedIn" and "Sign In with LinkedIn using ' +
+      'OpenID Connect" (both are granted straight away), and Auth → generate a token with the ' +
+      'w_member_social, openid and profile scopes.',
     group: 'publishing',
   },
   {
     key: 'LINKEDIN_AUTHOR_URN',
     label: 'LinkedIn author',
-    unlocks: 'Who the post is published as — you, or the company page.',
-    where: 'urn:li:person:… for you, urn:li:organization:… for the company page.',
+    unlocks:
+      'Optional. Leave it empty to publish as yourself — the cockpit reads who you are from the ' +
+      'token. Set it only to publish as the company page instead.',
+    where: 'urn:li:organization:… for a company page. Empty means your own profile.',
     group: 'publishing',
     public: true,
     placeholder: 'urn:li:person:xxxxxxxx',

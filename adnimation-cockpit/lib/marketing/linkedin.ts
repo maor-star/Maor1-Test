@@ -8,13 +8,18 @@ import { secret } from '@/lib/secrets/store';
  * read, posts it, and hands back the link. It decides nothing. No agent calls
  * it — the one caller is the action behind his PUBLISH button.
  *
- * Two credentials, both pasted on the Keys screen: LINKEDIN_ACCESS_TOKEN (a
- * token with w_member_social) and LINKEDIN_AUTHOR_URN (him, or the company
- * page). Without them the cockpit still drafts; publishing says what is
- * missing instead of failing obscurely.
+ * One credential he has to paste: LINKEDIN_ACCESS_TOKEN, a token with
+ * w_member_social. Who the post goes out as is worked out from that token —
+ * his own profile — so he never has to find and type a URN. He can still set
+ * LINKEDIN_AUTHOR_URN by hand to publish as the company page instead.
+ *
+ * Without a token the cockpit still drafts; publishing says what is missing
+ * instead of failing obscurely.
  */
 
 const POSTS = 'https://api.linkedin.com/rest/posts';
+/** Who the token belongs to. `sub` is the member id the author URN is built from. */
+const USERINFO = 'https://api.linkedin.com/v2/userinfo';
 const IMAGES_INIT = 'https://api.linkedin.com/rest/images?action=initializeUpload';
 /** The API is versioned by date and rejects a request without one. */
 const VERSION = '202405';
@@ -40,14 +45,59 @@ export interface LinkedInCredentials {
   author: string;
 }
 
+/**
+ * The author URN out of the member id the token identifies.
+ *
+ * Split from the network call so the shaping is testable on its own: a URN
+ * built wrong is a post that goes to nobody, and the failure looks like a
+ * permissions problem.
+ */
+export function personUrn(memberId: unknown): string | null {
+  return typeof memberId === 'string' && memberId.trim() !== ''
+    ? `urn:li:person:${memberId.trim()}`
+    : null;
+}
+
+/** Resolved once per token, because it cannot change while the token lasts. */
+const authorCache = new Map<string, string>();
+
+/**
+ * Who this token posts as.
+ *
+ * He asked for his own profile, and hit the thing everybody hits: LinkedIn
+ * makes you attach a Company Page to create the developer app at all, which
+ * reads as though the app can only post to that page. It cannot — the page is
+ * a requirement of the app, and who a post is authored by is a separate
+ * question answered by this token. So the cockpit asks the token.
+ */
+export async function resolveAuthor(
+  token: string,
+  fetcher: typeof fetch = fetch,
+): Promise<string | null> {
+  const cached = authorCache.get(token);
+  if (cached) return cached;
+
+  const res = await fetcher(USERINFO, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+  if (!res || !res.ok) return null;
+  const body = await res.json().catch(() => null);
+  const urn = personUrn((body as { sub?: unknown } | null)?.sub);
+  if (urn) authorCache.set(token, urn);
+  return urn;
+}
+
 export async function linkedInCredentials(): Promise<LinkedInCredentials | { missing: string[] }> {
-  const [token, author] = await Promise.all([secret('LINKEDIN_ACCESS_TOKEN'), secret('LINKEDIN_AUTHOR_URN')]);
-  const missing = [
-    token ? null : 'LINKEDIN_ACCESS_TOKEN',
-    author ? null : 'LINKEDIN_AUTHOR_URN',
-  ].filter((m): m is string => m !== null);
-  if (missing.length > 0) return { missing };
-  return { token: token!, author: author! };
+  const [token, stored] = await Promise.all([secret('LINKEDIN_ACCESS_TOKEN'), secret('LINKEDIN_AUTHOR_URN')]);
+  if (!token) return { missing: ['LINKEDIN_ACCESS_TOKEN'] };
+
+  /*
+   * What he set wins. Nothing set means his own profile, worked out from the
+   * token — which is what he asked for and one less thing to paste.
+   */
+  const author = stored ?? (await resolveAuthor(token));
+  if (!author) {
+    return { missing: ['LINKEDIN_AUTHOR_URN'] };
+  }
+  return { token, author };
 }
 
 export interface PostImage {

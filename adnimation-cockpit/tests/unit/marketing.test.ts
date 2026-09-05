@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { escapeCommentary, FakePublisher } from '@/lib/marketing/linkedin';
+import { FakePublisher, escapeCommentary, personUrn, resolveAuthor } from '@/lib/marketing/linkedin';
 import { FakeImageMaker, promptFromPost } from '@/lib/marketing/images';
 import {
   drawImage, imageOf, publishDraft, removeImage, riskyBits, storeDraft, MAX_POST_CHARS,
@@ -159,5 +159,65 @@ describe('a picture for the post', () => {
     expect(failed.ok).toBe(false);
     expect(failed.error).toMatch(/declined/);
     expect(await imageOf(id!)).toBeNull();
+  });
+});
+
+/**
+ * Who the post goes out as.
+ *
+ * He asked for it on his own profile and hit what everybody hits: LinkedIn
+ * makes you attach a Company Page to create the developer app at all, which
+ * reads as though the app can only post to that page. It cannot — the page is
+ * a requirement of the app; the author of a post is a separate question, and
+ * the token answers it. So the cockpit asks the token rather than making him
+ * find and type a URN he could get wrong in a way that looks like a
+ * permissions error.
+ */
+describe('who publishes', () => {
+  const answering = (sub: unknown) =>
+    (async () =>
+      ({ ok: true, json: async () => ({ sub }) }) as unknown as Response) as unknown as typeof fetch;
+
+  it('builds his own author URN from the member the token belongs to', async () => {
+    expect(await resolveAuthor('tok-a', answering('AbC123'))).toBe('urn:li:person:AbC123');
+  });
+
+  it('shapes the URN exactly, because a wrong one posts to nobody', () => {
+    expect(personUrn('xyz')).toBe('urn:li:person:xyz');
+    expect(personUrn('  xyz  ')).toBe('urn:li:person:xyz');
+  });
+
+  it('answers nothing rather than a broken URN', () => {
+    // "urn:li:person:undefined" fails as a permissions error, which is the
+    // wrong thing to send him looking at.
+    expect(personUrn(undefined)).toBe(null);
+    expect(personUrn('')).toBe(null);
+    expect(personUrn('   ')).toBe(null);
+    expect(personUrn(12345)).toBe(null);
+  });
+
+  it('answers nothing when LinkedIn refuses the token', async () => {
+    const refused = (async () =>
+      ({ ok: false, json: async () => ({}) }) as unknown as Response) as unknown as typeof fetch;
+    expect(await resolveAuthor('tok-b', refused)).toBe(null);
+  });
+
+  it('survives the call failing outright', async () => {
+    const dead = (async () => {
+      throw new Error('network');
+    }) as unknown as typeof fetch;
+    expect(await resolveAuthor('tok-c', dead)).toBe(null);
+  });
+
+  it('asks once per token and remembers the answer', async () => {
+    let calls = 0;
+    const counting = (async () => {
+      calls += 1;
+      return { ok: true, json: async () => ({ sub: 'once' }) } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    await resolveAuthor('tok-d', counting);
+    await resolveAuthor('tok-d', counting);
+    expect(calls).toBe(1);
   });
 });
