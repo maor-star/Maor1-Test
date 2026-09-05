@@ -1,15 +1,18 @@
 import Link from 'next/link';
 import type { TaskRow } from '@/lib/tasks/queries';
 import { TaskListRow } from '@/components/tasks/list-row';
+import { InstantFilter } from '@/components/hud/instant-filter';
 import { Num } from '@/components/num';
-
-/** Kept in step with the header row: the inline editor spans the whole table. */
-const COLUMNS = 10;
+import { foldForSearch } from '@/lib/search';
 
 /**
- * Spec 6.4 — the list view. Every row carries its actions, and now its whole
- * task: EDIT opens the editor in place rather than sending him to a page and
- * losing the list he was working through.
+ * Spec 6.4 — the list view, in the shape the contracts screen uses.
+ *
+ * It was a ten-column table, and the last two columns were off the right of
+ * the screen: he could not see the actions on his own tasks. A task is a card
+ * now — the thing and its state, the facts about it, what happens next, and
+ * the actions — which fits the width, and gives the editor somewhere to open
+ * without spanning a row of columns that no longer exist.
  */
 export function TaskListView({
   rows,
@@ -22,7 +25,7 @@ export function TaskListView({
 }) {
   if (rows.length === 0) {
     return (
-      <div className="hud-card hud-marks p-6 text-center font-semi text-[12px] text-neutral-500">
+      <div className="hud-card p-6 text-center text-[14.5px] text-muted">
         No tasks match this filter.
       </div>
     );
@@ -31,40 +34,37 @@ export function TaskListView({
   const now = new Date();
 
   return (
-    <div className="hud-card hud-marks overflow-x-auto">
-      <table className="cockpit-table">
-        <thead>
-          <tr>
-            <th className="w-[30%]">Task</th>
-            <th>Priority</th>
-            <th>Status</th>
-            <th>Department</th>
-            <th>Owner</th>
-            <th>Due</th>
-            {/* Sorting by newest or oldest is only legible if the date is on
-                the row — otherwise the list reorders and says nothing. */}
-            <th>Added</th>
-            <th>Impact</th>
-            <th>Heat</th>
-            <th className="text-end">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((t) => (
-            <TaskListRow
-              key={t.id}
-              task={t}
-              people={people}
-              departments={departments}
-              now={now}
-              columns={COLUMNS}
-            />
-          ))}
-        </tbody>
-      </table>
-      <div className="border-t border-line px-3 py-2 font-semi text-[11px] tracking-[0.1em] text-neutral-500">
-        <Num>{rows.length}</Num> TASKS ·{' '}
-        <Link href="/delegations" className="text-info hover:underline">Delegation Tracker</Link>
+    <div className="hud-card p-0">
+      <ul id="task-list">
+        {/* The list narrows as he types, before the URL has caught up. */}
+        <InstantFilter scope="task-list" />
+        {rows.map((t) => (
+          <TaskListRow
+            key={t.id}
+            task={t}
+            people={people}
+            departments={departments}
+            now={now}
+            search={foldForSearch(
+              t.title,
+              t.description,
+              t.nextStep,
+              t.ownerName,
+              t.deptNameHe,
+              t.status,
+              t.priority,
+              t.dueDate,
+              t.nextStepDate,
+              ...t.tags,
+            )}
+          />
+        ))}
+      </ul>
+      <div className="border-t border-line px-[18px] py-2 text-[12.5px] text-muted">
+        <Num>{rows.length}</Num> tasks ·{' '}
+        <Link href="/delegations" className="font-semibold text-info hover:underline">
+          Delegation tracker
+        </Link>
       </div>
     </div>
   );

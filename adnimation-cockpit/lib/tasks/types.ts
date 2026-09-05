@@ -77,6 +77,13 @@ export const taskInputSchema = z.object({
   moneyImpactCents: z.number().int().nonnegative().nullable().optional(),
   blockedPeople: z.array(z.string().uuid()).max(50).default([]),
   recurrenceRule: emptyToNull(z.string().trim().max(300).nullable()).optional(),
+  /*
+   * The next move and when it happens. Not required the way a deal's is —
+   * a deal with no next step is a deal going quiet, while a task often is
+   * its own next step.
+   */
+  nextStep: emptyToNull(z.string().trim().max(500).nullable()).optional(),
+  nextStepDate: emptyToNull(isoDate.nullable()).optional(),
   source: z.enum(TASK_SOURCES).default('manual'),
   sourceRef: emptyToNull(z.string().trim().max(500).nullable()).optional(),
 });

@@ -73,6 +73,19 @@ export const tasks = pgTable(
     source: taskSource('source').notNull().default('manual'),
     sourceRef: text('source_ref'),
     recurrenceRule: text('recurrence_rule'),
+    /*
+     * The next move and when it happens — the same pair the deals board has.
+     * A due date is when the task ends; these are what happens next, which on
+     * a list he works down is the more useful of the two.
+     */
+    nextStep: text('next_step'),
+    nextStepDate: date('next_step_date'),
+    /**
+     * When it last moved, which is not when the row was last written: the
+     * ClickUp poll touches every mirrored row whether or not anything
+     * happened.
+     */
+    lastTouchAt: timestamptz('last_touch_at'),
     archivedAt: timestamptz('archived_at'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),

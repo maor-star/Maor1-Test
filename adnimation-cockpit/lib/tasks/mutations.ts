@@ -28,6 +28,10 @@ export async function createTask(input: TaskInput, actor: string) {
       status: input.status,
       dueDate: input.dueDate ?? null,
       startDate: input.startDate ?? null,
+      nextStep: input.nextStep ?? null,
+      nextStepDate: input.nextStepDate ?? null,
+      // A task nobody has touched was last touched when it arrived.
+      lastTouchAt: new Date(),
       deptId: input.deptId ?? null,
       ownerPersonId: input.ownerPersonId ?? null,
       parentId: input.parentId ?? null,
@@ -80,6 +84,8 @@ export async function updateTask(patch: TaskPatch, actor: string) {
       ...(patch.deptId !== undefined ? { deptId: patch.deptId } : {}),
       ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
       ...(patch.recurrenceRule !== undefined ? { recurrenceRule: patch.recurrenceRule } : {}),
+      ...(patch.nextStep !== undefined ? { nextStep: patch.nextStep } : {}),
+      ...(patch.nextStepDate !== undefined ? { nextStepDate: patch.nextStepDate } : {}),
       priority: merged.priority,
       dueDate: merged.dueDate,
       moneyImpactCents: merged.moneyImpactCents,
@@ -87,6 +93,12 @@ export async function updateTask(patch: TaskPatch, actor: string) {
       ownerPersonId: merged.ownerPersonId,
       heatScore: computeHeat({ ...merged, blockedPeople: merged.blockedPeople ?? [] }),
       updatedAt: new Date(),
+      /*
+       * He touched it, so this is when it last moved. Separate from
+       * updatedAt, which the ClickUp poll writes on every mirrored row
+       * whether or not anything happened.
+       */
+      lastTouchAt: new Date(),
     })
     .where(eq(tasks.id, patch.id))
     .returning();

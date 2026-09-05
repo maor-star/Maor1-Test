@@ -38,6 +38,8 @@ export function InlineTaskEditor({
     status: string;
     dueDate: string | null;
     startDate: string | null;
+    nextStep: string | null;
+    nextStepDate: string | null;
     recurrenceRule: string | null;
     deptId: string | null;
     ownerPersonId: string | null;
@@ -65,7 +67,7 @@ export function InlineTaskEditor({
   return (
     <>
       <Button type="button" size="xs" variant={open ? 'default' : 'ghost'} onClick={toggle}>
-        {open ? 'CLOSE' : label}
+        {open ? 'Close' : label}
       </Button>
 
       {open ? (

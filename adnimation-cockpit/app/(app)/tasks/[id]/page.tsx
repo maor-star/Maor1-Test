@@ -102,6 +102,8 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                   status: task.status,
                   dueDate: task.dueDate,
                   startDate: task.startDate,
+                  nextStep: task.nextStep,
+                  nextStepDate: task.nextStepDate,
                   recurrenceRule: task.recurrenceRule,
                   deptId: task.deptId,
                   ownerPersonId: task.ownerPersonId,

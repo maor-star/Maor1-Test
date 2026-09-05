@@ -52,6 +52,8 @@ export async function createTaskAction(formData: FormData): Promise<ActionResult
     status: formData.get('status') ?? 'open',
     dueDate: formData.get('dueDate'),
     startDate: formData.get('startDate'),
+    nextStep: formData.get('nextStep'),
+    nextStepDate: formData.get('nextStepDate'),
     deptId: formData.get('deptId'),
     ownerPersonId: formData.get('ownerPersonId'),
     parentId: formData.get('parentId'),
@@ -72,7 +74,7 @@ export async function updateTaskAction(formData: FormData): Promise<ActionResult
   const user = await requireUser();
   const raw: Record<string, unknown> = { id: formData.get('id') };
   // Only send the fields the form actually submitted; everything else keeps its value.
-  for (const key of ['title', 'description', 'priority', 'status', 'dueDate', 'startDate', 'deptId', 'ownerPersonId', 'recurrenceRule'] as const) {
+  for (const key of ['title', 'description', 'priority', 'status', 'dueDate', 'startDate', 'nextStep', 'nextStepDate', 'deptId', 'ownerPersonId', 'recurrenceRule'] as const) {
     if (formData.has(key)) raw[key] = formData.get(key);
   }
   if (formData.has('tags')) raw.tags = parseTags(formData.get('tags'));
@@ -177,6 +179,8 @@ export async function taskForEditAction(id: string) {
       status: task.status,
       dueDate: task.dueDate,
       startDate: task.startDate,
+      nextStep: task.nextStep,
+      nextStepDate: task.nextStepDate,
       recurrenceRule: task.recurrenceRule,
       deptId: task.deptId,
       ownerPersonId: task.ownerPersonId,

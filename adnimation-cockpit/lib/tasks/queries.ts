@@ -13,6 +13,11 @@ export interface TaskRow {
   startDate: string | null;
   /** Carried so the row can stop a task repeating without opening its page. */
   recurrenceRule: string | null;
+  /** The next move on it, and when that move is due — see the deals board. */
+  nextStep: string | null;
+  nextStepDate: string | null;
+  /** When it last moved. Null on a task nothing has happened to yet. */
+  lastTouchAt: Date | null;
   tags: string[];
   heatScore: number;
   snoozeCount: number;
@@ -45,6 +50,9 @@ const selection = {
   dueDate: tasks.dueDate,
   startDate: tasks.startDate,
   recurrenceRule: tasks.recurrenceRule,
+  nextStep: tasks.nextStep,
+  nextStepDate: tasks.nextStepDate,
+  lastTouchAt: tasks.lastTouchAt,
   tags: tasks.tags,
   heatScore: tasks.heatScore,
   snoozeCount: tasks.snoozeCount,

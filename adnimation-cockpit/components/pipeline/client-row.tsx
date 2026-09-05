@@ -31,10 +31,13 @@ export function PipelineClientRow({
   client,
   owners,
   touches,
+  search,
 }: {
   client: PipelineRow;
   owners: { id: string; name: string }[];
   touches: Touch[];
+  /** The row's searchable text, folded — the list narrows on it as he types. */
+  search?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [logging, setLogging] = useState(false);
@@ -49,7 +52,10 @@ export function PipelineClientRow({
   const verdict = looksDone(client.stage, client.integration);
 
   return (
-    <li className="border-t border-line px-[18px] py-3">
+    <li
+      className={`border-t border-line px-[18px] py-3 ${editing ? 'bg-accent-100/40' : ''}`}
+      data-search={search}
+    >
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -58,7 +64,7 @@ export function PipelineClientRow({
             <button
               type="button"
               onClick={() => setEditing((v) => !v)}
-              className="text-start font-cond text-[17px] leading-none text-neutral-900 hover:text-accent"
+              className="text-start text-[16px] font-semibold leading-none text-ink hover:text-info"
               title="Open this deal and change anything on it"
             >
               {client.name}
@@ -76,25 +82,25 @@ export function PipelineClientRow({
             ) : null}
           </div>
 
-          <p className="hud-label mt-1 text-[11px]">
+          <p className="mt-1 text-[12.5px] text-muted">
             {[
               client.domain,
-              client.ownerName ? `OWNER ${client.ownerName}` : 'OWNER ME',
+              client.ownerName ? `owner ${client.ownerName}` : 'owner me',
               client.source,
             ]
               .filter(Boolean)
               .join(' · ')}
           </p>
 
-          <p className="mt-1.5 text-[13px] text-neutral-700">
+          <p className="mt-1.5 text-[13.5px] text-neutral-700">
             {client.nextStep ? (
               <>
-                <span className="hud-label me-1.5 text-[11px]">Next</span>
+                <span className="hud-label me-1.5 text-[11.5px]">Next</span>
                 {client.nextStep}
                 {client.nextStepDate ? (
                   <span
                     className={
-                      client.stepOverdue ? 'ms-1.5 text-sev-critical' : 'ms-1.5 text-neutral-500'
+                      client.stepOverdue ? 'ms-1.5 text-neg' : 'ms-1.5 text-muted'
                     }
                   >
                     <Num>{fmtDate(new Date(`${client.nextStepDate}T00:00:00Z`))}</Num>
@@ -103,35 +109,41 @@ export function PipelineClientRow({
                 ) : null}
               </>
             ) : (
-              <span className="text-neutral-500">No next step set.</span>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="text-muted hover:text-info hover:underline"
+              >
+                No next move set — say what happens next
+              </button>
             )}
           </p>
         </div>
 
         <div className="flex shrink-0 items-start gap-5">
           <div className="text-end">
-            <span className="hud-label block text-[11px]">VALUE / MO</span>
-            <span className="font-cond text-[19px] leading-none text-neutral-900">
+            <span className="hud-label block text-[11.5px]">Value / mo</span>
+            <span className="font-mono text-[19px] font-semibold leading-none text-ink">
               <Num>{client.valueCents != null ? fmtMoney(client.valueCents) : '—'}</Num>
             </span>
             {client.probability != null ? (
-              <span className="mt-0.5 block font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
+              <span className="mt-1 block text-[12.5px] text-muted">
                 <Num>{client.probability}%</Num>
               </span>
             ) : null}
           </div>
 
           <div className="text-end">
-            <span className="hud-label block text-[11px]">Last touch</span>
+            <span className="hud-label block text-[11.5px]">Last touch</span>
             <span
-              className={`font-cond text-[19px] leading-none ${
-                quiet ? 'text-sev-warning' : 'text-neutral-900'
+              className={`font-mono text-[19px] font-semibold leading-none ${
+                quiet ? 'text-warn' : 'text-ink'
               }`}
             >
               <Num>{client.quietDays === null ? 'NEVER' : `${client.quietDays}d`}</Num>
             </span>
-            <span className="mt-0.5 block font-semi text-[11.5px] tracking-[0.12em] text-neutral-500">
-              <Num>{client.touches}</Num> Logged
+            <span className="mt-1 block text-[12.5px] text-muted">
+              <Num>{client.touches}</Num> logged
             </span>
           </div>
         </div>
@@ -139,10 +151,10 @@ export function PipelineClientRow({
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button type="button" size="xs" variant="outline" onClick={() => setLogging((v) => !v)}>
-          {logging ? 'CLOSE' : 'LOG TOUCH'}
+          {logging ? 'Close' : 'Log touch'}
         </Button>
         <Button type="button" size="xs" variant={editing ? 'default' : 'ghost'} onClick={() => setEditing((v) => !v)}>
-          {editing ? 'CLOSE' : 'EDIT EVERYTHING'}
+          {editing ? 'Close' : 'Edit everything'}
         </Button>
         <Button
           type="button"
@@ -151,7 +163,7 @@ export function PipelineClientRow({
           onClick={() => setShowSteps((v) => !v)}
           title="The steps between signed and earning"
         >
-          {showSteps ? 'HIDE STEPS' : `GOING LIVE ${client.integration.done}/${client.integration.total}`}
+          {showSteps ? 'Hide steps' : `Going live ${client.integration.done}/${client.integration.total}`}
         </Button>
         <CloseDeal
           clientId={client.id}
@@ -165,13 +177,13 @@ export function PipelineClientRow({
       {showSteps ? <IntegrationChecklist clientId={client.id} progress={client.integration} /> : null}
 
       {logging ? (
-        <div className="mt-2 border border-line p-2">
+        <div className="mt-2 rounded-[12px] border border-line p-3">
           <TouchForm clientId={client.id} onDone={() => setLogging(false)} />
         </div>
       ) : null}
 
       {editing ? (
-        <div className="mt-2 border border-line p-2">
+        <div className="mt-2 rounded-[12px] border border-line p-3">
           <PipelineClientForm owners={owners} client={client} onDone={() => setEditing(false)} />
         </div>
       ) : null}

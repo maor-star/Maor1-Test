@@ -19,6 +19,8 @@ interface EditableTask {
   status: string;
   dueDate: string | null;
   startDate: string | null;
+  nextStep: string | null;
+  nextStepDate: string | null;
   recurrenceRule: string | null;
   deptId: string | null;
   ownerPersonId: string | null;
@@ -102,6 +104,30 @@ export function EditTaskForm({
         <div>
           <Label htmlFor="edit-due">Due date</Label>
           <Input id="edit-due" name="dueDate" type="date" defaultValue={task.dueDate ?? ''} />
+        </div>
+        {/*
+          The next move, and when that move happens. A due date is when the
+          whole thing has to be finished; on a list he works down, what happens
+          next is the more useful of the two — which is why the deals board has
+          carried both from the start.
+        */}
+        <div className="sm:col-span-2">
+          <Label htmlFor="edit-next-step">What is the next move</Label>
+          <Input
+            id="edit-next-step"
+            name="nextStep"
+            defaultValue={task.nextStep ?? ''}
+            placeholder="Send the deck, chase Amir, book the call…"
+          />
+        </div>
+        <div>
+          <Label htmlFor="edit-next-step-date">Next move due</Label>
+          <Input
+            id="edit-next-step-date"
+            name="nextStepDate"
+            type="date"
+            defaultValue={task.nextStepDate ?? ''}
+          />
         </div>
         {/*
           The start date and the recurrence were the two fields the row could

@@ -14,6 +14,8 @@ import {
   type ClientType, type Stage,
 } from '@/lib/pipeline/types';
 import { fmtMoney, fmtNumber } from '@/lib/utils';
+import { foldForSearch } from '@/lib/search';
+import { InstantFilter } from '@/components/hud/instant-filter';
 import {
   captureLabelHealth, contractsForOpportunities, inboxOpportunities,
 } from '@/lib/opportunities/module';
@@ -300,13 +302,27 @@ export default async function PipelinePage({
                 }
               />
             </div>
-            <ul>
+            <ul id={`deal-group-${group.stage}`}>
+              {/* The list narrows as he types, before the URL has caught up. */}
+              <InstantFilter scope={`deal-group-${group.stage}`} />
               {group.rows.map((c) => (
                 <PipelineClientRow
                   key={c.id}
                   client={c}
                   owners={owners}
                   touches={touches.get(c.id) ?? []}
+                  search={foldForSearch(
+                    c.name,
+                    c.domain,
+                    c.ownerName,
+                    c.source,
+                    c.nextStep,
+                    c.nextStepDate,
+                    c.stage,
+                    c.clientType,
+                    c.temperature,
+                    c.notes,
+                  )}
                 />
               ))}
             </ul>
