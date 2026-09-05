@@ -24,9 +24,10 @@ import postgres from 'postgres';
 import { loadSecrets } from './job-secrets.mjs';
 import { openSource } from './adops-rest.mjs';
 import {
-  bidderDays, bidderLine, categoryLine, clampToYear, coreClientDays, coreClientsLine,
-  endpointEnvironments, exchangeDays, exchangeEnvLine, googleCtvLine, ignoredSourceNames,
-  publishersDaysFromDetail, revShareLookup, seatDaysFrom, seatDays, YEAR_START,
+  bidderDays, bidderLine, bookOrNull, categoryLine, clampToYear, coreClientDays,
+  coreClientsLine, endpointEnvironments, exchangeDays, exchangeEnvLine, googleCtvLine,
+  ignoredSourceNames, mergeDays, PL_NUMERIC, publishersDaysFromDetail, revShareLookup,
+  seatDaysFrom, seatDays, YEAR_START,
 } from './adops-aggregate.mjs';
 
 const DB = process.env.DATABASE_URL;
@@ -53,69 +54,6 @@ const sql = postgres(DB, { max: 2, onnotice: () => {} });
 const day = (offset) => new Date(Date.now() - offset * 86_400_000).toISOString().slice(0, 10);
 
 /**
- * The P&L's four books, and the columns each one owns.
- *
- * Grouped rather than listed flat because a book the source refuses must not
- * be written at all. Flat, every column of every book went into one row and a
- * refused book arrived as a column of zeroes — which is how the publisher and
- * seat-lease books were wiped for the last twelve days of August the first
- * time the source closed its two reports. On the screen a denied grant and a
- * business that stopped look exactly alike.
- */
-const PL_BOOKS = {
-  publishers: [
-    'pub_gross_cents', 'pub_source_fee_cents', 'pub_net_after_fee_cents', 'pub_payout_cents',
-    'pub_profit_cents', 'pub_impressions',
-  ],
-  bidder: ['bidder_gross_cents', 'bidder_profit_cents', 'bidder_impressions'],
-  seat: ['seat_gross_cents', 'seat_payout_cents', 'seat_profit_cents', 'seat_impressions'],
-  exchange: ['xe_revenue_cents', 'xe_cost_cents', 'xe_profit_cents', 'xe_impressions'],
-};
-
-const PL_NUMERIC = Object.values(PL_BOOKS).flat();
-
-/**
- * One row per day, out of the books that actually came back.
- *
- * `books` maps a book's name to its days, or to null when the source refused
- * it. A book that answered writes its columns, including a real zero on a day
- * it earned nothing — a line that reported nothing that day earned nothing,
- * and leaving it undefined would drop the day out of a SUM further up. A book
- * that was refused writes no columns at all, and the returned `columns` list
- * is what the upsert is allowed to touch, so yesterday's correct figures stay
- * where they are and the screen labels their age.
- */
-function mergeDays(books, pulledAt) {
-  const columns = [];
-  for (const [name, days] of Object.entries(books)) {
-    if (days === null) continue;
-    columns.push(...PL_BOOKS[name]);
-  }
-
-  const byDate = new Map();
-  for (const days of Object.values(books)) {
-    for (const row of days ?? []) {
-      if (!row?.date) continue;
-      const target = byDate.get(row.date) ?? { date: row.date };
-      for (const [k, v] of Object.entries(row)) {
-        if (k !== 'date' && columns.includes(k)) target[k] = Number(v ?? 0);
-      }
-      byDate.set(row.date, target);
-    }
-  }
-
-  const rows = [...byDate.values()]
-    .map((r) => {
-      const full = { date: r.date, source: 'adops', pulled_at: pulledAt };
-      for (const k of columns) full[k] = Number.isFinite(r[k]) ? r[k] : 0;
-      return full;
-    })
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  return { rows, columns };
-}
-
-/**
  * Whether a pull is worth writing.
  *
  * A source outage that answers with no rows, or with zeroes everywhere, would
@@ -130,9 +68,6 @@ function assertWorthWriting(rows, what) {
   if (!anyMoney) throw new Error(`${what}: every figure came back zero — refusing to write`);
   return rows;
 }
-
-/** A book the source refused, so the upsert leaves its columns alone. */
-const bookOrNull = (rows, denied) => (denied ? null : rows);
 
 async function main() {
   const started = Date.now();
@@ -224,7 +159,7 @@ async function main() {
        * counts nothing here asks for.
        */
       ifAllowed('ars_site_daily_revenue', source.selectAll('ars_site_daily_revenue', {
-        select: 'report_date,ars_site_id,ars_account_id,category,source_name,gross_revenue,source_profit_usd,impressions',
+        select: 'report_date,ars_site_id,ars_account_id,category,source_name,gross_revenue,source_profit_usd,publisher_revenue,impressions',
         filters: window,
       })),
       ifAllowed('ars_demand_sources', source.selectAll('ars_demand_sources', { select: 'source_name,category,is_ignored' })),
@@ -273,7 +208,7 @@ async function main() {
 
   /* ---- the P&L ---- */
   const wasDenied = (what) => denied.includes(what);
-  const { rows: plRows, columns: plColumns } = mergeDays(
+  const { rows: plRows, columns: plColumns, empty: plEmpty } = mergeDays(
     {
       publishers: bookOrNull(
         publishersDaysFromDetail(siteDetail, accountsById, ignored, shareAt),
@@ -298,6 +233,13 @@ async function main() {
     `company_daily: ${plRows.length} days, ${plColumns.length}/${PL_NUMERIC.length} columns ` +
       '(a book the source refused keeps the figures it already had)',
   );
+  if (plEmpty.length > 0) {
+    console.error(
+      `NOT WRITTEN — ${plEmpty.join(', ')} came back with no money at all across the whole ` +
+        'window, which is a read that went wrong rather than a quiet fortnight. Those days keep ' +
+        'the figures they already had.',
+    );
+  }
 
   /* ---- the seven engines ---- */
   const engines = {

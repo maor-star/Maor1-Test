@@ -57,6 +57,98 @@ const dayOf = (row, field = 'report_date') => String(row[field] ?? '').slice(0, 
  * ------------------------------------------------------------------ */
 
 /**
+ * The P&L's four books, and the columns each one owns.
+ *
+ * Grouped rather than listed flat because a book the source refuses must not
+ * be written at all. Flat, every column of every book went into one row and a
+ * refused book arrived as a column of zeroes — which is how the publisher and
+ * seat-lease books were wiped for the last twelve days of August the first
+ * time the source closed its two reports. On the screen a denied grant and a
+ * business that stopped look exactly alike.
+ */
+export const PL_BOOKS = {
+  publishers: [
+    'pub_gross_cents', 'pub_source_fee_cents', 'pub_net_after_fee_cents', 'pub_payout_cents',
+    'pub_profit_cents', 'pub_impressions',
+  ],
+  bidder: ['bidder_gross_cents', 'bidder_profit_cents', 'bidder_impressions'],
+  seat: ['seat_gross_cents', 'seat_payout_cents', 'seat_profit_cents', 'seat_impressions'],
+  exchange: ['xe_revenue_cents', 'xe_cost_cents', 'xe_profit_cents', 'xe_impressions'],
+};
+
+export const PL_NUMERIC = Object.values(PL_BOOKS).flat();
+
+/**
+ * One row per day, out of the books that actually came back.
+ *
+ * `books` maps a book's name to its days, or to null when the source refused
+ * it. A book that answered writes its columns, including a real zero on a day
+ * it earned nothing — a line that reported nothing that day earned nothing,
+ * and leaving it undefined would drop the day out of a SUM further up. A book
+ * that was refused writes no columns at all, and the returned `columns` list
+ * is what the upsert is allowed to touch, so yesterday's correct figures stay
+ * where they are and the screen labels their age.
+ */
+export function mergeDays(books, pulledAt) {
+  const columns = [];
+  const empty = [];
+  for (const [name, days] of Object.entries(books)) {
+    if (days === null) continue;
+    if (!bookHasMoney(days)) {
+      empty.push(name);
+      continue;
+    }
+    columns.push(...PL_BOOKS[name]);
+  }
+
+  const byDate = new Map();
+  for (const days of Object.values(books)) {
+    for (const row of days ?? []) {
+      if (!row?.date) continue;
+      const target = byDate.get(row.date) ?? { date: row.date };
+      for (const [k, v] of Object.entries(row)) {
+        if (k !== 'date' && columns.includes(k)) target[k] = Number(v ?? 0);
+      }
+      byDate.set(row.date, target);
+    }
+  }
+
+  const rows = [...byDate.values()]
+    .map((r) => {
+      const full = { date: r.date, source: 'adops', pulled_at: pulledAt };
+      for (const k of columns) full[k] = Number.isFinite(r[k]) ? r[k] : 0;
+      return full;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return { rows, columns, empty };
+}
+
+
+/** A book the source refused, so the upsert leaves its columns alone. */
+export const bookOrNull = (rows, denied) => (denied ? null : rows);
+
+/**
+ * A book that came back but adds up to nothing is not a book.
+ *
+ * A window in which one of the four earned zero across every day does not
+ * happen; a column left out of the SELECT does. That is exactly how the
+ * publisher book was written with the right gross and a margin of zero — the
+ * detail read was missing `publisher_revenue`, so net-after-fee and profit
+ * were both computed from a column that was not there, and it wrote silently.
+ *
+ * So a book whose money is entirely zero is dropped here rather than written:
+ * the day keeps the figures it already had, and the run says which book and
+ * why. Loud and wrong beats quiet and wrong on the screen he runs on.
+ */
+export function bookHasMoney(rows) {
+  return (rows ?? []).some((r) =>
+    Object.entries(r).some(([k, v]) => k.endsWith('_cents') && Number(v) !== 0),
+  );
+}
+
+
+/**
  * Publishers, from the source's own overview report.
  *
  * Kept for the day the report is opened up again. As of today it answers

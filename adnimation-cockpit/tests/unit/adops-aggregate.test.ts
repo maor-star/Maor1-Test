@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 // eslint-disable-next-line prettier/prettier
 // @ts-expect-error — the jobs are plain ESM with no types.
-import { bidderDays, categoryLine, cents, clampToYear, coreClientDays, coreClientsLine, eachDay, endpointEnvironments, environmentOf, exchangeDays, exchangeEnvLine, googleCtvLine, ignoredSourceNames, publishersDay, publishersDaysFromDetail, revShareLookup, seatDaysFrom, seatDays, YEAR_START } from '@/deploy/adops-aggregate.mjs';
+import { bidderDays, bookHasMoney, bookOrNull, categoryLine, cents, clampToYear, coreClientDays, coreClientsLine, eachDay, endpointEnvironments, environmentOf, exchangeDays, exchangeEnvLine, googleCtvLine, ignoredSourceNames, mergeDays, PL_BOOKS, PL_NUMERIC, publishersDay, publishersDaysFromDetail, revShareLookup, seatDaysFrom, seatDays, YEAR_START } from '@/deploy/adops-aggregate.mjs';
 
 /**
  * The arithmetic that used to live inside SQL.
@@ -370,6 +370,75 @@ describe('the publisher book', () => {
   it('leaves trading accounts out, as the report did', () => {
     const [day] = publishersDaysFromDetail(rows, accounts, new Set(), shareAt);
     expect(day.pub_gross_cents).toBe(15_000);
+  });
+});
+
+/**
+ * What the P&L is allowed to overwrite.
+ *
+ * The source closed two of its reporting functions today. The sync answered by
+ * writing a column of zeroes where each of them used to be, and twelve days of
+ * the publisher and seat-lease books went to nothing — which on the screen is
+ * indistinguishable from a business that stopped. These pin the two ways that
+ * must not happen again.
+ */
+describe('the four books of the P&L', () => {
+  const at = new Date('2026-09-05T00:00:00Z');
+  const publishers = [{ date: '2026-08-24', pub_gross_cents: 2_339_253, pub_profit_cents: 353_347 }];
+  const bidder = [{ date: '2026-08-24', bidder_gross_cents: 144_000 }];
+
+  it('writes only the columns of the books that answered', () => {
+    const { columns } = mergeDays(
+      { publishers, seat: null, bidder, exchange: null },
+      at,
+    );
+    expect(columns).toEqual([...PL_BOOKS.publishers, ...PL_BOOKS.bidder]);
+    expect(columns).not.toContain('seat_gross_cents');
+  });
+
+  it('leaves a refused book’s columns out of the row entirely', () => {
+    // Not zero, and not null — absent, so the upsert never names the column
+    // and the day keeps the figure it already had.
+    const { rows } = mergeDays({ publishers, seat: null, bidder, exchange: null }, at);
+    expect(rows[0]).not.toHaveProperty('seat_gross_cents');
+    expect(rows[0].pub_gross_cents).toBe(2_339_253);
+  });
+
+  it('still writes a real zero for a day a book that answered earned nothing', () => {
+    // A quiet Sunday on the bidder is a fact. Dropping it would take the whole
+    // day out of a SUM further up and understate the month.
+    const quiet = [{ date: '2026-08-24', bidder_gross_cents: 0 }, { date: '2026-08-25', bidder_gross_cents: 144_000 }];
+    const { rows } = mergeDays({ publishers: null, seat: null, bidder: quiet, exchange: null }, at);
+    expect(rows[0].bidder_gross_cents).toBe(0);
+  });
+
+  it('drops a book that came back with no money at all, and says which', () => {
+    // How the publisher book was written with the right gross and a margin of
+    // zero: the detail read was missing publisher_revenue, so both columns
+    // computed off a column that was not there. Silent, and wrong.
+    const nothing = [{ date: '2026-08-24', pub_gross_cents: 0, pub_profit_cents: 0 }];
+    const { columns, empty } = mergeDays({ publishers: nothing, seat: null, bidder, exchange: null }, at);
+    expect(empty).toEqual(['publishers']);
+    expect(columns).not.toContain('pub_gross_cents');
+  });
+
+  it('knows money from no money', () => {
+    expect(bookHasMoney([{ date: 'x', pub_gross_cents: 0 }])).toBe(false);
+    expect(bookHasMoney([{ date: 'x', pub_gross_cents: 1 }])).toBe(true);
+    // Impressions are not money: a book with traffic and no revenue read wrong.
+    expect(bookHasMoney([{ date: 'x', pub_gross_cents: 0, pub_impressions: 900 }])).toBe(false);
+    expect(bookHasMoney([])).toBe(false);
+  });
+
+  it('treats a refused book and an empty one the same way at the column level', () => {
+    expect(bookOrNull(publishers, true)).toBe(null);
+    expect(bookOrNull(publishers, false)).toBe(publishers);
+  });
+
+  it('accounts for every P&L column exactly once', () => {
+    // A column in the table but in no book would never be written by anything.
+    expect(PL_NUMERIC.length).toBe(new Set(PL_NUMERIC).size);
+    expect(PL_NUMERIC.length).toBe(Object.values(PL_BOOKS).flat().length);
   });
 });
 
