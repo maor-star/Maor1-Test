@@ -1049,7 +1049,11 @@ function ensureDefaults(){
     db.fixV23=n; db.defaultsV=23; save();
   }
 }
-ensureDefaults();
+// הגנה: תקלה במיגרציה לא תשבית את כל האתר (מסך לבן) — מדווחים וממשיכים עם הנתונים כפי שהם
+try{ ensureDefaults(); }catch(e){ console.error('ensureDefaults failed',e); try{ window.__bootError=e.message; }catch(_){} }
+// שגיאות לא-מטופלות: הודעה קצרה למשתמש במקום קריסה שקטה
+window.addEventListener('error',e=>{ try{ const t=document.getElementById('toast'); if(t){ t.textContent='⚠️ שגיאה: '+(e.message||'').slice(0,120); t.className='toast show error'; setTimeout(()=>t.className='toast',4000); } }catch(_){} });
+window.addEventListener('unhandledrejection',e=>{ try{ const msg=(e.reason&&e.reason.message)||String(e.reason||''); if(/unauthorized/.test(msg)) return; const t=document.getElementById('toast'); if(t){ t.textContent='⚠️ '+msg.slice(0,120); t.className='toast show error'; setTimeout(()=>t.className='toast',4000); } }catch(_){} });
 const catById = (id)=> db.categories.find(c=>c.id==id);
 const proById = (id)=> db.professionals.find(p=>p.id==id);
 
@@ -1764,22 +1768,26 @@ function donut(items,clickable){
   return `<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><svg viewBox="0 0 180 180" style="width:168px;height:168px;flex-shrink:0">${segs}<text x="90" y="85" text-anchor="middle" font-size="11" fill="var(--viz-muted)">סה״כ</text><text x="90" y="104" text-anchor="middle" font-size="15" font-weight="800" fill="var(--viz-ink)">${money(total)}</text></svg><div style="flex:1;min-width:180px">${legend}</div></div>`;
 }
 
+// רשימת הקטגוריות ל-<select> — מחושבת פעם אחת ונשמרת במטמון (בעבר חושבה מחדש לכל שורה: אלפי שורות × אלפי עסקאות = הקפאת הדפדפן)
+let _catOptCache={key:'',items:[]};
 function catSelectOptions(cats,selId){
-  // תדירות שימוש לכל קטגוריה — כדי להציג את הנפוצות קודם; קיבוץ תת-קטגוריות תחת הראשית
-  const usage={}; db.transactions.forEach(t=>{ if(t.category_id) usage[t.category_id]=(usage[t.category_id]||0)+1; });
-  const subUse=(mid)=>cats.filter(c=>c.parent_id==mid).reduce((s,c)=>s+(usage[c.id]||0),0);
-  const mainUse=(mc)=>(usage[mc.id]||0)+subUse(mc.id);
-  const kindBlock=(kind,label)=>{
-    const mains=cats.filter(c=>c.kind===kind&&!c.parent_id).sort((a,b)=>mainUse(b)-mainUse(a)||strv(a.name).localeCompare(strv(b.name),'he'));
-    if(!mains.length) return '';
-    const inner=mains.map(mc=>{
-      const subs=cats.filter(c=>c.parent_id==mc.id).sort((a,b)=>(usage[b.id]||0)-(usage[a.id]||0)||strv(a.name).localeCompare(strv(b.name),'he'));
-      return `<option value="${mc.id}" ${mc.id==selId?'selected':''}>${esc(mc.name)}</option>`+
-        subs.map(s=>`<option value="${s.id}" ${s.id==selId?'selected':''}>&nbsp;&nbsp;↳ ${esc(s.name)}</option>`).join('');
-    }).join('');
-    return `<optgroup label="${esc(label)}">${inner}</optgroup>`;
-  };
-  return `<option value="">🔴 לא מסווג</option>`+kindBlock('expense','הוצאות (הנפוצות ראשונות)')+kindBlock('income','הכנסות');
+  const key=(db.updatedAt||0)+'|'+cats.length+'|'+cats.map(c=>c.id+':'+c.name+':'+(c.parent_id||'')).join(',').length;
+  if(_catOptCache.key!==key){
+    const usage={}; db.transactions.forEach(t=>{ if(t.category_id) usage[t.category_id]=(usage[t.category_id]||0)+1; });
+    const subUse=(mid)=>cats.filter(c=>c.parent_id==mid).reduce((s,c)=>s+(usage[c.id]||0),0);
+    const mainUse=(mc)=>(usage[mc.id]||0)+subUse(mc.id);
+    const items=[{v:'',html:'🔴 לא מסווג'}];
+    [['expense','הוצאות (הנפוצות ראשונות)'],['income','הכנסות']].forEach(([kind,label])=>{
+      const mains=cats.filter(c=>c.kind===kind&&!c.parent_id).sort((a,b)=>mainUse(b)-mainUse(a)||strv(a.name).localeCompare(strv(b.name),'he'));
+      if(!mains.length) return; items.push({group:label});
+      mains.forEach(mc=>{ items.push({v:String(mc.id),html:esc(mc.name)});
+        cats.filter(c=>c.parent_id==mc.id).sort((a,b)=>(usage[b.id]||0)-(usage[a.id]||0)||strv(a.name).localeCompare(strv(b.name),'he')).forEach(s=>items.push({v:String(s.id),html:'&nbsp;&nbsp;↳ '+esc(s.name)})); });
+      items.push({groupEnd:true});
+    });
+    _catOptCache={key,items};
+  }
+  const sel=selId==null?'':String(selId);
+  return _catOptCache.items.map(o=>o.group?`<optgroup label="${esc(o.group)}">`:o.groupEnd?'</optgroup>':`<option value="${o.v}"${o.v===sel?' selected':''}>${o.html}</option>`).join('');
 }
 views.transactions=async()=>{
   const el=document.createElement('div');
@@ -1819,10 +1827,12 @@ views.transactions=async()=>{
   };
   const renderFilterCats=()=>{ el.querySelector('#f-cat').innerHTML=`<option value="">כל הקטגוריות</option><option value="__none">🔴 לא מסווג</option>`+cats.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join(''); };
 
+  let showN=200; // עימוד: מציגים 200 שורות בכל פעם (אלפי שורות בבת אחת הקפיאו את הדפדפן)
   const renderTable=()=>{
     const fc=el.querySelector('#f-cat').value, fs=el.querySelector('#f-src').value, ft=el.querySelector('#f-txt').value.trim().toLowerCase(), only=el.querySelector('#f-uncls').checked, hideAgg=el.querySelector('#f-hideagg').checked;
     const filtered=rows.filter(r=>(!fc||(fc==='__none'?(!r.category_id&&!isAgg(r)):r.category_id==fc))&&(!fs||r.source===fs)&&(!ft||(r.merchant+' '+r.description).toLowerCase().includes(ft))&&(!only||(r.kind==='expense'&&!r.category_id&&!isAgg(r)))&&(!hideAgg||!isAgg(r)));
-    el.querySelector('#tx-table').innerHTML=filtered.length?`<table><thead><tr><th>תאריך</th><th class="wrap">מהות / בית עסק</th><th>מקור</th><th>סיווג (מהות ההוצאה)</th><th>סכום</th><th></th></tr></thead><tbody>${filtered.map(r=>`<tr>
+    const page=filtered.slice(0,showN);
+    el.querySelector('#tx-table').innerHTML=filtered.length?`<table><thead><tr><th>תאריך</th><th class="wrap">מהות / בית עסק</th><th>מקור</th><th>סיווג (מהות ההוצאה)</th><th>סכום</th><th></th></tr></thead><tbody>${page.map(r=>`<tr>
       <td class="tnum">${fmtDate(r.tx_date)}</td>
       <td class="wrap"><strong>${esc(r.merchant||r.description)||'—'}</strong>${r.merchant&&r.description&&r.merchant!==r.description?`<div class="hint">${esc(r.description)}</div>`:''}${r.account?`<div class="hint">${esc(r.account)}</div>`:''}</td>
       <td><span class="muted">${srcLabel(r.source)}</span></td>
@@ -1834,7 +1844,8 @@ views.transactions=async()=>{
       <td class="tnum ${r.kind==='income'?'amount-pos':'amount-neg'}">${r.kind==='income'?'+':'−'}${money2(r.amount)}</td>
       <td style="text-align:left"><button class="icon-btn" data-edit="${r.id}" title="עריכה מלאה">✏️</button><button class="btn-danger" data-del="${r.id}">🗑</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty">אין עסקאות תואמות. ייבאו תדפיס או הוסיפו עסקה ידנית.</div>';
     if(filtered.length){ const sE=filtered.filter(r=>r.kind==='expense').reduce((s,r)=>s+r.amount,0), sI=filtered.filter(r=>r.kind==='income').reduce((s,r)=>s+r.amount,0);
-      el.querySelector('#tx-table').insertAdjacentHTML('beforeend',`<div style="padding:13px 18px;border-top:2px solid var(--border);display:flex;gap:22px;flex-wrap:wrap;font-weight:800;background:var(--surface-2)"><span>סה״כ מוצג: ${filtered.length} עסקאות</span><span class="amount-neg">הוצאות: ${money(sE)}</span>${sI?`<span class="amount-pos">הכנסות: ${money(sI)}</span>`:''}</div>`); }
+      el.querySelector('#tx-table').insertAdjacentHTML('beforeend',`<div style="padding:13px 18px;border-top:2px solid var(--border);display:flex;gap:22px;flex-wrap:wrap;font-weight:800;background:var(--surface-2);align-items:center"><span>סה״כ: ${filtered.length} עסקאות${filtered.length>page.length?` · מוצגות ${page.length}`:''}</span><span class="amount-neg">הוצאות: ${money(sE)}</span>${sI?`<span class="amount-pos">הכנסות: ${money(sI)}</span>`:''}${filtered.length>page.length?`<button class="btn-ghost" id="tx-more" style="margin-inline-start:auto">הצג עוד ${Math.min(200,filtered.length-page.length)} ←</button>`:''}</div>`);
+      const more=el.querySelector('#tx-more'); if(more) more.onclick=()=>{ showN+=200; renderTable(); }; }
     el.querySelectorAll('.cat-select').forEach(sel=>sel.onchange=async()=>{
       const id=sel.dataset.id, catId=sel.value, r=rows.find(x=>x.id==id), remember=el.querySelector('#remember').checked;
       try{
