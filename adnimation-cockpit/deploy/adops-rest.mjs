@@ -76,7 +76,15 @@ export class AdOpsSource {
   /** One request, retried only for the failures that are worth retrying. */
   async #send(path, init) {
     for (let attempt = 0; attempt < 4; attempt += 1) {
-      const res = await fetch(`${this.#url}${path}`, init);
+      /*
+       * Every request is bounded. A fetch with no timeout against a report
+       * that never returns hangs the whole job with nothing in the log, and
+       * systemd kills it half an hour later having written nothing.
+       */
+      const res = await fetch(`${this.#url}${path}`, {
+        ...init,
+        signal: AbortSignal.timeout(120_000),
+      });
       if (res.ok) return res;
       // A rate limit or a server fault may pass; a 400 is a request we built
       // wrong and will build wrong again.
@@ -112,7 +120,19 @@ export class AdOpsSource {
     if (order) params.set('order', order);
 
     const rows = [];
+    const started = Date.now();
     for (let from = 0; ; from += PAGE) {
+      /*
+       * A hard stop on the paging.
+       *
+       * Without it a source that stops advancing — a Range header ignored, a
+       * proxy that always answers the first page — is an infinite loop that
+       * looks exactly like a slow job, which is how the first run of this sync
+       * sat for twenty-eight minutes and wrote nothing.
+       */
+      if (from > 500_000) {
+        throw new Error(`${table}: more than half a million rows — narrow the filter`);
+      }
       const res = await this.#send(`/rest/v1/${table}?${params.toString()}`, {
         // No `count=exact`: it counts the whole matching set on every page,
         // which on a table of hundreds of thousands of rows costs more than
@@ -124,7 +144,12 @@ export class AdOpsSource {
       });
       const page = await res.json();
       rows.push(...page);
-      if (page.length < PAGE) return rows;
+      if (page.length < PAGE) {
+        if (process.env.ADOPS_VERBOSE) {
+          console.error(`  read ${table}: ${rows.length} rows in ${Math.round((Date.now() - started) / 1000)}s`);
+        }
+        return rows;
+      }
     }
   }
 

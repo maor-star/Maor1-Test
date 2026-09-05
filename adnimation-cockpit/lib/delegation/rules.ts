@@ -18,6 +18,42 @@ export const VIEW_LABEL: Record<DelegationView, string> = {
   done: 'DONE',
 };
 
+/**
+ * How he hands something over, in his own words.
+ *
+ * He wrote it out: "לטיפולך בבקשה ועדכן. תודה, מאור" — over to you please, and
+ * let me know. That is the whole message. Anything longer is the cockpit
+ * talking instead of him, and the person on the other end can tell.
+ *
+ * The subject is the same every time too: waiting for an update on X. Most of
+ * the team has no ClickUp and never will, so the thing being tracked is this
+ * message, and its title has to say what it is about on its own.
+ */
+export const HANDOVER_BODY = 'לטיפולך בבקשה ועדכן.\n\nתודה,\nמאור';
+
+/** The title a hand-over is tracked under. */
+export const handoverTitle = (subject: string): string =>
+  `מחכה לעדכון בנושא: ${String(subject ?? '').trim()}`.slice(0, 300);
+
+/**
+ * The message itself: his words, then what it is about, then anything he added.
+ */
+export function handoverMessage(
+  subject: string,
+  note?: string | null,
+  dueDate?: string | null,
+): string {
+  return [
+    `*${String(subject ?? '').trim()}*`,
+    '',
+    HANDOVER_BODY,
+    note?.trim() ? `\n${note.trim()}` : '',
+    dueDate ? `\n*עד:* ${dueDate}` : '',
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
 export const newDelegationSchema = z.object({
   delegatedTo: z.string().uuid('Pick who this is going to'),
   title: z.string().trim().min(1, 'Say what you are handing over').max(300),

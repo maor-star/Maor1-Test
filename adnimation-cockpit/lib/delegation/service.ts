@@ -3,9 +3,9 @@ import { subDays } from 'date-fns';
 import { z } from 'zod';
 import { db, delegations, people, tasks } from '@/lib/db';
 import type { ClickUpAdapter, SlackAdapter } from '@/lib/integrations/types';
-import { PRIORITY_TO_CLICKUP } from '@/lib/integrations/clickup';
 import { recordFailure, recordSuccess } from '@/lib/integrations/health';
 import { DELEGATION_STALE_DAYS, TASK_PRIORITIES } from '@/lib/tasks/types';
+import { handoverMessage, handoverTitle } from './rules';
 import { writeAudit } from '@/lib/audit';
 
 export const delegateInputSchema = z.object({
@@ -49,34 +49,18 @@ export async function delegate(
 
   const dueDateMs = parsed.dueDate ? Date.parse(`${parsed.dueDate}T12:00:00Z`) : null;
 
-  const clickupTask = await deps.clickup
-    .createTask({
-      listId: parsed.clickupListId,
-      name: parsed.title,
-      description: [parsed.note ?? '', parsed.backlinkUrl ? `\n\nSource: ${parsed.backlinkUrl}` : '']
-        .join('')
-        .trim(),
-      assigneeIds: [],
-      priority: PRIORITY_TO_CLICKUP[parsed.priority],
-      dueDateMs,
-      tags: ['ceo-delegation'],
-    })
-    .catch((e: unknown) => ({
-      ok: false as const,
-      taskId: null,
-      url: null,
-      error: e instanceof Error ? e.message : 'unknown',
-    }));
+  /*
+   * No ClickUp task any more.
+   *
+   * He said it plainly: he no longer needs to keep ClickUp up to date, it all
+   * stays in his own system — and most of the team does not have ClickUp at
+   * all, so a ticket nobody opens was tracking nothing. What is tracked is the
+   * message and the reply to it.
+   */
+  const clickupTask = { ok: true as const, taskId: null, url: null, error: undefined };
+  void dueDateMs;
 
-  await (clickupTask.ok
-    ? recordSuccess('clickup')
-    : recordFailure('clickup', clickupTask.error ?? 'create_task_failed'));
-
-  const slackText = [
-    `*${parsed.title}*`,
-    parsed.note ? `\n${parsed.note}` : '',
-    parsed.dueDate ? `\n*Due:* ${parsed.dueDate}` : '',
-  ].join('');
+  const slackText = handoverMessage(parsed.title, parsed.note, parsed.dueDate);
 
   const slackResult = person.slackId
     ? await deps.slack
@@ -84,7 +68,7 @@ export async function delegate(
           target: person.slackId,
           text: slackText,
           contextLines: [`Delegated by ${deps.actor}`],
-          backlinkUrl: clickupTask.url ?? parsed.backlinkUrl,
+          backlinkUrl: parsed.backlinkUrl,
         })
         .catch((e: unknown) => ({
           ok: false as const,
@@ -129,7 +113,7 @@ export async function delegate(
     entityId: row.id,
     after: {
       delegatedTo: person.email,
-      title: parsed.title,
+      title: handoverTitle(parsed.title),
       slackOk: slackResult.ok,
       clickupOk: clickupTask.ok,
     },

@@ -41,6 +41,8 @@ export const people = pgTable('people', {
   email: text('email').notNull().unique(),
   slackId: text('slack_id'),
   clickupId: text('clickup_id'),
+  /** True when the roster sync found them in Slack rather than seeding them. */
+  fromSlack: boolean('from_slack').notNull().default(false),
   role: text('role'),
   managerId: uuid('manager_id'),
   deptId: uuid('dept_id').references(() => departments.id),
@@ -130,6 +132,10 @@ export const delegations = pgTable(
     delegatedTo: uuid('delegated_to').notNull().references(() => people.id),
     clickupTaskId: text('clickup_task_id'),
     slackMessageUrl: text('slack_message_url'),
+    /** 'person' | 'channel' | 'email' — where the message actually went. */
+    targetKind: text('target_kind').notNull().default('person'),
+    /** The channel id or the email address, when it was not a direct message. */
+    targetRef: text('target_ref'),
     note: text('note'),
     dueDate: date('due_date'),
     status: delegationStatus('status').notNull().default('sent'),

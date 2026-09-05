@@ -121,6 +121,7 @@ async function main() {
    */
   const days = eachDay(from, to);
   const publisherRows = [];
+  console.log(`publishers: ${days.length} days to ask for`);
   for (let i = 0; i < days.length; i += 14) {
     const batch = days.slice(i, i + 14);
     const results = await Promise.all(
@@ -132,8 +133,10 @@ async function main() {
       ),
     );
     publisherRows.push(...results.filter(Boolean));
+    console.log(`  publishers ${publisherRows.length}/${days.length}`);
   }
 
+  console.log('reading the tables…');
   const [seatOverview, vidazoo, xeUnsplit, rollup, coreSnapshot, gam, gamApps, xeEcon, xeSplit, accounts] =
     await Promise.all([
       source.rpc('get_seat_lease_overview_daily', { p_from: from, p_to: to }),
