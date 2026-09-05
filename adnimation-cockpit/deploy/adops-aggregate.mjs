@@ -328,16 +328,30 @@ const lineDay = (date, { gross, profit, impressions, entities }) => ({
 });
 
 /**
- * The year the cockpit reports on.
+ * How far back the cockpit reports: twelve months, rolling.
  *
- * He asked for this year and no further back: "take only this year's data, no
- * more". Every window the syncs build is clamped to it, so a stray argument or
- * a default of four hundred days cannot walk the source's whole history again.
+ * It was a fixed 2026-01-01 when he asked for "this year only". He then asked
+ * for a year back, which is not the same thing in September — it reaches into
+ * the previous autumn — so the floor moves with the calendar instead of
+ * standing on New Year's Day.
+ *
+ * It is still a floor and not a suggestion: every window any sync builds is
+ * clamped to it, so a stray argument or an old default cannot walk the whole
+ * of the source's history again. That run is the one he stopped.
  */
-export const YEAR_START = '2026-01-01';
+export const HISTORY_DAYS = 365;
 
-/** A window, never reaching further back than the year he asked for. */
-export const clampToYear = (from) => (from < YEAR_START ? YEAR_START : from);
+/** The earliest day any sync may ask the source for, given today. */
+export function historyFloor(today) {
+  const t = Date.parse(`${today}T00:00:00Z`);
+  return new Date(t - HISTORY_DAYS * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** A window, never reaching further back than the twelve months he asked for. */
+export function clampToHistory(from, today) {
+  const floor = historyFloor(today);
+  return from < floor ? floor : from;
+}
 
 /* ------------------------------------------------------------------ *
  * The publisher business, from the site detail.

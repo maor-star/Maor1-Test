@@ -33,6 +33,20 @@ const READ_ONLY_FUNCTIONS = new Set([
 /** How many rows one page asks for. PostgREST caps its own default far lower. */
 const PAGE = 1000;
 
+/**
+ * A breather between pages, in milliseconds.
+ *
+ * Zero for the routine run — a week of rows is a handful of pages and pausing
+ * between them would only make the job longer for no one's benefit.
+ *
+ * A backfill is the other case. Reading a year means hundreds of pages back to
+ * back against the system the ad ops team is working in at that moment, and he
+ * asked for it "in small groups, with gaps, without loading the server". So a
+ * backfill sets this and the paging idles between requests instead of taking
+ * everything it can as fast as it can.
+ */
+const pagePause = () => Number(process.env.ADOPS_PAGE_PAUSE_MS ?? 0);
+
 export class AdOpsSource {
   #url;
   #key;
@@ -199,6 +213,14 @@ export class AdOpsSource {
       }));
       const page = await res.json();
       rows.push(...page);
+
+      // Between pages, never after the last one: the pause is there to space
+      // out requests, and there is no request after this to space out from.
+      const pause = pagePause();
+      if (page.length === PAGE && pause > 0) {
+        await new Promise((r) => setTimeout(r, pause));
+      }
+
       if (page.length < PAGE) {
         if (process.env.ADOPS_VERBOSE) {
           console.error(`  read ${table}: ${rows.length} rows in ${Math.round((Date.now() - started) / 1000)}s`);

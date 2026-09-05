@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 // eslint-disable-next-line prettier/prettier
 // @ts-expect-error — the jobs are plain ESM with no types.
-import { bidderDays, bookHasMoney, bookOrNull, categoryLine, cents, clampToYear, coreClientDays, coreClientsLine, eachDay, endpointEnvironments, environmentOf, exchangeDays, exchangeEnvLine, googleCtvLine, ignoredSourceNames, mergeDays, PL_BOOKS, PL_NUMERIC, publishersDay, publishersDaysFromDetail, revShareLookup, seatDaysFrom, seatDays, YEAR_START } from '@/deploy/adops-aggregate.mjs';
+import { bidderDays, bookHasMoney, bookOrNull, categoryLine, cents, clampToHistory, coreClientDays, coreClientsLine, eachDay, endpointEnvironments, environmentOf, exchangeDays, exchangeEnvLine, googleCtvLine, ignoredSourceNames, mergeDays, PL_BOOKS, PL_NUMERIC, publishersDay, publishersDaysFromDetail, revShareLookup, seatDaysFrom, seatDays, historyFloor, HISTORY_DAYS } from '@/deploy/adops-aggregate.mjs';
 
 /**
  * The arithmetic that used to live inside SQL.
@@ -443,19 +443,36 @@ describe('the four books of the P&L', () => {
 });
 
 /**
- * This year, and no further back.
+ * Twelve months, and no further back.
  *
- * The backfill that walked four hundred days is the one he asked me to stop —
- * it was loading the server to re-read months whose figures had not changed.
+ * A floor rather than a suggestion: the run that walked the source's whole
+ * history is the one he asked me to stop. It rolls with the calendar because
+ * "a year back" in September reaches into the previous autumn, which a fixed
+ * New Year's Day floor would have refused.
  */
 describe('the window', () => {
-  it('never reaches back past this year', () => {
-    expect(clampToYear('2025-03-01')).toBe(YEAR_START);
-    expect(clampToYear('2024-12-31')).toBe(YEAR_START);
+  const today = '2026-09-05';
+
+  it('reaches back exactly twelve months', () => {
+    expect(historyFloor(today)).toBe('2025-09-05');
+    expect(HISTORY_DAYS).toBe(365);
   });
 
-  it('leaves a window inside this year alone', () => {
-    expect(clampToYear('2026-06-01')).toBe('2026-06-01');
+  it('refuses to go further back than that', () => {
+    expect(clampToHistory('2024-01-01', today)).toBe('2025-09-05');
+    expect(clampToHistory('2025-01-01', today)).toBe('2025-09-05');
+  });
+
+  it('leaves a window inside the twelve months alone', () => {
+    expect(clampToHistory('2025-11-01', today)).toBe('2025-11-01');
+    expect(clampToHistory('2026-06-01', today)).toBe('2026-06-01');
+  });
+
+  it('moves with the calendar rather than standing on New Year', () => {
+    // The whole point of the change: the same request asked on two days gets
+    // two different floors, and neither of them is 1 January.
+    expect(historyFloor('2026-12-31')).toBe('2025-12-31');
+    expect(historyFloor('2027-03-01')).toBe('2026-03-01');
   });
 });
 

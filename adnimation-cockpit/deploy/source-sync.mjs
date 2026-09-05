@@ -24,10 +24,10 @@ import postgres from 'postgres';
 import { loadSecrets } from './job-secrets.mjs';
 import { openSource } from './adops-rest.mjs';
 import {
-  bidderDays, bidderLine, bookOrNull, categoryLine, clampToYear, coreClientDays,
+  bidderDays, bidderLine, bookOrNull, categoryLine, coreClientDays,
   coreClientsLine, endpointEnvironments, exchangeDays, exchangeEnvLine, googleCtvLine,
-  ignoredSourceNames, mergeDays, PL_NUMERIC, publishersDaysFromDetail, revShareLookup,
-  seatDaysFrom, seatDays, YEAR_START,
+  clampToHistory, historyFloor, ignoredSourceNames, mergeDays, PL_NUMERIC,
+  publishersDaysFromDetail, revShareLookup, seatDaysFrom, seatDays,
 } from './adops-aggregate.mjs';
 
 const DB = process.env.DATABASE_URL;
@@ -108,10 +108,11 @@ async function main() {
    * safer and restartable — each chunk is a whole, correct pull of its own
    * days, and one that fails costs only itself.
    */
-  const from = clampToYear(process.env.SOURCE_SYNC_FROM ?? day(DAYS));
-  const to = process.env.SOURCE_SYNC_TO ?? day(0);
-  if (to < YEAR_START) {
-    console.log(`${to} is before ${YEAR_START} — he asked for this year only. Nothing to do.`);
+  const today = day(0);
+  const from = clampToHistory(process.env.SOURCE_SYNC_FROM ?? day(DAYS), today);
+  const to = process.env.SOURCE_SYNC_TO ?? today;
+  if (to < historyFloor(today)) {
+    console.log(`${to} is more than twelve months back. Nothing to do.`);
     await sql.end();
     process.exit(0);
   }
