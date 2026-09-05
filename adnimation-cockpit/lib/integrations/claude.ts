@@ -167,9 +167,33 @@ export async function ask<T = string>(
 
     if (!options.schema) return { ok: true, text, ...usage };
 
-    // Models like to wrap JSON in prose or a fence; take the object itself.
+    /*
+     * Models like to wrap JSON in prose or a fence; take the object itself.
+     *
+     * And the parse is guarded, because an answer that runs into the token
+     * ceiling comes back as a JSON object cut off mid-string. An unguarded
+     * JSON.parse on that throws out of here, through whatever was asking, and
+     * out of the render — which is how one long contract answer turned into
+     * "this screen failed to load". Every caller of this already handles
+     * `ok: false`; none of them expected a throw.
+     */
     const json = /\{[\s\S]*\}/.exec(text)?.[0] ?? text;
-    const shaped = options.schema.safeParse(JSON.parse(json) as unknown);
+    let value: unknown;
+    try {
+      value = JSON.parse(json);
+    } catch {
+      // Said apart, because they are different problems: one is fixed by
+      // asking for less, the other by asking more clearly.
+      const truncated = parsed.data.usage.output_tokens >= (options.maxTokens ?? 2000) - 8;
+      return {
+        ok: false,
+        error: truncated
+          ? 'Claude ran out of room before it finished the answer — ask for a shorter one.'
+          : 'Claude did not answer with usable JSON',
+      };
+    }
+
+    const shaped = options.schema.safeParse(value);
     if (!shaped.success) {
       return { ok: false, error: `Claude's answer did not fit the shape asked for` };
     }

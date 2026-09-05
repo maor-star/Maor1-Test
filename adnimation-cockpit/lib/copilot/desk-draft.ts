@@ -74,7 +74,9 @@ Rules that do not bend:
   can make, write the message that asks the question or buys the time, and say so
   in "why".
 · Write in the language the other side used.
-· Short. Two or three sentences is almost always right.
+· Short. Two or three sentences is almost always right, and the whole answer
+  has to fit in one JSON object — a reply that runs long comes back cut in half
+  and is no use to him. Keep "why" to one line and each verdict point to one.
 · Where you are guessing, say what you assumed in "why" rather than hiding it in
   confident prose. Low confidence is a useful answer; a confident wrong one is not.
 
@@ -182,10 +184,16 @@ export async function draftForItem(item: DeskItem): Promise<DraftResult> {
     }
   }
 
+  /*
+   * A contract answer is a verdict, its points, and the message — three times
+   * the length of a mail reply, and it has to fit inside one JSON object. Cut
+   * off at the ceiling it comes back as an unterminated string, so the ceiling
+   * is set to the work rather than the other way round.
+   */
   const result = await ask<DeskDraft>((await promptFor(item)) + extra, {
     system: SYSTEM(profileText),
     schema: deskDraftSchema,
-    maxTokens: 1500,
+    maxTokens: item.channel === 'contract' ? 4000 : 2000,
   });
 
   if (!result.ok) {
