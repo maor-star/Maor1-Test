@@ -223,10 +223,17 @@ async function main() {
         select: 'report_date,site_id,revenue,impressions,device_category',
         filters: [...window, ['device_category', 'in.("connected tv","set-top box")']],
       })),
-      // Which environment each demand endpoint sells into. A few hundred rows,
-      // and the only thing that tells APP from DISPLAY on the exchange.
-      ifAllowed('xe_endpoint_dim', source.selectAll('xe_endpoint_dim', {
-        select: 'endpoint_kind,endpoint_id,environment',
+      /*
+       * Which environment each demand endpoint sells into — the only thing
+       * that tells APP from DISPLAY from CTV on the exchange.
+       *
+       * The source has a view that answers this, and it is denied to this
+       * sign-in. The table underneath it is not, so the view's rule is applied
+       * in adops-aggregate instead; it agrees with the view on all 380 demand
+       * endpoints. Under five hundred rows either way.
+       */
+      ifAllowed('trading_xe_endpoints', source.selectAll('trading_xe_endpoints', {
+        select: 'id,kind,name,environments,targeting',
       })),
       ifAllowed('trading_xe_reports (split)', source.selectAll('trading_xe_reports', { filters: window })),
       ifAllowed('ars_accounts', source.selectAll('ars_accounts')),

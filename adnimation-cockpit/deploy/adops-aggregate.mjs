@@ -290,13 +290,49 @@ export const EXCHANGE_ENV_LINE = {
   CTV: 'ctv',
 };
 
+/** A JSON flag the source writes as either a boolean or the string "true". */
+const isOn = (v) => v === true || String(v ?? '').toLowerCase() === 'true';
+
+/** A name that says CTV or OTT as a word of its own, not inside another word. */
+const CTV_IN_NAME = /(^|[^a-z])(ctv|ott)([^a-z]|$)/i;
+
+/**
+ * Which environment a demand endpoint sells into.
+ *
+ * This is the source's own rule, ported rather than invented — it is the
+ * CASE in its `xe_endpoint_dim` view, in the same order, and it agrees with
+ * that view on every one of the 380 demand endpoints it has.
+ *
+ * It is ported because the view itself is denied to this sign-in and the
+ * table underneath it is not. Two of the view's five branches are left out —
+ * a manual override table and a bundle-share heuristic — and both are empty
+ * of demand endpoints today, which is why the two still agree. If the ad ops
+ * team starts overriding an endpoint by hand, this will not see it, and the
+ * fix is a grant on the view rather than more rules here.
+ *
+ * Order matters: an endpoint that sells in-app AND on the web is WEB, and one
+ * that targets televisions only is CTV whatever its environments say.
+ */
+export function environmentOf(endpoint) {
+  const device = endpoint?.targeting?.device ?? {};
+  if (isOn(device.ctv) && !isOn(device.mobile) && !isOn(device.desktop)) return 'CTV';
+  if (CTV_IN_NAME.test(String(endpoint?.name ?? ''))) return 'CTV';
+
+  const env = endpoint?.environments ?? {};
+  if (isOn(env.inapp) && !isOn(env.web)) return 'INAPP';
+  if (isOn(env.web)) return 'WEB';
+  return null;
+}
+
 /** The environment of each demand endpoint, by its id. */
 export function endpointEnvironments(endpointRows) {
   const out = new Map();
   for (const row of endpointRows ?? []) {
-    if (String(row.endpoint_kind ?? '') !== 'dsp') continue;
-    if (!row.environment) continue;
-    out.set(String(row.endpoint_id), String(row.environment).toUpperCase());
+    // Supply endpoints carry an environment too, and it is the wrong one to
+    // read: the tile is about where the buyer is spending.
+    if (String(row.kind ?? row.endpoint_kind ?? '') !== 'dsp') continue;
+    const env = row.environment ? String(row.environment).toUpperCase() : environmentOf(row);
+    if (env) out.set(String(row.id ?? row.endpoint_id), env);
   }
   return out;
 }

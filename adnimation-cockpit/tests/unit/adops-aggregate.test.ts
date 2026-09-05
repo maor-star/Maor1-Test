@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the jobs are plain ESM with no types.
 // eslint-disable-next-line prettier/prettier
-import {
-  bidderDays, categoryLine, cents, clampToYear, coreClientDays, coreClientsLine, eachDay,
-  endpointEnvironments, exchangeDays, exchangeEnvLine, googleCtvLine, ignoredSourceNames,
-  publishersDay, seatDaysFrom, seatDays, YEAR_START,
-} from '@/deploy/adops-aggregate.mjs';
+// @ts-expect-error — the jobs are plain ESM with no types.
+import { bidderDays, categoryLine, cents, clampToYear, coreClientDays, coreClientsLine, eachDay, endpointEnvironments, environmentOf, exchangeDays, exchangeEnvLine, googleCtvLine, ignoredSourceNames, publishersDay, seatDaysFrom, seatDays, YEAR_START } from '@/deploy/adops-aggregate.mjs';
 
 /**
  * The arithmetic that used to live inside SQL.
@@ -193,8 +189,9 @@ describe('the publisher lines, off the site detail', () => {
       ['20', { ars_id: 20, name: 'Resold', is_trading_account: true }],
     ]);
     const ranked = coreClientDays(rows, accounts, ignored);
-    expect(ranked.map((r) => r.account).sort()).toEqual(['Big Publisher', 'Resold']);
-    expect(ranked.find((r) => r.account === 'Resold')?.is_trading).toBe(true);
+    const names = ranked.map((r: { account: string }) => r.account).sort();
+    expect(names).toEqual(['Big Publisher', 'Resold']);
+    expect(ranked.find((r: { account: string; is_trading: boolean }) => r.account === 'Resold')?.is_trading).toBe(true);
   });
 });
 
@@ -208,11 +205,12 @@ describe('the publisher lines, off the site detail', () => {
  */
 describe('the exchange, split by environment', () => {
   const envByDsp = endpointEnvironments([
-    { endpoint_kind: 'dsp', endpoint_id: 1, environment: 'INAPP' },
-    { endpoint_kind: 'dsp', endpoint_id: 2, environment: 'WEB' },
-    { endpoint_kind: 'dsp', endpoint_id: 3, environment: 'CTV' },
-    // An SSP carries an environment too, and it is the wrong one to read.
-    { endpoint_kind: 'ssp', endpoint_id: 1, environment: 'CTV' },
+    { kind: 'dsp', id: 1, name: 'Buyer A', environments: { inapp: true, web: false } },
+    { kind: 'dsp', id: 2, name: 'Buyer B', environments: { web: true } },
+    { kind: 'dsp', id: 3, name: 'Buyer CTV EU', environments: { inapp: true } },
+    // A supply endpoint carries an environment too, and it is the wrong one
+    // to read: the tile is about where the buyer is spending.
+    { kind: 'ssp', id: 1, name: 'Seller CTV', environments: { web: true } },
   ]);
 
   const reports = [
@@ -226,6 +224,11 @@ describe('the exchange, split by environment', () => {
   it('reads the environment off the demand endpoint', () => {
     expect(envByDsp.get('1')).toBe('INAPP');
     expect(envByDsp.get('3')).toBe('CTV');
+  });
+
+  it('leaves the supply endpoints out of it', () => {
+    // Both sides of a trade have an environment and only the buyer's counts.
+    expect([...envByDsp.keys()].sort()).toEqual(['1', '2', '3']);
   });
 
   it('sends each environment to its own tile', () => {
@@ -251,6 +254,50 @@ describe('the exchange, split by environment', () => {
     // demand under apps because apps is the big one.
     const unknown = [{ report_date: '2026-08-01', dsp_id: 99, ssp_id: null, revenue: 500, dsp_spend: 1, impressions: 1 }];
     expect(exchangeEnvLine(unknown, envByDsp, 'apps')).toEqual([]);
+  });
+});
+
+/**
+ * The source's own rule for which environment an endpoint sells into.
+ *
+ * Ported from its `xe_endpoint_dim` view rather than invented, because the
+ * view is denied to this sign-in and the table underneath it is not. Checked
+ * against the view on all 380 demand endpoints it has: same answer every time.
+ * These pin the branches, so a change here has to be a deliberate one.
+ */
+describe('the environment rule, as the source writes it', () => {
+  it('calls an endpoint that targets only televisions CTV', () => {
+    expect(environmentOf({ targeting: { device: { ctv: true } }, environments: { inapp: true } })).toBe('CTV');
+  });
+
+  it('does not, once it also targets phones', () => {
+    // A buyer taking CTV and mobile is not a CTV buyer; it is an app buyer
+    // that will also take a television.
+    expect(environmentOf({
+      targeting: { device: { ctv: true, mobile: true } },
+      environments: { inapp: true },
+    })).toBe('INAPP');
+  });
+
+  it('reads CTV or OTT in the name as a word, not as letters inside one', () => {
+    expect(environmentOf({ name: 'Nexxen CTV EU', environments: { inapp: true } })).toBe('CTV');
+    expect(environmentOf({ name: 'OTT-DSP-1', environments: { web: true } })).toBe('CTV');
+    // "Scottish" and "Lottery" contain ott and must not become televisions.
+    expect(environmentOf({ name: 'Lottery Media', environments: { web: true } })).toBe('WEB');
+  });
+
+  it('sends an endpoint that sells both ways to the web', () => {
+    // The source's own default, and the reason it is written down: guessing
+    // the other way would move real money onto the app tile.
+    expect(environmentOf({ environments: { inapp: true, web: true } })).toBe('WEB');
+  });
+
+  it('accepts the flags as strings, which is how the source writes them', () => {
+    expect(environmentOf({ environments: { inapp: 'true', web: 'false' } })).toBe('INAPP');
+  });
+
+  it('answers nothing rather than guessing when there is no signal', () => {
+    expect(environmentOf({ name: 'Anonymous', environments: {} })).toBe(null);
   });
 });
 
