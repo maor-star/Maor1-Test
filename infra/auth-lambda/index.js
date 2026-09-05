@@ -396,7 +396,14 @@ async function handleOF(action, event) {
 // ---------- Gemini (עוזר הבית מבוסס AI) ----------
 // מפתח ה-API של Gemini נשמר אך ורק בשרת (S3); הדפדפן שולח שאלה + תקציר נתונים, והשרת פונה ל-Gemini.
 const AI_CONFIG_KEY = 'data/__ai_config__.json';
-const AI_DEFAULT_MODEL = 'gemini-2.5-flash';
+const AI_DEFAULT_MODEL = 'gemini-3.6-flash';
+// רשימת המודלים הזמינים למפתח (תומכי generateContent) — כדי שהמנהל יבחר מודל שקיים בפועל
+async function geminiModels(key) {
+  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=' + encodeURIComponent(key));
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((j.error && j.error.message) || ('HTTP ' + r.status));
+  return (j.models || []).filter((m) => (m.supportedGenerationMethods || []).includes('generateContent') && /gemini/i.test(m.name)).map((m) => ({ id: String(m.name).replace(/^models\//, ''), name: m.displayName || m.name, desc: m.description || '' }));
+}
 async function aiLoadConfig() { const c = await getJson(AI_CONFIG_KEY, null); return c && typeof c === 'object' ? c : null; }
 const aiMask = (c) => c && c.geminiKey ? { configured: true, keyHint: c.geminiKey.slice(0, 4) + '••••••••' + c.geminiKey.slice(-4), model: c.model || AI_DEFAULT_MODEL, updatedAt: c.updatedAt || null } : { configured: false, model: AI_DEFAULT_MODEL };
 async function geminiCall(cfg, body) {
@@ -429,6 +436,12 @@ async function handleAI(action, event) {
     return resp(200, { ok: true, config: aiMask(next) });
   }
   if (action === 'status') return resp(200, { ok: true, config: aiMask(cfg) });
+  if (action === 'models') {
+    if (!isAdmin) return resp(403, { error: 'forbidden' });
+    const key = String(body.geminiKey || '').trim() || (cfg && cfg.geminiKey);
+    if (!key) return resp(400, { error: 'אין מפתח' });
+    try { return resp(200, { ok: true, models: await geminiModels(key) }); } catch (e) { return resp(400, { error: 'לא ניתן לקבל רשימת מודלים: ' + e.message }); }
+  }
   if (action === 'ask') {
     if (!cfg || !cfg.geminiKey) return resp(400, { error: 'עוזר ה-AI עדיין לא הוגדר — הזינו מפתח Gemini במסך «מפתחות»' });
     const question = String(body.question || '').trim().slice(0, 4000);
