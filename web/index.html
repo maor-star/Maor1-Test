@@ -472,6 +472,7 @@ code{background:var(--chip); padding:2px 7px; border-radius:6px; font-size:13px;
       <a data-view="lighting"><span class="ico">💡</span> <span>תאורה</span></a>
       <a data-view="shopping"><span class="ico">🛒</span> <span>רשימת קניות</span></a>
       <a data-view="categories"><span class="ico">🗂️</span> <span>קטגוריות</span></a>
+      <a data-view="keys"><span class="ico">🔑</span> <span>מפתחות</span></a>
       <a data-view="settings"><span class="ico">⚙️</span> <span>הגדרות וגיבוי</span></a>
     </nav>
     <div class="sidebar-foot">
@@ -2138,6 +2139,105 @@ views.bank=async()=>{
   return el;
 };
 
+/* ===================== עוזר AI (Gemini) — המפתח בשרת בלבד; הדפדפן שולח שאלה + תקציר של כל נתוני האתר ===================== */
+let aiState={configured:false,model:''}, aiHistory=[];
+async function aiApi(action, body){
+  if(!authToken) throw new Error('נדרשת התחברות');
+  const r=await fetch(SYNC_API+'/ai/'+action,{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+authToken},body:JSON.stringify(body||{})});
+  let data={}; try{ data=await r.json(); }catch(e){}
+  if(r.status===401){ onSessionExpired(); throw new Error('unauthorized'); }
+  if(!r.ok) throw new Error(data.error||('שגיאת שרת '+r.status));
+  return data;
+}
+async function aiRefreshStatus(){ try{ const s=await aiApi('status'); aiState={configured:!!(s.config&&s.config.configured),model:(s.config&&s.config.model)||'',keyHint:(s.config&&s.config.keyHint)||''}; }catch(e){} return aiState; }
+// תקציר כל נתוני האתר ל-Gemini: חודשים×קטגוריות, מדדים, בתי עסק, כרטיסים, נדל"ן/משכנתא, קבועות, תחזוקה, אחריות, עסקאות אחרונות
+function aiDigest(){
+  const R=n=>Math.round(Number(n)||0); const ym=t=>String(t.tx_date).slice(0,7);
+  const rows=db.transactions.map(txView); const curYM=new Date().toISOString().slice(0,7);
+  const months=[...new Set(rows.map(ym).filter(m=>m.length===7&&m<=curYM))].sort().slice(-14);
+  const inM=t=>months.includes(ym(t));
+  const home=rows.filter(t=>t.kind==='expense'&&countsHome(t)&&inM(t)); const ess=rows.filter(t=>t.kind==='expense'&&countsEssence(t)&&!isRealEstate(t)&&inM(t));
+  const inc=rows.filter(t=>t.kind==='income'&&!isTransferIncome(t)&&!isRentIncomeTx(t)&&inM(t));
+  const monthly={}; months.forEach(m=>monthly[m]={home:0,income:0,mortgage:0,rent:0,transfers_cash:0,byCategory:{}});
+  home.forEach(t=>{ const o=monthly[ym(t)]; o.home+=t.amount; if(isMoneyMove(t)) o.transfers_cash+=t.amount; });
+  ess.forEach(t=>{ const o=monthly[ym(t)]; const k=(t.main_name||'ללא סיווג')+(t.sub_name?' › '+t.sub_name:''); o.byCategory[k]=(o.byCategory[k]||0)+t.amount; });
+  inc.forEach(t=>{ monthly[ym(t)].income+=t.amount; });
+  rows.filter(t=>inM(t)&&t.kind==='expense'&&isMortgageTx(t)).forEach(t=>{ monthly[ym(t)].mortgage+=t.amount; });
+  rows.filter(t=>inM(t)&&isRentIncomeTx(t)).forEach(t=>{ monthly[ym(t)].rent+=t.amount; });
+  Object.values(monthly).forEach(o=>{ ['home','income','mortgage','rent','transfers_cash'].forEach(k=>o[k]=R(o[k])); Object.keys(o.byCategory).forEach(k=>o.byCategory[k]=R(o.byCategory[k])); });
+  const mer={}; ess.forEach(t=>{ if(isMoneyMove(t)) return; const k=(t.merchant||t.description||'—').trim(); const o=mer[k]=mer[k]||{total:0,count:0,category:t.main_name||'ללא סיווג',sub:t.sub_name||'',months:new Set(),last:''}; o.total+=t.amount; o.count++; o.months.add(ym(t)); if(t.tx_date>o.last) o.last=t.tx_date; });
+  const merchants=Object.entries(mer).sort((a,b)=>b[1].total-a[1].total).slice(0,220).map(([k,o])=>({name:k,total:R(o.total),count:o.count,category:o.category,sub:o.sub,active_months:o.months.size,last:o.last}));
+  const recurring=merchants.filter(m=>m.active_months>=Math.max(3,Math.ceil(months.length*0.6))).map(m=>({name:m.name,per_month:R(m.total/m.active_months),category:m.category}));
+  const uncategorized=rows.filter(t=>t.kind==='expense'&&!t.category_id&&countsEssence(t)&&!isMoneyMove(t)&&inM(t));
+  const cards=[...new Set(rows.filter(t=>isCardDetail(t)).map(t=>t.account))];
+  const lumps=rows.filter(t=>t.kind==='expense'&&isAggLump(t)&&!lumpCovered(t)&&inM(t)).map(t=>({date:t.tx_date,bank_line:t.merchant,amount:R(t.amount),ref:t.ref||''}));
+  const capital=rows.filter(t=>t.kind==='expense'&&isCapitalMove(t)&&inM(t)).map(t=>({date:t.tx_date,name:t.merchant||t.description,amount:R(t.amount)}));
+  const recent=rows.filter(t=>t.kind!=='income'||!isTransferIncome(t)).sort((a,b)=>String(b.tx_date).localeCompare(String(a.tx_date))).slice(0,120).map(t=>({d:t.tx_date,name:(t.merchant||t.description||'').trim(),amt:R(t.amount)*(t.kind==='income'?1:-1),cat:t.category_full||'ללא סיווג',acct:t.account||''}));
+  const st=_ofStatus||{}; const loans=(st.accounts||[]).filter(a=>a.type==='LOAN'&&a.loanType!=='CREDIT_LIMIT'&&a.balance&&Math.abs(a.balance)>=10).map(a=>({name:a.name||a.product,balance:R(Math.abs(a.balance)),rate:(a.interest||[]).flatMap(i=>i.rate||[])[0]||null,end:a.endDate||null}));
+  const balances=(st.accounts||[]).filter(a=>a.type==='CHECKING'||a.type==='CARD'||a.type==='SAVINGS').map(a=>({type:a.type,name:(a.issuer||a.provider)+(a.number?' ••'+a.number:''),balance:a.balance!=null?R(a.balance):null,limit:a.creditLimit||null}));
+  const cats=db.categories.filter(c=>c.kind==='expense').map(c=>({name:c.name,parent:c.parent_id?(catById(c.parent_id)||{}).name:null,budget:c.monthly_budget||0}));
+  const maint=(db.components||[]).map(compView).map(c=>({name:c.name,area:c.area||c.system,next:c.next_due,days_left:c.days_left}));
+  const warr=(db.warranties||[]).map(warrantyView).map(w=>({item:w.item_name,brand:w.brand,expires:w.effective_expiry,days_left:w.days_left}));
+  const recurringDefined=(db.recurring||[]).filter(recActive).map(r=>({name:r.name,amount:r.amount,frequency:r.frequency}));
+  return JSON.stringify({today:new Date().toISOString().slice(0,10),currency:'ILS',months,monthly,merchants_top:merchants,recurring_detected:recurring,recurring_defined:recurringDefined,uncategorized:{count:uncategorized.length,total:R(uncategorized.reduce((s,t)=>s+t.amount,0)),examples:uncategorized.slice(0,25).map(t=>({d:t.tx_date,name:t.merchant||t.description,amt:R(t.amount)}))},cards_connected:cards,card_charges_without_detail:lumps,capital_movements_excluded:capital,loans_and_mortgages:loans,accounts:balances,categories:cats,maintenance:maint,warranties:warr,recent_transactions:recent,shopping_list:(db.shopping||[]).slice(0,40).map(s=>s.name||s.title||'')});
+}
+async function aiAsk(question){
+  const digest=aiDigest();
+  const res=await aiApi('ask',{question,digest,history:aiHistory.slice(-10)});
+  if(!res.ok) throw new Error(res.error||'לא התקבלה תשובה');
+  aiHistory.push({role:'user',text:question},{role:'model',text:res.text}); if(aiHistory.length>24) aiHistory=aiHistory.slice(-24);
+  return res.text;
+}
+// המרת Markdown בסיסי (כותרות, הדגשה, רשימות, טבלאות) ל-HTML בטוח
+function mdToHtml(md){ const lines=String(md||'').split('\n'); let out='',inList=false,inTable=false,tableRows=[];
+  const inline=s=>esc(s).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*(.+?)\*/g,'<em>$1</em>');
+  const flushTable=()=>{ if(!inTable) return; const rows=tableRows.filter(r=>!/^\s*\|?\s*:?-{2,}/.test(r)); out+='<div class="table-wrap"><table style="width:100%">'+rows.map((r,i)=>'<tr>'+r.replace(/^\s*\|/,'').replace(/\|\s*$/,'').split('|').map(c=>(i===0?'<th>':'<td>')+inline(c.trim())+(i===0?'</th>':'</td>')).join('')+'</tr>').join('')+'</table></div>'; inTable=false; tableRows=[]; };
+  lines.forEach(l=>{ if(/^\s*\|.*\|\s*$/.test(l)){ inTable=true; tableRows.push(l); return; } flushTable();
+    const li=l.match(/^\s*(?:[-*•]|\d+[.)])\s+(.*)$/); if(li){ if(!inList){ out+='<ul style="margin:6px 0;padding-inline-start:18px">'; inList=true; } out+='<li>'+inline(li[1])+'</li>'; return; } if(inList){ out+='</ul>'; inList=false; }
+    const h=l.match(/^\s*#{1,6}\s+(.*)$/); if(h){ out+='<div style="font-weight:800;margin:8px 0 2px">'+inline(h[1])+'</div>'; return; }
+    if(l.trim()==='') { out+='<div style="height:6px"></div>'; return; } out+='<div>'+inline(l)+'</div>'; });
+  if(inList) out+='</ul>'; flushTable(); return out; }
+
+views.keys=async()=>{
+  const el=document.createElement('div');
+  const isAdmin=authUser&&authUser.role==='admin';
+  if(!isAdmin){ el.innerHTML='<div class="empty">מסך המפתחות מיועד למנהל בלבד.</div>'; return el; }
+  const [ai,of]=await Promise.all([aiRefreshStatus(),ofStatusCached(false)]);
+  const ofc=(of&&of.config)||{};
+  el.innerHTML=`
+    <p class="hintbar">🔒 כל המפתחות נשמרים <strong>בשרת בלבד</strong> (מוצפנים במאגר של האפליקציה) ולעולם לא נשלחים לדפדפן של המשתמשים. כאן מזינים אותם פעם אחת.</p>
+    <div class="panel" style="margin-bottom:18px;border-color:color-mix(in srgb,var(--accent) 35%,var(--border))">
+      <h3>✨ Gemini — עוזר הבית החכם</h3>
+      <div class="stats-grid" style="margin-bottom:12px">
+        <div class="stat-card ${ai.configured?'income':'warn'}"><div class="label">סטטוס</div><div class="value" style="font-size:18px">${ai.configured?'✅ מחובר':'⏳ לא הוגדר'}</div><div class="sub">${ai.configured?`מפתח ${esc(ai.keyHint||'')} · מודל ${esc(ai.model||'')}`:'הזינו מפתח למטה'}</div></div>
+      </div>
+      <div class="card" style="padding:14px 16px;margin-bottom:14px">
+        <div style="font-weight:700;margin-bottom:6px">איך משיגים מפתח (2 דקות, חינם):</div>
+        <ol style="margin:0;padding-inline-start:20px;line-height:1.8">
+          <li>היכנסו ל‑<a class="link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> עם חשבון Google.</li>
+          <li>לחצו <strong>Create API key</strong> (אם נדרש — בחרו/צרו פרויקט Google Cloud; ברירת המחדל מתאימה).</li>
+          <li>העתיקו את המפתח (מתחיל ב‑<code>AIza…</code>) והדביקו בשדה למטה → <strong>שמירה ואימות</strong>.</li>
+          <li>עברו ל<a class="link" data-nav="insights">«תובנות ועוזר»</a> ושאלו את הבוט כל שאלה על הבית.</li>
+        </ol>
+        <div class="hint" style="margin-top:8px">המפתח נבדק מול Google ברגע השמירה. השימוש במודל Flash חינמי ברוב המקרים (מכסה יומית נדיבה); אין צורך בכרטיס אשראי.</div>
+      </div>
+      <div class="field-row"><div class="field"><label>מפתח Gemini API</label><input id="ai-key" type="password" placeholder="${ai.configured?'••••••••  (ריק = ללא שינוי)':'AIza…'}" style="direction:ltr" autocomplete="new-password"></div>
+        <div class="field"><label>מודל</label><select id="ai-model"><option value="gemini-2.5-flash" ${(ai.model||'gemini-2.5-flash')==='gemini-2.5-flash'?'selected':''}>gemini-2.5-flash (מומלץ — מהיר וחינמי)</option><option value="gemini-2.5-pro" ${ai.model==='gemini-2.5-pro'?'selected':''}>gemini-2.5-pro (חכם יותר, איטי יותר)</option><option value="gemini-2.0-flash" ${ai.model==='gemini-2.0-flash'?'selected':''}>gemini-2.0-flash</option></select></div></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" id="ai-save">💾 שמירה ואימות</button>${ai.configured?'<button class="btn-ghost" id="ai-test">🧪 בדיקה: שאל «כמה הוצאתי על מזון החודש?»</button><button class="btn-ghost" id="ai-clear" style="color:var(--red)">ניתוק ומחיקת המפתח</button>':''}</div>
+      <div id="ai-out" class="hint" style="margin-top:10px"></div>
+    </div>
+    <div class="panel">
+      <h3>🏦 Open Finance — חיבור לבנק</h3>
+      <p class="hint" style="margin-bottom:10px">${ofc.configured?`מוגדר ✓ · User ID <span style="direction:ltr;display:inline-block">${esc(ofc.userId||'')}</span> · Client ID <span style="direction:ltr;display:inline-block">${esc(ofc.clientId||'')}</span> · Secret ${ofc.hasSecret?'שמור ✓':'חסר'}`:'לא הוגדר.'} עריכת המפתחות והחיבורים לבנקים — במסך <a class="link" data-nav="bank">«חיבור לבנק»</a>.</p>
+    </div>`;
+  const q=s=>el.querySelector(s);
+  q('#ai-save').onclick=async()=>{ const key=q('#ai-key').value.trim(), model=q('#ai-model').value; if(!ai.configured&&!key) return toast('הדביקו את המפתח',true); q('#ai-save').disabled=true; q('#ai-out').textContent='מאמת מול Google…';
+    try{ const body={model}; if(key) body.geminiKey=key; await aiApi('config',body); toast('המפתח נשמר ואומת ✓'); await aiRefreshStatus(); render(); }catch(e){ q('#ai-out').innerHTML='<span style="color:var(--red)">'+esc(e.message)+'</span>'; q('#ai-save').disabled=false; } };
+  if(q('#ai-test')) q('#ai-test').onclick=async()=>{ q('#ai-out').textContent='✨ שואל את Gemini…'; try{ const t=await aiAsk('כמה הוצאתי על מזון החודש? ענה בקצרה.'); q('#ai-out').innerHTML=mdToHtml(t); }catch(e){ q('#ai-out').innerHTML='<span style="color:var(--red)">'+esc(e.message)+'</span>'; } };
+  if(q('#ai-clear')) q('#ai-clear').onclick=()=>confirmDelete('למחוק את מפתח Gemini מהשרת? העוזר יחזור למצב המובנה.',async()=>{ await aiApi('config',{clear:true}); aiHistory=[]; toast('נמחק ✓'); await aiRefreshStatus(); render(); });
+  return el;
+};
+
 views.import=async()=>{
   const el=document.createElement('div');
   const txs=await api('/transactions');
@@ -3260,8 +3360,15 @@ async function analyticsBuild(mode){
     // עוזר הבית
     const msgs=el.querySelector('#asst-msgs'), input=el.querySelector('#asst-in'), sendBtn=el.querySelector('#asst-send');
     const addMsg=(html,who)=>{ const b=document.createElement('div'); b.className='asst-bubble '+(who==='me'?'me':'bot'); b.innerHTML=html; msgs.appendChild(b); msgs.scrollTop=msgs.scrollHeight; };
-    const ask=(qText)=>{ const q=strv(qText).trim(); if(!q) return; addMsg(esc(q),'me'); input.value=''; setTimeout(()=>{ let ans; try{ ans=homeAssistant(q); }catch(e){ ans='אופס, לא הצלחתי לחשב את זה. נסו לנסח אחרת.'; } addMsg(ans,'bot'); },160); };
-    addMsg('שלום! 👋 שאלו אותי כל דבר על ההוצאות — למשל «כמה הוצאתי על מזון החודש?» או «מה ההוצאה הכי גדולה שלי?»','bot');
+    // Gemini (אם הוגדר מפתח) — אחרת העוזר המובנה
+    const aiOn=aiState.configured;
+    const ask=async(qText)=>{ const q=strv(qText).trim(); if(!q) return; addMsg(esc(q),'me'); input.value='';
+      if(!aiOn){ setTimeout(()=>{ let ans; try{ ans=homeAssistant(q); }catch(e){ ans='אופס, לא הצלחתי לחשב את זה. נסו לנסח אחרת.'; } addMsg(ans,'bot'); },160); return; }
+      const wait=document.createElement('div'); wait.className='asst-bubble bot'; wait.innerHTML='<span class="hint" style="margin:0">✨ Gemini חושב…</span>'; msgs.appendChild(wait); msgs.scrollTop=msgs.scrollHeight; sendBtn.disabled=true;
+      try{ const ans=await aiAsk(q); wait.remove(); addMsg(mdToHtml(ans),'bot'); }catch(e){ wait.remove(); addMsg('⚠️ '+esc(e.message)+(/(מפתח|הוגדר)/.test(e.message)?' — <a class="link" data-nav="keys">למסך המפתחות ←</a>':''),'bot'); }
+      finally{ sendBtn.disabled=false; } };
+    if(aiOn){ addMsg(`שלום! 👋 אני עוזר הבית, מבוסס <strong>Gemini</strong> (${esc(aiState.model||'')}) ומכיר את כל הנתונים באתר — הוצאות, קטגוריות, בתי עסק, כרטיסים, משכנתאות ונדל״ן. שאלו אותי כל דבר, גם בשפה חופשית.`,'bot'); aiHistory.filter(h=>h.text).slice(-8).forEach(h=>addMsg(h.role==='model'?mdToHtml(h.text):esc(h.text),h.role==='model'?'bot':'me')); }
+    else addMsg('שלום! 👋 אני העוזר המובנה. כדי להפעיל עוזר חכם מבוסס Gemini — <a class="link" data-nav="keys">הזינו מפתח במסך «מפתחות» ←</a>. בינתיים: «כמה הוצאתי על מזון החודש?», «מה ההוצאה הכי גדולה שלי?»','bot');
     const chips=['כמה על מזון בממוצע לחודש?','מזון מול פנאי','על מה הכי הוצאתי?','מה ההוצאה הכי גדולה?','כמה אחוז מותרות?','כמה נשאר לי בממוצע?','מה ההוצאות הקבועות שלי?','איפה חרגתי מהתקציב?'];
     const chipsBox=el.querySelector('#asst-chips'); chips.forEach(c=>{ const b=document.createElement('button'); b.className='asst-chip'; b.textContent=c; b.onclick=()=>ask(c); chipsBox.appendChild(b); });
     sendBtn.onclick=()=>ask(input.value); input.onkeydown=(e)=>{ if(e.key==='Enter') ask(input.value); };
@@ -3761,7 +3868,7 @@ views.balance=async()=>{
 };
 
 /* ============================ Router ============================ */
-const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',insights:'תובנות ועוזר הבית',transactions:'עסקאות',review:'סיווג עסקאות',classifyall:'כל הסיווגים',bank:'חיבור לבנק — Open Finance',import:'ייבוא ידני מקובץ',monthly:'לפי חודש',balance:'מאזן והצלבה',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',mortgages:'משכנתאות והלוואות',realestate:'נדל״ן — הכנסות, הוצאות ומשכנתא',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',documents:'ארכיון מסמכים',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',shopping:'רשימת קניות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי',users:'ניהול משתמשים'};
+const TITLES={dashboard:'דשבורד',analytics:'גרפים וניתוח',insights:'תובנות ועוזר הבית',transactions:'עסקאות',review:'סיווג עסקאות',classifyall:'כל הסיווגים',bank:'חיבור לבנק — Open Finance',import:'ייבוא ידני מקובץ',monthly:'לפי חודש',balance:'מאזן והצלבה',reconcile:'השלמות אשראי',recurring:'הוצאות קבועות',mortgages:'משכנתאות והלוואות',realestate:'נדל״ן — הכנסות, הוצאות ומשכנתא',keys:'מפתחות API',maintenance:'תחזוקה ורכיבים',warranties:'תעודות אחריות',documents:'ארכיון מסמכים',professionals:'בעלי מקצוע',lighting:'תאורה ונורות',shopping:'רשימת קניות',categories:'קטגוריות וכללים',settings:'הגדרות וגיבוי',users:'ניהול משתמשים'};
 function currentView(){ const hash=location.hash.replace('#/','')||'dashboard'; return views[hash]?hash:'dashboard'; }
 async function render(opts){
   opts=(opts&&opts.keepScroll)?opts:{}; // hashchange/אירועים מעבירים Event — מתייחסים אליו כרענדר רגיל
@@ -3907,6 +4014,8 @@ async function startApp(){
   }catch(e){ if(!sessionExpired) syncBadge('לא מקוון'); }
   render();
   if(dirty) scheduleSync();
+  // סטטוס עוזר ה-AI (Gemini) — כדי שמסך התובנות ידע אם להשתמש בו
+  aiRefreshStatus().then(()=>{ if(currentView()==='insights'&&!userBusy()) render({keepScroll:true}); });
   // סנכרון אוטומטי מהבנק ברקע (Open Finance) — אחרי טעינה, ואז כל שעה (בפועל לא יותר מפעם ב-6 שעות)
   setTimeout(ofMaybeAutoSync,4000);
   if(!_ofTimer) _ofTimer=setInterval(ofMaybeAutoSync,3600*1000);

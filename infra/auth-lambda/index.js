@@ -393,6 +393,66 @@ async function handleOF(action, event) {
   return resp(404, { error: 'unknown action' });
 }
 
+// ---------- Gemini (עוזר הבית מבוסס AI) ----------
+// מפתח ה-API של Gemini נשמר אך ורק בשרת (S3); הדפדפן שולח שאלה + תקציר נתונים, והשרת פונה ל-Gemini.
+const AI_CONFIG_KEY = 'data/__ai_config__.json';
+const AI_DEFAULT_MODEL = 'gemini-2.5-flash';
+async function aiLoadConfig() { const c = await getJson(AI_CONFIG_KEY, null); return c && typeof c === 'object' ? c : null; }
+const aiMask = (c) => c && c.geminiKey ? { configured: true, keyHint: c.geminiKey.slice(0, 4) + '••••••••' + c.geminiKey.slice(-4), model: c.model || AI_DEFAULT_MODEL, updatedAt: c.updatedAt || null } : { configured: false, model: AI_DEFAULT_MODEL };
+async function geminiCall(cfg, body) {
+  const model = cfg.model || AI_DEFAULT_MODEL;
+  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(cfg.geminiKey), {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const txt = await r.text(); let j = null; try { j = JSON.parse(txt); } catch (e) {}
+  if (!r.ok) { const msg = (j && j.error && j.error.message) || txt.slice(0, 300); const e = new Error(r.status === 400 && /API key/i.test(msg) ? 'מפתח Gemini לא תקין' : ('Gemini ' + r.status + ': ' + msg)); e.status = r.status; throw e; }
+  const parts = (((j || {}).candidates || [])[0] || {}).content; const text = parts && parts.parts ? parts.parts.map((p) => p.text || '').join('') : '';
+  return { text, usage: j && j.usageMetadata || null, blocked: !text && j && j.promptFeedback ? j.promptFeedback.blockReason : null };
+}
+async function handleAI(action, event) {
+  const u = await currentUserFrom(event);
+  if (!u) return resp(401, { error: 'unauthorized' });
+  let body = {}; try { body = readBody(event); } catch (e) { return resp(400, { error: 'bad json' }); }
+  const isAdmin = u.role === 'admin';
+  const cfg = await aiLoadConfig();
+  if (action === 'config') {
+    if (!isAdmin) return resp(403, { error: 'רק המנהל יכול לעדכן את מפתח ה-AI' });
+    if (body.clear === true) { await putJson(AI_CONFIG_KEY, {}); return resp(200, { ok: true, config: aiMask(null) }); }
+    const next = Object.assign({}, cfg || {});
+    if (body.geminiKey !== undefined && String(body.geminiKey || '').trim() !== '') next.geminiKey = String(body.geminiKey).trim();
+    if (body.model !== undefined) next.model = String(body.model || '').trim() || AI_DEFAULT_MODEL;
+    if (!next.geminiKey) return resp(400, { error: 'יש להזין מפתח Gemini' });
+    // אימות מיידי: קריאה קצרה ל-Gemini
+    try { const t = await geminiCall(next, { contents: [{ role: 'user', parts: [{ text: 'ענה במילה אחת: בדיקה' }] }], generationConfig: { maxOutputTokens: 5 } }); if (!t.text && !t.blocked) throw new Error('לא התקבלה תשובה'); }
+    catch (e) { return resp(400, { error: 'המפתח לא אומת: ' + e.message }); }
+    next.updatedAt = Date.now();
+    await putJson(AI_CONFIG_KEY, next);
+    return resp(200, { ok: true, config: aiMask(next) });
+  }
+  if (action === 'status') return resp(200, { ok: true, config: aiMask(cfg) });
+  if (action === 'ask') {
+    if (!cfg || !cfg.geminiKey) return resp(400, { error: 'עוזר ה-AI עדיין לא הוגדר — הזינו מפתח Gemini במסך «מפתחות»' });
+    const question = String(body.question || '').trim().slice(0, 4000);
+    if (!question) return resp(400, { error: 'שאלה ריקה' });
+    const digest = String(body.digest || '').slice(0, 400000);
+    const history = Array.isArray(body.history) ? body.history.slice(-12) : [];
+    const system = [
+      'אתה «עוזר הבית» — יועץ פיננסי ביתי חכם וידידותי של משפחה ישראלית. ענה בעברית, בקצרה ולעניין, עם מספרים מדויקים בשקלים (₪) מהנתונים.',
+      'הנתונים שלפניך הם כל המידע באתר ניהול הבית של המשתמש: הוצאות והכנסות לפי חודש וקטגוריה, בתי עסק, כרטיסים, משכנתאות, נדל"ן, הוצאות קבועות, תחזוקה, אחריות, ורשימת העסקאות האחרונות.',
+      'כללים: «הוצאות הבית» אינן כוללות משכנתא ונדל"ן (מנוהלים בנפרד). העברות בין חשבונות/מזומן/שיקים אינם מסווגים ואינם הכנסה. אם משהו לא קיים בנתונים — אמור זאת, אל תנחש.',
+      'כשמתאים, הצע תובנה או המלצה קונקרטית (איפה לחסוך, מה חורג מהממוצע). אפשר להשתמש בכותרות קצרות, רשימות וטבלאות Markdown פשוטות.',
+      '', '=== נתוני הבית (JSON/טקסט) ===', digest,
+    ].join('\n');
+    const contents = history.filter((h) => h && h.text).map((h) => ({ role: h.role === 'model' ? 'model' : 'user', parts: [{ text: String(h.text).slice(0, 6000) }] }));
+    contents.push({ role: 'user', parts: [{ text: question }] });
+    try {
+      const out = await geminiCall(cfg, { system_instruction: { parts: [{ text: system }] }, contents, generationConfig: { temperature: 0.3, maxOutputTokens: 2048 } });
+      if (!out.text) return resp(200, { ok: false, error: out.blocked ? 'התשובה נחסמה על ידי Gemini (' + out.blocked + ')' : 'לא התקבלה תשובה' });
+      return resp(200, { ok: true, text: out.text, usage: out.usage, model: cfg.model || AI_DEFAULT_MODEL });
+    } catch (e) { return resp(200, { ok: false, error: e.message }); }
+  }
+  return resp(404, { error: 'unknown action' });
+}
+
 exports.handler = async (event) => {
   const http = (event.requestContext && event.requestContext.http) || {};
   const method = http.method || 'GET';
@@ -403,6 +463,8 @@ exports.handler = async (event) => {
     if (authMatch) return await handleAuth(authMatch[1].toLowerCase(), event);
     const ofMatch = path.match(/\/of\/([a-z]+)\/?$/i);
     if (ofMatch) return await handleOF(ofMatch[1].toLowerCase(), event);
+    const aiMatch = path.match(/\/ai\/([a-z]+)\/?$/i);
+    if (aiMatch) return await handleAI(aiMatch[1].toLowerCase(), event);
     if (/\/data\/?$/.test(path)) return await handleData(method, event);
     return resp(404, { error: 'not found' });
   } catch (e) {
