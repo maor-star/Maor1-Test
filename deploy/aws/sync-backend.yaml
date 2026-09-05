@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  ניהול הבית — backend סנכרון: HTTP API (Lambda) + אחסון S3 פרטי לכל "קוד סנכרון".
+  שומר/טוען את כל נתוני האפליקציה בענן כדי לסנכרן בין מכשירים.
+
+Resources:
+  SyncBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'home-management-sync-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+
+  SyncFnRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: sync-s3
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub '${SyncBucket.Arn}/data/*'
+
+  SyncFn:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: home-management-sync
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Timeout: 15
+      MemorySize: 256
+      Role: !GetAtt SyncFnRole.Arn
+      Environment:
+        Variables: { BUCKET: !Ref SyncBucket }
+      Code:
+        ZipFile: |
+          const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+          const crypto = require('crypto');
+          const s3 = new S3Client({});
+          const BUCKET = process.env.BUCKET;
+          const keyFor = (code) => 'data/' + crypto.createHash('sha256').update('v1|' + String(code)).digest('hex') + '.json';
+          const resp = (status, body) => ({
+            statusCode: status,
+            headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*',
+                       'access-control-allow-methods': 'GET,PUT,OPTIONS', 'access-control-allow-headers': 'content-type' },
+            body: JSON.stringify(body),
+          });
+          exports.handler = async (event) => {
+            const method = (event.requestContext && event.requestContext.http && event.requestContext.http.method) || 'GET';
+            if (method === 'OPTIONS') return resp(200, { ok: true });
+            try {
+              if (method === 'GET') {
+                const code = (event.queryStringParameters || {}).code;
+                if (!code || String(code).length < 6) return resp(400, { error: 'code too short' });
+                try {
+                  const out = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: keyFor(code) }));
+                  const str = await out.Body.transformToString();
+                  return resp(200, JSON.parse(str));
+                } catch (e) {
+                  if (e.name === 'NoSuchKey' || e.$metadata?.httpStatusCode === 404) return resp(200, { data: null, updatedAt: 0 });
+                  throw e;
+                }
+              }
+              if (method === 'PUT' || method === 'POST') {
+                const body = JSON.parse(event.body || '{}');
+                if (!body.code || String(body.code).length < 6) return resp(400, { error: 'code too short' });
+                const updatedAt = Date.now();
+                await s3.send(new PutObjectCommand({
+                  Bucket: BUCKET, Key: keyFor(body.code),
+                  Body: JSON.stringify({ data: body.data, updatedAt }),
+                  ContentType: 'application/json',
+                }));
+                return resp(200, { ok: true, updatedAt });
+              }
+              return resp(405, { error: 'method not allowed' });
+            } catch (e) { return resp(500, { error: e.message }); }
+          };
+
+  Api:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: home-management-sync-api
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins: ['*']
+        AllowMethods: [GET, PUT, OPTIONS]
+        AllowHeaders: ['content-type']
+        MaxAge: 3600
+
+  Integration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref Api
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt SyncFn.Arn
+      PayloadFormatVersion: '2.0'
+
+  RouteGet:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: 'GET /data'
+      Target: !Sub 'integrations/${Integration}'
+  RoutePut:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: 'PUT /data'
+      Target: !Sub 'integrations/${Integration}'
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref Api
+      StageName: $default
+      AutoDeploy: true
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SyncFn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*/*/data'
+
+Outputs:
+  ApiUrl:
+    Description: כתובת בסיס ל-API הסנכרון
+    Value: !GetAtt Api.ApiEndpoint

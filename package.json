@@ -1,7 +1,7 @@
 {
-  "name": "office-management-app",
+  "name": "home-management-app",
   "version": "1.0.0",
-  "description": "אפליקציה לניהול משרד - הוצאות, שעות עובדים, הכנסות והוצאות החברה",
+  "description": "אפליקציה לניהול הבית - ייבוא תדפיסי אשראי ובנק, סיווג הוצאות, תחזוקה, אחריות, בעלי מקצוע ותאורה",
   "type": "module",
   "main": "server.js",
   "scripts": {
