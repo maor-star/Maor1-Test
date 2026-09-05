@@ -47,7 +47,7 @@ test.describe('password sign-in', () => {
   });
 
   test('the cockpit is still gated without a session', async ({ page }) => {
-    await page.goto('/revenue');
+    await page.goto('/tasks');
     await expect(page).toHaveURL(/\/login/);
   });
 });

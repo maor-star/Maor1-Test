@@ -85,7 +85,7 @@ export default async function AgentsPage({
   return (
     <div className="space-y-5">
       <PageHeader
-        kicker="AGENTS / 14"
+        kicker="AGENTS / 11"
         title="Agents"
         action={
           <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">

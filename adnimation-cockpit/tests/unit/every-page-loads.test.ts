@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { loadControlPanel } from '@/lib/control/service';
-import { summariseAllPeriods, summariseCompany } from '@/lib/revenue/company';
-import { summariseForPeriod } from '@/lib/revenue/period-service';
+import { summariseCompany } from '@/lib/revenue/company';
 import { PERIODS } from '@/lib/revenue/periods';
 import { topSeats, loadSeats, availableSeatPeriods } from '@/lib/seats/service';
 import { clientsToCall, urgentWork } from '@/lib/overview/service';
@@ -185,11 +184,9 @@ describe('mail, contracts, CRM', () => {
   });
 });
 
-describe('revenue, seats, trading', () => {
+describe('seats and trading', () => {
   it('loads every period on every screen that has one', async () => {
-    await ok('summariseAllPeriods', () => summariseAllPeriods(PERIODS));
     for (const period of PERIODS) {
-      await ok(`summariseForPeriod ${period}`, () => summariseForPeriod(period));
       await ok(`loadSeats demand ${period}`, () => loadSeats('demand', period));
       await ok(`loadSeats supply ${period}`, () => loadSeats('supply', period));
     }

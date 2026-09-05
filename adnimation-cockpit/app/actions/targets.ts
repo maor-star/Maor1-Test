@@ -57,6 +57,5 @@ export async function setLineTargetAction(
   );
 
   revalidatePath('/');
-  revalidatePath('/revenue');
   return { ok: true };
 }

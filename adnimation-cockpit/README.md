@@ -36,7 +36,9 @@ Per `CLAUDE.md` §8, each milestone ships working end-to-end before the next beg
   demand category but carries no business-unit split, so every assignment is marked unconfirmed
   in the UI and unmatched revenue lands in an explicit UNASSIGNED bucket.
 - Anomaly detection per spec 7.4: 28-day day-of-week-adjusted baseline, drop/spike thresholds.
-- Cockpit strip 1 and a `/revenue` page with drill-down to demand category.
+- Cockpit strip 1. There was a separate `/revenue` page with a drill-down to demand category;
+  it was removed once the overview grew the company's books and the seven engines over every
+  period, which is what that page had been for.
 
 ### What Milestone 1 delivers
 

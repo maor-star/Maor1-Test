@@ -75,14 +75,17 @@ export function CompanyCube({ summary, period }: { summary: CompanySummary; peri
       </div>
 
       {/* The four books the P&L keeps, for the same window. Their nets sum to
-          the company's; the seven line tiles below do not. */}
+          the company's; the seven line tiles below do not.
+
+          They used to open the revenue page. That page is gone — it said the
+          same things this screen says — so each book states its figures here
+          and leads nowhere, rather than to a route that no longer exists. */}
       <div className="grid gap-px border-t border-line bg-line sm:grid-cols-2 xl:grid-cols-4">
         {summary.lines.map((l) => (
-          <Link
+          <div
             key={l.line}
-            href={`/revenue?period=${period}`}
-            className="group bg-card p-[13px] transition-colors hover:bg-neutral-100"
-            title={`${l.label} — open the breakdown`}
+            className="bg-card p-[13px]"
+            title={l.label}
           >
             <p className="hud-label text-[11px]">{l.label}</p>
             <p className="mt-[7px] text-[18px] font-semibold leading-none text-ink">
@@ -95,16 +98,13 @@ export function CompanyCube({ summary, period }: { summary: CompanySummary; peri
               Gross <Num>{fmtMoney(l.grossCents)}</Num> · <Num>{(l.shareOfProfit * 100).toFixed(0)}%</Num> OF NET ·{' '}
               <Num>{l.marginPct === null ? '—' : `${(l.marginPct * 100).toFixed(0)}%`}</Num> margin
             </p>
-          </Link>
+          </div>
         ))}
       </div>
 
       <p className="border-t border-line px-[18px] py-2 text-[12px] text-muted">
         Last full day <Num>{summary.lastCompleteDay}</Num> · pulled{' '}
-        <Num>{fmtDateTime(new Date(summary.pulledAt))}</Num> ·{' '}
-        <Link href={`/revenue?period=${period}`} className="font-semibold text-info hover:underline">
-          Full breakdown
-        </Link>
+        <Num>{fmtDateTime(new Date(summary.pulledAt))}</Num>
       </p>
     </HudCard>
   );

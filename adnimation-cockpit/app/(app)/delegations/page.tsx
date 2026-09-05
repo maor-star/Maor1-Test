@@ -67,7 +67,7 @@ export default async function DelegationsPage({
   return (
     <div className="space-y-5">
       <PageHeader
-        kicker="DELEGATIONS / 04"
+        kicker="DELEGATIONS / 03"
         title="Delegation tracker"
         action={
           <span>

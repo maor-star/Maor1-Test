@@ -35,13 +35,6 @@ export const LINE_LABEL: Record<BusinessLineKey, string> = {
   exchange: 'EXCHANGE (TRADING)',
 };
 
-export const LINE_NOTE: Record<BusinessLineKey, string> = {
-  publishers: 'Managed publisher sites. Profit is what is left after the source fee and the publisher rev share.',
-  bidder: 'The Vidazoo bidder. Profit is revenue less what is paid to third parties.',
-  seat_lease: 'SSP seats leased to partners. Profit is gross less the partner payout.',
-  exchange: 'The XE exchange. Profit is what the demand paid less what the supply was paid.',
-};
-
 interface Row {
   date: string;
   pubGross: number;
@@ -311,13 +304,6 @@ export async function summariseCompany(period: Period): Promise<CompanySummary> 
     partialDay: snap.partialDay,
     live: snap.live,
   };
-}
-
-/** Every window at once, for the comparison table. */
-export async function summariseAllPeriods(periods: readonly Period[]) {
-  return Promise.all(
-    periods.map((p) => summariseCompany(p).then((s) => ({ period: p, ...s }))),
-  );
 }
 
 export async function companyMeta() {

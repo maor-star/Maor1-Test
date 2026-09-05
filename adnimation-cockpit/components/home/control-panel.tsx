@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
@@ -84,12 +83,7 @@ export function ControlPanel({
           <HudCardHeader
             title="Core clients"
             action={
-              <span className="text-[12.5px] text-muted">
-                Last 7 full days · by gross ·{' '}
-                <Link href="/revenue" className="font-semibold text-info hover:underline">
-                  Revenue
-                </Link>
-              </span>
+              <span className="text-[12.5px] text-muted">Last 7 full days · by gross</span>
             }
           />
         </div>

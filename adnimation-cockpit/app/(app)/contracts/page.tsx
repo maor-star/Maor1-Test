@@ -115,7 +115,7 @@ export default async function ContractsPage({
   return (
     <div className="space-y-5">
       <PageHeader
-        kicker="CONTRACTS / 08"
+        kicker="CONTRACTS / 06"
         title="Contracts"
         action={
           <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">

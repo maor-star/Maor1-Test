@@ -233,7 +233,9 @@ function fromAnomaly(a: RevenueAnomalyInput): CadenceItem {
     moneyAtStakeCents: a.moneyImpactCents,
     dueLabel: null,
     deptCode: a.deptCode,
-    href: '/revenue',
+    // The overview: it carries the company's books and the seven engines, and
+    // is where a drop is actually looked into now.
+    href: '/',
     delegable: true,
   };
 }

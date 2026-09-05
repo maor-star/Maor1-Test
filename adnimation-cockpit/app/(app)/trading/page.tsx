@@ -38,7 +38,7 @@ export default async function TradingPage({
   return (
     <div className="space-y-5">
       <PageHeader
-        kicker="EXCHANGE / 13"
+        kicker="EXCHANGE / 10"
         title="TRADING"
         action={
           <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">

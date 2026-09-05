@@ -118,7 +118,7 @@ export default async function TasksPage({
   return (
     <div className="space-y-3">
       <PageHeader
-        kicker="TASKS / 03"
+        kicker="TASKS / 02"
         title="Tasks"
         action={
           <nav className="segmented">

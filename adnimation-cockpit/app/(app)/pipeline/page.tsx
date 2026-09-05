@@ -199,7 +199,7 @@ export default async function PipelinePage({
   return (
     <div className="space-y-5">
       <PageHeader
-        kicker="DEALS / 05"
+        kicker="DEALS / 04"
         title="DEALS"
         action={
           <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
