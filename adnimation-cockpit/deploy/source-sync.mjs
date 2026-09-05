@@ -51,6 +51,24 @@ const DAYS = Number(process.argv[2] ?? process.env.SOURCE_SYNC_DAYS ?? 7);
 
 const sql = postgres(DB, { max: 2, onnotice: () => {} });
 
+/**
+ * The seat-lease partners, each in its own cache table.
+ *
+ * Listed rather than discovered: there is no readable table that names them,
+ * and a partner added at the source is a table added here, which is a
+ * one-line change with a name on it rather than a silent gap.
+ */
+const SEAT_LEASE_CACHES = [
+  'seat_lease_openx_daily_cache',
+  'seat_lease_xandr_daily_cache',
+  'seat_lease_nexxen_daily_cache',
+  'seat_lease_magnite_daily_cache',
+  'seat_lease_pubmatic_daily_cache',
+  'seat_lease_adaptmx_daily_cache',
+  'seat_lease_medianet_daily_cache',
+  'seat_lease_gravite_daily_cache',
+];
+
 const day = (offset) => new Date(Date.now() - offset * 86_400_000).toISOString().slice(0, 10);
 
 /**
@@ -140,7 +158,27 @@ async function main() {
 
   const [seatOverview, vidazoo, xeUnsplit, siteDetail, demandSources, gam, endpoints, xeSplit, accounts, revShares] =
     await Promise.all([
-      ifAllowed('the seat lease report', source.rpc('get_seat_lease_overview_daily', { p_from: from, p_to: to })),
+      /*
+       * Seat lease, one partner at a time.
+       *
+       * The source's own overview report is closed to this sign-in — it now
+       * answers "platform_only: this data is served through the application,
+       * not directly" — but the per-partner caches it is built from are open,
+       * seven of the eight. Summed they reproduce it exactly: 4,942 dollars
+       * gross for 24 August against the 4,942 the report returned.
+       *
+       * Each partner is read on its own so one closed cache costs its own
+       * partner and not the whole book. Gravité is closed today, and had no
+       * rows on the day this was checked against.
+       */
+      Promise.all(
+        SEAT_LEASE_CACHES.map((table) =>
+          ifAllowed(table, source.selectAll(table, {
+            select: 'report_date,gross_revenue,partner_payout,adnimation_profit,impressions',
+            filters: window,
+          })),
+        ),
+      ).then((sets) => sets.flat()),
       ifAllowed('trading_vidazoo_reports', source.selectAll('trading_vidazoo_reports', { filters: window })),
       /*
        * The exchange at its per-demand-endpoint grain. It answers two
@@ -214,7 +252,12 @@ async function main() {
         publishersDaysFromDetail(siteDetail, accountsById, ignored, shareAt),
         wasDenied('ars_site_daily_revenue') || wasDenied('ars_rev_shares'),
       ),
-      seat: bookOrNull(seatDays(seatOverview), wasDenied('the seat lease report')),
+      // Denied only if EVERY partner is: one closed cache is a partner-sized
+      // gap, not a reason to stop reporting the book.
+      seat: bookOrNull(
+        seatDays(seatOverview),
+        SEAT_LEASE_CACHES.every((t) => wasDenied(t)),
+      ),
       bidder: bookOrNull(bidderDays(vidazoo), wasDenied('trading_vidazoo_reports')),
       exchange: bookOrNull(exchangeDays(xeUnsplit), wasDenied('trading_xe_reports')),
     },
