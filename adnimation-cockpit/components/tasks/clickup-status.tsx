@@ -105,7 +105,7 @@ export function ClickUpStatus({
         defaultValue={status}
         disabled={pending}
         onChange={(e) => move(e.target.value)}
-        className="h-7 text-[12px]"
+        className="h-9 text-[13.5px]"
       >
         {options.map((o) => (
           <option key={o} value={o}>

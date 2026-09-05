@@ -31,6 +31,21 @@ export function queryTerms(q: string | null | undefined): string[] {
 }
 
 /**
+ * One row's searchable text, folded, for the browser to match against.
+ *
+ * The list narrows as he types by hiding rows whose `data-search` is missing a
+ * word — see components/hud/instant-filter.tsx. That only agrees with the
+ * server if both fold the same way, so both fold here.
+ */
+export function foldForSearch(...fields: Searchable[]): string {
+  return fold(
+    fields
+      .map((f) => (f instanceof Date ? f.toISOString() : f == null ? '' : String(f)))
+      .join('   '),
+  );
+}
+
+/**
  * Does this row match? With no query, everything does — a search box he has
  * not used must never hide a row.
  */
@@ -38,11 +53,7 @@ export function matchesQuery(q: string | null | undefined, ...fields: Searchable
   const terms = queryTerms(q);
   if (terms.length === 0) return true;
 
-  const hay = fold(
-    fields
-      .map((f) => (f instanceof Date ? f.toISOString() : f == null ? '' : String(f)))
-      .join('   '),
-  );
+  const hay = foldForSearch(...fields);
   return terms.every((term) => hay.includes(term));
 }
 

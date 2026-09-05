@@ -161,7 +161,7 @@ export function DelegationCard({ delegation }: { delegation: DelegationRow }) {
           id={`status-${d.id}`}
           value={d.status}
           disabled={pending}
-          className="h-7 text-[12px]"
+          className="h-9 text-[13.5px]"
           onChange={(e) => {
             if (e.target.value === 'done') {
               setClosing(true);

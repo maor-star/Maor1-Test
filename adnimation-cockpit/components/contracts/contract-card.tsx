@@ -47,7 +47,18 @@ const CATEGORY_TAG: Record<string, string> = {
  * board of thirty contracts would otherwise be sixty queries for links nobody
  * is looking at.
  */
-export function ContractCard({ contract }: { contract: ContractRow }) {
+export function ContractCard({
+  contract,
+  /**
+   * The row's searchable text, folded. It sits on the row itself rather than
+   * on a wrapper because a <ul> may only hold <li>, and the instant filter
+   * hides rows by this attribute while he types.
+   */
+  search,
+}: {
+  contract: ContractRow;
+  search?: string;
+}) {
   const c = contract;
   const [open, setOpen] = useState(c.status === 'unclassified' && !c.categoryConfirmed);
   const [links, setLinks] = useState<{
@@ -113,7 +124,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
   const unfiled = c.versions.filter((v) => v.uploadedAt === null).length;
 
   return (
-    <li className="border-t border-line px-[18px] py-3">
+    <li className="border-t border-line px-[18px] py-3" data-search={search}>
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -318,7 +329,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
               id={`cs-${c.id}`}
               value={c.status}
               disabled={pending}
-              className="h-7 text-[12px]"
+              className="h-9 text-[13.5px]"
               onChange={(e) => {
                 const data = new FormData();
                 data.set('id', c.id);
@@ -385,7 +396,7 @@ export function ContractCard({ contract }: { contract: ContractRow }) {
             id={`ldl-${c.id}`}
             value={c.pipelineClientId ?? ''}
             disabled={pending}
-            className="h-7 max-w-[14rem] text-[12px]"
+            className="h-9 max-w-[14rem] text-[13.5px]"
             onFocus={() => loadLinks()}
             onChange={(e) => {
               const data = new FormData();

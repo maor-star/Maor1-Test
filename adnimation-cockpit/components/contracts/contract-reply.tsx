@@ -426,7 +426,7 @@ function MyFix({
         value={instruction}
         onChange={(e) => setInstruction(e.target.value)}
         placeholder="What should it say instead? e.g. Net 45, cap at 12 months of fees"
-        className="h-7 min-w-0 flex-1 text-[12px]"
+        className="h-9 min-w-0 flex-1 text-[13.5px]"
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault();

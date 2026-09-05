@@ -365,7 +365,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
           id={`lvl-${a.id}`}
           value={a.autonomyLevel}
           disabled={pending}
-          className="h-7 min-w-0 max-w-[22rem] text-[12px]"
+          className="h-9 min-w-0 max-w-[22rem] text-[13.5px]"
           onChange={(e) => run(setAutonomyAction, withId({ level: e.target.value }))}
         >
           {levels.map((level) => (
@@ -387,7 +387,7 @@ export function AgentCard({ agent }: { agent: AgentListItem }) {
           id={`every-${a.id}`}
           value={a.runEveryMinutes ?? 'null'}
           disabled={pending}
-          className="h-7 min-w-0 max-w-[16rem] text-[12px]"
+          className="h-9 min-w-0 max-w-[16rem] text-[13.5px]"
           onChange={(e) => run(setScheduleAction, withId({ minutes: e.target.value }))}
         >
           {RUN_INTERVALS.map((i) => (

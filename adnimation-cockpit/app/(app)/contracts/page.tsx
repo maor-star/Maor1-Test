@@ -9,7 +9,8 @@ import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
 import { Figure } from '@/components/hud/figure';
 import { SearchBox } from '@/components/hud/search-box';
-import { filterByQuery } from '@/lib/search';
+import { InstantFilter } from '@/components/hud/instant-filter';
+import { filterByQuery, foldForSearch } from '@/lib/search';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { ConfirmFiling, ContractActions } from '@/components/contracts/contract-actions';
@@ -64,7 +65,13 @@ export default async function ContractsPage({
     const query = params.toString();
     return query ? `/contracts?${query}` : '/contracts';
   };
-  const rows = filterByQuery(intake, q, (c) => [
+  /*
+   * The fields a row can be found by, in one place: the server filters on
+   * them, and each row carries the same text folded into `data-search` so the
+   * list can narrow in the browser before the server has been asked. Two
+   * copies of a search that disagreed would be worse than one that is slow.
+   */
+  const searchable = (c: (typeof intake)[number]) => [
     c.counterpartyName,
     c.docType,
     c.category,
@@ -77,7 +84,10 @@ export default async function ContractsPage({
     c.pipelineClientName,
     c.valueCents == null ? null : c.valueCents / 100,
     c.receivedAt,
-  ]);
+    // The file names are printed on the row, so they are things he will type.
+    ...c.versions.map((v) => v.fileName),
+  ];
+  const rows = filterByQuery(intake, q, searchable);
 
   return (
     <div className="space-y-5">
@@ -190,7 +200,7 @@ export default async function ContractsPage({
         </div>
 
         {rows.length === 0 ? (
-          <p className="border-t border-line px-[18px] py-4 font-semi text-[12px] text-neutral-500">
+          <p className="border-t border-line px-[18px] py-4 text-[14.5px] text-muted">
             {q
               ? `Nothing in this view matches “${q}”.`
               : intakeView === 'classify'
@@ -198,9 +208,10 @@ export default async function ContractsPage({
                 : 'Nothing in this view.'}
           </p>
         ) : (
-          <ul>
+          <ul id="contract-list">
+            <InstantFilter scope="contract-list" />
             {rows.map((c) => (
-              <ContractCard key={c.id} contract={c} />
+              <ContractCard key={c.id} contract={c} search={foldForSearch(...searchable(c))} />
             ))}
           </ul>
         )}

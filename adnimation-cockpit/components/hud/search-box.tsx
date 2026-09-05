@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { SEARCH_EVENT, type SearchEventDetail } from './search-event';
 
 /**
  * Type to find it, on every screen that lists anything.
@@ -44,6 +45,16 @@ export function SearchBox({
   // The URL is the truth: a back button or a cleared filter must show here.
   useEffect(() => setValue(fromUrl), [fromUrl]);
 
+  /*
+   * Every keystroke, to whatever is listening on this page — before the URL,
+   * before the server. That is what makes the list narrow as he types rather
+   * than a beat after he stops. See components/hud/instant-filter.tsx.
+   */
+  useEffect(() => {
+    const detail: SearchEventDetail = { param, value };
+    window.dispatchEvent(new CustomEvent(SEARCH_EVENT, { detail }));
+  }, [value, param]);
+
   useEffect(() => {
     if (value === fromUrl) return;
     const timer = setTimeout(() => {
@@ -51,8 +62,22 @@ export function SearchBox({
       if (value.trim()) next.set(param, value.trim());
       else next.delete(param);
       const query = next.toString();
-      startTransition(() => router.replace(query ? `${pathname}?${query}` : pathname));
-    }, 220);
+      /*
+       * `scroll: false` is the whole of the fix for the page jumping under him
+       * as he typed. Next scrolls to the top of the document on every
+       * navigation by default, and a search box that puts the query in the URL
+       * navigates on every keystroke — so each letter threw the list he was
+       * reading back to the top of the page.
+       */
+      startTransition(() =>
+        router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }),
+      );
+      /*
+       * Slower than it was. The URL is no longer what makes the list narrow —
+       * the event above does that — so this is only the shareable copy of the
+       * query catching up, and it costs a full server render of the page.
+       */
+    }, 400);
     return () => clearTimeout(timer);
   }, [value, fromUrl, param, params, pathname, router]);
 

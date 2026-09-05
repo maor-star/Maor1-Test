@@ -101,7 +101,7 @@ export function IntegrationChecklist({
                     autoFocus
                     defaultValue={s.blockedOn ?? ''}
                     placeholder="Who is this waiting on?"
-                    className="h-7 max-w-xs text-[12px]"
+                    className="h-9 max-w-xs text-[13.5px]"
                     onBlur={(e) => {
                       setBlocking(null);
                       if (e.target.value !== (s.blockedOn ?? '')) send(s.key, { blockedOn: e.target.value });

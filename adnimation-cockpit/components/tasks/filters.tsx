@@ -32,7 +32,9 @@ export function TaskFilters({
       const params = new URLSearchParams();
       const merged = { ...current, ...patch };
       for (const [k, v] of Object.entries(merged)) if (v) params.set(k, v);
-      router.push(`/tasks?${params.toString()}`);
+      // Same reason as the search box: changing a filter must not throw the
+      // list he is reading back to the top of the page.
+      router.push(`/tasks?${params.toString()}`, { scroll: false });
     },
     [current, router],
   );

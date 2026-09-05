@@ -92,7 +92,7 @@ export function ConfirmFiling({
         value={choice}
         disabled={pending}
         onChange={(e) => setChoice(e.target.value as ContractCategory)}
-        className="h-7 text-[12px]"
+        className="h-9 text-[13.5px]"
       >
         {CONTRACT_CATEGORIES.map((c) => (
           <option key={c} value={c}>

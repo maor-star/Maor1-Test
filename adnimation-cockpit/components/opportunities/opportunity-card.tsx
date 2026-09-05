@@ -237,7 +237,7 @@ export function OpportunityCard({
               id={`status-${o.id}`}
               value={o.status}
               disabled={pending}
-              className="h-7 text-[12px]"
+              className="h-9 text-[13.5px]"
               onChange={(e) => {
                 const next = e.target.value;
                 if (next === 'won' || next === 'lost') {
@@ -319,7 +319,7 @@ export function OpportunityCard({
             run(setStatusAction, data);
           }}
         >
-          <Select name="status" defaultValue="won" className="h-8 text-[12px]">
+          <Select name="status" defaultValue="won" className="h-8 text-[13.5px]">
             <option value="won">Taken</option>
             <option value="lost">Missed</option>
           </Select>
@@ -349,7 +349,7 @@ export function OpportunityCard({
         >
           <div>
             <Label htmlFor={`stage-${o.id}`}>Starting stage</Label>
-            <Select id={`stage-${o.id}`} name="stage" defaultValue="open_new" className="h-8 text-[12px]">
+            <Select id={`stage-${o.id}`} name="stage" defaultValue="open_new" className="h-8 text-[13.5px]">
               {OPEN_STAGES.map((st) => (
                 <option key={st} value={st}>
                   {STAGE_LABEL[st]}
@@ -363,7 +363,7 @@ export function OpportunityCard({
               id={`ct-${o.id}`}
               name="clientType"
               defaultValue={KIND_TO_CLIENT_TYPE[o.kind]}
-              className="h-8 text-[12px]"
+              className="h-8 text-[13.5px]"
             >
               {CLIENT_TYPES.map((ct) => (
                 <option key={ct} value={ct}>
