@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   actualFor, attainment, daysInMonth, gapCents, judgedDays, monthOf, proRatedTarget, verdict,
 } from '@/lib/control/target-rules';
+import { notStartedYet } from '@/lib/control/lines';
 
 const usd = (n: number) => n * 100;
 
@@ -108,5 +109,42 @@ describe('which figure a target is judged against', () => {
     // fails it every day for ever, which is worse than not judging it.
     expect(actualFor('net', { grossCents: usd(100), profitCents: 0 })).toBe(0);
     expect(verdict(actualFor('gross', { grossCents: usd(100), profitCents: 0 }), usd(90))).toBe('hit');
+  });
+});
+
+/**
+ * A line that has not started against a line that has stopped.
+ *
+ * They look identical on a tile — a small number, or none — and they mean
+ * opposite things. Exchange CTV took two dollars in the last week of August
+ * and is meant to; Core Publishers taking two dollars would be an emergency.
+ * Without this rule he reads the first as the second and goes looking for a
+ * fault that is really a line he has not launched yet.
+ */
+describe('a line that has not started yet', () => {
+  it('says so when it is taking almost nothing', () => {
+    // The real figure: $2 across seven days on the exchange's CTV environment.
+    expect(notStartedYet({ grossCents: 200, daysReported: 7 })).toBe(true);
+  });
+
+  it('does not say so about a line that is simply small', () => {
+    // $170 a day is a small business, not an unlaunched one.
+    expect(notStartedYet({ grossCents: 119_000, daysReported: 7 })).toBe(false);
+  });
+
+  it('judges the rate, not the total, so the window does not decide it', () => {
+    // The same line over a quarter must read the same as over a week: $2 a
+    // week is under a dollar a day however long you add it up for.
+    expect(notStartedYet({ grossCents: 2_600, daysReported: 91 })).toBe(true);
+    expect(notStartedYet({ grossCents: 29, daysReported: 1 })).toBe(true);
+    // And a dollar a day is the line: $2 in a single day is over it.
+    expect(notStartedYet({ grossCents: 200, daysReported: 1 })).toBe(false);
+  });
+
+  it('stays quiet when the window holds no days at all', () => {
+    // Nothing reported is a different thing again — the tile already says
+    // "nothing in this window", and calling that "not started" would be a
+    // guess about a line that may be running perfectly well.
+    expect(notStartedYet({ grossCents: 0, daysReported: 0 })).toBe(false);
   });
 });

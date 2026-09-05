@@ -24,8 +24,9 @@ import postgres from 'postgres';
 import { loadSecrets } from './job-secrets.mjs';
 import { openSource } from './adops-rest.mjs';
 import {
-  appsLine, bidderDays, bidderLine, coreClientDays, coreClientsLine, ctvLine, eachDay,
-  exchangeDays, googleCtvLine, publishersDay, rollupLine, seatDaysFrom, seatDays,
+  bidderDays, bidderLine, categoryLine, clampToYear, coreClientDays, coreClientsLine,
+  eachDay, endpointEnvironments, exchangeDays, exchangeEnvLine, googleCtvLine,
+  ignoredSourceNames, publishersDay, seatDaysFrom, seatDays, YEAR_START,
 } from './adops-aggregate.mjs';
 
 const DB = process.env.DATABASE_URL;
@@ -34,8 +35,18 @@ if (!DB) {
   process.exit(1);
 }
 
-/** How far back to pull. A year by default: he asked for all of it. */
-const DAYS = Number(process.argv[2] ?? process.env.SOURCE_SYNC_DAYS ?? 400);
+/**
+ * How far back a plain run pulls.
+ *
+ * A week, not a year. The source revises the last few days and nothing older,
+ * so a week catches every revision — and the run that walked four hundred days
+ * every three hours is the one he asked me to stop, because it was loading the
+ * server for figures that had not changed since the last time it read them.
+ *
+ * A backfill passes SOURCE_SYNC_FROM and SOURCE_SYNC_TO, and even that cannot
+ * reach further back than this year.
+ */
+const DAYS = Number(process.argv[2] ?? process.env.SOURCE_SYNC_DAYS ?? 7);
 
 const sql = postgres(DB, { max: 2, onnotice: () => {} });
 
@@ -114,8 +125,13 @@ async function main() {
    * safer and restartable — each chunk is a whole, correct pull of its own
    * days, and one that fails costs only itself.
    */
-  const from = process.env.SOURCE_SYNC_FROM ?? day(DAYS);
+  const from = clampToYear(process.env.SOURCE_SYNC_FROM ?? day(DAYS));
   const to = process.env.SOURCE_SYNC_TO ?? day(0);
+  if (to < YEAR_START) {
+    console.log(`${to} is before ${YEAR_START} — he asked for this year only. Nothing to do.`);
+    await sql.end();
+    process.exit(0);
+  }
   const pulledAt = new Date();
   /** The window, as the pair of conditions PostgREST wants on one column. */
   const window = [
@@ -172,13 +188,31 @@ async function main() {
       throw e;
     });
 
-  const [seatOverview, vidazoo, xeUnsplit, rollup, coreSnapshot, gam, gamApps, xeEcon, xeSplit, accounts] =
+  const [seatOverview, vidazoo, xeUnsplit, siteDetail, demandSources, gam, endpoints, xeSplit, accounts] =
     await Promise.all([
       ifAllowed('seat lease', source.rpc('get_seat_lease_overview_daily', { p_from: from, p_to: to })),
       ifAllowed('trading_vidazoo_reports', source.selectAll('trading_vidazoo_reports', { filters: window })),
+      /*
+       * The exchange at its per-demand-endpoint grain. It answers two
+       * questions: the P&L's exchange book, and — joined to the endpoints'
+       * environments — the three EXCHANGE tiles.
+       */
       ifAllowed('trading_xe_reports', source.selectAll('trading_xe_reports', { filters: [...window, ['ssp_id', 'is.null']] })),
-      ifAllowed('ars_site_daily_rollup', source.selectAll('ars_site_daily_rollup', { filters: window })),
-      ifAllowed('ars_core_publishers_daily_snapshot', source.selectAll('ars_core_publishers_daily_snapshot', { filters: window })),
+      /*
+       * The publisher business, at the grain the source keeps it: one row per
+       * site per demand source per day. Core Publishers, IBV and the account
+       * ranking are all cut out of this one read rather than out of the three
+       * aggregates the source has since revoked.
+       *
+       * Only the columns those cuts need. The table is the largest thing this
+       * job reads and most of its width is currency conversions and request
+       * counts nothing here asks for.
+       */
+      ifAllowed('ars_site_daily_revenue', source.selectAll('ars_site_daily_revenue', {
+        select: 'report_date,ars_site_id,ars_account_id,category,source_name,gross_revenue,source_profit_usd,impressions',
+        filters: window,
+      })),
+      ifAllowed('ars_demand_sources', source.selectAll('ars_demand_sources', { select: 'source_name,category,is_ignored' })),
       /*
        * Only the CTV slice, narrowed at the source. The whole table is seven
        * hundred thousand rows a month and this is thirty-three thousand of
@@ -189,14 +223,10 @@ async function main() {
         select: 'report_date,site_id,revenue,impressions,device_category',
         filters: [...window, ['device_category', 'in.("connected tv","set-top box")']],
       })),
-      ifAllowed('gam_app_reports', source.selectAll('gam_app_reports', {
-        select: 'report_date,site_id,app_id,revenue,impressions',
-        filters: window,
-      })),
-      // Likewise: CTV is under a thousand rows a month out of half a million.
-      ifAllowed('xe_econ_path_daily', source.selectAll('xe_econ_path_daily', {
-        select: 'report_date,dsp_id,env_type,revenue,profit,impressions',
-        filters: [...window, ['env_type', 'eq.CTV']],
+      // Which environment each demand endpoint sells into. A few hundred rows,
+      // and the only thing that tells APP from DISPLAY on the exchange.
+      ifAllowed('xe_endpoint_dim', source.selectAll('xe_endpoint_dim', {
+        select: 'endpoint_kind,endpoint_id,environment',
       })),
       ifAllowed('trading_xe_reports (split)', source.selectAll('trading_xe_reports', { filters: window })),
       ifAllowed('ars_accounts', source.selectAll('ars_accounts')),
@@ -204,9 +234,9 @@ async function main() {
 
   console.log(
     `read: publishers ${publisherRows.length}d, seat lease ${seatOverview.length}, ` +
-      `vidazoo ${vidazoo.length}, exchange ${xeUnsplit.length}, rollup ${rollup.length}, ` +
-      `core ${coreSnapshot.length}, gam ${gam.length}, apps ${gamApps.length}, ` +
-      `paths ${xeEcon.length}, seats ${xeSplit.length}, accounts ${accounts.length}`,
+      `vidazoo ${vidazoo.length}, exchange ${xeUnsplit.length}, sites ${siteDetail.length}, ` +
+      `demand sources ${demandSources.length}, gam ${gam.length}, endpoints ${endpoints.length}, ` +
+      `seats ${xeSplit.length}, accounts ${accounts.length}`,
   );
 
   /* ---- the P&L ---- */
@@ -228,12 +258,16 @@ async function main() {
   console.log(`company_daily: ${plRows.length} days`);
 
   /* ---- the seven engines ---- */
+  const ignored = ignoredSourceNames(demandSources);
+  const accountsById = new Map(accounts.map((a) => [String(a.ars_id ?? a.id), a]));
+  const envByDsp = endpointEnvironments(endpoints);
+
   const engines = {
-    core_clients: coreClientsLine(coreSnapshot),
-    ibv: rollupLine(rollup, 'video'),
-    rtb_display: rollupLine(rollup, 'header_bidding'),
-    apps: appsLine(gamApps),
-    ctv: ctvLine(xeEcon),
+    core_clients: coreClientsLine(siteDetail, accountsById, ignored),
+    ibv: categoryLine(siteDetail, 'video', ignored),
+    apps: exchangeEnvLine(xeUnsplit, envByDsp, 'apps'),
+    rtb_display: exchangeEnvLine(xeUnsplit, envByDsp, 'rtb_display'),
+    ctv: exchangeEnvLine(xeUnsplit, envByDsp, 'ctv'),
     google_ctv: googleCtvLine(gam),
     bidder: bidderLine(vidazoo),
   };
@@ -263,8 +297,7 @@ async function main() {
   );
 
   /* ---- the accounts that carry the company ---- */
-  const accountsById = new Map(accounts.map((a) => [String(a.id ?? a.ars_id), a]));
-  const clientRows = coreClientDays(rollup, accountsById, new Map()).map((r) => ({
+  const clientRows = coreClientDays(siteDetail, accountsById, ignored).map((r) => ({
     ...r,
     source: 'adops',
     pulled_at: pulledAt,

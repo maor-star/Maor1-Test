@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the jobs are plain ESM with no types.
 // eslint-disable-next-line prettier/prettier
-import { appsLine, bidderDays, cents, coreClientsLine, ctvLine, eachDay, exchangeDays, googleCtvLine, publishersDay, rollupLine, seatDaysFrom, seatDays } from '@/deploy/adops-aggregate.mjs';
+import {
+  bidderDays, categoryLine, cents, clampToYear, coreClientDays, coreClientsLine, eachDay,
+  endpointEnvironments, exchangeDays, exchangeEnvLine, googleCtvLine, ignoredSourceNames,
+  publishersDay, seatDaysFrom, seatDays, YEAR_START,
+} from '@/deploy/adops-aggregate.mjs';
 
 /**
  * The arithmetic that used to live inside SQL.
@@ -130,39 +134,123 @@ describe('seat lease', () => {
   });
 });
 
-describe('the engines cut out of the site rollup', () => {
+/**
+ * The publisher lines, read from the site detail.
+ *
+ * They used to be read from `ars_site_daily_rollup` and the core publishers
+ * snapshot. The source revoked both from this sign-in mid-afternoon and all
+ * three lines went to a flat zero on his screen — which is what he was looking
+ * at when he said IBV was showing nothing. These read the detail underneath
+ * instead, which the same sign-in can read and which no grant has since taken
+ * away.
+ */
+describe('the publisher lines, off the site detail', () => {
+  const sources = [
+    { source_name: 'AnyClip Video', category: 'video', is_ignored: false },
+    { source_name: 'Deductions', category: 'ignored', is_ignored: true },
+  ];
+  const ignored = ignoredSourceNames(sources);
+
   const rows = [
-    { report_date: '2026-08-01', category: 'video', src_ignored: false, ars_site_id: 1, gross_revenue: 10, source_profit_usd: 3, impressions: 100 },
-    { report_date: '2026-08-01', category: 'video', src_ignored: false, ars_site_id: 2, gross_revenue: 5, source_profit_usd: 1, impressions: 50 },
-    { report_date: '2026-08-01', category: 'video', src_ignored: true, ars_site_id: 3, gross_revenue: 99, source_profit_usd: 99, impressions: 999 },
-    { report_date: '2026-08-01', category: 'header_bidding', src_ignored: false, ars_site_id: 4, gross_revenue: 7, source_profit_usd: 2, impressions: 70 },
+    { report_date: '2026-08-01', category: 'video', source_name: 'AnyClip Video', ars_site_id: 1, ars_account_id: 10, gross_revenue: 10, source_profit_usd: 3, impressions: 100 },
+    { report_date: '2026-08-01', category: 'video', source_name: 'AnyClip Video', ars_site_id: 2, ars_account_id: 10, gross_revenue: 5, source_profit_usd: 1, impressions: 50 },
+    { report_date: '2026-08-01', category: 'video', source_name: 'Deductions', ars_site_id: 3, ars_account_id: 10, gross_revenue: 99, source_profit_usd: 99, impressions: 999 },
+    { report_date: '2026-08-01', category: 'header_bidding', source_name: 'OpenX', ars_site_id: 4, ars_account_id: 20, gross_revenue: 7, source_profit_usd: 2, impressions: 70 },
   ];
 
-  it('keeps only its own category', () => {
-    const [video] = rollupLine(rows, 'video');
+  it('cuts IBV to the video category alone', () => {
+    const [video] = categoryLine(rows, 'video', ignored);
     expect(video.gross_cents).toBe(1_500);
-    const [display] = rollupLine(rows, 'header_bidding');
-    expect(display.gross_cents).toBe(700);
+    expect(video.profit_cents).toBe(400);
   });
 
-  it('leaves out what the source has marked ignored', () => {
-    // The source has already decided those do not count.
-    const [video] = rollupLine(rows, 'video');
+  it('leaves out the sources the source itself ignores', () => {
+    // Deductions and analytics are not revenue, and the ad ops team has
+    // already said so on the demand source. Reading the detail moved that flag
+    // one table away, so forgetting the join would silently add them back.
+    const [video] = categoryLine(rows, 'video', ignored);
     expect(video.entities).toBe(2);
     expect(video.impressions).toBe(150);
   });
+
+  it('gives core publishers every format together', () => {
+    const [day] = coreClientsLine(rows, new Map(), ignored);
+    expect(day.gross_cents).toBe(2_200);
+    expect(day.profit_cents).toBe(600);
+  });
+
+  it('leaves trading accounts out of core publishers', () => {
+    // They are a different business with a different margin. Counting them as
+    // represented publishers overstates the portfolio he is judged on.
+    const accounts = new Map([['20', { ars_id: 20, name: 'Resold', is_trading_account: true }]]);
+    const [day] = coreClientsLine(rows, accounts, ignored);
+    expect(day.gross_cents).toBe(1_500);
+  });
+
+  it('keeps trading accounts in the ranking, marked', () => {
+    const accounts = new Map([
+      ['10', { ars_id: 10, name: 'Big Publisher' }],
+      ['20', { ars_id: 20, name: 'Resold', is_trading_account: true }],
+    ]);
+    const ranked = coreClientDays(rows, accounts, ignored);
+    expect(ranked.map((r) => r.account).sort()).toEqual(['Big Publisher', 'Resold']);
+    expect(ranked.find((r) => r.account === 'Resold')?.is_trading).toBe(true);
+  });
 });
 
-describe('CTV', () => {
-  it('is the environment the request came from, not one endpoint guess', () => {
-    const days = ctvLine([
-      { report_date: '2026-08-01', env_type: 'CTV', dsp_id: 'x', revenue: 10, profit: 4, impressions: 100 },
-      { report_date: '2026-08-01', env_type: 'CTV', dsp_id: 'y', revenue: 5, profit: 1, impressions: 50 },
-      { report_date: '2026-08-01', env_type: 'MOBILE', dsp_id: 'z', revenue: 99, profit: 99, impressions: 999 },
-    ]);
-    expect(days[0].gross_cents).toBe(1_500);
-    expect(days[0].profit_cents).toBe(500);
-    expect(days[0].entities).toBe(2);
+/**
+ * The three EXCHANGE tiles.
+ *
+ * He settled what they mean himself: one business in three environments. Two
+ * of them used to point somewhere else entirely — EXCHANGE APP at Google's app
+ * inventory, EXCHANGE DISPLAY at the publishers' header bidding — so the wall
+ * reported two things that are not the exchange under names that say they are.
+ */
+describe('the exchange, split by environment', () => {
+  const envByDsp = endpointEnvironments([
+    { endpoint_kind: 'dsp', endpoint_id: 1, environment: 'INAPP' },
+    { endpoint_kind: 'dsp', endpoint_id: 2, environment: 'WEB' },
+    { endpoint_kind: 'dsp', endpoint_id: 3, environment: 'CTV' },
+    // An SSP carries an environment too, and it is the wrong one to read.
+    { endpoint_kind: 'ssp', endpoint_id: 1, environment: 'CTV' },
+  ]);
+
+  const reports = [
+    { report_date: '2026-08-01', dsp_id: 1, ssp_id: null, revenue: 100, dsp_spend: 70, impressions: 1000 },
+    { report_date: '2026-08-01', dsp_id: 2, ssp_id: null, revenue: 10, dsp_spend: 8, impressions: 100 },
+    { report_date: '2026-08-01', dsp_id: 3, ssp_id: null, revenue: 1, dsp_spend: 1, impressions: 10 },
+    // The pair rows say the same money once per endpoint it passed through.
+    { report_date: '2026-08-01', dsp_id: 1, ssp_id: 55, revenue: 100, dsp_spend: 100, impressions: 1000 },
+  ];
+
+  it('reads the environment off the demand endpoint', () => {
+    expect(envByDsp.get('1')).toBe('INAPP');
+    expect(envByDsp.get('3')).toBe('CTV');
+  });
+
+  it('sends each environment to its own tile', () => {
+    expect(exchangeEnvLine(reports, envByDsp, 'apps')[0].gross_cents).toBe(10_000);
+    expect(exchangeEnvLine(reports, envByDsp, 'rtb_display')[0].gross_cents).toBe(1_000);
+    expect(exchangeEnvLine(reports, envByDsp, 'ctv')[0].gross_cents).toBe(100);
+  });
+
+  it('counts the per-endpoint totals once, not the pair rows as well', () => {
+    // Summing both reports the exchange at twice its size, and the app tile
+    // would have read 200 instead of 100.
+    const [apps] = exchangeEnvLine(reports, envByDsp, 'apps');
+    expect(apps.gross_cents).toBe(10_000);
+    expect(apps.entities).toBe(1);
+  });
+
+  it('takes profit as revenue less what the buyer was charged', () => {
+    expect(exchangeEnvLine(reports, envByDsp, 'apps')[0].profit_cents).toBe(3_000);
+  });
+
+  it('drops an endpoint whose environment nobody has recorded', () => {
+    // Better a line that is short than a line that quietly files unknown
+    // demand under apps because apps is the big one.
+    const unknown = [{ report_date: '2026-08-01', dsp_id: 99, ssp_id: null, revenue: 500, dsp_spend: 1, impressions: 1 }];
+    expect(exchangeEnvLine(unknown, envByDsp, 'apps')).toEqual([]);
   });
 });
 
@@ -178,25 +266,20 @@ describe('Google CTV', () => {
   });
 });
 
-describe('apps', () => {
-  it('counts an app once however many ad units it has', () => {
-    const days = appsLine([
-      { report_date: '2026-08-01', app_id: 'a', site_id: 1, revenue: 4, impressions: 40 },
-      { report_date: '2026-08-01', app_id: 'a', site_id: 1, revenue: 6, impressions: 60 },
-      { report_date: '2026-08-01', app_id: null, site_id: 2, revenue: 5, impressions: 50 },
-    ]);
-    expect(days[0].gross_cents).toBe(1_500);
-    expect(days[0].entities).toBe(2);
+/**
+ * This year, and no further back.
+ *
+ * The backfill that walked four hundred days is the one he asked me to stop —
+ * it was loading the server to re-read months whose figures had not changed.
+ */
+describe('the window', () => {
+  it('never reaches back past this year', () => {
+    expect(clampToYear('2025-03-01')).toBe(YEAR_START);
+    expect(clampToYear('2024-12-31')).toBe(YEAR_START);
   });
-});
 
-describe('core publishers', () => {
-  it('takes profit as what is left after the fee and the payout', () => {
-    const [day] = coreClientsLine([
-      { report_date: '2026-08-01', gross: 100, source_fee: 10, net_after_fee: 90, net: 70 },
-    ]);
-    expect(day.gross_cents).toBe(10_000);
-    expect(day.profit_cents).toBe(2_000);
+  it('leaves a window inside this year alone', () => {
+    expect(clampToYear('2026-06-01')).toBe('2026-06-01');
   });
 });
 

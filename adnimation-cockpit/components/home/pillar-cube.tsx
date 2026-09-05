@@ -10,7 +10,7 @@ import { Sparkline } from '@/components/revenue/sparkline';
 import { setLineTargetAction } from '@/app/actions/targets';
 import { fmtMoney, fmtNumber } from '@/lib/utils';
 import { BASIS_LABEL, TARGET_BASES } from '@/lib/control/target-rules';
-import type { LinePeriodSummary } from '@/lib/control/lines';
+import { notStartedYet, type LinePeriodSummary } from '@/lib/control/lines';
 import type { LineTargetView } from '@/lib/control/targets';
 
 /**
@@ -78,6 +78,16 @@ export function PillarCube({
       ? 'Nothing to judge yet'
       : skin.word;
 
+  /*
+   * A line that is a plan rather than a business yet.
+   *
+   * Exchange CTV took two dollars in the last week of August. Without this it
+   * shows a zero beside six real numbers, and a zero on this wall means
+   * something broke — so he goes looking for a fault that is really a line he
+   * has not launched. Said out loud instead, it costs him nothing.
+   */
+  const notStarted = notStartedYet(line);
+
   return (
     <div className={`min-w-0 rounded-[12px] border p-[15px] ${skin.card}`}>
       {/*
@@ -92,8 +102,12 @@ export function PillarCube({
       <div className="mt-1 flex flex-wrap items-center gap-1">
         {/* Both, not one instead of the other: a line can be ahead of target
             and have stopped reporting, and he needs to know both things. */}
-        <Tag tone={skin.tag}>{word}</Tag>
-        {line.stale ? <Tag tone="warning">Quiet</Tag> : null}
+        <Tag tone={notStarted && target.verdict === 'unset' ? 'outline' : skin.tag}>
+          {notStarted && target.verdict === 'unset' ? 'Not started yet' : word}
+        </Tag>
+        {/* Not on a line that has not started: it has no days to be late with,
+            and two greyed-out tags say less than one. */}
+        {line.stale && !notStarted ? <Tag tone="warning">Quiet</Tag> : null}
       </div>
 
       {line.daysReported === 0 ? (

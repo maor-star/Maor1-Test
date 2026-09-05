@@ -159,27 +159,64 @@ const lineDay = (date, { gross, profit, impressions, entities }) => ({
   entities: entities === null || entities === undefined ? null : Math.round(entities),
 });
 
-/** Core publishers, straight off the source's daily snapshot. */
-export function coreClientsLine(rows) {
-  return (rows ?? [])
-    .map((r) =>
-      lineDay(dayOf(r), {
-        gross: num(r.gross),
-        profit: num(r.net_after_fee) - num(r.net),
-        impressions: 0,
-        entities: null,
-      }),
-    )
-    .sort((a, b) => a.date.localeCompare(b.date));
-}
+/**
+ * The year the cockpit reports on.
+ *
+ * He asked for this year and no further back: "take only this year's data, no
+ * more". Every window the syncs build is clamped to it, so a stray argument or
+ * a default of four hundred days cannot walk the source's whole history again.
+ */
+export const YEAR_START = '2026-01-01';
+
+/** A window, never reaching further back than the year he asked for. */
+export const clampToYear = (from) => (from < YEAR_START ? YEAR_START : from);
+
+/* ------------------------------------------------------------------ *
+ * The publisher business, from the site detail.
+ *
+ * These three lines used to read `ars_site_daily_rollup` and
+ * `ars_core_publishers_daily_snapshot`. Both are aggregates the source builds
+ * for its own screens, and both were revoked from this sign-in in the middle
+ * of an afternoon — after which IBV, Exchange Display and Core Publishers all
+ * showed a flat zero, which reads as a business that stopped rather than as a
+ * grant that changed.
+ *
+ * `ars_site_daily_revenue` is the detail underneath both of them and this
+ * sign-in can read it. Summed the same way it reproduces the rollup to the
+ * dollar — checked against the source: for 29–31 August, google 58,297 against
+ * 58,297, video 28,364 against 28,364. So the figures do not move; only the
+ * table they are read from does, and this one does not depend on a grant that
+ * can be taken away.
+ * ------------------------------------------------------------------ */
 
 /**
- * A line cut out of the site rollup by category — video for IBV, header
- * bidding for exchange display. Rows the source has marked ignored are left
- * out, because it has already decided they do not count.
+ * A source the ad ops team has told the system to ignore.
+ *
+ * The rollup carried this as `src_ignored`; on the detail it lives one table
+ * over, on the demand source itself. Dropping the join would quietly add back
+ * the analytics and expense rows the source has already decided are not
+ * revenue.
  */
-export function rollupLine(rows, category) {
-  const kept = (rows ?? []).filter((r) => r.category === category && !r.src_ignored);
+export function ignoredSourceNames(demandSources) {
+  return new Set(
+    (demandSources ?? [])
+      .filter((s) => s.is_ignored)
+      .map((s) => String(s.source_name ?? '').toLowerCase()),
+  );
+}
+
+const notIgnored = (ignored) => (row) =>
+  !ignored.has(String(row.source_name ?? '').toLowerCase());
+
+/**
+ * One format across the whole publisher portfolio — video, for IBV.
+ *
+ * A format cut, not a set of accounts: it runs across every publisher, which
+ * is why it overlaps Core Publishers on purpose and why the two tiles do not
+ * add up to anything.
+ */
+export function categoryLine(detailRows, category, ignored = new Set()) {
+  const kept = (detailRows ?? []).filter((r) => r.category === category).filter(notIgnored(ignored));
   return [...groupBy(kept, (r) => dayOf(r)).entries()]
     .map(([date, day]) =>
       lineDay(date, {
@@ -192,35 +229,114 @@ export function rollupLine(rows, category) {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** Apps, from Ad Manager's app reporting. */
-export function appsLine(rows) {
-  return [...groupBy(rows, (r) => dayOf(r)).entries()]
+/**
+ * A trading account: one we buy and resell through rather than represent.
+ *
+ * They are publishers' money in the same table, but they are a different
+ * business with a different margin, and the ad ops team marks them. Core
+ * Publishers is the represented portfolio, so they are left out of it — and
+ * kept, marked, in the account ranking, where the mark is what stops a reader
+ * comparing their margin to a publisher's.
+ */
+const isTrading = (account) => Boolean(account?.is_trading_account ?? account?.is_trading ?? false);
+
+/**
+ * Core publishers: the represented portfolio, every format together.
+ *
+ * The source's own snapshot would have been the obvious thing to read, and it
+ * is what this used to read. Two reasons it is not read any more: this sign-in
+ * is denied it, and its net_after_fee and net are the same number every day —
+ * so the profit it yields is a hard zero, which is not a figure to put on the
+ * CEO's largest tile.
+ */
+export function coreClientsLine(detailRows, accountsById = new Map(), ignored = new Set()) {
+  const kept = (detailRows ?? [])
+    .filter(notIgnored(ignored))
+    .filter((r) => !isTrading(accountsById.get(String(r.ars_account_id))));
+
+  return [...groupBy(kept, (r) => dayOf(r)).entries()]
     .map(([date, day]) =>
       lineDay(date, {
-        gross: sumOf(day, 'revenue'),
-        profit: 0,
+        gross: sumOf(day, 'gross_revenue'),
+        profit: sumOf(day, 'source_profit_usd'),
         impressions: sumOf(day, 'impressions'),
-        entities: new Set(day.map((r) => r.app_id ?? String(r.site_id ?? ''))).size,
+        entities: distinct(day, 'ars_site_id'),
       }),
     )
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/* ------------------------------------------------------------------ *
+ * The exchange, split by environment.
+ * ------------------------------------------------------------------ */
+
 /**
- * CTV on the exchange, by the environment the request came from — so it is
- * CTV wherever it was bought rather than one endpoint's guess at it.
+ * Which tile each environment belongs to.
+ *
+ * He settled this himself: the three tiles whose names start with EXCHANGE are
+ * one business seen in three environments, not three different businesses. So
+ * an app impression on the exchange is EXCHANGE APP wherever it was bought,
+ * and Google's own app inventory — which used to fill this tile — is not on it
+ * at all, because Google is not the exchange.
+ *
+ * Two vocabularies for the same thing: the path report says APP/SITE/CTV, the
+ * endpoint dimension says INAPP/WEB/CTV.
  */
-export function ctvLine(rows) {
-  const kept = (rows ?? []).filter((r) => r.env_type === 'CTV');
+export const EXCHANGE_ENV_LINE = {
+  APP: 'apps',
+  INAPP: 'apps',
+  SITE: 'rtb_display',
+  WEB: 'rtb_display',
+  CTV: 'ctv',
+};
+
+/** The environment of each demand endpoint, by its id. */
+export function endpointEnvironments(endpointRows) {
+  const out = new Map();
+  for (const row of endpointRows ?? []) {
+    if (String(row.endpoint_kind ?? '') !== 'dsp') continue;
+    if (!row.environment) continue;
+    out.set(String(row.endpoint_id), String(row.environment).toUpperCase());
+  }
+  return out;
+}
+
+/**
+ * One environment of the exchange, from the demand endpoints' own reports.
+ *
+ * The rows are the per-DSP totals — the ones with a dsp_id and no ssp_id. The
+ * pair rows in the same table say the same money once per endpoint it passed
+ * through, and summing both reports the exchange at twice its size.
+ *
+ * Profit is revenue less what the DSP was charged, which is the rule the P&L
+ * already uses for the exchange.
+ *
+ * Where this differs from the source's own path report: the path report knows
+ * the environment of each path, this knows the environment of each demand
+ * endpoint. The totals agree (28,280 against 28,279 for the last week of
+ * August); the app/display line between them moves by about $680 in the week,
+ * which matters little on APP and is most of DISPLAY. It is read this way
+ * because the path report is denied to this sign-in, and because it is half a
+ * million rows a month against forty-five thousand in the whole of this one.
+ */
+export function exchangeEnvLine(reportRows, envByDsp, line) {
+  const kept = (reportRows ?? []).filter(
+    (r) =>
+      r.dsp_id !== null && r.dsp_id !== undefined &&
+      (r.ssp_id === null || r.ssp_id === undefined) &&
+      EXCHANGE_ENV_LINE[envByDsp.get(String(r.dsp_id))] === line,
+  );
+
   return [...groupBy(kept, (r) => dayOf(r)).entries()]
-    .map(([date, day]) =>
-      lineDay(date, {
-        gross: sumOf(day, 'revenue'),
-        profit: sumOf(day, 'profit'),
+    .map(([date, day]) => {
+      const revenue = sumOf(day, 'revenue');
+      return lineDay(date, {
+        gross: revenue,
+        profit: revenue - sumOf(day, 'dsp_spend'),
         impressions: sumOf(day, 'impressions'),
         entities: distinct(day, 'dsp_id'),
-      }),
-    )
+      });
+    })
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -315,27 +431,28 @@ export function seatDaysFrom(rows) {
  * ------------------------------------------------------------------ */
 
 /**
- * The accounts that carry the company, from the site rollup joined to names.
+ * The accounts that carry the company, from the site detail joined to names.
  *
  * Named by account rather than by site: he thinks in publishers, and one
- * publisher is often a dozen sites.
+ * publisher is often a dozen sites. Trading accounts stay in, marked, because
+ * they are clients too.
  */
-export function coreClientDays(rollupRows, accountsById, sitesById) {
+export function coreClientDays(detailRows, accountsById, ignored = new Set()) {
+  const kept = (detailRows ?? []).filter(notIgnored(ignored));
   const out = [];
-  for (const [day, dayRows] of groupBy(rollupRows, (r) => dayOf(r)).entries()) {
+  for (const [day, dayRows] of groupBy(kept, (r) => dayOf(r)).entries()) {
     for (const [accountId, rows] of groupBy(dayRows, 'ars_account_id').entries()) {
       const account = accountsById.get(String(accountId));
       const name = account?.name ?? account?.account_name ?? `Account ${accountId}`;
       out.push({
         account: name,
         date: day,
-        is_trading: Boolean(account?.is_trading ?? false),
+        is_trading: isTrading(account),
         gross_cents: cents(sumOf(rows, 'gross_revenue')),
         profit_cents: cents(sumOf(rows, 'source_profit_usd')),
         impressions: Math.round(sumOf(rows, 'impressions')),
       });
     }
   }
-  void sitesById;
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.account.localeCompare(b.account));
 }

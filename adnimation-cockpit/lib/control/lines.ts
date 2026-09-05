@@ -12,12 +12,10 @@ import type { PeriodRange } from '@/lib/revenue/periods';
 /**
  * The revenue engines, in his words.
  *
- * Six are read from the activity source's own daily rows. `bidder` is not one
- * of them: it is the Vidazoo bidder, which the P&L already carries day by day
- * in `company_daily`, so the control panel reads it from there and hands it to
- * the same summariser. It is an engine of the business either way, and which
- * table its days happen to live in is not something the screen should know
- * about.
+ * Seven cuts of the business, each read from where its money actually is.
+ * Three of them are the exchange seen in three environments; two are the
+ * publisher portfolio, whole and cut to video; two are other people's
+ * platforms — Google's connected TV, and the Vidazoo bidder.
  *
  * Seat lease is a book in the P&L and not one of his seven, so it is not here.
  */
@@ -53,9 +51,11 @@ export const LINE_LABEL: Record<ActivityLine, string> = {
 export const LINE_UNIT: Record<ActivityLine, string | null> = {
   core_clients: 'SITES',
   ibv: 'SITES',
-  rtb_display: 'SITES',
-  apps: 'APPS',
-  ctv: 'ENDPOINTS',
+  // The three exchange lines count the demand endpoints buying in that
+  // environment — the thing that grows when the line grows.
+  rtb_display: 'BUYERS',
+  apps: 'BUYERS',
+  ctv: 'BUYERS',
   google_ctv: 'SITES',
   bidder: null,
 };
@@ -64,21 +64,46 @@ export const LINE_UNIT: Record<ActivityLine, string | null> = {
  * Where each line comes from, said on the screen.
  *
  * These are seven different cuts of the business, not seven slices of one
- * pie: core clients is a set of accounts, IBV and RTB display are formats
- * running across all of them, CTV is a device. They overlap on purpose, and
+ * pie: Core Publishers is a set of accounts and IBV is the video format
+ * running across those same accounts, so the second sits inside the first.
+ * The three exchange lines are one business in three environments and do add
+ * up — to the exchange, not to the company. They overlap on purpose, and
  * adding the tiles up does not give the company — the P&L above them does.
  * Saying so on the tile is the difference between a panel he can act on and
  * one he has to re-derive every time.
  */
 export const LINE_SOURCE: Record<ActivityLine, string> = {
-  core_clients: 'The core publisher accounts, on the source’s own daily snapshot',
-  ibv: 'In-banner and outstream video units across the publisher portfolio',
-  rtb_display: 'Display bought through header bidding',
-  apps: 'Google Ad Manager, app inventory',
+  core_clients: 'The represented publisher portfolio, every format, trading accounts excluded',
+  ibv: 'Video units across the publisher portfolio — a cut of Core Publishers, not a separate book',
+  apps: 'The exchange, app environment',
+  rtb_display: 'The exchange, web environment',
   ctv: 'The exchange, CTV environment',
   google_ctv: 'Google Ad Manager, connected TV and set-top box',
   bidder: 'The Vidazoo bidder, from the P&L’s own daily rows',
 };
+
+/**
+ * Under a dollar a day is not a business yet.
+ *
+ * Some of the seven are a plan rather than a going concern — Exchange CTV took
+ * two dollars in the last week of August, and it is meant to. A tile that
+ * shows that as a bare zero next to six real numbers reads as a line that
+ * collapsed, and he goes looking for what broke. Saying "not started yet"
+ * instead is the difference between a screen that reports the company and one
+ * that raises a false alarm once a week.
+ *
+ * A rate rather than a total, so the same rule holds over a day and over a
+ * quarter.
+ */
+export const NOT_STARTED_DAILY_CENTS = 100;
+
+export function notStartedYet(line: {
+  grossCents: number;
+  daysReported: number;
+}): boolean {
+  if (line.daysReported === 0) return false;
+  return line.grossCents / line.daysReported < NOT_STARTED_DAILY_CENTS;
+}
 
 export interface LineDay {
   line: ActivityLine;
