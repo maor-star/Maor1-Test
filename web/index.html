@@ -3520,8 +3520,64 @@ function cashflowModel(){
   let bal=balNow; const proj=[]; if(bal!=null){ let b=bal-restOfMonth.reduce((s,e)=>s+e.amt,0); proj.push({m:curYM,bal:b,label:'סוף '+fmtMonth(curYM)}); fut.forEach(m=>{ b+=M[m].inflow-out(m); proj.push({m,bal:b,label:'סוף '+fmtMonth(m)}); }); }
   return {hist,fut,M,out,events,balNow,proj,chargeDay,currentCycle,curYM,compl};
 }
+// ---- תזרים יומי: יתרת עו"ש משוחזרת חצי שנה אחורה (מהיתרה הנוכחית, יום-יום) + תחזית 90 יום קדימה לפי החיובים הצפויים ----
+function cfIncludeIncome(){ try{ return localStorage.getItem('home-cf-income')!=='0'; }catch(e){ return true; } }
+function cashflowDaily(includeIncome){
+  const c=cashflowModel(); const rows=db.transactions; const pad=n=>String(n).padStart(2,'0'); const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+  const today=new Date(); today.setHours(0,0,0,0); const start=new Date(today); start.setDate(start.getDate()-182); const end=new Date(today); end.setDate(end.getDate()+92);
+  const days=[]; for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)) days.push(iso(d));
+  const idx={}; days.forEach((d,i)=>idx[d]=i); const inflow=days.map(()=>0), outflow=days.map(()=>0), notes=days.map(()=>[]);
+  const todayS=iso(today);
+  // בעבר היתרה אמיתית (משוחזרת מכל התנועות); «ללא הכנסות» משפיע על התחזית בלבד — כדי לראות כמה החיובים לבד מורידים מהיתרה
+  const add=(d,amt,isIn,label)=>{ const i=idx[d]; if(i===undefined) return; if(isIn){ if(!includeIncome&&d>todayS) return; inflow[i]+=amt; } else outflow[i]+=amt; if(label&&amt>=500) notes[i].push((isIn?'+':'−')+money(amt)+' '+label); };
+  // עבר: תנועות בנק אמיתיות (לא פירוט כרטיס), כולל משכנתא/העברות/מזומן/הו"ק; חיובי כרטיסים = רכישות החודש הקודם ביום החיוב
+  rows.forEach(t=>{ const d=String(t.tx_date).slice(0,10); if(d>todayS||!idx[d]&&idx[d]!==0) return;
+    if(t.kind==='income'){ if(t.amount<100000) add(d,t.amount,true,(t.merchant||'').trim()); return; }
+    if(t.kind!=='expense'||isCardDetail(t)||isCapitalMove(t)) return;
+    if(isAggLump(t)){ if(!lumpCovered(t)) add(d,t.amount,false,'חיוב '+(detectIssuer(t.merchant||t.description)||'כרטיס')); return; }
+    add(d,t.amount,false,isMortgageTx(t)?'משכנתא':(t.merchant||t.description||'').trim()); });
+  const ymOf=s=>s.slice(0,7); const shift=(m,k)=>{ const [y,mo]=m.split('-').map(Number); const dt=new Date(y,mo-1+k,1); return dt.getFullYear()+'-'+pad(dt.getMonth()+1); };
+  const cardBuy={}; rows.forEach(t=>{ if(t.kind==='expense'&&isCardDetail(t)){ const i=detectIssuer(t.account); if(i) (cardBuy[i]=cardBuy[i]||{})[ymOf(String(t.tx_date))]=(cardBuy[i][ymOf(String(t.tx_date))]||0)+t.amount; } });
+  const months=[...new Set(days.map(ymOf))];
+  months.forEach(m=>{ Object.keys(cardBuy).forEach(i=>{ const day=c.chargeDay[i]||2; const d=m+'-'+pad(day); if(d>todayS) return; const amt=cardBuy[i][shift(m,-1)]||0; if(amt>0) add(d,amt,false,'חיוב '+i); }); });
+  // עתיד: משכנתא, כרטיסים (מחזור נוכחי → ממוצע), הו"ק קבועות ביום הקבוע, הוצאות שוטפות פרוסות יומית, הכנסות חוזרות
+  const futM=months.filter(m=>m>=ymOf(todayS)); const curYM=ymOf(todayS);
+  const lastMort=c.M[c.hist[c.hist.length-2]]?.mortgage||[...c.hist].reverse().map(m=>c.M[m].mortgage).find(v=>v>0)||0; const mortDay=(()=>{ const ds=rows.filter(t=>t.kind==='expense'&&isMortgageTx(t)).map(t=>Number(String(t.tx_date).slice(8,10))); const cnt={}; ds.forEach(x=>cnt[x]=(cnt[x]||0)+1); return Number(Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]?.[0])||15; })();
+  const st=_ofStatus||{}; const cardAcc=(st.accounts||[]).filter(a=>a.type==='CARD'&&a.balance>0&&a.status!=='deleted');
+  const nIss=Math.max(1,Object.keys(cardBuy).length); const avgCards=c.compl.length?c.compl.reduce((s,m)=>s+c.M[m].cards,0)/c.compl.length:0;
+  futM.forEach((m,mi)=>{ if(lastMort){ const d=m+'-'+pad(mortDay); if(d>todayS) add(d,lastMort,false,'משכנתא (צפוי)'); }
+    Object.keys(cardBuy).forEach(i=>{ const d=m+'-'+pad(c.chargeDay[i]||2); if(d<=todayS) return; let amt; if(m===curYM) amt=cardBuy[i][shift(m,-1)]||0; else if(m===shift(curYM,1)){ const acc=cardAcc.filter(a=>(a.issuer||'')===i).reduce((s,a)=>s+a.balance,0); amt=acc>0?acc:avgCards/nIss; } else amt=avgCards/nIss; if(amt>0) add(d,amt,false,'חיוב '+i+' (צפוי)'); }); });
+  // הו"ק קבועות והכנסות חוזרות — מהאירועים של המודל החודשי (45 יום) + חזרה חודשית עד סוף התחזית
+  c.events.filter(e=>e.kind==='fixed'||e.kind==='income').forEach(e=>{ const base=e.d; for(let k=0;k<4;k++){ const d=shift(ymOf(base),k)+'-'+base.slice(8,10); if(d>todayS&&idx[d]!==undefined&&!(k>0&&ymOf(d)===ymOf(base))) add(d,e.amt,e.kind==='income',e.name+' (צפוי)'); } });
+  // הוצאות שוטפות משתנות (העברות/מזומן/קניות בנק) — ממוצע חודשי פרוס על ימי העתיד
+  const avgOther=c.compl.length?c.compl.reduce((s,m)=>s+c.M[m].other,0)/c.compl.length:0; days.forEach((d,i)=>{ if(d>todayS) outflow[i]+=avgOther/30.4; });
+  // יתרה: מהיתרה הנוכחית אחורה וקדימה
+  const ti=idx[todayS]; const balNow=c.balNow!=null?c.balNow:0; const bal=days.map(()=>0); bal[ti]=balNow;
+  for(let i=ti-1;i>=0;i--) bal[i]=bal[i+1]-inflow[i+1]+outflow[i+1];
+  for(let i=ti+1;i<days.length;i++) bal[i]=bal[i-1]+inflow[i]-outflow[i];
+  let minI=0; bal.forEach((v,i)=>{ if(v<bal[minI]) minI=i; }); let minF=ti; for(let i=ti;i<days.length;i++) if(bal[i]<bal[minF]) minF=i;
+  return {days,bal,inflow,outflow,notes,ti,minI,minF,balNow:c.balNow,hasBal:c.balNow!=null};
+}
+function dailyLineChart(m){ const W=960,H=300,padL=16,padR=64,padT=18,padB=34; const n=m.days.length; const vals=m.bal;
+  const mx=Math.max(...vals,1), mn=Math.min(...vals,0); const span=mx-mn||1; const x=i=>padL+(W-padL-padR)*i/(n-1); const y=v=>padT+(H-padT-padB)*(1-(v-mn)/span);
+  const ticks=[0,.25,.5,.75,1].map(f=>mn+span*f); const grid=ticks.map(v=>`<line x1="${padL}" y1="${y(v).toFixed(1)}" x2="${W-padR}" y2="${y(v).toFixed(1)}" stroke="var(--viz-grid)"/><text x="${W-padR+6}" y="${(y(v)+3.5).toFixed(1)}" font-size="10" fill="var(--viz-muted)" class="tnum">${vizNum(v)}</text>`).join('');
+  const zero=(mn<0&&mx>0)?`<line x1="${padL}" y1="${y(0).toFixed(1)}" x2="${W-padR}" y2="${y(0).toFixed(1)}" stroke="var(--red)" stroke-width="1.2" stroke-dasharray="4 4"/><text x="${W-padR+6}" y="${(y(0)+3.5).toFixed(1)}" font-size="10" fill="var(--red)">0</text>`:'';
+  const past=vals.slice(0,m.ti+1).map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' '); const fut=vals.slice(m.ti).map((v,i)=>`${x(m.ti+i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const areaP=`<polygon points="${x(0)},${y(mn)} ${past} ${x(m.ti)},${y(mn)}" fill="var(--viz-1)" opacity=".08"/>`;
+  const todayL=`<line x1="${x(m.ti).toFixed(1)}" y1="${padT}" x2="${x(m.ti).toFixed(1)}" y2="${H-padB}" stroke="var(--viz-axis)" stroke-dasharray="3 3"/><text x="${x(m.ti).toFixed(1)}" y="${padT-6}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--viz-ink-2)">היום</text>`;
+  const dip=(i,label,color)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(vals[i]).toFixed(1)}" r="5" fill="${color}" stroke="var(--surface)" stroke-width="2"/><text x="${x(i).toFixed(1)}" y="${(y(vals[i])+18).toFixed(1)}" text-anchor="middle" font-size="10.5" font-weight="800" fill="${color}">${label} ${fmtDate(m.days[i])}: ${money(vals[i])}</text>`;
+  const dips=dip(m.minI,'שפל',m.minI<=m.ti?'var(--red)':'var(--amber)')+(m.minF!==m.minI?dip(m.minF,'שפל צפוי','var(--amber)'):'');
+  const labels=m.days.map((d,i)=>d.slice(8,10)==='01'?`<text x="${x(i).toFixed(1)}" y="${H-12}" text-anchor="middle" font-size="10" font-weight="600" fill="var(--viz-ink-2)">${mLabel(d.slice(0,7))}</text><line x1="${x(i).toFixed(1)}" y1="${H-padB}" x2="${x(i).toFixed(1)}" y2="${H-padB+5}" stroke="var(--viz-axis)"/>`:'').join('');
+  const bw=(W-padL-padR)/(n-1); const hits=m.days.map((d,i)=>`<rect class="hit" x="${(x(i)-bw/2).toFixed(1)}" y="${padT}" width="${bw.toFixed(2)}" height="${H-padT-padB}" data-tip="${esc(fmtDate(d)+(i>m.ti?' (תחזית)':'')+'\nיתרה: '+money(vals[i])+(m.inflow[i]?'\nנכנס: '+money(m.inflow[i]):'')+(m.outflow[i]?'\nיצא: '+money(m.outflow[i]):'')+(m.notes[i].length?'\n'+m.notes[i].slice(0,4).join('\n'):''))}"/>`).join('');
+  return `<div class="viz"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="aspect-ratio:${W}/${H}">${grid}${zero}${areaP}<polyline points="${past}" fill="none" stroke="var(--viz-1)" stroke-width="2" stroke-linejoin="round"/><polyline points="${fut}" fill="none" stroke="var(--amber)" stroke-width="2" stroke-dasharray="6 4" stroke-linejoin="round"/>${todayL}${dips}${labels}${hits}</svg></div><div class="viz-legend"><span><i style="background:var(--viz-1)"></i>יתרת עו״ש (משוחזרת מהתנועות)</span><span><i style="background:var(--amber);height:0;border-top:2px dashed var(--amber)"></i>תחזית לפי החיובים הצפויים</span><span><i style="background:var(--red);height:0;border-top:2px dashed var(--red)"></i>אפס (מינוס)</span></div>`; }
+document.addEventListener('change',e=>{ if(e.target&&e.target.id==='cf-income'){ try{ localStorage.setItem('home-cf-income',e.target.checked?'1':'0'); }catch(_){} render({keepScroll:true}); } });
 function cashflowHTML(){
   const c=cashflowModel(); const all=c.hist.concat(c.fut); const M=c.M;
+  const dm=cashflowDaily(cfIncludeIncome());
+  const dailyPanel=`<div class="panel" style="grid-column:1/-1"><h3>📉 יתרת העו״ש יום‑יום — חצי שנה אחורה ו‑3 חודשים קדימה <label class="chk" style="display:inline-flex;align-items:center;gap:6px;margin-inline-start:14px;font-weight:400;font-size:12.5px;cursor:pointer"><input type="checkbox" id="cf-income" ${cfIncludeIncome()?'checked':''}> כולל הכנסות</label></h3>
+    ${dm.hasBal?'':'<div class="hintbar">⚠️ אין יתרת עו״ש מהבנק (החיבור לא נטען) — הגרף מתחיל מ‑0 ומראה את השינוי היחסי בלבד.</div>'}
+    ${dailyLineChart(dm)}
+    <div class="hint" style="margin-top:8px">${cfIncludeIncome()?'התחזית כוללת את הכניסות הצפויות לעו״ש (משכורת, קצבאות, העברות חוזרות). בטלו את הסימון כדי לראות את «הדיפ» הגולמי — רק החיובים הצפויים.':'<strong>ללא הכנסות</strong> — העבר הוא היתרה האמיתית, ומהיום קדימה הקו מראה כמה החיובים הצפויים לבד מורידים מהיתרה: זה הדיפ שצריך לכסות.'} שפל ${dm.minI<=dm.ti?'היסטורי':'צפוי'}: <strong>${money(dm.bal[dm.minI])}</strong> ב‑${fmtDate(dm.days[dm.minI])}${dm.minF!==dm.minI?` · שפל צפוי בתחזית: <strong>${money(dm.bal[dm.minF])}</strong> ב‑${fmtDate(dm.days[dm.minF])}`:''}. ריחוף על הגרף מציג מה נכנס ויצא באותו יום.</div></div>`;
   const next30=c.events.filter(e=>{ const d=new Date(e.d); const diff=(d-new Date())/86400000; return diff>=-1&&diff<=45; });
   const outN=next30.filter(e=>e.kind!=='income').reduce((s,e)=>s+e.amt,0), inN=next30.filter(e=>e.kind==='income').reduce((s,e)=>s+e.amt,0);
   const series=[{name:'הכנסות',color:'var(--viz-3)',values:all.map(m=>Math.round(M[m].inflow))},{name:'תשלומים (משכנתא+כרטיסים+הו״ק+שוטף)',color:'var(--viz-2)',values:all.map(m=>Math.round(c.out(m)))}];
@@ -3536,6 +3592,7 @@ function cashflowHTML(){
       ${c.proj.length?`<div class="stat-card ${c.proj[c.proj.length-1].bal<0?'expense':'income'}"><div class="label">🔮 יתרה צפויה ${c.proj[c.proj.length-1].label}</div><div class="value tnum">${money(c.proj[c.proj.length-1].bal)}</div><div class="sub">${c.proj.map(p=>p.label.replace('סוף ','')+': '+money(p.bal)).join(' · ')}</div></div>`:''}
     </div>
     <div class="panels">
+      ${dailyPanel}
       <div class="panel" style="grid-column:1/-1"><h3>📈 הכנסות מול תשלומים — היסטוריה ותחזית</h3>${multiLineChart(all,series)}<div class="hint" style="margin-top:6px">3 החודשים האחרונים בגרף הם <strong>תחזית</strong>: משכנתא = התשלום האחרון · חיובי כרטיסים לחודש הבא = יתרת המחזור הנוכחי מהבנק${c.currentCycle!=null?` (${money(c.currentCycle)})`:''}, אחר כך ממוצע 3 חודשים · הו״ק והוצאות שוטפות והכנסות = ממוצע 3 החודשים המלאים האחרונים.</div></div>
       <div class="panel" style="grid-column:1/-1"><h3>📅 תזרים לפי חודש</h3><div class="table-wrap"><table style="width:100%"><thead><tr><th>חודש</th><th class="tnum">כניסות לעו״ש</th><th class="tnum">מזה העברות</th><th class="tnum">משכנתא</th><th class="tnum">חיובי כרטיסים</th><th class="tnum">הו״ק קבועות</th><th class="tnum">שוטף בנק</th><th class="tnum">תנועות הון</th><th class="tnum">נטו</th></tr></thead><tbody>
         ${all.slice().reverse().map(m=>{ const o=M[m]; const net=o.inflow-c.out(m); return `<tr style="${o.forecast?'background:color-mix(in srgb,var(--accent) 7%,transparent)':''}"><td><strong>${fmtMonth(m)}</strong>${o.forecast?' <span class="pill status-soon" style="padding:1px 7px">תחזית</span>':(m===c.curYM?' <span class="pill status-none" style="padding:1px 7px">בעיצומו</span>':'')}</td><td class="tnum amount-pos">${money(o.inflow)}</td><td class="tnum muted">${o.transfersIn?money(o.transfersIn):'—'}</td><td class="tnum amount-neg">${o.mortgage?money(o.mortgage):'—'}</td><td class="tnum amount-neg">${o.cards?money(o.cards):'—'}</td><td class="tnum amount-neg">${o.fixed?money(o.fixed):'—'}</td><td class="tnum amount-neg">${o.other?money(o.other):'—'}</td><td class="tnum muted">${o.capital?money(o.capital):'—'}</td><td class="tnum ${net>=0?'amount-pos':'amount-neg'}" style="font-weight:800">${money(net)}</td></tr>`; }).join('')}</tbody></table></div><div class="hint" style="margin-top:6px">חיובי כרטיסים = רכישות החודש הקודם (מחויבות בחודש הזה${Object.keys(c.chargeDay).length?': '+Object.entries(c.chargeDay).map(([k,d])=>k+' ב‑'+d).join(', '):''}). «כניסות לעו״ש» = כל מה שנכנס לחשבון (משכורת, קצבאות וגם העברות מחשבונות אחרים), ללא תנועות הון חד-פעמיות מעל ₪100K. «נטו» = כניסות פחות כל התשלומים. תחזית ההכנסות = חציון 6 החודשים האחרונים.</div></div>
@@ -4215,5 +4272,6 @@ async function boot(){
 }
 boot();
 </script>
+
 
 </body></html>
