@@ -111,12 +111,20 @@ export class AdOpsSource {
    * seven hundred requests instead of thirty-three — the difference between a
    * job that finishes and one that gives up.
    */
-  async selectAll(table, { select = '*', filters = {}, order = null } = {}) {
+  async selectAll(table, { select = '*', filters = [], order = null } = {}) {
     if (!/^[a-z_][a-z0-9_]*$/i.test(table)) throw new Error(`"${table}" is not a table name`);
 
     const params = new URLSearchParams();
     params.set('select', select);
-    for (const [column, condition] of Object.entries(filters)) params.append(column, condition);
+    /*
+     * Filters are PAIRS, not an object, because a column takes more than one
+     * condition: a date range is `report_date=gte.X` AND `report_date=lte.Y`.
+     * Written as an object the second key overwrote the first, the lower bound
+     * vanished, and the job read every row the source had ever recorded — a
+     * three-day pull came back with forty-six thousand rows and never
+     * finished. It looked exactly like a slow network.
+     */
+    for (const [column, condition] of filters) params.append(column, condition);
     if (order) params.set('order', order);
 
     const rows = [];

@@ -109,8 +109,11 @@ async function main() {
   const from = day(DAYS);
   const to = day(0);
   const pulledAt = new Date();
-  const between = { report_date: `gte.${from}` };
-  const andTo = { report_date: `lte.${to}` };
+  /** The window, as the pair of conditions PostgREST wants on one column. */
+  const window = [
+    ['report_date', `gte.${from}`],
+    ['report_date', `lte.${to}`],
+  ];
 
   console.log(`pulling ${from}..${to}`);
 
@@ -140,10 +143,10 @@ async function main() {
   const [seatOverview, vidazoo, xeUnsplit, rollup, coreSnapshot, gam, gamApps, xeEcon, xeSplit, accounts] =
     await Promise.all([
       source.rpc('get_seat_lease_overview_daily', { p_from: from, p_to: to }),
-      source.selectAll('trading_vidazoo_reports', { filters: { ...between, ...andTo } }),
-      source.selectAll('trading_xe_reports', { filters: { ...between, ...andTo, ssp_id: 'is.null' } }),
-      source.selectAll('ars_site_daily_rollup', { filters: { ...between, ...andTo } }),
-      source.selectAll('ars_core_publishers_daily_snapshot', { filters: { ...between, ...andTo } }),
+      source.selectAll('trading_vidazoo_reports', { filters: window }),
+      source.selectAll('trading_xe_reports', { filters: [...window, ['ssp_id', 'is.null']] }),
+      source.selectAll('ars_site_daily_rollup', { filters: window }),
+      source.selectAll('ars_core_publishers_daily_snapshot', { filters: window }),
       /*
        * Only the CTV slice, narrowed at the source. The whole table is seven
        * hundred thousand rows a month and this is thirty-three thousand of
@@ -152,18 +155,18 @@ async function main() {
        */
       source.selectAll('gam_reports', {
         select: 'report_date,site_id,revenue,impressions,device_category',
-        filters: { ...between, ...andTo, device_category: 'in.("connected tv","set-top box")' },
+        filters: [...window, ['device_category', 'in.("connected tv","set-top box")']],
       }),
       source.selectAll('gam_app_reports', {
         select: 'report_date,site_id,app_id,revenue,impressions',
-        filters: { ...between, ...andTo },
+        filters: window,
       }),
       // Likewise: CTV is under a thousand rows a month out of half a million.
       source.selectAll('xe_econ_path_daily', {
         select: 'report_date,dsp_id,env_type,revenue,profit,impressions',
-        filters: { ...between, ...andTo, env_type: 'eq.CTV' },
+        filters: [...window, ['env_type', 'eq.CTV']],
       }),
-      source.selectAll('trading_xe_reports', { filters: { ...between, ...andTo } }),
+      source.selectAll('trading_xe_reports', { filters: window }),
       source.selectAll('ars_accounts'),
     ]);
 
