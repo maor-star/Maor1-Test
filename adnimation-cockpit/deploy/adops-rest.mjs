@@ -93,9 +93,15 @@ export class AdOpsSource {
   /**
    * Every row matching a query, however many pages that takes.
    *
-   * PostgREST answers a bounded slice and says how many there are in total, so
-   * a year of daily rows arrives whole instead of silently truncated at the
-   * first thousand — which would look exactly like a quiet year.
+   * PostgREST answers a bounded slice — a thousand rows, capped server-side —
+   * so a year of daily rows arrives whole instead of silently truncated at the
+   * first page, which would look exactly like a quiet year.
+   *
+   * Which is why every caller filters at the SOURCE rather than afterwards. Ad
+   * Manager reports seven hundred thousand rows for a month; the CTV slice of
+   * it is thirty-three thousand. Pulling the first and narrowing here would be
+   * seven hundred requests instead of thirty-three — the difference between a
+   * job that finishes and one that gives up.
    */
   async selectAll(table, { select = '*', filters = {}, order = null } = {}) {
     if (!/^[a-z_][a-z0-9_]*$/i.test(table)) throw new Error(`"${table}" is not a table name`);
@@ -108,10 +114,12 @@ export class AdOpsSource {
     const rows = [];
     for (let from = 0; ; from += PAGE) {
       const res = await this.#send(`/rest/v1/${table}?${params.toString()}`, {
+        // No `count=exact`: it counts the whole matching set on every page,
+        // which on a table of hundreds of thousands of rows costs more than
+        // the page does. The page's own length says whether there is more.
         headers: await this.#headers({
           Range: `${from}-${from + PAGE - 1}`,
           'Range-Unit': 'items',
-          Prefer: 'count=exact',
         }),
       });
       const page = await res.json();
@@ -138,12 +146,23 @@ export class AdOpsSource {
     return res.json();
   }
 
-  /** Signed in and able to read — the two things that fail separately. */
+  /**
+   * Signed in and able to read — the two things that fail separately.
+   *
+   * A session that authenticates but can see nothing is the failure that looks
+   * like success, so this does both and says which one broke.
+   */
   async health(table = 'ars_site_daily_revenue') {
     await this.#auth();
-    const rows = await this.selectAll(table, { select: 'report_date', filters: { limit: 'x' } })
-      .catch(() => null);
-    return { signedIn: true, canRead: rows !== null };
+    try {
+      const res = await this.#send(`/rest/v1/${table}?select=report_date`, {
+        headers: await this.#headers({ Range: '0-0', 'Range-Unit': 'items' }),
+      });
+      const rows = await res.json();
+      return { signedIn: true, canRead: true, rows: rows.length, error: null };
+    } catch (e) {
+      return { signedIn: true, canRead: false, rows: null, error: e?.message ?? String(e) };
+    }
   }
 }
 

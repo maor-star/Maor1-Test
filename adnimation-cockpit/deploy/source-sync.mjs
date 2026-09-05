@@ -141,17 +141,24 @@ async function main() {
       source.selectAll('trading_xe_reports', { filters: { ...between, ...andTo, ssp_id: 'is.null' } }),
       source.selectAll('ars_site_daily_rollup', { filters: { ...between, ...andTo } }),
       source.selectAll('ars_core_publishers_daily_snapshot', { filters: { ...between, ...andTo } }),
+      /*
+       * Only the CTV slice, narrowed at the source. The whole table is seven
+       * hundred thousand rows a month and this is thirty-three thousand of
+       * them — the difference between a job that finishes and one that does
+       * not.
+       */
       source.selectAll('gam_reports', {
         select: 'report_date,site_id,revenue,impressions,device_category',
-        filters: { ...between, ...andTo },
+        filters: { ...between, ...andTo, device_category: 'in.("connected tv","set-top box")' },
       }),
       source.selectAll('gam_app_reports', {
         select: 'report_date,site_id,app_id,revenue,impressions',
         filters: { ...between, ...andTo },
       }),
+      // Likewise: CTV is under a thousand rows a month out of half a million.
       source.selectAll('xe_econ_path_daily', {
         select: 'report_date,dsp_id,env_type,revenue,profit,impressions',
-        filters: { ...between, ...andTo },
+        filters: { ...between, ...andTo, env_type: 'eq.CTV' },
       }),
       source.selectAll('trading_xe_reports', { filters: { ...between, ...andTo } }),
       source.selectAll('ars_accounts'),
