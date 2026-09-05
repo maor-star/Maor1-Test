@@ -90,7 +90,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
 }
 
 /**
- * The company first, then its seven pillars, over one window.
+ * The company first, then its revenue engines, over one window.
  *
  * The pillars are seven different cuts of the business and they overlap on
  * purpose, so the cube above them is the P&L rather than their sum. Each is

@@ -14,7 +14,7 @@ describe('the pillars a thing can be tagged to', () => {
     expect(labels).toContain('EXCHANGE APP');
     expect(labels).toContain('EXCHANGE CTV');
     expect(labels).toContain('EXCHANGE DISPLAY');
-    expect(labels).toContain('BUDDER');
+    expect(labels).toContain('BIDDER');
     expect(labels).toContain('GOOGLE CTV');
     expect(labels).toContain('IBV — VIDEO');
   });

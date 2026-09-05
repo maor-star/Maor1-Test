@@ -13,7 +13,7 @@
  */
 
 export const PERIODS = [
-  'TODAY', 'YESTERDAY', '7D', '30D', 'MTD', 'QTD', 'LAST_Q', 'YTD',
+  'TODAY', 'YESTERDAY', '7D', '30D', 'MTD', 'LAST_M', 'QTD', 'LAST_Q', 'YTD',
 ] as const;
 export type Period = (typeof PERIODS)[number];
 
@@ -24,6 +24,7 @@ export const PERIOD_LABEL: Record<Period, string> = {
   '30D': '30 DAYS',
   MTD: 'MONTH TO DATE',
   QTD: 'QUARTER TO DATE',
+  LAST_M: 'LAST MONTH',
   LAST_Q: 'LAST QUARTER',
   YTD: 'YEAR TO DATE',
 };
@@ -36,6 +37,7 @@ export const PERIOD_TAB: Record<Period, string> = {
   '30D': '30D',
   MTD: 'MTD',
   QTD: 'QTD',
+  LAST_M: 'LAST MONTH',
   LAST_Q: 'LAST Q',
   YTD: 'YTD',
 };
@@ -48,6 +50,7 @@ export const COMPARISON_LABEL: Record<Period, string> = {
   '30D': 'vs previous 30 days',
   MTD: 'vs same days last month',
   QTD: 'vs same days last quarter',
+  LAST_M: 'vs the month before it',
   LAST_Q: 'vs the quarter before it',
   YTD: 'vs same days last year',
 };
@@ -159,6 +162,19 @@ export function rangeFor(
       const elapsed = daysBetween(from, to);
       const prevFrom = shiftMonths(from, 1);
       return build(from, prevFrom, addDays(prevFrom, elapsed - 1));
+    }
+
+    /*
+     * The last *complete* month — a whole month against a whole month, so
+     * unlike month-to-date this needs no elapsed-days adjustment. It is the
+     * window he closes a month on: "what did we actually do in August".
+     */
+    case 'LAST_M': {
+      const thisMonthStart = startOfMonth(to);
+      const from = shiftMonths(thisMonthStart, 1);
+      const over = addDays(thisMonthStart, -1);
+      const prevFrom = shiftMonths(from, 1);
+      return build(from, prevFrom, addDays(from, -1), over);
     }
 
     case 'QTD': {

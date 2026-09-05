@@ -80,6 +80,9 @@ async function main() {
     // The control panel's lines: activity-sync imports activity-source, which
     // borrows the read-only guard from revenue-source.
     'activity-sync.mjs', 'activity-source.mjs',
+    // Everything from the source over its own REST door — the one that has a
+    // credential. The two above go through the Lovable API and exit 78.
+    'source-sync.mjs', 'adops-rest.mjs', 'adops-aggregate.mjs',
     // Both syncs read the keys he set on the Keys screen, not only the .env.
     'job-secrets.mjs',
     // opportunity-sweep imports the generated copy of the detection rules.

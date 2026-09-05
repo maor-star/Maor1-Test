@@ -10,14 +10,14 @@ import type { PeriodRange } from '@/lib/revenue/periods';
  */
 
 /**
- * The seven pillars of the company, in his words.
+ * The revenue engines, in his words.
  *
- * Six are read from the activity source's own daily rows. `bidder` — Budder —
- * is not one of them: it is the Vidazoo bidder, which the P&L already carries
- * day by day in `company_daily`, so the control panel reads it from there and
- * hands it to the same summariser. It is a pillar of the business either way,
- * and which table its days happen to live in is not something the screen
- * should know about.
+ * Six are read from the activity source's own daily rows. `bidder` is not one
+ * of them: it is the Vidazoo bidder, which the P&L already carries day by day
+ * in `company_daily`, so the control panel reads it from there and hands it to
+ * the same summariser. It is an engine of the business either way, and which
+ * table its days happen to live in is not something the screen should know
+ * about.
  *
  * Seat lease is a book in the P&L and not one of his seven, so it is not here.
  */
@@ -44,7 +44,7 @@ export const LINE_LABEL: Record<ActivityLine, string> = {
   apps: 'EXCHANGE APP',
   ctv: 'EXCHANGE CTV',
   rtb_display: 'EXCHANGE DISPLAY',
-  bidder: 'BUDDER',
+  bidder: 'BIDDER',
   google_ctv: 'GOOGLE CTV',
   ibv: 'IBV — VIDEO',
 };

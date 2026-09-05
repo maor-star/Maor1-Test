@@ -113,12 +113,22 @@ describe('rangeFor', () => {
   it('every period compares like with like', () => {
     for (const p of PERIODS) {
       const r = rangeFor(p, DAY, TODAY);
-      // LAST_Q compares whole calendar quarters, and those genuinely differ in
-      // length (Q1 2026 is 90 days, Q2 is 91). The headline delta divides by
-      // days, so the comparison stays fair without forcing equal windows.
+      /*
+       * LAST_Q and LAST_M compare whole calendar periods, and those genuinely
+       * differ in length — Q1 2026 is 90 days and Q2 is 91; March is 31 days
+       * and February 28. Forcing equal windows would answer a different
+       * question from the one he asks when he closes a month: what did we do
+       * in August, against what we did in July. The headline delta divides by
+       * days, so the comparison stays fair without them matching.
+       */
       if (p === 'LAST_Q') {
         expect(r.previous.from.endsWith('-01-01')).toBe(true);
         expect(r.previous.to.endsWith('-03-31')).toBe(true);
+      } else if (p === 'LAST_M') {
+        // A whole month, ending the day before the current window opens.
+        expect(r.previous.from.endsWith('-01')).toBe(true);
+        expect(daysBetween(r.previous.from, r.previous.to)).toBeGreaterThanOrEqual(28);
+        expect(daysBetween(r.previous.from, r.previous.to)).toBeLessThanOrEqual(31);
       } else {
         expect(daysBetween(r.previous.from, r.previous.to)).toBe(r.days);
       }

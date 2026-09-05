@@ -7,7 +7,7 @@ import { cleanLines, type Taggable } from './pillars';
  * Tagging work to the pillars it belongs to.
  *
  * He asked to be able to see the whole company by department: a task, a deal
- * or a contract carries one or more of the seven pillars, and every screen can
+ * or a contract carries one or more of the revenue engines, and every screen can
  * then be read one pillar at a time. The pillar is the same key the revenue
  * source reports against, so "Exchange CTV" on the overview tile and "Exchange
  * CTV" on a contract are the same thing — not two taxonomies that drift.

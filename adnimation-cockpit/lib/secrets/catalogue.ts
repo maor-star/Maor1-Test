@@ -35,7 +35,7 @@ export const SECRETS: SecretSpec[] = [
     key: 'SUPABASE_ANON_KEY',
     label: 'Source key (Supabase publishable)',
     unlocks:
-      'Reading the ad ops source directly, so the seven pillars and the P&L show live figures instead of the last snapshot.',
+      'Reading the ad ops source directly, so the revenue engines and the P&L show live figures instead of the last snapshot.',
     where:
       'Lovable → the adops-architect project → the value of VITE_SUPABASE_PUBLISHABLE_KEY. It is the publishable key — the one that already ships in the app people load in a browser.',
     group: 'data',

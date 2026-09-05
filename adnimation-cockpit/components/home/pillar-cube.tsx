@@ -14,14 +14,15 @@ import type { LinePeriodSummary } from '@/lib/control/lines';
 import type { LineTargetView } from '@/lib/control/targets';
 
 /**
- * One pillar of the company: what it earned, what it was meant to earn, and
- * which of those is bigger.
+ * One revenue engine: what it earned, what it was meant to earn, and which of
+ * those is bigger.
  *
  * Green or red across the whole tile, because the question he asks a wall of
- * these is not "how is Budder doing" but "which of the seven needs me today" —
- * and that has to be answerable from across the room. A pillar with no target
- * set stays neutral rather than guessing: red is a judgement, and judging a
- * line against a number nobody set is how a colour stops meaning anything.
+ * these is not "how is the bidder doing" but "which of the seven needs me
+ * today" — and that has to be answerable from across the room. An engine with
+ * no target set stays neutral rather than guessing: red is a judgement, and
+ * judging a line against a number nobody set is how a colour stops meaning
+ * anything.
  *
  * The target is edited on the tile. It lives per month and is pro-rated to
  * whatever window the page is showing, so the same figure reads correctly over

@@ -45,9 +45,9 @@ export async function loadControlPanel(period: Period = '30D'): Promise<ControlP
     db.select().from(activityDaily).where(gte(activityDaily.date, since)),
     db.select().from(coreClientsDaily).where(gte(coreClientsDaily.date, since)),
     /*
-     * Budder's days.
+     * The bidder's days.
      *
-     * The bidder is one of his seven pillars and the activity source does not
+     * The bidder is one of his revenue engines and the activity source does not
      * report it — the P&L does, day by day, because it is one of the four
      * books. Reading it from there costs one query and keeps the tile telling
      * the truth; the alternative was a seventh tile that said "nothing from

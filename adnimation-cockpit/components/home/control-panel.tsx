@@ -11,9 +11,9 @@ import type { LineTargetView } from '@/lib/control/targets';
 import { PillarCube } from '@/components/home/pillar-cube';
 
 /**
- * The seven pillars of the company, one cube each, across the width.
+ * The revenue engines, one cube each, across the width.
  *
- * Core Publishers, Exchange App, Exchange CTV, Exchange Display, Budder,
+ * Core Publishers, Exchange App, Exchange CTV, Exchange Display, Bidder,
  * Google CTV and IBV — the way he names the business. Each carries what it
  * earned over the window on screen and what it was meant to earn, and the
  * whole tile goes green or red on the answer, because the question he asks a
@@ -40,7 +40,7 @@ export function ControlPanel({
       <HudCard className="gap-0 overflow-hidden p-0">
         <div className="p-[22px] pb-[14px]">
           <HudCardHeader
-            title="The seven pillars"
+            title="Revenue engines"
             action={
               <span className="text-[12.5px] text-muted">
                 {PERIOD_LABEL[panel.period]} · against target, pro-rated to the window ·{' '}

@@ -38,7 +38,7 @@ interface SearchParams {
   closed?: string;
   /** '1' shows what has been suggested and not yet accepted. */
   suggested?: string;
-  /** One of the seven pillars, to read the board a department at a time. */
+  /** One of the revenue engines, to read the board a department at a time. */
   pillar?: string;
 }
 

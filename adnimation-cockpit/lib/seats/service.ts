@@ -89,6 +89,7 @@ const WINDOW_DAYS: Record<string, number> = {
   '7D': 7,
   '30D': 30,
   MTD: 28,
+  LAST_M: 30,
   QTD: 59,
   LAST_Q: 91,
   YTD: 240,
