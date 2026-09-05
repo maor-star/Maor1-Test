@@ -1049,6 +1049,23 @@ function ensureDefaults(){
       for(const [k,cid] of MAP){ if(cid && (k==='studio' ? /^studio\b/i.test((t.merchant||'').trim()) : txt.includes(k.toLowerCase()))){ if(t.category_id!==cid){ t.category_id=cid; n++; } break; } } });
     db.fixV23=n; db.defaultsV=23; save();
   }
+  if((db.defaultsV||0) < 24){
+    // כפילויות קובץ↔בנק שנבדלות רק בפורמט השם: «עיר ~בית עסק» (קנייה בחו"ל באתר חברת האשראי), «PAYBOX-שם»/«העברה בBIT-שם» (הבנק מוסיף למי),
+    // «(תאריך ערך: …)». אותו תאריך + אותו סכום + שם אחד מוכל בשני ⇒ אותה קנייה. שומרים את שורת הבנק (יש לה מזהה), מעבירים אליה סיווג אם חסר.
+    const core=s=>String(s||'').toLowerCase().replace(/^[^~]*~/,'').replace(/\(.*?\)/g,'').replace(/[^a-z0-9֐-׿]/g,'');
+    const byK={}; (db.transactions||[]).forEach(t=>{ if(t.kind!=='expense') return; const k=String(t.tx_date).slice(0,10)+'|'+Math.round(Number(t.amount)*100); (byK[k]=byK[k]||[]).push(t); });
+    const drop=new Set(); let sum=0;
+    Object.values(byK).forEach(arr=>{ if(arr.length<2) return;
+      for(let i=0;i<arr.length;i++) for(let j=i+1;j<arr.length;j++){ const a=arr[i],b=arr[j]; if(drop.has(a.id)||drop.has(b.id)) continue;
+        const na=core(a.merchant||a.description), nb=core(b.merchant||b.description); if(!na||!nb||na.length<3||nb.length<3) continue;
+        if(!(na.includes(nb)||nb.includes(na))) continue;
+        // לא מוחקים שתי שורות שהגיעו שתיהן מהבנק עם כרטיסים שונים (שתי קניות זהות בשני כרטיסים — נדיר אבל אפשרי)
+        if(a.of_id&&b.of_id&&/••/.test(a.account||'')&&/••/.test(b.account||'')&&a.account!==b.account) continue;
+        const keep=(a.of_id&&!b.of_id)?a:(b.of_id&&!a.of_id)?b:(/••/.test(a.account||'')?a:b); const gone=keep===a?b:a;
+        if(!keep.category_id&&gone.category_id) keep.category_id=gone.category_id; drop.add(gone.id); sum+=gone.amount; } });
+    if(drop.size) db.transactions=db.transactions.filter(t=>!drop.has(t.id));
+    db.dedupV24={rows:drop.size,sum:Math.round(sum)}; db.defaultsV=24; save();
+  }
 }
 // הגנה: תקלה במיגרציה לא תשבית את כל האתר (מסך לבן) — מדווחים וממשיכים עם הנתונים כפי שהם
 try{ ensureDefaults(); }catch(e){ console.error('ensureDefaults failed',e); try{ window.__bootError=e.message; }catch(_){} }
@@ -1229,6 +1246,10 @@ function h_transactions(m,id,sub,b,qp){
       const seen=refMap.get(bk)||[];
       // קנייה בכרטיס שכבר קיימת (מאותו כרטיס לפי ••, או שורת כרטיס מקובץ ללא מספר) — אותה קנייה; שומרים אחת ומיישרים לשם הבנק
       const l4=(s)=>(String(s||'').match(/••(\d{4})/)||[])[1]||''; const rl4=strv(r.source)==='credit_card'?l4(r.account):'';
+      // גם כשהשם שונה בפורמט בלבד (עיר ~בית עסק / PAYBOX-שם / (תאריך ערך)) — אותו תאריך+סכום בכרטיס = אותה קנייה
+      const core=s=>strv(s).toLowerCase().replace(/^[^~]*~/,'').replace(/\(.*?\)/g,'').replace(/[^a-z0-9֐-׿]/g,'');
+      const daKey=kind+'|'+date.slice(0,10)+'|'+Math.round(amount*100);
+      if(rl4 && !(txMap.get(bk)||[]).length){ const rc=core(merchant); const cand=db.transactions.find(x=>x.kind===kind&&String(x.tx_date).slice(0,10)===date.slice(0,10)&&Math.round(Math.abs(numv(x.amount))*100)===Math.round(amount*100)&&isCardDetail(x)&&!l4(x.account)&&(()=>{ const xc=core(x.merchant||x.description); return xc.length>=3&&rc.length>=3&&(xc.includes(rc)||rc.includes(xc)); })()); if(cand){ cand.account=strv(r.account); if(ofId&&!cand.of_id){ cand.of_id=ofId; ofIds.add(ofId); } if(!cand.ref&&ref) cand.ref=ref; skipped++; continue; } }
       if(rl4){ const same=(txMap.get(bk)||[]).find(x=>l4(x.account)===rl4 || (isCardDetail(x)&&!l4(x.account))); if(same){ if(same.account!==strv(r.account)) same.account=strv(r.account); if(ofId&&!same.of_id){ same.of_id=ofId; ofIds.add(ofId); } if(!same.ref&&ref) same.ref=ref; skipped++; continue; } }
       if(seen.length && (ref==='' || seen.some(x=>x===''||x===ref))){ // כפילות — אבל מעשירים שורה קיימת (מקובץ) באסמכתא/מזהה מהבנק אם חסרים לה
         const ex=(txMap.get(bk)||[]).find(x=>!strv(x.ref)); if(ex){ if(ref) ex.ref=ref; if(ofId&&!ex.of_id){ ex.of_id=ofId; ofIds.add(ofId); } if(r.of_cat&&r.of_cat.main&&!ex.of_cat) ex.of_cat=r.of_cat.main+(r.of_cat.sub?'/'+r.of_cat.sub:'');
