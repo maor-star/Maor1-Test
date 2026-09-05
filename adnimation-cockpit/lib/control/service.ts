@@ -1,5 +1,5 @@
 import { and, desc, gte, sql } from 'drizzle-orm';
-import { activityDaily, coreClientsDaily, db } from '@/lib/db';
+import { activityDaily, companyDaily, coreClientsDaily, db } from '@/lib/db';
 import { todayInTz } from '@/lib/utils';
 import { addDays, rangeFor, type Period, type PeriodRange } from '@/lib/revenue/periods';
 import {
@@ -41,9 +41,27 @@ export async function loadControlPanel(period: Period = '30D'): Promise<ControlP
   const fiveWeeksAgo = addDays(today, -WINDOW_DAYS);
   const since = range.previous.from < fiveWeeksAgo ? range.previous.from : fiveWeeksAgo;
 
-  const [lineRows, clientRows, [meta]] = await Promise.all([
+  const [lineRows, clientRows, bidderRows, [meta]] = await Promise.all([
     db.select().from(activityDaily).where(gte(activityDaily.date, since)),
     db.select().from(coreClientsDaily).where(gte(coreClientsDaily.date, since)),
+    /*
+     * Budder's days.
+     *
+     * The bidder is one of his seven pillars and the activity source does not
+     * report it — the P&L does, day by day, because it is one of the four
+     * books. Reading it from there costs one query and keeps the tile telling
+     * the truth; the alternative was a seventh tile that said "nothing from
+     * the source yet" for ever.
+     */
+    db
+      .select({
+        date: companyDaily.date,
+        grossCents: companyDaily.bidderGrossCents,
+        profitCents: companyDaily.bidderProfitCents,
+        impressions: companyDaily.bidderImpressions,
+      })
+      .from(companyDaily)
+      .where(gte(companyDaily.date, since)),
     db
       .select({ pulledAt: sql<Date | null>`max(pulled_at)` })
       .from(activityDaily),
@@ -62,6 +80,17 @@ export async function loadControlPanel(period: Period = '30D'): Promise<ControlP
       entities: r.entities,
     }));
 
+  for (const r of bidderRows) {
+    days.push({
+      line: 'bidder',
+      date: r.date,
+      grossCents: r.grossCents,
+      profitCents: r.profitCents,
+      impressions: r.impressions,
+      entities: null,
+    });
+  }
+
   const clients: CoreClientDay[] = clientRows.map((r) => ({
     account: r.account,
     date: r.date,
@@ -77,7 +106,7 @@ export async function loadControlPanel(period: Period = '30D'): Promise<ControlP
     lines: ACTIVITY_LINES.map((line) => summariseLineOver(line, days, range, today)),
     coreClients: rankCoreClients(clients, today),
     pulledAt: meta?.pulledAt ? new Date(meta.pulledAt) : null,
-    empty: lineRows.length === 0 && clientRows.length === 0,
+    empty: lineRows.length === 0 && clientRows.length === 0 && bidderRows.length === 0,
     today,
   };
 }

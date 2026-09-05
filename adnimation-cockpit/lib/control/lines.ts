@@ -9,6 +9,18 @@ import type { PeriodRange } from '@/lib/revenue/periods';
  * being a second, private arithmetic.
  */
 
+/**
+ * The seven pillars of the company, in his words.
+ *
+ * Six are read from the activity source's own daily rows. `bidder` — Budder —
+ * is not one of them: it is the Vidazoo bidder, which the P&L already carries
+ * day by day in `company_daily`, so the control panel reads it from there and
+ * hands it to the same summariser. It is a pillar of the business either way,
+ * and which table its days happen to live in is not something the screen
+ * should know about.
+ *
+ * Seat lease is a book in the P&L and not one of his seven, so it is not here.
+ */
 export const ACTIVITY_LINES = [
   'core_clients',
   'ibv',
@@ -16,7 +28,7 @@ export const ACTIVITY_LINES = [
   'apps',
   'ctv',
   'google_ctv',
-  'seat_lease',
+  'bidder',
 ] as const;
 export type ActivityLine = (typeof ACTIVITY_LINES)[number];
 
@@ -32,7 +44,7 @@ export const LINE_LABEL: Record<ActivityLine, string> = {
   apps: 'EXCHANGE APP',
   ctv: 'EXCHANGE CTV',
   rtb_display: 'EXCHANGE DISPLAY',
-  seat_lease: 'BUDDER',
+  bidder: 'BUDDER',
   google_ctv: 'GOOGLE CTV',
   ibv: 'IBV — VIDEO',
 };
@@ -45,7 +57,7 @@ export const LINE_UNIT: Record<ActivityLine, string | null> = {
   apps: 'APPS',
   ctv: 'ENDPOINTS',
   google_ctv: 'SITES',
-  seat_lease: 'PARTNERS',
+  bidder: null,
 };
 
 /**
@@ -65,7 +77,7 @@ export const LINE_SOURCE: Record<ActivityLine, string> = {
   apps: 'Google Ad Manager, app inventory',
   ctv: 'The exchange, CTV environment',
   google_ctv: 'Google Ad Manager, connected TV and set-top box',
-  seat_lease: 'Seat lease partners, on the source’s own economics',
+  bidder: 'The Vidazoo bidder, from the P&L’s own daily rows',
 };
 
 export interface LineDay {
