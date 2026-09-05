@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useUndo } from '@/components/ui/undo-bar';
 import { savePipelineClientAction } from '@/app/actions/pipeline';
 import { Button } from '@/components/ui/button';
-import { Input, Label, Select, Textarea } from '@/components/ui/input';
+import { Input, Select, Textarea } from '@/components/ui/input';
+import { EditorActions, EditorField, EditorGrid } from '@/components/hud/editor-panel';
 import {
   CLIENT_TYPES, CLIENT_TYPE_LABEL, OPEN_STAGES, STAGES, STAGE_LABEL, TEMPERATURES,
   TEMPERATURE_LABEL, type Stage,
@@ -13,7 +14,9 @@ import {
 import type { PipelineRow } from '@/lib/pipeline/service';
 
 /**
- * Add or edit a client in the pipeline.
+ * Add or edit a client in the pipeline, in the shape the contracts card set:
+ * a caption over every control, four across, the notes spanning the width at
+ * the bottom, and one row saying what the save is going to do.
  *
  * Typing a name and pressing ADD CLIENT is enough. An open deal still ends up
  * with a next step and a date — the server fills in a placeholder when he
@@ -42,11 +45,11 @@ export function PipelineClientForm({
   const undo = useUndo();
 
   const needsStep = OPEN_STAGES.includes(stage);
+  const f = (name: string) => `pl-${name}-${client?.id ?? 'new'}`;
 
   return (
     <form
       ref={formRef}
-      className="space-y-2"
       action={(formData) => {
         startTransition(async () => {
           const result = await savePipelineClientAction(formData);
@@ -64,28 +67,24 @@ export function PipelineClientForm({
       {client ? <input type="hidden" name="id" value={client.id} /> : null}
 
       {formError || Object.keys(errors).length > 0 ? (
-        <p className="border border-sev-critical/60 bg-sev-critical/10 px-2 py-1.5 text-[12px] text-neutral-900">
+        <p className="mb-3 rounded-[10px] border border-neg/50 bg-neg/10 px-3 py-2 text-[13px] text-ink">
           {formError ?? 'Not saved — see the fields marked below.'}
         </p>
       ) : null}
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="sm:col-span-2">
-          <Label htmlFor={`pl-name-${client?.id ?? 'new'}`}>Client</Label>
-          <Input
-            id={`pl-name-${client?.id ?? 'new'}`}
-            name="name"
-            required
-            defaultValue={client?.name}
-            placeholder="Company name"
-          />
-          {errors.name ? <p className="mt-0.5 text-2xs text-destructive">{errors.name[0]}</p> : null}
-        </div>
+      <EditorGrid>
+        <EditorField
+          label="Who it is with"
+          htmlFor={f('name')}
+          span={2}
+          error={errors.name?.[0] ?? null}
+        >
+          <Input id={f('name')} name="name" required defaultValue={client?.name} placeholder="Company name" />
+        </EditorField>
 
-        <div>
-          <Label htmlFor={`pl-type-${client?.id ?? 'new'}`}>Type</Label>
+        <EditorField label="Type" htmlFor={f('type')}>
           <Select
-            id={`pl-type-${client?.id ?? 'new'}`}
+            id={f('type')}
             name="clientType"
             defaultValue={client?.clientType ?? 'other'}
             className="w-full"
@@ -96,12 +95,11 @@ export function PipelineClientForm({
               </option>
             ))}
           </Select>
-        </div>
+        </EditorField>
 
-        <div>
-          <Label htmlFor={`pl-stage-${client?.id ?? 'new'}`}>Stage</Label>
+        <EditorField label="Stage" htmlFor={f('stage')}>
           <Select
-            id={`pl-stage-${client?.id ?? 'new'}`}
+            id={f('stage')}
             name="stage"
             value={stage}
             onChange={(e) => setStage(e.target.value as Stage)}
@@ -113,12 +111,40 @@ export function PipelineClientForm({
               </option>
             ))}
           </Select>
-        </div>
+        </EditorField>
 
-        <div>
-          <Label htmlFor={`pl-temp-${client?.id ?? 'new'}`}>Temperature</Label>
+        <EditorField
+          label="What is the next move"
+          htmlFor={f('step')}
+          span={2}
+          hint={needsStep ? 'Filled in for you if you leave it empty' : undefined}
+          error={errors.nextStep?.[0] ?? null}
+        >
+          <Input
+            id={f('step')}
+            name="nextStep"
+            defaultValue={client?.nextStep ?? ''}
+            placeholder="Call Ravit about the IO"
+          />
+        </EditorField>
+
+        <EditorField
+          label="Next move due"
+          htmlFor={f('stepdate')}
+          hint={needsStep ? 'Tomorrow, if you leave it empty' : undefined}
+          error={errors.nextStepDate?.[0] ?? null}
+        >
+          <Input
+            id={f('stepdate')}
+            name="nextStepDate"
+            type="date"
+            defaultValue={client?.nextStepDate ?? ''}
+          />
+        </EditorField>
+
+        <EditorField label="Temperature" htmlFor={f('temp')}>
           <Select
-            id={`pl-temp-${client?.id ?? 'new'}`}
+            id={f('temp')}
             name="temperature"
             defaultValue={client?.temperature ?? 'warm'}
             className="w-full"
@@ -129,12 +155,11 @@ export function PipelineClientForm({
               </option>
             ))}
           </Select>
-        </div>
+        </EditorField>
 
-        <div>
-          <Label htmlFor={`pl-owner-${client?.id ?? 'new'}`}>Owner</Label>
+        <EditorField label="Owner" htmlFor={f('owner')}>
           <Select
-            id={`pl-owner-${client?.id ?? 'new'}`}
+            id={f('owner')}
             name="ownerPersonId"
             defaultValue={client?.ownerPersonId ?? ''}
             className="w-full"
@@ -146,12 +171,11 @@ export function PipelineClientForm({
               </option>
             ))}
           </Select>
-        </div>
+        </EditorField>
 
-        <div>
-          <Label htmlFor={`pl-value-${client?.id ?? 'new'}`}>Value (USD / month)</Label>
+        <EditorField label="What it is worth (USD / month)" htmlFor={f('value')}>
           <Input
-            id={`pl-value-${client?.id ?? 'new'}`}
+            id={f('value')}
             name="value"
             type="number"
             min="0"
@@ -159,12 +183,11 @@ export function PipelineClientForm({
             dir="ltr"
             defaultValue={client?.valueCents != null ? client.valueCents / 100 : ''}
           />
-        </div>
+        </EditorField>
 
-        <div>
-          <Label htmlFor={`pl-prob-${client?.id ?? 'new'}`}>Probability (%)</Label>
+        <EditorField label="Probability (%)" htmlFor={f('prob')}>
           <Input
-            id={`pl-prob-${client?.id ?? 'new'}`}
+            id={f('prob')}
             name="probability"
             type="number"
             min="0"
@@ -172,80 +195,48 @@ export function PipelineClientForm({
             dir="ltr"
             defaultValue={client?.probability ?? ''}
           />
-        </div>
+        </EditorField>
 
-        <div className="sm:col-span-2">
-          <Label htmlFor={`pl-step-${client?.id ?? 'new'}`}>
-            Next step {needsStep ? '(filled in for you if you leave it empty)' : '(optional)'}
-          </Label>
+        <EditorField label="Domain" htmlFor={f('domain')}>
           <Input
-            id={`pl-step-${client?.id ?? 'new'}`}
-            name="nextStep"
-            defaultValue={client?.nextStep ?? ''}
-            placeholder="Call Ravit about the IO"
-          />
-          {errors.nextStep ? (
-            <p className="mt-0.5 text-2xs text-destructive">{errors.nextStep[0]}</p>
-          ) : null}
-        </div>
-
-        <div>
-          <Label htmlFor={`pl-stepdate-${client?.id ?? 'new'}`}>
-            Next step date {needsStep ? '(tomorrow, if you leave it empty)' : ''}
-          </Label>
-          <Input
-            id={`pl-stepdate-${client?.id ?? 'new'}`}
-            name="nextStepDate"
-            type="date"
-            defaultValue={client?.nextStepDate ?? ''}
-          />
-          {errors.nextStepDate ? (
-            <p className="mt-0.5 text-2xs text-destructive">{errors.nextStepDate[0]}</p>
-          ) : null}
-        </div>
-
-        <div>
-          <Label htmlFor={`pl-domain-${client?.id ?? 'new'}`}>Domain</Label>
-          <Input
-            id={`pl-domain-${client?.id ?? 'new'}`}
+            id={f('domain')}
             name="domain"
             defaultValue={client?.domain ?? ''}
             placeholder="example.com"
           />
-        </div>
+        </EditorField>
 
-        <div>
-          <Label htmlFor={`pl-source-${client?.id ?? 'new'}`}>Source</Label>
+        <EditorField label="Where it came from" htmlFor={f('source')}>
           <Input
-            id={`pl-source-${client?.id ?? 'new'}`}
+            id={f('source')}
             name="source"
             defaultValue={client?.source ?? ''}
             placeholder="Conference, referral, inbound"
           />
-        </div>
+        </EditorField>
 
-        <div className="sm:col-span-2 xl:col-span-4">
-          <Label htmlFor={`pl-notes-${client?.id ?? 'new'}`}>Notes</Label>
-          <Textarea
-            id={`pl-notes-${client?.id ?? 'new'}`}
-            name="notes"
-            rows={2}
-            defaultValue={client?.notes ?? ''}
-          />
-        </div>
-      </div>
+        <EditorField label="Notes" htmlFor={f('notes')} span="full">
+          <Textarea id={f('notes')} name="notes" rows={3} defaultValue={client?.notes ?? ''} />
+        </EditorField>
+      </EditorGrid>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <EditorActions
+        hint={
+          needsStep
+            ? 'AN OPEN DEAL ALWAYS ENDS UP WITH A NEXT MOVE AND A DATE · A SIGNED CONTRACT MOVES IT TO INTEGRATION'
+            : 'A SIGNED CONTRACT MOVES A DEAL TO INTEGRATION · NOTHING HERE IS EVER DELETED'
+        }
+      >
         <Button type="submit" disabled={pending}>
-          {pending ? 'SAVING…' : client ? 'SAVE' : 'ADD CLIENT'}
+          {pending ? 'SAVING…' : client ? 'SAVE IT' : 'ADD THE CLIENT'}
         </Button>
         {onDone ? (
           <Button type="button" variant="ghost" size="sm" onClick={onDone}>
             Cancel
           </Button>
         ) : null}
-        {formError ? <span className="text-2xs text-destructive">{formError}</span> : null}
-      </div>
+        {formError ? <span className="text-[12px] text-neg">{formError}</span> : null}
+      </EditorActions>
     </form>
   );
 }

@@ -8,7 +8,8 @@ import {
   setLinkAction, setWaitingOnAction, suggestLinksAction, summariseAction, undoAction,
 } from '@/app/actions/contract-intake';
 import { Button } from '@/components/ui/button';
-import { Input, Label, Select, Textarea } from '@/components/ui/input';
+import { Input, Select, Textarea } from '@/components/ui/input';
+import { EditorActions, EditorField, EditorGrid } from '@/components/hud/editor-panel';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { BOARD_STATUSES, STATUS_LABEL } from '@/lib/contracts/status';
@@ -591,7 +592,7 @@ export function ContractCard({
 
       {open ? (
         <form
-          className="mt-2 border border-line p-2"
+          className="mt-2 rounded-[12px] border border-line p-3"
           onSubmit={(e) => {
             e.preventDefault();
             const data = new FormData(e.currentTarget);
@@ -599,18 +600,17 @@ export function ContractCard({
             run(classifyAction, data);
           }}
         >
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            <div>
-              <Label htmlFor={`cp-${c.id}`}>Who it is with</Label>
+          <EditorGrid>
+            <EditorField label="Who it is with" htmlFor={`cp-${c.id}`}>
               <Input
                 id={`cp-${c.id}`}
                 name="counterpartyName"
                 defaultValue={c.counterpartyName}
                 required
               />
-            </div>
-            <div>
-              <Label htmlFor={`cat-${c.id}`}>Category</Label>
+            </EditorField>
+
+            <EditorField label="Category" htmlFor={`cat-${c.id}`}>
               <Select
                 id={`cat-${c.id}`}
                 name="category"
@@ -627,18 +627,18 @@ export function ContractCard({
                   </option>
                 ))}
               </Select>
-            </div>
-            <div>
-              <Label htmlFor={`dt-${c.id}`}>What kind of document</Label>
+            </EditorField>
+
+            <EditorField label="What kind of document" htmlFor={`dt-${c.id}`}>
               <Input
                 id={`dt-${c.id}`}
                 name="docType"
                 defaultValue={c.docType}
                 placeholder="Demand agreement, NDA, addendum"
               />
-            </div>
-            <div>
-              <Label htmlFor={`st-${c.id}`}>Status</Label>
+            </EditorField>
+
+            <EditorField label="Status" htmlFor={`st-${c.id}`}>
               <Select
                 id={`st-${c.id}`}
                 name="status"
@@ -651,10 +651,9 @@ export function ContractCard({
                   </option>
                 ))}
               </Select>
-            </div>
+            </EditorField>
 
-            <div>
-              <Label htmlFor={`dl-${c.id}`}>Belongs to a deal</Label>
+            <EditorField label="Belongs to a deal" htmlFor={`dl-${c.id}`}>
               <Select
                 id={`dl-${c.id}`}
                 name="pipelineClientId"
@@ -694,35 +693,35 @@ export function ContractCard({
                       }
                     });
                   }}
-                  className="mt-1 font-semi text-[11.5px] uppercase tracking-[0.14em] text-info hover:underline"
+                  className="hud-label mt-1 text-[11.5px] text-info hover:underline"
                 >
                   + Create a deal for {c.counterpartyName}
                 </button>
               ) : null}
-            </div>
+            </EditorField>
 
-            <div className="sm:col-span-2 xl:col-span-4">
-              <Label htmlFor={`nt-${c.id}`}>Notes</Label>
-              <Textarea id={`nt-${c.id}`} name="notes" rows={2} defaultValue={c.notes ?? ''} />
-            </div>
-          </div>
+            <EditorField label="Notes" htmlFor={`nt-${c.id}`} span="full">
+              <Textarea id={`nt-${c.id}`} name="notes" rows={3} defaultValue={c.notes ?? ''} />
+            </EditorField>
+          </EditorGrid>
 
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          <EditorActions
+            hint={
+              (links === null
+                ? 'LOOKING FOR WHAT THIS BELONGS TO…'
+                : links.deals.length === 0
+                  ? 'NO DEAL MATCHING THIS COUNTERPARTY ON THE BOARD'
+                  : `${links.deals.length} POSSIBLE MATCH${links.deals.length === 1 ? '' : 'ES'} FOUND`) +
+              ' · MARKING IT SIGNED MOVES THE LINKED DEAL TO INTEGRATION'
+            }
+          >
             <Button type="submit" size="sm" disabled={pending}>
               {pending ? 'FILING…' : 'SAVE AND FILE IT'}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <span className="font-semi text-[11.5px] tracking-[0.1em] text-neutral-500">
-              {links === null
-                ? 'LOOKING FOR WHAT THIS BELONGS TO…'
-                : (links.deals.length === 0
-                    ? 'NO DEAL MATCHING THIS COUNTERPARTY ON THE BOARD'
-                    : `${links.deals.length} POSSIBLE MATCH${links.deals.length === 1 ? '' : 'ES'} FOUND`)}
-              {' · MARKING IT SIGNED MOVES THE LINKED DEAL TO INTEGRATION'}
-            </span>
-          </div>
+          </EditorActions>
         </form>
       ) : null}
     </li>

@@ -6,7 +6,8 @@ import { useUndo } from '@/components/ui/undo-bar';
 import { archiveTaskAction, updateTaskAction } from '@/app/actions/tasks';
 import { detachFromClickUpAction, editClickUpTaskAction } from '@/app/actions/clickup-tasks';
 import { Button } from '@/components/ui/button';
-import { Input, Label, Select, Textarea } from '@/components/ui/input';
+import { Input, Select, Textarea } from '@/components/ui/input';
+import { EditorActions, EditorField, EditorGrid } from '@/components/hud/editor-panel';
 import {
   PRIORITY_META, STATUS_LABEL, TASK_PRIORITIES, TASK_STATUSES, type TaskPriority,
 } from '@/lib/tasks/types';
@@ -28,6 +29,11 @@ interface EditableTask {
   moneyImpactCents: number | null;
 }
 
+/**
+ * Editing a task, in the shape the contracts card set: a caption over every
+ * control, four across, the description spanning the width at the bottom, and
+ * one row saying what the save is going to do.
+ */
 export function EditTaskForm({
   task,
   departments,
@@ -40,11 +46,14 @@ export function EditTaskForm({
    * ClickUp list, which has its own words for it.
    */
   mode = 'mine',
+  /** Closes the editor. Absent on the task's own page, which has nothing to close. */
+  onDone,
 }: {
   task: EditableTask;
   departments: { id: string; label: string }[];
   people: { id: string; label: string }[];
   mode?: 'mine' | 'clickup';
+  onDone?: () => void;
 }) {
   const mirrored = mode === 'clickup';
   const [pending, startTransition] = useTransition();
@@ -52,10 +61,11 @@ export function EditTaskForm({
   const [saved, setSaved] = useState(false);
   const router = useRouter();
   const undo = useUndo();
+  // Unique per task: two of these can be open at once on the list.
+  const f = (name: string) => `t-${name}-${task.id}`;
 
   return (
     <form
-      className="space-y-2"
       action={(formData) => {
         startTransition(async () => {
           const result = mirrored
@@ -66,105 +76,99 @@ export function EditTaskForm({
           if (result.ok) {
             undo.offer();
             router.refresh();
+            onDone?.();
           }
         });
       }}
     >
       <input type="hidden" name="id" value={task.id} />
 
-      <div>
-        <Label htmlFor="edit-title">Title</Label>
-        <Input id="edit-title" name="title" defaultValue={task.title} required />
-      </div>
+      <EditorGrid>
+        <EditorField label="What the task is" htmlFor={f('title')} span={2}>
+          <Input id={f('title')} name="title" defaultValue={task.title} required />
+        </EditorField>
 
-      <div>
-        <Label htmlFor="edit-description">Description</Label>
-        <Textarea id="edit-description" name="description" rows={4} defaultValue={task.description ?? ''} />
-      </div>
-
-      <div className="grid gap-2 md:grid-cols-3">
-        <div>
-          <Label htmlFor="edit-priority">Priority</Label>
-          <Select id="edit-priority" name="priority" defaultValue={task.priority} className="w-full">
+        <EditorField label="Priority" htmlFor={f('priority')}>
+          <Select id={f('priority')} name="priority" defaultValue={task.priority} className="w-full">
             {TASK_PRIORITIES.map((p) => (
               <option key={p} value={p}>{p} — {PRIORITY_META[p].label}</option>
             ))}
           </Select>
-        </div>
+        </EditorField>
+
         {mirrored ? null : (
-          <div>
-            <Label htmlFor="edit-status">Status</Label>
-            <Select id="edit-status" name="status" defaultValue={task.status} className="w-full">
+          <EditorField label="Status" htmlFor={f('status')}>
+            <Select id={f('status')} name="status" defaultValue={task.status} className="w-full">
               {TASK_STATUSES.map((s) => (
                 <option key={s} value={s}>{STATUS_LABEL[s]}</option>
               ))}
             </Select>
-          </div>
+          </EditorField>
         )}
-        <div>
-          <Label htmlFor="edit-due">Due date</Label>
-          <Input id="edit-due" name="dueDate" type="date" defaultValue={task.dueDate ?? ''} />
-        </div>
+
         {/*
           The next move, and when that move happens. A due date is when the
           whole thing has to be finished; on a list he works down, what happens
           next is the more useful of the two — which is why the deals board has
           carried both from the start.
         */}
-        <div className="sm:col-span-2">
-          <Label htmlFor="edit-next-step">What is the next move</Label>
+        <EditorField label="What is the next move" htmlFor={f('next-step')} span={2}>
           <Input
-            id="edit-next-step"
+            id={f('next-step')}
             name="nextStep"
             defaultValue={task.nextStep ?? ''}
             placeholder="Send the deck, chase Amir, book the call…"
           />
-        </div>
-        <div>
-          <Label htmlFor="edit-next-step-date">Next move due</Label>
+        </EditorField>
+
+        <EditorField label="Next move due" htmlFor={f('next-step-date')}>
           <Input
-            id="edit-next-step-date"
+            id={f('next-step-date')}
             name="nextStepDate"
             type="date"
             defaultValue={task.nextStepDate ?? ''}
           />
-        </div>
+        </EditorField>
+
+        <EditorField label="Due date" htmlFor={f('due')}>
+          <Input id={f('due')} name="dueDate" type="date" defaultValue={task.dueDate ?? ''} />
+        </EditorField>
+
         {/*
           The start date and the recurrence were the two fields the row could
           show but not change, which meant a task that repeats had to be opened
           on its own page to stop repeating.
         */}
-        <div>
-          <Label htmlFor="edit-start">Start date</Label>
-          <Input
-            id="edit-start"
-            name="startDate"
-            type="date"
-            defaultValue={task.startDate ?? ''}
-          />
-        </div>
-        <div>
-          <Label htmlFor="edit-dept">Department</Label>
-          <Select id="edit-dept" name="deptId" defaultValue={task.deptId ?? ''} className="w-full">
+        <EditorField label="Start date" htmlFor={f('start')}>
+          <Input id={f('start')} name="startDate" type="date" defaultValue={task.startDate ?? ''} />
+        </EditorField>
+
+        <EditorField label="Department" htmlFor={f('dept')}>
+          <Select id={f('dept')} name="deptId" defaultValue={task.deptId ?? ''} className="w-full">
             <option value="">None</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>{d.label}</option>
             ))}
           </Select>
-        </div>
-        <div>
-          <Label htmlFor="edit-owner">Owner</Label>
-          <Select id="edit-owner" name="ownerPersonId" defaultValue={task.ownerPersonId ?? ''} className="w-full">
+        </EditorField>
+
+        <EditorField label="Owner" htmlFor={f('owner')}>
+          <Select
+            id={f('owner')}
+            name="ownerPersonId"
+            defaultValue={task.ownerPersonId ?? ''}
+            className="w-full"
+          >
             <option value="">Me</option>
             {people.map((p) => (
               <option key={p.id} value={p.id}>{p.label}</option>
             ))}
           </Select>
-        </div>
-        <div>
-          <Label htmlFor="edit-money">Money impact (USD)</Label>
+        </EditorField>
+
+        <EditorField label="What it is worth (USD)" htmlFor={f('money')}>
           <Input
-            id="edit-money"
+            id={f('money')}
             name="moneyImpact"
             type="number"
             min="0"
@@ -172,44 +176,55 @@ export function EditTaskForm({
             dir="ltr"
             defaultValue={task.moneyImpactCents === null ? '' : task.moneyImpactCents / 100}
           />
-        </div>
-      </div>
+        </EditorField>
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div>
-          <Label htmlFor="edit-tags">Tags (comma separated)</Label>
-          <Input id="edit-tags" name="tags" defaultValue={task.tags.join(', ')} />
-        </div>
-        <div>
-          <Label htmlFor="edit-recurrence">Repeats (RRULE, blank for never)</Label>
+        <EditorField label="Tags" htmlFor={f('tags')} hint="Separated by commas">
+          <Input id={f('tags')} name="tags" defaultValue={task.tags.join(', ')} />
+        </EditorField>
+
+        <EditorField label="Repeats" htmlFor={f('recurrence')} hint="Leave it empty for never">
           <Input
-            id="edit-recurrence"
+            id={f('recurrence')}
             name="recurrenceRule"
             dir="ltr"
             placeholder="FREQ=WEEKLY;BYDAY=MO"
             defaultValue={task.recurrenceRule ?? ''}
           />
-        </div>
-      </div>
+        </EditorField>
 
-      {/*
-        Which half of this form goes where. Without it, a department that
-        never appears in ClickUp and a title that does look identical, and the
-        first surprise is a colleague asking why the task was renamed.
-      */}
-      {mirrored ? (
-        <p className="text-2xs text-neutral-500">
-          Title, description, priority and due date are written to ClickUp — the team sees them.
-          Department, owner, tags and money impact are kept here only, and the next sync will
-          leave them alone now that you have set them.
-        </p>
-      ) : null}
+        <EditorField label="Notes" htmlFor={f('description')} span="full">
+          <Textarea
+            id={f('description')}
+            name="description"
+            rows={3}
+            defaultValue={task.description ?? ''}
+          />
+        </EditorField>
+      </EditorGrid>
 
-      {message ? <p className="text-2xs text-destructive">{message}</p> : null}
-      {saved && !message ? <p className="text-2xs text-sev-ok">Saved.</p> : null}
+      {message ? <p className="mt-2 text-[12px] text-neg">{message}</p> : null}
+      {saved && !message ? <p className="mt-2 text-[12px] text-pos">Saved.</p> : null}
 
-      <div className="flex items-center gap-2 pt-1">
-        <Button type="submit" disabled={pending}>{pending ? 'SAVING…' : 'SAVE'}</Button>
+      <EditorActions
+        hint={
+          /*
+            Which half of this form goes where. Without it, a department that
+            never appears in ClickUp and a title that does look identical, and
+            the first surprise is a colleague asking why the task was renamed.
+          */
+          mirrored
+            ? 'THE TITLE, THE NOTES, THE PRIORITY AND THE DUE DATE GO TO CLICKUP — THE TEAM SEES THEM · THE REST IS KEPT HERE AND THE NEXT SYNC LEAVES IT ALONE'
+            : 'NOTHING HERE IS EVER DELETED — ARCHIVING TAKES IT OUT OF EVERY LIST'
+        }
+      >
+        <Button type="submit" disabled={pending}>{pending ? 'SAVING…' : 'SAVE IT'}</Button>
+
+        {onDone ? (
+          <Button type="button" size="sm" variant="ghost" onClick={onDone}>
+            Cancel
+          </Button>
+        ) : null}
+
         {mirrored ? (
           <Button
             type="button"
@@ -239,7 +254,7 @@ export function EditTaskForm({
               });
             }}
           >
-            DETACH FROM CLICKUP
+            Detach from ClickUp
           </Button>
         ) : null}
 
@@ -265,7 +280,7 @@ export function EditTaskForm({
         >
           Archive
         </Button>
-      </div>
+      </EditorActions>
     </form>
   );
 }

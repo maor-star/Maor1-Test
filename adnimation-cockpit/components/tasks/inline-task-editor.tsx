@@ -82,6 +82,7 @@ export function InlineTaskEditor({
               task={task}
               departments={departments}
               people={people}
+              onDone={() => setOpen(false)}
             />
           ) : null}
         </div>

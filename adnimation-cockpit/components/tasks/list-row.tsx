@@ -194,6 +194,7 @@ export function TaskListRow({
             }}
             departments={departments}
             people={people}
+            onDone={() => setEditing(false)}
           />
         </div>
       ) : null}
