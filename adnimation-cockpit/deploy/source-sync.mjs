@@ -148,34 +148,58 @@ async function main() {
   }
 
   console.log('reading the tables…');
+
+  /*
+   * A table we cannot read is a gap, not a failure.
+   *
+   * The source's grants are its own and they change: three of these went from
+   * readable to "permission denied" in the middle of an afternoon. One denied
+   * table used to take the whole sync down with it, so a change to one line's
+   * permissions cost him the P&L, the seats and the other six lines as well.
+   *
+   * Now each read stands alone. What can be read is written; what cannot is
+   * named at the end, with the reason, so the fix is "grant read on these
+   * three" rather than "the sync is broken".
+   */
+  const denied = [];
+  const ifAllowed = (what, promise) =>
+    promise.catch((e) => {
+      const said = e?.message ?? String(e);
+      if (/http_40[13]|permission denied/i.test(said)) {
+        denied.push(what);
+        return [];
+      }
+      throw e;
+    });
+
   const [seatOverview, vidazoo, xeUnsplit, rollup, coreSnapshot, gam, gamApps, xeEcon, xeSplit, accounts] =
     await Promise.all([
-      source.rpc('get_seat_lease_overview_daily', { p_from: from, p_to: to }),
-      source.selectAll('trading_vidazoo_reports', { filters: window }),
-      source.selectAll('trading_xe_reports', { filters: [...window, ['ssp_id', 'is.null']] }),
-      source.selectAll('ars_site_daily_rollup', { filters: window }),
-      source.selectAll('ars_core_publishers_daily_snapshot', { filters: window }),
+      ifAllowed('seat lease', source.rpc('get_seat_lease_overview_daily', { p_from: from, p_to: to })),
+      ifAllowed('trading_vidazoo_reports', source.selectAll('trading_vidazoo_reports', { filters: window })),
+      ifAllowed('trading_xe_reports', source.selectAll('trading_xe_reports', { filters: [...window, ['ssp_id', 'is.null']] })),
+      ifAllowed('ars_site_daily_rollup', source.selectAll('ars_site_daily_rollup', { filters: window })),
+      ifAllowed('ars_core_publishers_daily_snapshot', source.selectAll('ars_core_publishers_daily_snapshot', { filters: window })),
       /*
        * Only the CTV slice, narrowed at the source. The whole table is seven
        * hundred thousand rows a month and this is thirty-three thousand of
        * them — the difference between a job that finishes and one that does
        * not.
        */
-      source.selectAll('gam_reports', {
+      ifAllowed('gam_reports', source.selectAll('gam_reports', {
         select: 'report_date,site_id,revenue,impressions,device_category',
         filters: [...window, ['device_category', 'in.("connected tv","set-top box")']],
-      }),
-      source.selectAll('gam_app_reports', {
+      })),
+      ifAllowed('gam_app_reports', source.selectAll('gam_app_reports', {
         select: 'report_date,site_id,app_id,revenue,impressions',
         filters: window,
-      }),
+      })),
       // Likewise: CTV is under a thousand rows a month out of half a million.
-      source.selectAll('xe_econ_path_daily', {
+      ifAllowed('xe_econ_path_daily', source.selectAll('xe_econ_path_daily', {
         select: 'report_date,dsp_id,env_type,revenue,profit,impressions',
         filters: [...window, ['env_type', 'eq.CTV']],
-      }),
-      source.selectAll('trading_xe_reports', { filters: window }),
-      source.selectAll('ars_accounts'),
+      })),
+      ifAllowed('trading_xe_reports (split)', source.selectAll('trading_xe_reports', { filters: window })),
+      ifAllowed('ars_accounts', source.selectAll('ars_accounts')),
     ]);
 
   console.log(
@@ -216,6 +240,8 @@ async function main() {
 
   const lineRows = [];
   for (const [line, rows] of Object.entries(engines)) {
+    // An engine whose table is denied has no rows. Writing zeroes for it would
+    // put a real-looking zero on a tile, which reads as a collapse.
     for (const r of rows) lineRows.push({ line, ...r, source: 'adops', pulled_at: pulledAt });
   }
 
@@ -284,6 +310,14 @@ async function main() {
   const demand = seatRows.filter((r) => r.side === 'demand').length;
   const supply = seatRows.length - demand;
   console.log(`seat_days: ${seatRows.length} rows — demand ${demand}, supply ${supply}`);
+
+  if (denied.length > 0) {
+    console.log(
+      `NOT READ — the source denies this sign-in read access to: ${denied.join(', ')}. ` +
+        'Everything else above is current. Granting select on those to the authenticated ' +
+        'role is all that is missing.',
+    );
+  }
 
   const [summary] = await sql`select count(*) as days, max(date)::text as latest from company_daily`;
   console.log(
