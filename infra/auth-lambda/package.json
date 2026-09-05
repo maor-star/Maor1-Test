@@ -1,0 +1,6 @@
+{
+  "name": "home-management-sync",
+  "private": true,
+  "type": "commonjs",
+  "description": "Lambda: auth, cloud data, Open Finance sync, Gemini assistant, server-side 3-day sync and weekly e-mail report"
+}

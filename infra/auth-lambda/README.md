@@ -46,9 +46,49 @@ Sign convention (verified against live data): negative `chargedAmount` is a
 debit for both bank and card transactions; `classification.type`
 (`*_EXPENSE` / `*_INCOME`) overrides the sign when present.
 
+## Server-side jobs: 3-day bank sync and the weekly e-mail report
+
+Two EventBridge Scheduler schedules invoke the function directly (no HTTP):
+
+- `home-mgmt-bank-sync-3d` — `rate(3 days)`, payload `{"cron":"sync"}`. Pulls
+  the last 45 days from Open Finance for every connected bank and card and
+  imports them into the household data in S3.
+- `home-mgmt-weekly-report` — `cron(0 7 ? * SUN *)` in `Asia/Jerusalem`,
+  payload `{"cron":"report"}`. Runs a sync first, then e-mails the weekly
+  budget-vs-actual report through Amazon SES (sender `REPORT_FROM`, domain
+  `adnimation.com` is verified in SES us-east-1).
+
+Both jobs reuse the **web app's own JavaScript**: `headless.js` loads
+`index.html` from the web bucket and runs its `<script>` inside Node's `vm`
+with a stub DOM, so import, de-duplication, classification, cash-flow and the
+report numbers (`weeklyReportData()`) are computed by exactly the same code the
+browser runs. Writes use the same optimistic check as `PUT /data` (re-read and
+retry if the blob changed meanwhile). Job state is kept in
+`data/__report_config__.json` (`to`, `enabled`, `lastSync`, `lastReport`).
+
+Note: Open Finance answers `403` to the refresh endpoints for this client, so
+the job relies on Open Finance's own daily refresh (`refreshData:true` on every
+connection) and just imports whatever is new.
+
+HTTP routes, `POST /report/{action}` (approved-user token):
+
+- `status` — recipients, enabled flag, last sync / last report results.
+- `config` — admin: `{to:[emails], enabled}`.
+- `test` — admin: `{to:[emails]}` builds the report from the current data (no
+  sync, to stay inside the 29 s API Gateway limit) and sends it immediately.
+- `syncnow` — admin: asynchronously invokes the function with `{"cron":"sync"}`.
+
+IAM additions on the function role (`sync-extras`): `s3:GetObject` on the web
+bucket's `index.html`, `ses:SendEmail`, and `lambda:InvokeFunction` on itself.
+The scheduler role `home-management-scheduler-role` may invoke the function.
+Function timeout is 300 s / 1024 MB (API Gateway still caps HTTP calls at 29 s).
+
 ## Configuration (Lambda environment variables)
 
 - `BUCKET` — S3 bucket for storage.
+- `WEB_BUCKET` — bucket holding the deployed `index.html` (for headless runs).
+- `SITE_URL` — public site URL used for links inside the e-mail.
+- `REPORT_FROM` — SES-verified sender address for the weekly report.
 - `AUTH_SECRET` — HMAC signing secret for tokens (keep private; rotating it
   invalidates all existing sessions).
 - `ADMIN_EMAIL` — the single email allowed to hold the `admin` role.

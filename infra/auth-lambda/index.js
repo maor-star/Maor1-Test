@@ -263,9 +263,17 @@ function ofAccountView(a) {
   const bal = (a.balances || []).map((b) => ({ type: b.balanceType || '', amount: Number((b.balanceAmount && b.balanceAmount.amount) != null ? b.balanceAmount.amount : b.amount), currency: (b.balanceAmount && b.balanceAmount.currency) || b.currency || 'ILS', date: b.referenceDate || '' }))
     .filter((b) => !isNaN(b.amount)).sort((x, y) => String(y.date).localeCompare(String(x.date)));
   const lim = a.creditLimit && typeof a.creditLimit === 'object' ? Number(a.creditLimit.amount) : Number(a.creditLimit);
+  // היתרה «האמיתית»: רק בשקלים, ולפי סוג — בעו"ש «expected/interimBooked/closingBooked» (היתרה החשבונאית),
+  // לא «forwardAvailable» שכולל את מסגרת האשראי (מציג +30K כשבפועל החשבון ב-0). בכרטיס — המחזור הפתוח (interimBooked).
+  const ils = bal.filter((b) => !b.currency || b.currency === 'ILS');
+  const pick = (types) => { for (const t of types) { const f = ils.filter((b) => b.type === t); if (f.length) return f[0]; } return null; };
+  const chosen = isCard ? (pick(['interimBooked', 'closingBooked', 'expected']) || ils[0] || null)
+    : (pick(['expected', 'interimBooked', 'closingBooked', 'interimAvailable']) || null);
+  const avail = pick(['forwardAvailable', 'interimAvailable']);
   return { id: a.id, connectionId: a.connectionId, providerId: a.providerId, provider: ofProvName(a.providerId), type: isCard ? 'CARD' : (String(a.accountType || 'CHECKING').toUpperCase()),
     issuer: isCard ? cardIssuerName(a.providerId, a.accountNumber, a.product || a.accountName) : null,
-    name: a.accountName || '', product: a.product || '', number: a.accountNumber ? String(a.accountNumber).slice(-4) : '', fullNumber: a.accountNumber || '', currency: a.currency || 'ILS', balances: bal, balance: bal.length ? bal[0].amount : null,
+    name: a.accountName || '', product: a.product || '', number: a.accountNumber ? String(a.accountNumber).slice(-4) : '', fullNumber: a.accountNumber || '', currency: a.currency || 'ILS', balances: bal,
+    balance: chosen ? chosen.amount : null, balanceType: chosen ? chosen.type : null, balanceCurrency: chosen ? 'ILS' : (bal[0] ? bal[0].currency : null), available: avail ? avail.amount : null,
     creditLimit: lim > 0 ? lim : null, dueDate: a.cardDueDate || null, txCount: a.transactions || null, status: a.status || a.creditStatus || '', loanType: a.loanType || null,
     interest: Array.isArray(a.interest) ? a.interest.map((i) => ({ type: i.type, rate: (i.rate || []).map((r) => Number(r.percentage)).filter((n) => !isNaN(n)) })) : [], endDate: a.relatedDates && a.relatedDates.contractEndDate || null };
 }
@@ -371,26 +379,31 @@ async function handleOF(action, event) {
     if (body.full) dateFrom = isoDay(since);
     // הקליינט מסנכרן בחלונות זמן (חודשיים כל פעם) כדי להישאר בתוך מגבלת 30 השניות של API Gateway
     const dateTo = body.dateTo ? String(body.dateTo).slice(0, 10) : isoDay(new Date(Date.now() + 86400000));
-    const accts = (await ofGetAll(token, '/data/accounts', { limit: 200 })).map(ofAccountView);
-    const acctMap = {}; accts.forEach((a) => { acctMap[a.id] = a; });
-    const raw = await ofGetAll(token, '/data/transactions', { dateFrom, dateTo, sort: 1, includeDuplicates: 0 });
-    // זיהוי אוטומטי של מוסכמת הסימן בבנק: אם עסקאות עו"ש שסווגו ע"י Open Finance כהוצאה מופיעות בעיקר כמספר חיובי — הבנק מציג חיובים כחיובי
-    let pos = 0, neg = 0;
-    raw.forEach((t) => { const acc = acctMap[t.accountId]; const isCard = acc ? acc.type === 'CARD' : OF_CARD_PROVIDERS.has(ofProvKey(t.providerId)); if (isCard) return;
-      const main = String((t.category && t.category.main) || '').toUpperCase(); if (!main || INCOME_MAINS.has(main) || main === 'OTHER' || main === 'FINANCE') return;
-      const a = Number(t.amount && t.amount.chargedAmount && t.amount.chargedAmount.amount); if (a > 0) pos++; else if (a < 0) neg++; });
-    const debitPositive = cfg.debitPositive != null ? !!cfg.debitPositive : (pos > neg * 2);
-    // מייבאים רק עו"ש וכרטיסי אשראי (לא ני"ע / פיקדונות / הלוואות — תשלומי המשכנתא ממילא מופיעים בעו"ש)
-    const wantedType = (t) => { const ty = String(t.type || '').toUpperCase(); if (ty === 'CHECKING' || ty === 'CARD') return true; if (ty === 'SECURITIES' || ty === 'LOAN' || ty === 'SAVINGS') return false; const acc = acctMap[t.accountId]; return !acc || acc.type === 'CARD' || acc.type === 'CHECKING'; };
-    const rows = raw.filter((t) => wantedType(t) && !t.isDuplicate && String(t.status || '').toUpperCase() !== 'DELETED').map((t) => ofNormalize(t, acctMap, debitPositive)).filter((r) => r.date && r.amount > 0 && (r.merchant || r.description));
-    const stats = { fetched: raw.length, rows: rows.length, dateFrom, dateTo, debitPositive, byAccount: {} };
-    rows.forEach((r) => { const k = r.account; stats.byAccount[k] = stats.byAccount[k] || { count: 0, sum: 0, type: r.accountType }; stats.byAccount[k].count++; stats.byAccount[k].sum += r.amount; });
-    const next = Object.assign({}, cfg, { lastSync: Date.now(), lastSyncRows: rows.length, debitPositiveDetected: debitPositive });
+    const { rows, accts, stats } = await ofPullRows(cfg, token, dateFrom, dateTo);
+    const next = Object.assign({}, cfg, { lastSync: Date.now(), lastSyncRows: rows.length, debitPositiveDetected: stats.debitPositive });
     await putJson(OF_CONFIG_KEY, next);
     return resp(200, { ok: true, rows, accounts: accts, stats, config: ofMask(next) });
   }
 
   return resp(404, { error: 'unknown action' });
+}
+// משיכת עסקאות מנורמלות לחלון תאריכים — משמש גם את הסנכרון מהדפדפן וגם את הסנכרון האוטומטי בשרת
+async function ofPullRows(cfg, token, dateFrom, dateTo, acctsIn) {
+  const accts = acctsIn || (await ofGetAll(token, '/data/accounts', { limit: 200 })).map(ofAccountView);
+  const acctMap = {}; accts.forEach((a) => { acctMap[a.id] = a; });
+  const raw = await ofGetAll(token, '/data/transactions', { dateFrom, dateTo, sort: 1, includeDuplicates: 0 });
+  // זיהוי אוטומטי של מוסכמת הסימן בבנק: אם עסקאות עו"ש שסווגו ע"י Open Finance כהוצאה מופיעות בעיקר כמספר חיובי — הבנק מציג חיובים כחיובי
+  let pos = 0, neg = 0;
+  raw.forEach((t) => { const acc = acctMap[t.accountId]; const isCard = acc ? acc.type === 'CARD' : OF_CARD_PROVIDERS.has(ofProvKey(t.providerId)); if (isCard) return;
+    const main = String((t.category && t.category.main) || '').toUpperCase(); if (!main || INCOME_MAINS.has(main) || main === 'OTHER' || main === 'FINANCE') return;
+    const a = Number(t.amount && t.amount.chargedAmount && t.amount.chargedAmount.amount); if (a > 0) pos++; else if (a < 0) neg++; });
+  const debitPositive = cfg.debitPositive != null ? !!cfg.debitPositive : (pos > neg * 2);
+  // מייבאים רק עו"ש וכרטיסי אשראי (לא ני"ע / פיקדונות / הלוואות — תשלומי המשכנתא ממילא מופיעים בעו"ש)
+  const wantedType = (t) => { const ty = String(t.type || '').toUpperCase(); if (ty === 'CHECKING' || ty === 'CARD') return true; if (ty === 'SECURITIES' || ty === 'LOAN' || ty === 'SAVINGS') return false; const acc = acctMap[t.accountId]; return !acc || acc.type === 'CARD' || acc.type === 'CHECKING'; };
+  const rows = raw.filter((t) => wantedType(t) && !t.isDuplicate && String(t.status || '').toUpperCase() !== 'DELETED').map((t) => ofNormalize(t, acctMap, debitPositive)).filter((r) => r.date && r.amount > 0 && (r.merchant || r.description));
+  const stats = { fetched: raw.length, rows: rows.length, dateFrom, dateTo, debitPositive, byAccount: {} };
+  rows.forEach((r) => { const k = r.account; stats.byAccount[k] = stats.byAccount[k] || { count: 0, sum: 0, type: r.accountType }; stats.byAccount[k].count++; stats.byAccount[k].sum += r.amount; });
+  return { rows, accts, stats };
 }
 
 // ---------- Gemini (עוזר הבית מבוסס AI) ----------
@@ -466,7 +479,225 @@ async function handleAI(action, event) {
   return resp(404, { error: 'unknown action' });
 }
 
+// ---------- סנכרון אוטומטי בשרת (כל 3 ימים) + דוח שבועי במייל ----------
+// שני אלה רצים מלוח-זמנים בענן (EventBridge Scheduler → invoke ישיר של הפונקציה עם {cron:'sync'|'report'}),
+// ומשתמשים בקוד של האפליקציה עצמה (web/index.html מה-S3) דרך headless.js — כך הייבוא, סינון הכפילויות,
+// הסיווג והתזרים זהים ב-100% למה שקורה בדפדפן.
+const { createRuntime } = require('./headless');
+const WEB_BUCKET = process.env.WEB_BUCKET || 'home-management-450118321037-us-east-1';
+const SITE_URL = process.env.SITE_URL || 'https://bait.wonderfool.xyz';
+const REPORT_KEY = 'data/__report_config__.json';
+const REPORT_FROM = process.env.REPORT_FROM || 'ניהול הבית <bait@adnimation.com>';
+const SYNC_EVERY_MS = 3 * 86400000;
+const FN_NAME = process.env.AWS_LAMBDA_FUNCTION_NAME || 'home-management-sync';
+
+async function reportLoadCfg() { const c = await getJson(REPORT_KEY, null); return Object.assign({ to: [], enabled: true, lastReport: null, lastSync: null }, c && typeof c === 'object' ? c : {}); }
+async function reportSaveCfg(patch) { const cur = await reportLoadCfg(); const next = Object.assign({}, cur, patch, { updatedAt: Date.now() }); await putJson(REPORT_KEY, next); return next; }
+const reportView = (c) => ({ to: c.to || [], enabled: c.enabled !== false, from: REPORT_FROM.replace(/^.*<|>.*$/g, ''), lastReport: c.lastReport || null, lastSync: c.lastSync || null,
+  nextSync: c.lastSync && c.lastSync.at ? c.lastSync.at + SYNC_EVERY_MS : null });
+
+async function loadApp() {
+  const out = await s3.send(new GetObjectCommand({ Bucket: WEB_BUCKET, Key: 'index.html' }));
+  return createRuntime(await out.Body.transformToString());
+}
+async function ofStatusData(cfg, token) {
+  const [conns, accts] = await Promise.all([ofGetAll(token, '/connections', { limit: 100 }), ofGetAll(token, '/data/accounts', { limit: 200 })]);
+  return { ok: true, config: ofMask(cfg), connections: conns.map(ofConnectionView), accounts: accts.map(ofAccountView), rawConns: conns };
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// בקשת רענון נתונים מ-Open Finance — לכל חיבור בנפרד (POST /connections/{id}/refresh), עם נפילה חזרה לנתיב לפי משתמש.
+// מחזיר מפה {connectionId|user: httpStatus} לצורך ניטור.
+async function ofRefreshAll(cfg, token) {
+  const out = {}; const h = { authorization: 'Bearer ' + token, 'content-type': 'application/json' };
+  const tryUrl = async (url) => { let r = null; try { r = await fetch(url, { method: 'POST', headers: h, body: '{}' }); if (r.status === 404 || r.status === 405) r = await fetch(url, { headers: h }); return r.status; } catch (e) { return 'error: ' + e.message; } };
+  let conns = []; try { conns = await ofGetAll(token, '/connections', { limit: 100 }); } catch (e) {}
+  for (const c of conns.filter((c) => c && c.id && String(c.status || '').toUpperCase() !== 'DELETED')) out[c.id] = await tryUrl(OF_API + '/connections/' + encodeURIComponent(c.id) + '/refresh');
+  if (!Object.values(out).some((s) => s === 200 || s === 202 || s === 204)) out.user = await tryUrl(OF_API + '/connections/' + encodeURIComponent(cfg.userId) + '/refresh');
+  return out;
+}
+
+// סנכרון מלא בשרת: רענון בבנקים → המתנה לנתונים טריים → משיכת החודש-וחצי האחרונים → ייבוא דרך לוגיקת האפליקציה → שמירה בענן
+async function serverSync(opts) {
+  opts = opts || {};
+  const cfg = await ofLoadConfig();
+  if (!cfg || !cfg.clientId || !cfg.clientSecret || !cfg.userId) throw new Error('החיבור לבנק לא הוגדר (מפתחות Open Finance)');
+  const token = await ofToken(cfg);
+  let refreshed = false;
+  if (opts.refresh !== false) {
+    // בקשה מ-Open Finance למשוך נתונים טריים; ממתינים (עד waitMs) שלפחות חיבור אחד יתעדכן
+    const stamp = (c) => c.lastFetchedDataDate || (c.refreshSettings && c.refreshSettings.lastFetchedDataDate) || '';
+    let before = [];
+    try { before = (await ofGetAll(token, '/connections', { limit: 100 })).map((c) => c.id + '@' + stamp(c)).sort(); } catch (e) {}
+    serverSync.lastRefreshStatus = await ofRefreshAll(cfg, token);
+    refreshed = Object.values(serverSync.lastRefreshStatus).some((s) => s === 200 || s === 202 || s === 204);
+    const until = Date.now() + (opts.waitMs || 90000);
+    while (refreshed && Date.now() < until) {
+      await sleep(10000);
+      try { const now = (await ofGetAll(token, '/connections', { limit: 100 })).map((c) => c.id + '@' + stamp(c)).sort(); if (now.join('|') !== before.join('|')) break; } catch (e) { break; }
+    }
+  }
+  const status = await ofStatusData(cfg, token);
+  const from = new Date(); from.setDate(from.getDate() - (opts.days || 45));
+  const { rows, stats } = await ofPullRows(cfg, token, isoDay(from), isoDay(new Date(Date.now() + 86400000)), status.accounts);
+  const rt = await loadApp();
+  const key = dataKeyFor(HOUSEHOLD_CODE);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const stored = await getJson(key, { data: null, updatedAt: 0 });
+    if (!stored.data) throw new Error('אין עדיין נתונים בענן — פתחו את האתר פעם אחת');
+    const res = await rt.run(`(async()=>{ db=__io.data; ensureDefaults(); _ofStatus=__io.status;
+      const r=await ofImportRows(__io.rows); ofSetState({lastSyncAt:Date.now(),lastResult:r,lastRows:__io.rows.length}); db.ofServerSync=Date.now();
+      return {r:JSON.parse(JSON.stringify(r)), json:JSON.stringify(db)}; })()`, { data: stored.data, status: { ok: true, accounts: status.accounts, connections: status.connections }, rows });
+    // בקרת גרסאות: אם מישהו שמר מהדפדפן בזמן שעבדנו — טוענים שוב וחוזרים על הייבוא (לא דורסים)
+    const cur = await getJson(key, { updatedAt: 0 });
+    if ((cur.updatedAt || 0) !== (stored.updatedAt || 0)) continue;
+    const updatedAt = Date.now();
+    await putJson(key, { data: JSON.parse(res.json), updatedAt });
+    await putJson(OF_CONFIG_KEY, Object.assign({}, cfg, { lastSync: Date.now(), lastSyncRows: rows.length, debitPositiveDetected: stats.debitPositive }));
+    const result = { ok: true, at: updatedAt, refreshed, refreshStatus: serverSync.lastRefreshStatus || null, rows: rows.length, added: res.r.added || 0, skipped: res.r.skipped || 0, auto: res.r.auto || 0, pruned: res.r.pruned || 0, from: stats.dateFrom, to: stats.dateTo };
+    await reportSaveCfg({ lastSync: result });
+    return result;
+  }
+  throw new Error('הענן השתנה תוך כדי סנכרון (3 ניסיונות) — ננסה בפעם הבאה');
+}
+
+// ---- הדוח השבועי ----
+const fmtILS = (v) => { const n = Math.round(Number(v) || 0); return (n < 0 ? '−' : '') + '₪' + Math.abs(n).toLocaleString('en-US'); };
+const fmtD = (s) => { const [y, m, d] = String(s || '').slice(0, 10).split('-'); return d ? `${d}/${m}/${y}` : ''; };
+const escH = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const HE_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+const heMonth = (ym) => { const [y, m] = String(ym).split('-').map(Number); return (HE_MONTHS[m - 1] || '') + ' ' + y; };
+
+async function buildReportData(rt, data, status) {
+  const json = rt.run(`(function(){ db=__io.data; ensureDefaults(); _ofStatus=__io.status; if(!budgetCatIds().length){ db.budgetCats=suggestBudgetCats(); } return JSON.stringify(weeklyReportData()); })()`, { data, status });
+  return JSON.parse(json);
+}
+
+function reportHTML(w, meta) {
+  const over = w.cats.filter((c) => c.status === 'over'), warn = w.cats.filter((c) => c.status === 'warn'), withBudget = w.cats.filter((c) => c.budget > 0);
+  const verdict = !withBudget.length ? { ic: '🎯', txt: 'עדיין לא הוגדרו תקציבים — הגדירו אותם במסך «תקציבים» כדי לקבל ✅/🔴 בדוח הבא.', color: '#0284c7' }
+    : over.length ? { ic: '🔴', txt: `${over.length} קטגוריות בקצב חריגה מהתקציב: ${over.map((c) => c.name).join(', ')}`, color: '#dc2626' }
+    : warn.length ? { ic: '⚠️', txt: `על הגבול ב‑${warn.map((c) => c.name).join(', ')} — עוד קצת ועוברים את התקציב`, color: '#d97706' }
+    : { ic: '✅', txt: 'עומדים ביעד בכל קטגוריות התקציב — כל הכבוד!', color: '#059669' };
+  const delta = w.homePrevSame > 0 ? Math.round((w.homeMtd - w.homePrevSame) / w.homePrevSame * 100) : null;
+  const stIc = { ok: '✅', warn: '⚠️', over: '🔴', none: '—' };
+  const bar = (v, max, color) => { const p = max > 0 ? Math.min(100, Math.round(v / max * 100)) : 0; return `<div style="background:#e5e7eb;border-radius:6px;height:8px;overflow:hidden;margin-top:4px"><div style="width:${p}%;height:8px;background:${color}"></div></div>`; };
+  const tile = (label, value, sub, color) => `<td style="padding:6px" width="33%"><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px"><div style="font-size:12px;color:#64748b">${label}</div><div style="font-size:22px;font-weight:800;color:${color || '#0f172a'};margin-top:2px">${value}</div><div style="font-size:12px;color:#64748b;margin-top:2px">${sub || ''}</div></div></td>`;
+  const catRows = w.cats.map((c) => { const col = c.status === 'over' ? '#dc2626' : c.status === 'warn' ? '#d97706' : '#059669'; return `<tr>
+      <td style="padding:8px 6px;border-bottom:1px solid #eef2f7"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${escH(c.color)};margin-inline-end:6px"></span><strong>${escH(c.name)}</strong>${c.budget > 0 ? bar(c.mtd, c.budget, col) : ''}</td>
+      <td style="padding:8px 6px;border-bottom:1px solid #eef2f7;text-align:center;white-space:nowrap">${fmtILS(c.week)}${c.budget > 0 ? `<div style="font-size:11px;color:#64748b">יעד שבועי ${fmtILS(c.weekBudget)}</div>` : ''}</td>
+      <td style="padding:8px 6px;border-bottom:1px solid #eef2f7;text-align:center;white-space:nowrap">${fmtILS(c.mtd)}${c.budget > 0 ? `<div style="font-size:11px;color:#64748b">מתוך ${fmtILS(c.budget)}</div>` : ''}</td>
+      <td style="padding:8px 6px;border-bottom:1px solid #eef2f7;text-align:center;white-space:nowrap">${c.budget > 0 ? `<span style="color:${c.left < 0 ? '#dc2626' : '#059669'};font-weight:700">${fmtILS(c.left)}</span>` : '—'}</td>
+      <td style="padding:8px 6px;border-bottom:1px solid #eef2f7;text-align:center;white-space:nowrap">${fmtILS(c.projected)}</td>
+      <td style="padding:8px 6px;border-bottom:1px solid #eef2f7;text-align:center;font-size:18px">${stIc[c.status] || ''}</td></tr>`; }).join('');
+  const topRows = w.top.map((t) => `<tr><td style="padding:6px;border-bottom:1px solid #eef2f7">${escH(t.name)}${t.cat ? `<span style="color:#64748b;font-size:12px"> · ${escH(t.cat)}</span>` : ''}</td><td style="padding:6px;border-bottom:1px solid #eef2f7;text-align:left;white-space:nowrap;direction:ltr"><strong>${fmtILS(t.value)}</strong>${t.n > 1 ? ` <span style="color:#64748b;font-size:12px">(${t.n})</span>` : ''}</td></tr>`).join('');
+  const upRows = w.upcoming.filter((e) => e.kind !== 'income' && e.amt >= 300).slice(0, 8).map((e) => `<tr><td style="padding:5px 6px;border-bottom:1px solid #eef2f7;white-space:nowrap">${fmtD(e.d)}</td><td style="padding:5px 6px;border-bottom:1px solid #eef2f7">${e.kind === 'card' ? '💳' : e.kind === 'mortgage' ? '🏦' : '🔁'} ${escH(e.name)}${e.est ? ' <span style="color:#64748b;font-size:12px">(אומדן)</span>' : ''}</td><td style="padding:5px 6px;border-bottom:1px solid #eef2f7;text-align:left;direction:ltr;white-space:nowrap;color:#dc2626">−${fmtILS(e.amt)}</td></tr>`).join('');
+  const th = (t) => `<th style="padding:8px 6px;text-align:center;font-size:12px;color:#64748b;border-bottom:2px solid #e2e8f0">${t}</th>`;
+  const lowCol = w.low30.bal < 0 ? '#dc2626' : '#059669';
+  return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>דוח שבועי — ניהול הבית</title></head>
+<body style="margin:0;background:#eef1f6;font-family:-apple-system,'Segoe UI',Roboto,Arial,'Noto Sans Hebrew',sans-serif;color:#0f172a;direction:rtl">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:18px 8px">
+<table role="presentation" width="680" style="max-width:680px;width:100%;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0" cellpadding="0" cellspacing="0">
+  <tr><td style="background:linear-gradient(135deg,#0d9488,#0284c7);color:#fff;padding:20px 22px">
+    <div style="font-size:13px;opacity:.9">🏠 ניהול הבית · דוח שבועי</div>
+    <div style="font-size:24px;font-weight:800;margin-top:4px">עמדנו ביעד? · ${fmtD(w.weekStart)} – ${fmtD(w.weekEnd)}</div>
+    <div style="font-size:13px;opacity:.9;margin-top:4px">${heMonth(w.month)} · יום ${w.dayN} מתוך ${w.dim}</div></td></tr>
+  <tr><td style="padding:18px 16px 6px"><div style="background:${verdict.color}14;border:1px solid ${verdict.color}55;border-radius:12px;padding:12px 14px;font-size:16px"><strong>${verdict.ic} ${escH(verdict.txt)}</strong></div></td></tr>
+  <tr><td style="padding:6px 10px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+    ${tile('הוצאות הבית השבוע', fmtILS(w.homeWeek), 'ללא נדל״ן ומשכנתא')}
+    ${tile('מתחילת החודש', fmtILS(w.homeMtd), delta == null ? '' : `${delta > 0 ? '▲' : '▼'} ${Math.abs(delta)}% מול אותם ימים בחודש הקודם (${fmtILS(w.homePrevSame)})`, delta != null && delta > 10 ? '#dc2626' : '#0f172a')}
+    ${tile('קצב צפוי לסוף החודש', fmtILS(w.homeProjected), w.totalBudget > 0 ? `תקציב הקטגוריות: ${fmtILS(w.totalBudget)}` : 'לפי הקצב עד כה', w.totalBudget > 0 && w.homeProjected > w.totalBudget * 1.1 ? '#dc2626' : '#0f172a')}
+  </tr></table></td></tr>
+  <tr><td style="padding:12px 16px 4px"><div style="font-size:17px;font-weight:800">🎯 תקציב מול ביצוע</div><div style="font-size:12px;color:#64748b">«קצב צפוי» = ההוצאה מתחילת החודש מתורגמת לחודש מלא. 🔴 מעל 110% מהתקציב · ⚠️ 95%–110% · ✅ בתוך התקציב</div></td></tr>
+  <tr><td style="padding:4px 16px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px"><thead><tr>${th('קטגוריה')}${th('השבוע')}${th('מתחילת החודש')}${th('נותר')}${th('קצב צפוי')}${th('')}</tr></thead><tbody>${catRows || `<tr><td colspan="6" style="padding:12px;color:#64748b;text-align:center">אין קטגוריות תקציב — <a href="${SITE_URL}/#/budgets" style="color:#0284c7">הגדירו במסך «תקציבים»</a></td></tr>`}</tbody></table></td></tr>
+  <tr><td style="padding:12px 16px 4px"><div style="font-size:17px;font-weight:800">💧 תזרים</div></td></tr>
+  <tr><td style="padding:4px 10px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+    ${tile('יתרת עו״ש כעת', w.balNow != null ? fmtILS(w.balNow) : '—', w.creditLine ? `מסגרת אשראי ${fmtILS(w.creditLine)}` : '', w.balNow != null && w.balNow < 0 ? '#dc2626' : '#0f172a')}
+    ${tile('השפל הצפוי ב‑30 יום', fmtILS(w.low30.bal), `ב‑${fmtD(w.low30.d)} · כולל הכנסות צפויות`, lowCol)}
+    ${tile('השפל ללא הכנסות', fmtILS(w.low30NoIncome.bal), `ב‑${fmtD(w.low30NoIncome.d)} · רק החיובים`, '#d97706')}
+  </tr></table></td></tr>
+  ${upRows ? `<tr><td style="padding:6px 16px 12px"><div style="font-size:13px;color:#64748b;margin-bottom:4px">חיובים גדולים ב‑10 הימים הקרובים:</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px">${upRows}</table></td></tr>` : ''}
+  <tr><td style="padding:12px 16px 4px"><div style="font-size:17px;font-weight:800">🛒 בתי העסק הגדולים של השבוע</div></td></tr>
+  <tr><td style="padding:4px 16px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px">${topRows || '<tr><td style="padding:8px;color:#64748b">אין הוצאות בשבוע זה</td></tr>'}</table></td></tr>
+  ${w.uncatWeek ? `<tr><td style="padding:6px 16px 14px"><div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:10px 14px;font-size:14px">🏷️ <strong>${w.uncatWeek} עסקאות</strong> מהשבוע (${fmtILS(w.uncatWeekSum)}) עדיין ללא סיווג${w.uncatAll > w.uncatWeek ? ` · סה״כ ${w.uncatAll} ממתינות` : ''} — <a href="${SITE_URL}/#/review" style="color:#0284c7;font-weight:700">לסיווג באתר ←</a></div></td></tr>` : ''}
+  <tr><td style="padding:14px 16px 18px;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b">
+    <a href="${SITE_URL}" style="color:#0284c7;font-weight:700">פתיחת האתר</a> · <a href="${SITE_URL}/#/insights" style="color:#0284c7">תזרים יומי</a> · <a href="${SITE_URL}/#/budgets" style="color:#0284c7">תקציבים</a><br>
+    נתונים עד ${fmtD(w.lastTx)}${meta && meta.sync ? (meta.sync.ok ? ` · סונכרן מהבנק לפני השליחה (${meta.sync.added} עסקאות חדשות)` : ` · הסנכרון מהבנק לפני השליחה נכשל: ${escH(meta.sync.error || '')}`) : ''} · נוצר אוטומטית ${new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}.
+    ${meta && meta.test ? '<br><em>זהו דוח בדיקה שנשלח ידנית ממסך «מפתחות».</em>' : ''}</td></tr>
+</table></td></tr></table></body></html>`;
+}
+
+async function sendEmail(to, subject, html) {
+  const { SESv2Client, SendEmailCommand } = require('@aws-sdk/client-sesv2');
+  const ses = new SESv2Client({});
+  await ses.send(new SendEmailCommand({ FromEmailAddress: REPORT_FROM, Destination: { ToAddresses: to },
+    Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Html: { Data: html, Charset: 'UTF-8' } } } } }));
+}
+
+async function runReport(to, opts) {
+  opts = opts || {};
+  let sync = null;
+  if (opts.sync) { try { sync = await serverSync({ refresh: true, waitMs: 60000 }); } catch (e) { sync = { ok: false, error: e.message }; } }
+  const cfg = await ofLoadConfig();
+  let status = { ok: false, accounts: [], connections: [] };
+  if (cfg && cfg.clientSecret) { try { status = await ofStatusData(cfg, await ofToken(cfg)); } catch (e) {} }
+  const [rt, stored] = await Promise.all([loadApp(), getJson(dataKeyFor(HOUSEHOLD_CODE), { data: null })]);
+  if (!stored.data) throw new Error('אין עדיין נתונים בענן');
+  const w = await buildReportData(rt, stored.data, { ok: status.ok, accounts: status.accounts, connections: status.connections });
+  const over = w.cats.filter((c) => c.status === 'over').length;
+  const subject = `${over ? '🔴' : w.cats.some((c) => c.status === 'warn') ? '⚠️' : '✅'} דוח שבועי לבית · ${fmtD(w.weekStart)}–${fmtD(w.weekEnd)} · הוצאות ${fmtILS(w.homeWeek)}`;
+  await sendEmail(to, subject, reportHTML(w, { sync, test: !!opts.test }));
+  return { ok: true, to, subject, at: Date.now(), sync };
+}
+
+async function handleReport(action, event) {
+  const u = await currentUserFrom(event);
+  if (!u) return resp(401, { error: 'unauthorized' });
+  const isAdmin = u.role === 'admin';
+  let body = {};
+  try { body = readBody(event); } catch (e) { return resp(400, { error: 'bad json' }); }
+  if (action === 'status') return resp(200, reportView(await reportLoadCfg()));
+  if (!isAdmin) return resp(403, { error: 'רק המנהל יכול לשנות את הגדרות הדוח והסנכרון' });
+  const cleanTo = (arr) => [...new Set((Array.isArray(arr) ? arr : []).map((s) => String(s || '').trim().toLowerCase()).filter((s) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s)))].slice(0, 10);
+  if (action === 'config') {
+    const patch = {}; if (body.to !== undefined) patch.to = cleanTo(body.to); if (body.enabled !== undefined) patch.enabled = !!body.enabled;
+    return resp(200, reportView(await reportSaveCfg(patch)));
+  }
+  if (action === 'test') { // דוח בדיקה — מהנתונים הקיימים (בלי סנכרון, כדי להישאר בתוך 29 השניות של API Gateway)
+    const to = cleanTo(body.to); if (!to.length) return resp(400, { error: 'אין נמענים תקינים' });
+    const r = await runReport(to, { sync: false, test: true });
+    return resp(200, { ok: true, to: r.to, subject: r.subject });
+  }
+  if (action === 'syncnow') { // הפעלה אסינכרונית של הסנכרון בשרת (לוקח כ-2 דקות)
+    const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+    await new LambdaClient({}).send(new InvokeCommand({ FunctionName: FN_NAME, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ cron: 'sync', by: u.email })) }));
+    return resp(200, { ok: true, started: true });
+  }
+  return resp(404, { error: 'unknown action' });
+}
+
+// הפעלה מלוח-הזמנים (ללא HTTP): {cron:'sync'} כל 3 ימים · {cron:'report'} כל יום ראשון בבוקר
+async function handleCron(event) {
+  if (event.cron === 'sync') {
+    try { return { ok: true, sync: await serverSync({ refresh: true, waitMs: 90000 }) }; }
+    catch (e) { await reportSaveCfg({ lastSync: { ok: false, at: Date.now(), error: e.message } }); return { ok: false, error: e.message }; }
+  }
+  if (event.cron === 'report') {
+    const cfg = await reportLoadCfg();
+    const to = Array.isArray(event.to) && event.to.length ? event.to : cfg.to;
+    if (cfg.enabled === false && !event.force) return { ok: true, skipped: 'disabled' };
+    if (!to || !to.length) return { ok: true, skipped: 'no recipients' };
+    try { const r = await runReport(to, { sync: true }); await reportSaveCfg({ lastReport: { ok: true, at: r.at, to: r.to, subject: r.subject } }); return { ok: true, report: r }; }
+    catch (e) { await reportSaveCfg({ lastReport: { ok: false, at: Date.now(), to, error: e.message } }); return { ok: false, error: e.message }; }
+  }
+  if (event.cron === 'refresh') { // אבחון: רק בקשת רענון מהבנקים, בלי ייבוא
+    const cfg = await ofLoadConfig(); if (!cfg || !cfg.clientSecret) return { ok: false, error: 'no config' };
+    return { ok: true, statuses: await ofRefreshAll(cfg, await ofToken(cfg)) };
+  }
+  return { ok: false, error: 'unknown cron ' + event.cron };
+}
+
 exports.handler = async (event) => {
+  if (event && event.cron && !event.requestContext) return handleCron(event);
   const http = (event.requestContext && event.requestContext.http) || {};
   const method = http.method || 'GET';
   const path = event.rawPath || http.path || '/';
@@ -478,6 +709,8 @@ exports.handler = async (event) => {
     if (ofMatch) return await handleOF(ofMatch[1].toLowerCase(), event);
     const aiMatch = path.match(/\/ai\/([a-z]+)\/?$/i);
     if (aiMatch) return await handleAI(aiMatch[1].toLowerCase(), event);
+    const rpMatch = path.match(/\/report\/([a-z]+)\/?$/i);
+    if (rpMatch) return await handleReport(rpMatch[1].toLowerCase(), event);
     if (/\/data\/?$/.test(path)) return await handleData(method, event);
     return resp(404, { error: 'not found' });
   } catch (e) {
