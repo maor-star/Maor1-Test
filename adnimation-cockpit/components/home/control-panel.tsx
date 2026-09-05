@@ -7,32 +7,43 @@ import { fmtDateTime, fmtMoney, fmtNumber } from '@/lib/utils';
 import { PERIOD_LABEL } from '@/lib/revenue/periods';
 import type { ControlPanel as Panel } from '@/lib/control/service';
 import type { LinePeriodSummary } from '@/lib/control/lines';
+import type { LineTargetView } from '@/lib/control/targets';
+import { PillarCube } from '@/components/home/pillar-cube';
 
 /**
- * The control panel — every line of the business, one cube each, across the
- * width of the page.
+ * The seven pillars of the company, one cube each, across the width.
  *
- * Seven cubes, one per stream of money the company runs, each read from the
- * Ad Ops Architect source and each showing the same window as the company
- * cube above: what it made, what was ours, how that compares with the
- * equivalent earlier window, and the shape of the days inside it. Below them,
- * the accounts that carry the company, ranked on money.
+ * Core Publishers, Exchange App, Exchange CTV, Exchange Display, Budder,
+ * Google CTV and IBV — the way he names the business. Each carries what it
+ * earned over the window on screen and what it was meant to earn, and the
+ * whole tile goes green or red on the answer, because the question he asks a
+ * wall of these is which of the seven needs him today.
  *
  * A cube whose source has gone quiet says so rather than showing a zero: on
  * this screen a zero reads as a collapse, and a collapse is the one thing he
- * must never be told by accident.
+ * must never be told by accident. A cube with no target set stays neutral for
+ * the same reason — red has to be a judgement, not a default.
  */
-export function ControlPanel({ panel }: { panel: Panel }) {
+export function ControlPanel({
+  panel,
+  targets,
+  month,
+}: {
+  panel: Panel;
+  /** Line → how it is doing against its target, by line key. */
+  targets: Record<string, LineTargetView>;
+  /** The month a target typed on a cube applies to. */
+  month: string;
+}) {
   return (
     <>
       <HudCard className="gap-0 overflow-hidden p-0">
         <div className="p-[22px] pb-[14px]">
           <HudCardHeader
-            title="Every line"
+            title="The seven pillars"
             action={
               <span className="text-[12.5px] text-muted">
-                {PERIOD_LABEL[panel.period]} · seven cuts of the business — they overlap, they do
-                not sum ·{' '}
+                {PERIOD_LABEL[panel.period]} · against target, pro-rated to the window ·{' '}
                 {panel.pulledAt ? (
                   <>pulled <Num>{fmtDateTime(panel.pulledAt)}</Num></>
                 ) : (
@@ -55,10 +66,15 @@ export function ControlPanel({ panel }: { panel: Panel }) {
            * mono figures it truncated every heading and pushed the row off the
            * card, which is worse than a second line of tiles.
            */
-          <div className="grid gap-[14px] border-t border-line p-[18px] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {panel.lines.map((l) => (
-              <LineCube key={l.line} line={l} />
-            ))}
+          <div className="grid gap-[12px] border-t border-line p-[16px] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {panel.lines.map((l) => {
+              const target = targets[l.line];
+              return target ? (
+                <PillarCube key={l.line} line={l} target={target} month={month} />
+              ) : (
+                <LineCube key={l.line} line={l} />
+              );
+            })}
           </div>
         )}
       </HudCard>

@@ -20,14 +20,21 @@ export const ACTIVITY_LINES = [
 ] as const;
 export type ActivityLine = (typeof ACTIVITY_LINES)[number];
 
+/**
+ * The pillars, in his words.
+ *
+ * These are the names he uses for the company's seven lines, so they are the
+ * names on the screen — the keys underneath stay as they are because they are
+ * what the source reports against and what every stored row already says.
+ */
 export const LINE_LABEL: Record<ActivityLine, string> = {
-  core_clients: 'CORE CLIENTS',
-  ibv: 'IBV — IN-BANNER VIDEO',
-  rtb_display: 'RTB DISPLAY',
-  apps: 'APPS',
-  ctv: 'CTV',
+  core_clients: 'CORE PUBLISHERS',
+  apps: 'EXCHANGE APP',
+  ctv: 'EXCHANGE CTV',
+  rtb_display: 'EXCHANGE DISPLAY',
+  seat_lease: 'BUDDER',
   google_ctv: 'GOOGLE CTV',
-  seat_lease: 'SEAT LEASE',
+  ibv: 'IBV — VIDEO',
 };
 
 /** What "entities" counts on each line, for the label under the number. */

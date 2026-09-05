@@ -18,6 +18,7 @@ import { InlineTaskEditor } from '@/components/tasks/inline-task-editor';
 import { listDepartments, listPeople } from '@/lib/tasks/queries';
 import { loadControlPanel } from '@/lib/control/service';
 import { ControlPanel } from '@/components/home/control-panel';
+import { currentTargets, judge, type LineTargetView } from '@/lib/control/targets';
 import { CompanyCube } from '@/components/home/company-total';
 
 export const dynamic = 'force-dynamic';
@@ -89,17 +90,36 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
 }
 
 /**
- * The company first, then its lines, over one window.
+ * The company first, then its seven pillars, over one window.
  *
- * The lines are seven different cuts of the business and they overlap on
- * purpose, so the cube above them is the P&L rather than their sum.
+ * The pillars are seven different cuts of the business and they overlap on
+ * purpose, so the cube above them is the P&L rather than their sum. Each is
+ * judged against its own target, pro-rated to the window on screen.
  */
 async function ControlPanelSection({ period }: { period: Period }) {
-  const [panel, summary] = await Promise.all([loadControlPanel(period), summariseCompany(period)]);
+  const [panel, summary, targets] = await Promise.all([
+    loadControlPanel(period),
+    summariseCompany(period),
+    currentTargets().catch(() => new Map()),
+  ]);
+
+  const judged: Record<string, LineTargetView> = {};
+  for (const line of panel.lines) {
+    judged[line.line] = judge(line.line, targets.get(line.line), line, {
+      days: line.range.days,
+      from: line.range.current.from,
+      daysReported: line.daysReported,
+    });
+  }
+
   return (
     <>
       <CompanyCube summary={summary} period={period} />
-      <ControlPanel panel={panel} />
+      <ControlPanel
+        panel={panel}
+        targets={judged}
+        month={`${summary.range.current.to.slice(0, 7)}-01`}
+      />
     </>
   );
 }

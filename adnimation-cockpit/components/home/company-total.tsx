@@ -11,14 +11,17 @@ import {
 } from '@/lib/revenue/periods';
 
 /**
- * The company, over one window — the cube at the top of the home screen.
+ * The company, over one window — the strip at the top of the home screen.
  *
- * Every metric the P&L has for the window he picked, in one place: gross,
- * net (what Adnimation kept after every payout and fee), the cost between
- * them, margin, impressions, net per day, and how it compares with the
- * equivalent earlier window. The switcher is a row of links, so a window is
- * a URL he can bookmark and the whole page — this cube and every line tile
- * under it — moves together.
+ * Every metric the P&L has for the window he picked: gross, net (what
+ * Adnimation kept after every payout and fee), the cost between them, margin,
+ * impressions, net per day, and how it compares with the equivalent earlier
+ * window. The switcher is a row of links, so a window is a URL he can bookmark
+ * and the whole page — this strip and every pillar under it — moves together.
+ *
+ * Deliberately small. It used to take most of the first screen, and the seven
+ * pillars — the thing he actually reads down — began below the fold. The
+ * company is one line of figures he glances at; the pillars are the work.
  */
 export function CompanyCube({ summary, period }: { summary: CompanySummary; period: Period }) {
   const c = summary.company;
@@ -26,11 +29,11 @@ export function CompanyCube({ summary, period }: { summary: CompanySummary; peri
 
   return (
     <HudCard className="gap-0 overflow-hidden p-0">
-      <div className="p-[22px] pb-[14px]">
-        <HudCardHeader title="The company" action={<PeriodBar period={period} />} />
+      <div className="px-[18px] pb-[10px] pt-[14px]">
+        <HudCardHeader title="The company" className="[&_h2]:text-[17px]" action={<PeriodBar period={period} />} />
       </div>
 
-      <div className="border-t border-line px-[22px] py-[18px]">
+      <div className="border-t border-line px-[18px] py-[13px]">
         <div className="flex flex-wrap items-center gap-2">
           <span className="hud-label text-[11px]">{PERIOD_LABEL[period]}</span>
           <span className="hud-label text-[11px] text-neutral-400">
@@ -46,16 +49,18 @@ export function CompanyCube({ summary, period }: { summary: CompanySummary; peri
         {/* The package's metric grid: one cell per figure, never a row of
             eight columns crushed together — which is what the eight metrics
             became the moment the figures were set in mono. */}
-        <div className="mt-[14px] grid grid-cols-1 gap-[14px] sm:grid-cols-2 lg:grid-cols-4">
-          <Metric label="gross" value={fmtMoney(c.grossCents)} big tone="muted" />
-          <Metric label="net" value={fmtMoney(c.profitCents)} big />
+        {/* Eight figures on one row on a wide screen, so the whole company is
+            one glance and the pillars below it start above the fold. */}
+        <div className="mt-[10px] grid grid-cols-2 gap-[10px] sm:grid-cols-4 xl:grid-cols-8">
+          <Metric label="gross" value={fmtMoney(c.grossCents)} tone="muted" />
+          <Metric label="net" value={fmtMoney(c.profitCents)} />
           <Metric label="margin" value={c.marginPct === null ? '—' : `${(c.marginPct * 100).toFixed(1)}%`} tone="info" />
           <Metric label="cost (paid out)" value={fmtMoney(costCents)} />
           <Metric label="impressions" value={fmtNumber(c.impressions)} />
           <Metric label="net / day" value={fmtMoney(c.dailyProfitCents)} />
-          <div className="min-w-0 rounded-[12px] border border-line p-[17px]">
-            <p className="hud-label text-[12px]">{COMPARISON_LABEL[period].toUpperCase()}</p>
-            <p className="mt-3 text-[24px] leading-none">
+          <div className="min-w-0 rounded-[10px] border border-line p-[11px]">
+            <p className="hud-label truncate text-[10.5px]">{COMPARISON_LABEL[period].toUpperCase()}</p>
+            <p className="mt-[7px] text-[17px] leading-none">
               <DeltaPct delta={{ pct: summary.deltaPct, absCents: null }} />
             </p>
           </div>
@@ -64,9 +69,9 @@ export function CompanyCube({ summary, period }: { summary: CompanySummary; peri
 
         <Sparkline
           values={summary.series.map((d) => d.profitCents)}
-          className="mt-4 h-14 w-full text-info"
+          className="mt-3 h-9 w-full text-info"
         />
-        <p className="hud-label mt-2 text-[11.5px]">Daily net across the window</p>
+        <p className="hud-label mt-1.5 text-[11px]">Daily net across the window</p>
       </div>
 
       {/* The four books the P&L keeps, for the same window. Their nets sum to
@@ -76,11 +81,11 @@ export function CompanyCube({ summary, period }: { summary: CompanySummary; peri
           <Link
             key={l.line}
             href={`/revenue?period=${period}`}
-            className="group bg-card p-[18px] transition-colors hover:bg-neutral-100"
+            className="group bg-card p-[13px] transition-colors hover:bg-neutral-100"
             title={`${l.label} — open the breakdown`}
           >
-            <p className="hud-label text-[11.5px]">{l.label}</p>
-            <p className="mt-[10px] text-[24px] font-semibold leading-none text-ink">
+            <p className="hud-label text-[11px]">{l.label}</p>
+            <p className="mt-[7px] text-[18px] font-semibold leading-none text-ink">
               <Num>{fmtMoney(l.profitCents)}</Num>
               <span className="ms-2 text-[11.5px] font-bold uppercase tracking-[0.09em] text-muted">
                 Net
@@ -94,7 +99,7 @@ export function CompanyCube({ summary, period }: { summary: CompanySummary; peri
         ))}
       </div>
 
-      <p className="border-t border-line px-[22px] py-3 text-[12.5px] text-muted">
+      <p className="border-t border-line px-[18px] py-2 text-[12px] text-muted">
         Last full day <Num>{summary.lastCompleteDay}</Num> · pulled{' '}
         <Num>{fmtDateTime(new Date(summary.pulledAt))}</Num> ·{' '}
         <Link href={`/revenue?period=${period}`} className="font-semibold text-info hover:underline">
@@ -126,7 +131,7 @@ export function PeriodBar({ period, base = '/' }: { period: Period; base?: strin
   );
 }
 
-/** One metric cell: a 12px card, an uppercase label, a mono figure. */
+/** One metric cell: a small card, an uppercase label, a mono figure. */
 function Metric({
   label,
   value,
@@ -139,10 +144,10 @@ function Metric({
   tone?: 'muted' | 'info';
 }) {
   return (
-    <div className="min-w-0 rounded-[12px] border border-line p-[17px]">
-      <p className="hud-label text-[12px]">{label}</p>
+    <div className="min-w-0 rounded-[10px] border border-line p-[11px]">
+      <p className="hud-label truncate text-[10.5px]">{label}</p>
       <p
-        className={`hud-numeral mt-3 truncate ${big ? 'text-[30px]' : 'text-[24px]'} ${
+        className={`hud-numeral mt-[7px] truncate ${big ? 'text-[21px]' : 'text-[17px]'} ${
           tone === 'muted' ? 'text-neutral-700' : tone === 'info' ? 'text-info' : ''
         }`}
       >

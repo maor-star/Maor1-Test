@@ -489,6 +489,32 @@ export const deskDrafts = pgTable(
 
 export type DeskDraftRow = typeof deskDrafts.$inferSelect;
 
+/**
+ * What each pillar of the company is meant to earn, per month.
+ *
+ * Keyed by line and month so a target raised in March does not rewrite what
+ * February was judged against, and carrying `source` so a figure he typed is
+ * never silently replaced by a fed one.
+ */
+export const lineTargets = pgTable(
+  'line_targets',
+  {
+    line: text('line').notNull(),
+    /** The first of the month it applies to. */
+    month: date('month').notNull(),
+    targetCents: moneyCents('target_cents').notNull(),
+    /** Gross or net — several lines report no profit at all. */
+    basis: text('basis').notNull().default('gross'),
+    /** 'manual' is his own figure; 'feed' came from the planning system. */
+    source: text('source').notNull().default('manual'),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+    updatedBy: text('updated_by'),
+  },
+  (t) => [primaryKey({ columns: [t.line, t.month] }), index('idx_line_targets_month').on(t.month)],
+);
+
+export type LineTargetRow = typeof lineTargets.$inferSelect;
+
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type TaskComment = typeof taskComments.$inferSelect;
