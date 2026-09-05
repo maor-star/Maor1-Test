@@ -1,4 +1,6 @@
-import { PERIODS, type Period } from '@/lib/revenue/periods';
+import { PERIODS, rangeFor, type Period } from '@/lib/revenue/periods';
+import { db, seatDays } from '@/lib/db';
+import { todayInTz } from '@/lib/utils';
 
 /**
  * Seats — the demand and supply endpoints the exchange runs on.
@@ -201,18 +203,99 @@ function build(rows: (string | number)[][], side: SeatSide, windowDays: Record<s
   return byWindow;
 }
 
+/**
+ * The seats, from the table the source sync fills.
+ *
+ * These three screens read a checked-in fixture from the day they were built —
+ * every figure on Trading, Demand and Supply was frozen at whatever the file
+ * said. Now they are the exchange's own daily rows, one per seat per day, and
+ * a window is a sum over them.
+ *
+ * The fixture stays as the fallback for a database that has never synced, so a
+ * fresh install renders something correct rather than an empty page. Which one
+ * he is looking at is on the screen, in `pulledAt`.
+ */
 async function load(): Promise<Snapshot> {
   if (cache) return cache;
-  const snap = (await import('@/fixtures/xe-seats.json')).default;
+
+  const rows = await db
+    .select({
+      side: seatDays.side,
+      seat: seatDays.seat,
+      date: seatDays.reportDate,
+      revenueCents: seatDays.revenueCents,
+      costCents: seatDays.costCents,
+      impressions: seatDays.impressions,
+      endpoints: seatDays.endpoints,
+      pulledAt: seatDays.pulledAt,
+    })
+    .from(seatDays)
+    .catch(() => []);
+
+  if (rows.length === 0) {
+    const snap = (await import('@/fixtures/xe-seats.json')).default;
+    cache = {
+      demand: build(snap.demand, 'demand', WINDOW_DAYS),
+      supply: build(snap.supply, 'supply', WINDOW_DAYS),
+      meta: {
+        lastCompleteDay: snap.lastCompleteDay,
+        partialDay: snap.partialDay,
+        coverageFrom: snap.coverageFrom,
+        pulledAt: snap.pulledAt,
+      },
+      windowDays: WINDOW_DAYS,
+    };
+    return cache;
+  }
+
+  const dates = rows.map((r) => r.date).sort();
+  const today = todayInTz();
+  const lastComplete = dates.filter((d) => d < today).at(-1) ?? (dates.at(-1) ?? today);
+
+  /*
+   * One tuple per seat per window, in the shape `build` already speaks — so
+   * the scoring, the health and the words on the card are the same code they
+   * always were, and only where the numbers come from has changed.
+   */
+  const tuples = (side: SeatSide): (string | number)[][] => {
+    const out: (string | number)[][] = [];
+    for (const period of PERIODS) {
+      const range = rangeFor(period, lastComplete, today);
+      const inWindow = rows.filter(
+        (r) => r.side === side && r.date >= range.current.from && r.date <= range.current.to,
+      );
+
+      const bySeat = new Map<string, typeof inWindow>();
+      for (const r of inWindow) bySeat.set(r.seat, [...(bySeat.get(r.seat) ?? []), r]);
+
+      for (const [seat, days] of bySeat) {
+        const revenue = days.reduce((a, d) => a + d.revenueCents, 0);
+        const cost = days.reduce((a, d) => a + d.costCents, 0);
+        out.push([
+          period,
+          seat,
+          seat,
+          revenue,
+          cost,
+          days.reduce((a, d) => a + d.impressions, 0),
+          Math.max(...days.map((d) => d.endpoints), 0),
+          new Set(days.map((d) => d.date)).size,
+        ]);
+      }
+    }
+    return out;
+  };
+
+  const pulled = rows.map((r) => r.pulledAt.getTime()).sort((a, b) => b - a)[0];
 
   cache = {
-    demand: build(snap.demand, 'demand', WINDOW_DAYS),
-    supply: build(snap.supply, 'supply', WINDOW_DAYS),
+    demand: build(tuples('demand'), 'demand', WINDOW_DAYS),
+    supply: build(tuples('supply'), 'supply', WINDOW_DAYS),
     meta: {
-      lastCompleteDay: snap.lastCompleteDay,
-      partialDay: snap.partialDay,
-      coverageFrom: snap.coverageFrom,
-      pulledAt: snap.pulledAt,
+      lastCompleteDay: lastComplete,
+      partialDay: today,
+      coverageFrom: dates[0] ?? lastComplete,
+      pulledAt: new Date(pulled ?? Date.now()).toISOString(),
     },
     windowDays: WINDOW_DAYS,
   };

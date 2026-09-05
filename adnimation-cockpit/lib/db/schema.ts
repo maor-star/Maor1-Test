@@ -551,6 +551,40 @@ export const entityLines = pgTable(
 
 export type EntityLineRow = typeof entityLines.$inferSelect;
 
+/**
+ * Every demand and supply seat that traded, day by day.
+ *
+ * The exchange reports each day split by SSP and by DSP, which answers both
+ * sides from the same rows: a DSP is a demand seat — somebody buying through
+ * us — and an SSP is a supply seat, an endpoint we buy from. One row per seat
+ * per day per side, so any window the screens ask for is a sum over these.
+ */
+export const seatDays = pgTable(
+  'seat_days',
+  {
+    reportDate: date('report_date').notNull(),
+    /** 'demand' | 'supply'. */
+    side: text('side').notNull(),
+    seat: text('seat').notNull(),
+    seatId: text('seat_id'),
+    revenueCents: moneyCents('revenue_cents').notNull().default(0),
+    costCents: moneyCents('cost_cents').notNull().default(0),
+    profitCents: moneyCents('profit_cents').notNull().default(0),
+    impressions: moneyCents('impressions').notNull().default(0),
+    requests: moneyCents('requests').notNull().default(0),
+    /** Counterparts it traded with that day. */
+    endpoints: integer('endpoints').notNull().default(0),
+    source: text('source').notNull().default('adops'),
+    pulledAt: timestamptz('pulled_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.reportDate, t.side, t.seat] }),
+    index('idx_seat_days_side').on(t.side, t.reportDate),
+  ],
+);
+
+export type SeatDayRow = typeof seatDays.$inferSelect;
+
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type TaskComment = typeof taskComments.$inferSelect;
