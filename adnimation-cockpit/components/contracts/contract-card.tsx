@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { EditorActions, EditorField, EditorGrid } from '@/components/hud/editor-panel';
+import { PillarPicker, PillarTags } from '@/components/hud/pillar-picker';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { BOARD_STATUSES, STATUS_LABEL } from '@/lib/contracts/status';
@@ -56,9 +57,12 @@ export function ContractCard({
    * hides rows by this attribute while he types.
    */
   search,
+  lines = [],
 }: {
   contract: ContractRow;
   search?: string;
+  /** The pillars it already belongs to. */
+  lines?: readonly string[];
 }) {
   const c = contract;
   const [open, setOpen] = useState(c.status === 'unclassified' && !c.categoryConfirmed);
@@ -149,6 +153,7 @@ export function ContractCard({
             ) : null}
             {c.waitingOn === 'them' ? <Tag tone="outline">With them</Tag> : null}
             <Tag tone="neutral">FROM {c.source.toUpperCase()}</Tag>
+            <PillarTags lines={lines} />
             {unfiled > 0 ? (
               <Tag tone="warning" title="Recorded here, but the file is not in Drive yet">
                 <Num>{unfiled}</Num> NOT IN DRIVE
@@ -698,6 +703,15 @@ export function ContractCard({
                   + Create a deal for {c.counterpartyName}
                 </button>
               ) : null}
+            </EditorField>
+
+            <EditorField
+              label="Which parts of the company"
+              htmlFor={`pl-${c.id}-core_clients`}
+              span="full"
+              hint="Tag it to as many pillars as it touches"
+            >
+              <PillarPicker id={`pl-${c.id}`} selected={lines} />
             </EditorField>
 
             <EditorField label="Notes" htmlFor={`nt-${c.id}`} span="full">

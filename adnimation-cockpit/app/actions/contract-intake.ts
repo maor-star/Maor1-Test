@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { contracts, db } from '@/lib/db';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
+import { setLines } from '@/lib/control/tagging';
 import {
   archiveContract, classifyContract, createLinkTarget, fileContract, setContractLink, setWaitingOn,
   suggestLinks,
@@ -102,6 +103,13 @@ export async function classifyAction(formData: FormData): Promise<ContractAction
   );
 
   if (!result.ok) return { ok: false, error: result.error };
+
+  // The pillars it belongs to, when the form carried the picker. A form
+  // without it leaves the tags alone rather than clearing them.
+  if (formData.has('lines')) {
+    await setLines('contract', parsed.data.id, formData.getAll('lines').map(String), user.email);
+  }
+
   refresh();
   return { ok: true, ...(result.warning ? { warning: result.warning } : {}) };
 }

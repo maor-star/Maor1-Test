@@ -14,6 +14,7 @@ import { QuickTaskActions } from '@/components/quick-task-actions';
 import { ClickUpStatus } from '@/components/tasks/clickup-status';
 import { DelegateButton } from '@/components/tasks/delegate-button';
 import { EditTaskForm } from '@/components/tasks/edit-task-form';
+import { PillarTags } from '@/components/hud/pillar-picker';
 
 /**
  * One task, in the shape the contracts screen uses: the thing itself and its
@@ -45,11 +46,14 @@ export function TaskListRow({
   departments,
   now,
   search,
+  lines = [],
 }: {
   task: TaskRow;
   people: { id: string; label: string }[];
   departments: { id: string; label: string }[];
   now: Date;
+  /** The pillars it belongs to. */
+  lines?: readonly string[];
   /** The row's searchable text, folded — the list narrows on it as he types. */
   search?: string;
 }) {
@@ -77,6 +81,7 @@ export function TaskListRow({
             {t.tags.map((tag) => (
               <Tag key={tag} tone="outline">{tag}</Tag>
             ))}
+            <PillarTags lines={lines} />
           </div>
 
           <p className="mt-1 text-[12.5px] text-muted">
@@ -194,6 +199,7 @@ export function TaskListRow({
             }}
             departments={departments}
             people={people}
+            lines={lines}
             onDone={() => setEditing(false)}
           />
         </div>

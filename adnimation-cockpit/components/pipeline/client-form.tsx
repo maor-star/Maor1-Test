@@ -7,6 +7,7 @@ import { savePipelineClientAction } from '@/app/actions/pipeline';
 import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { EditorActions, EditorField, EditorGrid } from '@/components/hud/editor-panel';
+import { PillarPicker } from '@/components/hud/pillar-picker';
 import {
   CLIENT_TYPES, CLIENT_TYPE_LABEL, OPEN_STAGES, STAGES, STAGE_LABEL, TEMPERATURES,
   TEMPERATURE_LABEL, type Stage,
@@ -31,10 +32,13 @@ export function PipelineClientForm({
   owners,
   client,
   onDone,
+  lines = [],
 }: {
   owners: { id: string; name: string }[];
   client?: PipelineRow;
   onDone?: () => void;
+  /** The pillars it already belongs to. */
+  lines?: readonly string[];
 }) {
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -213,6 +217,15 @@ export function PipelineClientForm({
             defaultValue={client?.source ?? ''}
             placeholder="Conference, referral, inbound"
           />
+        </EditorField>
+
+        <EditorField
+          label="Which parts of the company"
+          htmlFor={`${f('lines')}-core_clients`}
+          span="full"
+          hint="Tag it to as many pillars as it touches"
+        >
+          <PillarPicker id={f('lines')} selected={lines} />
         </EditorField>
 
         <EditorField label="Notes" htmlFor={f('notes')} span="full">

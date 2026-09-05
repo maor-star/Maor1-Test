@@ -22,6 +22,8 @@ import {
 } from '@/lib/contracts/intake-module';
 import { ContractCard } from '@/components/contracts/contract-card';
 import { driveStatus } from '@/lib/integrations/drive';
+import { linesForMany, PILLAR_OPTIONS } from '@/lib/control/tagging';
+import { PillarFilter } from '@/components/hud/pillar-filter';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,13 +37,15 @@ export const dynamic = 'force-dynamic';
 export default async function ContractsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; q?: string }>;
+  searchParams: Promise<{ view?: string; q?: string; pillar?: string }>;
 }) {
   const sp = await searchParams;
   const intakeView: IntakeView = CONTRACT_VIEWS.includes(sp.view as IntakeView)
     ? (sp.view as IntakeView)
     : 'classify';
   const q = sp.q ?? '';
+  // Only one of the seven, and only if it is one of the seven.
+  const pillar = PILLAR_OPTIONS.some((p) => p.line === sp.pillar) ? (sp.pillar ?? null) : null;
 
   const [board, departments, intake, counts, drive] = await Promise.all([
     contractBoard(),
@@ -62,6 +66,17 @@ export default async function ContractsPage({
     const params = new URLSearchParams();
     if (v !== 'classify') params.set('view', v);
     if (q) params.set('q', q);
+    if (pillar) params.set('pillar', pillar);
+    const query = params.toString();
+    return query ? `/contracts?${query}` : '/contracts';
+  };
+
+  /** The same screen, read on one pillar — or on all of them. */
+  const pillarHref = (line: string | null) => {
+    const params = new URLSearchParams();
+    if (intakeView !== 'classify') params.set('view', intakeView);
+    if (q) params.set('q', q);
+    if (line) params.set('pillar', line);
     const query = params.toString();
     return query ? `/contracts?${query}` : '/contracts';
   };
@@ -87,7 +102,15 @@ export default async function ContractsPage({
     // The file names are printed on the row, so they are things he will type.
     ...c.versions.map((v) => v.fileName),
   ];
-  const rows = filterByQuery(intake, q, searchable);
+  const found = filterByQuery(intake, q, searchable);
+  // Which pillars each contract belongs to, in one query for the whole board.
+  const pillars = await linesForMany('contract', found.map((c) => c.id));
+  // Narrowed to one pillar when he asked for one. Untagged contracts drop out,
+  // which is the point: the filter answers "what is on Exchange CTV", and a
+  // contract nobody has said that about is not an answer to it.
+  const rows = pillar
+    ? found.filter((c) => (pillars.get(c.id) ?? []).some((l) => l === pillar))
+    : found;
 
   return (
     <div className="space-y-5">
@@ -197,11 +220,16 @@ export default async function ContractsPage({
               </div>
             }
           />
+          <div className="mt-3">
+            <PillarFilter current={pillar} href={pillarHref} />
+          </div>
         </div>
 
         {rows.length === 0 ? (
           <p className="border-t border-line px-[18px] py-4 text-[14.5px] text-muted">
-            {q
+            {pillar
+              ? 'Nothing in this view is tagged to that pillar yet — open a contract and tag it.'
+              : q
               ? `Nothing in this view matches “${q}”.`
               : intakeView === 'classify'
                 ? 'Nothing waiting to be classified. Contracts arriving by mail or Slack land here.'
@@ -211,7 +239,12 @@ export default async function ContractsPage({
           <ul id="contract-list">
             <InstantFilter scope="contract-list" />
             {rows.map((c) => (
-              <ContractCard key={c.id} contract={c} search={foldForSearch(...searchable(c))} />
+              <ContractCard
+                key={c.id}
+                contract={c}
+                search={foldForSearch(...searchable(c))}
+                lines={pillars.get(c.id) ?? []}
+              />
             ))}
           </ul>
         )}

@@ -515,6 +515,36 @@ export const lineTargets = pgTable(
 
 export type LineTargetRow = typeof lineTargets.$inferSelect;
 
+/**
+ * Which pillars a piece of work belongs to.
+ *
+ * One row per thing per pillar, because most of the work that matters belongs
+ * to more than one. The pillar is the activity line's own key — the same key
+ * the revenue source reports against — so a tag here and a tile on the
+ * overview mean the same thing.
+ *
+ * No foreign key on `entityId`: the three things tagged live in three tables,
+ * and one column cannot reference all of them.
+ */
+export const entityLines = pgTable(
+  'entity_lines',
+  {
+    /** 'task' | 'deal' | 'contract'. */
+    entityType: text('entity_type').notNull(),
+    entityId: uuid('entity_id').notNull(),
+    line: text('line').notNull(),
+    taggedAt: timestamptz('tagged_at').notNull().defaultNow(),
+    taggedBy: text('tagged_by'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.entityType, t.entityId, t.line] }),
+    index('idx_entity_lines_line').on(t.line, t.entityType),
+    index('idx_entity_lines_entity').on(t.entityType, t.entityId),
+  ],
+);
+
+export type EntityLineRow = typeof entityLines.$inferSelect;
+
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type TaskComment = typeof taskComments.$inferSelect;

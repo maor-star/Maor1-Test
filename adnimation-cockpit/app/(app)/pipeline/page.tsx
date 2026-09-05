@@ -15,6 +15,8 @@ import {
 } from '@/lib/pipeline/types';
 import { fmtMoney, fmtNumber } from '@/lib/utils';
 import { foldForSearch } from '@/lib/search';
+import { linesForMany, PILLAR_OPTIONS } from '@/lib/control/tagging';
+import { PillarFilter } from '@/components/hud/pillar-filter';
 import { InstantFilter } from '@/components/hud/instant-filter';
 import {
   captureLabelHealth, contractsForOpportunities, inboxOpportunities,
@@ -36,6 +38,8 @@ interface SearchParams {
   closed?: string;
   /** '1' shows what has been suggested and not yet accepted. */
   suggested?: string;
+  /** One of the seven pillars, to read the board a department at a time. */
+  pillar?: string;
 }
 
 /**
@@ -78,11 +82,20 @@ export default async function PipelinePage({
     captureLabelHealth(gmailLabels).catch(() => []),
     closedCount(),
   ]);
-  const board = buildBoard(rows);
-  const [touches, inboxContracts] = await Promise.all([
+  const [touches, pillars, inboxContracts] = await Promise.all([
     recentTouches(rows.map((r) => r.id)),
+    // Which pillars each deal belongs to, in one query for the whole board.
+    linesForMany('deal', rows.map((r) => r.id)),
     contractsForOpportunities(inbox.map((o) => o.id)),
   ]);
+
+  // Only one of the seven, and only if it is one of the seven. A deal nobody
+  // has tagged is not an answer to "what is on Exchange CTV", so it drops out
+  // of the board while the filter is on.
+  const pillar = PILLAR_OPTIONS.some((p) => p.line === sp.pillar) ? (sp.pillar ?? null) : null;
+  const board = buildBoard(
+    pillar ? rows.filter((r) => (pillars.get(r.id) ?? []).some((l) => l === pillar)) : rows,
+  );
 
   // Keep the current filters when only one of them changes — working the list
   // means narrowing it repeatedly, not starting over each time.
@@ -90,7 +103,7 @@ export default async function PipelinePage({
     const next = new URLSearchParams();
     const merged = {
       stage: sp.stage, type: sp.type, q: sp.q, attention: sp.attention, sort: sp.sort,
-      closed: sp.closed, suggested: sp.suggested, ...patch,
+      closed: sp.closed, suggested: sp.suggested, pillar: sp.pillar, ...patch,
     };
     for (const [k, v] of Object.entries(merged)) if (v) next.set(k, v);
     const qs = next.toString();
@@ -202,6 +215,10 @@ export default async function PipelinePage({
       */}
       <SearchBox size="lg" placeholder="Find a client — name or domain" className="max-w-xl" />
 
+      {/* The whole company by department: the same board, read one pillar at a
+          time, in the URL so a narrowed screen is a link he can send. */}
+      <PillarFilter current={pillar} href={(line) => href({ pillar: line ?? undefined })} />
+
       <HudCard>
         <HudCardHeader
           title="The book"
@@ -310,6 +327,7 @@ export default async function PipelinePage({
                   key={c.id}
                   client={c}
                   owners={owners}
+                  lines={pillars.get(c.id) ?? []}
                   touches={touches.get(c.id) ?? []}
                   search={foldForSearch(
                     c.name,

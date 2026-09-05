@@ -8,6 +8,7 @@ import { detachFromClickUpAction, editClickUpTaskAction } from '@/app/actions/cl
 import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { EditorActions, EditorField, EditorGrid } from '@/components/hud/editor-panel';
+import { PillarPicker } from '@/components/hud/pillar-picker';
 import {
   PRIORITY_META, STATUS_LABEL, TASK_PRIORITIES, TASK_STATUSES, type TaskPriority,
 } from '@/lib/tasks/types';
@@ -48,12 +49,15 @@ export function EditTaskForm({
   mode = 'mine',
   /** Closes the editor. Absent on the task's own page, which has nothing to close. */
   onDone,
+  lines = [],
 }: {
   task: EditableTask;
   departments: { id: string; label: string }[];
   people: { id: string; label: string }[];
   mode?: 'mine' | 'clickup';
   onDone?: () => void;
+  /** The pillars it already belongs to. */
+  lines?: readonly string[];
 }) {
   const mirrored = mode === 'clickup';
   const [pending, startTransition] = useTransition();
@@ -190,6 +194,15 @@ export function EditTaskForm({
             placeholder="FREQ=WEEKLY;BYDAY=MO"
             defaultValue={task.recurrenceRule ?? ''}
           />
+        </EditorField>
+
+        <EditorField
+          label="Which parts of the company"
+          htmlFor={`${f('lines')}-core_clients`}
+          span="full"
+          hint="Tag it to as many pillars as it touches — every screen can be read one pillar at a time"
+        >
+          <PillarPicker id={f('lines')} selected={lines} />
         </EditorField>
 
         <EditorField label="Notes" htmlFor={f('description')} span="full">

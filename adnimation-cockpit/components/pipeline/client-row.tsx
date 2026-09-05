@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { PipelineClientForm } from './client-form';
+import { PillarTags } from '@/components/hud/pillar-picker';
 import { TouchForm } from './touch-form';
 import { IntegrationChecklist } from './integration-checklist';
 import { CloseDeal } from './close-deal';
@@ -32,12 +33,15 @@ export function PipelineClientRow({
   owners,
   touches,
   search,
+  lines = [],
 }: {
   client: PipelineRow;
   owners: { id: string; name: string }[];
   touches: Touch[];
   /** The row's searchable text, folded — the list narrows on it as he types. */
   search?: string;
+  /** The pillars it belongs to. */
+  lines?: readonly string[];
 }) {
   const [editing, setEditing] = useState(false);
   const [logging, setLogging] = useState(false);
@@ -72,6 +76,7 @@ export function PipelineClientRow({
             <Tag tone="outline">{CLIENT_TYPE_LABEL[client.clientType]}</Tag>
             <Tag tone={TEMP_TONE[client.temperature]}>{TEMPERATURE_LABEL[client.temperature]}</Tag>
             <Tag tone="neutral">{STAGE_LABEL[client.stage]}</Tag>
+            <PillarTags lines={lines} />
             {client.stage === 'integration' && client.closedAt === null ? (
               <Tag tone={client.integration.complete ? 'ok' : 'watch'}>
                 <Num>{client.integration.done}</Num>/<Num>{client.integration.total}</Num> LIVE
@@ -184,7 +189,12 @@ export function PipelineClientRow({
 
       {editing ? (
         <div className="mt-2 rounded-[12px] border border-line p-3">
-          <PipelineClientForm owners={owners} client={client} onDone={() => setEditing(false)} />
+          <PipelineClientForm
+            owners={owners}
+            client={client}
+            lines={lines}
+            onDone={() => setEditing(false)}
+          />
         </div>
       ) : null}
 

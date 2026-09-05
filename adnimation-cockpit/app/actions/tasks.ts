@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { addDays } from 'date-fns';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
+import { setLines } from '@/lib/control/tagging';
 import {
   addComment, archiveTask, completeTask, createTask, snoozeTask, updateTask,
 } from '@/lib/tasks/mutations';
@@ -88,6 +89,14 @@ export async function updateTaskAction(formData: FormData): Promise<ActionResult
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Update failed' };
   }
+  // Which pillars it belongs to, when the form carried the picker. A form
+  // without it leaves the tags alone rather than clearing them — the quick
+  // editors do not show the picker, and a save from one must not silently
+  // untag the task.
+  if (formData.has('lines')) {
+    await setLines('task', parsed.data.id, formData.getAll('lines').map(String), user.email);
+  }
+
   revalidatePath('/tasks');
   revalidatePath(`/tasks/${parsed.data.id}`);
   revalidatePath('/');

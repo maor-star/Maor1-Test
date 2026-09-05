@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
+import { setLines } from '@/lib/control/tagging';
 import { closeDeal, logTouch, setIntegrationStep, upsertPipelineClient } from '@/lib/pipeline/service';
 import { CLOSE_OUTCOMES } from '@/lib/pipeline/integration';
 import type { PipelineInput } from '@/lib/pipeline/types';
@@ -56,6 +57,11 @@ export async function savePipelineClientAction(formData: FormData): Promise<Acti
 
   try {
     const saved = await upsertPipelineClient({ ...input, id }, user.email);
+    // The pillars it belongs to, when the form carried the picker. A form
+    // without it leaves the tags alone rather than clearing them.
+    if (formData.has('lines')) {
+      await setLines('deal', saved, formData.getAll('lines').map(String), user.email);
+    }
     revalidatePath('/pipeline');
     revalidatePath('/');
     return { ok: true, id: saved };

@@ -12,6 +12,8 @@ import { TaskBoardView } from '@/components/tasks/board-view';
 import { TaskCalendarView } from '@/components/tasks/calendar-view';
 import { TaskFilters } from '@/components/tasks/filters';
 import { NewTaskForm } from '@/components/tasks/new-task-form';
+import { linesForMany, PILLAR_OPTIONS } from '@/lib/control/tagging';
+import { PillarFilter } from '@/components/hud/pillar-filter';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,6 +34,7 @@ interface SearchParams {
   status?: string;
   dept?: string;
   sort?: string;
+  pillar?: string;
 }
 
 /** Spec 6.1.1 / 6.4 — my tasks and the ClickUp mirror, in three views. */
@@ -67,7 +70,7 @@ export default async function TasksPage({
     ? (sp.sort as TaskSort)
     : 'newest';
 
-  const [rows, departments, people] = await Promise.all([
+  const [all, departments, people] = await Promise.all([
     listTasks({
       layer,
       search: sp.q,
@@ -80,6 +83,29 @@ export default async function TasksPage({
     listDepartments(),
     listPeople(),
   ]);
+
+  // Which pillars each task belongs to, in one query for the whole list.
+  const pillars = await linesForMany('task', all.map((r) => r.id));
+
+  // Only one of the seven, and only if it is one of the seven.
+  const pillar = PILLAR_OPTIONS.some((p) => p.line === sp.pillar) ? (sp.pillar ?? null) : null;
+
+  // Narrowed to one pillar when he asked for one. A task nobody has tagged is
+  // not an answer to "what is on Exchange CTV", so it drops out.
+  const rows = pillar
+    ? all.filter((t) => (pillars.get(t.id) ?? []).some((l) => l === pillar))
+    : all;
+
+  /** The same screen, read on one pillar — everything else he narrowed kept. */
+  const pillarHref = (line: string | null) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(sp)) {
+      if (key !== 'pillar' && typeof value === 'string' && value) params.set(key, value);
+    }
+    if (line) params.set('pillar', line);
+    const query = params.toString();
+    return query ? `/tasks?${query}` : '/tasks';
+  };
 
   const query = (patch: Record<string, string | undefined>) => {
     const params = new URLSearchParams();
@@ -116,6 +142,10 @@ export default async function TasksPage({
       */}
       <SearchBox size="lg" placeholder="Find a task — title or description" className="max-w-xl" />
 
+      {/* The whole company by department: the same list, read one pillar at a
+          time, in the URL so a narrowed screen is a link he can send. */}
+      <PillarFilter current={pillar} href={pillarHref} />
+
       <TaskFilters
         departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
         current={{
@@ -142,6 +172,7 @@ export default async function TasksPage({
         rows={rows}
         people={people.map((p) => ({ id: p.id, label: p.name }))}
         departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
+        lines={pillars}
       />
     </div>
   );
@@ -152,13 +183,15 @@ function TaskViewSwitch({
   rows,
   people,
   departments,
+  lines,
 }: {
   view: View;
   rows: TaskRow[];
   people: { id: string; label: string }[];
   departments: { id: string; label: string }[];
+  lines?: Map<string, string[]>;
 }) {
   if (view === 'board') return <TaskBoardView rows={rows} people={people} departments={departments} />;
   if (view === 'calendar') return <TaskCalendarView rows={rows} today={todayInTz()} />;
-  return <TaskListView rows={rows} people={people} departments={departments} />;
+  return <TaskListView rows={rows} people={people} departments={departments} lines={lines} />;
 }

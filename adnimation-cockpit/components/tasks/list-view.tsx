@@ -18,10 +18,13 @@ export function TaskListView({
   rows,
   people,
   departments,
+  lines,
 }: {
   rows: TaskRow[];
   people: { id: string; label: string }[];
   departments: { id: string; label: string }[];
+  /** Task id → the pillars it belongs to, fetched for the whole list at once. */
+  lines?: Map<string, string[]>;
 }) {
   if (rows.length === 0) {
     return (
@@ -45,6 +48,7 @@ export function TaskListView({
             people={people}
             departments={departments}
             now={now}
+            lines={lines?.get(t.id) ?? []}
             search={foldForSearch(
               t.title,
               t.description,
