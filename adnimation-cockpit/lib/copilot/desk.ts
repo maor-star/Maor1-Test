@@ -30,7 +30,7 @@ export interface Desk {
 }
 
 /** How many of each channel reach the desk. Beyond this it stops being a desk. */
-const PER_CHANNEL = 12;
+const PER_CHANNEL = 8;
 
 export async function collectDesk(now = new Date()): Promise<Desk> {
   const gaps: string[] = [];

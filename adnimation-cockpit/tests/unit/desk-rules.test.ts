@@ -38,13 +38,46 @@ describe('what the desk shows first', () => {
     expect(old).toBeLessThan(urgency(item({ channel: 'contract', waitingDays: 0 })));
   });
 
-  it('orders loudest first and breaks ties the same way every time', () => {
+  it('opens with the single most pressing thing', () => {
     const ordered = deskOrder([
       item({ id: 'task:b', channel: 'task', waitingDays: 1 }),
       item({ id: 'contract:a', channel: 'contract', waitingDays: 1 }),
       item({ id: 'task:a', channel: 'task', waitingDays: 1 }),
     ]);
-    expect(ordered.map((i) => i.id)).toEqual(['contract:a', 'task:a', 'task:b']);
+    expect(ordered[0]!.id).toBe('contract:a');
+  });
+
+  it('shows one of each channel before a second of any', () => {
+    // Twelve contracts used to sit above the first unanswered mail, which is a
+    // screen that tells him he has no mail.
+    const many = [
+      ...Array.from({ length: 12 }, (_, n) =>
+        item({ id: `contract:${n}`, channel: 'contract', waitingDays: 5 }),
+      ),
+      item({ id: 'mail:x', channel: 'mail', waitingDays: 1 }),
+      item({ id: 'task:x', channel: 'task', waitingDays: 1 }),
+    ];
+    const ordered = deskOrder(many);
+    expect(ordered.slice(0, 3).map((i) => i.channel)).toEqual(['contract', 'mail', 'task']);
+  });
+
+  it('keeps a channel own items loudest first', () => {
+    const ordered = deskOrder([
+      item({ id: 'task:new', channel: 'task', waitingDays: 1 }),
+      item({ id: 'task:old', channel: 'task', waitingDays: 9 }),
+    ]);
+    expect(ordered.map((i) => i.id)).toEqual(['task:old', 'task:new']);
+  });
+
+  it('loses nothing on the way through', () => {
+    const many = [
+      item({ id: 'mail:1' }),
+      item({ id: 'mail:2' }),
+      item({ id: 'deal:1', channel: 'deal' }),
+      item({ id: 'contract:1', channel: 'contract' }),
+    ];
+    expect(deskOrder(many)).toHaveLength(4);
+    expect(new Set(deskOrder(many).map((i) => i.id)).size).toBe(4);
   });
 
   it('never counts negative waiting — a due date in the future is not overdue', () => {

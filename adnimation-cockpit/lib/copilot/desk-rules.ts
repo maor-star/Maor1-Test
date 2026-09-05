@@ -86,11 +86,42 @@ export function urgency(item: Pick<DeskItem, 'channel' | 'waitingDays'>): number
   return WEIGHT[item.channel] * 10 + waited;
 }
 
-/** Loudest first, and the same order every time for anything tied. */
+/**
+ * The order he reads them in: a round of every channel, then the next round.
+ *
+ * Straight urgency put twelve contracts above the first unanswered mail,
+ * because a contract outranks a mail and there were twelve of them — and a
+ * screen where the mail is below the fold is a screen that tells him he has no
+ * mail. He asked to see everything he has to do, so the first screenful is one
+ * of each: the loudest contract, the loudest mail, the loudest Slack question,
+ * then round again.
+ *
+ * Inside a channel it is still loudest first, and the channels themselves are
+ * ordered by whichever has the loudest thing in it, so the first card on the
+ * desk is still the single most pressing thing.
+ */
 export function deskOrder<T extends Pick<DeskItem, 'channel' | 'waitingDays' | 'id'>>(
   items: T[],
 ): T[] {
-  return [...items].sort((a, b) => urgency(b) - urgency(a) || a.id.localeCompare(b.id));
+  const groups = new Map<DeskChannel, T[]>();
+  for (const item of items) {
+    const list = groups.get(item.channel) ?? [];
+    list.push(item);
+    groups.set(item.channel, list);
+  }
+
+  const queues = [...groups.values()]
+    .map((list) => [...list].sort((a, b) => urgency(b) - urgency(a) || a.id.localeCompare(b.id)))
+    .sort((a, b) => urgency(b[0]!) - urgency(a[0]!) || a[0]!.id.localeCompare(b[0]!.id));
+
+  const out: T[] = [];
+  for (let round = 0; out.length < items.length; round += 1) {
+    for (const queue of queues) {
+      const next = queue[round];
+      if (next) out.push(next);
+    }
+  }
+  return out;
 }
 
 /** The id a draft is filed under. */
