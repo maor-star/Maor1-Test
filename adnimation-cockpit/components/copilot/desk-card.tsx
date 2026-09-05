@@ -107,9 +107,9 @@ export function DeskCard({
             ) : null}
           </div>
 
-          <p className="mt-1 truncate text-[13.5px] text-neutral-700">{item.title}</p>
+          <p className="mt-1 text-[13.5px] text-neutral-700">{item.title}</p>
           {item.context ? (
-            <p className="mt-1 line-clamp-2 text-[12.5px] text-muted">{item.context}</p>
+            <p className="mt-1 whitespace-pre-line text-[12.5px] text-muted">{item.context}</p>
           ) : null}
         </div>
 
@@ -138,13 +138,24 @@ export function DeskCard({
       </div>
 
       {/*
-        Why this is the answer, before the answer itself. He decides whether to
-        read the draft closely from this line — and where the copilot guessed,
-        this is where it says so.
+        The briefing, then the recommendation — in that order, because that is
+        the order he can judge them in.
+        
+        He asked for this: a card that opened straight into a suggested reply
+        was asking him to trust advice about a conversation he had not read.
+        The background is what they said; the recommendation is what to do
+        about it; "why" is the reasoning he can disagree with.
       */}
+      {current?.background ? (
+        <div className="mt-2 rounded-[10px] border border-line bg-neutral-50 p-2.5">
+          <span className="hud-label block text-[11px]">What they wrote</span>
+          <p className="mt-1 text-[13px] leading-snug text-neutral-800">{current.background}</p>
+        </div>
+      ) : null}
+
       {current ? (
         <p className="mt-2 text-[13px] text-neutral-700">
-          <span className="hud-label me-1.5 text-[11.5px]">Why</span>
+          <span className="hud-label me-1.5 text-[11.5px]">Why this answer</span>
           {current.why}
         </p>
       ) : null}
@@ -162,7 +173,9 @@ export function DeskCard({
       {current ? (
         <div className="mt-2">
           <label htmlFor={`d-${item.id}`} className="hud-label block text-[11.5px]">
-            {item.act === 'send' ? 'What to send — change anything before you do' : 'The next move'}
+            {item.act === 'send'
+              ? 'What I would send — change anything before you do'
+              : 'What I would do next'}
           </label>
           <Textarea
             id={`d-${item.id}`}

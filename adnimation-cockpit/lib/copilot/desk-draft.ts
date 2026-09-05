@@ -24,6 +24,16 @@ import type { DeskItem } from '@/lib/copilot/desk-rules';
  */
 
 export const deskDraftSchema = z.object({
+  /**
+   * What the other side actually said, and where this stands — two or three
+   * sentences of background.
+   *
+   * He asked for this and he was right to: a card that opens with a suggested
+   * reply asks him to trust a recommendation about a conversation he cannot
+   * see. The snippet on the card is one clipped line of the last message; this
+   * is what the thread is about.
+   */
+  background: z.string(),
   /** The suggested message, ready to send, or the decision, ready to record. */
   text: z.string(),
   /** One line: why this is the answer. He reads this before the text. */
@@ -80,6 +90,12 @@ Rules that do not bend:
 · Where you are guessing, say what you assumed in "why" rather than hiding it in
   confident prose. Low confidence is a useful answer; a confident wrong one is not.
 
+Every answer carries a "background" of two or three sentences: who they are,
+what they actually asked or said, and where the thing stands. Write it as you
+would brief him walking into the room — he has not read the thread, and a
+recommendation about a conversation he cannot see is one he cannot judge. Say
+what is known, not what you assume.
+
 Set "handTo" to the person or team this really belongs to when it is plainly not
 his — finance, ad ops, a named colleague — and null when it is his to answer.`;
 
@@ -106,7 +122,8 @@ async function promptFor(item: DeskItem): Promise<string> {
       body ? `The conversation, oldest first:\n${body}` : 'The body could not be fetched — work from the summary above and keep the reply cautious.',
       '',
       'Write the reply he should send. Answer as JSON: ' +
-        '{"text": "the reply", "why": "one line", "confidence": "high|medium|low", "handTo": null}',
+        '{"background": "two or three sentences on what they wrote and where it stands", ' +
+        '"text": "the reply", "why": "one line", "confidence": "high|medium|low", "handTo": null}',
     ].join('\n');
   }
 
@@ -120,7 +137,8 @@ async function promptFor(item: DeskItem): Promise<string> {
         'you listed. If the document itself has not been read, say so in "why" and keep ' +
         'the verdict to what the record supports.',
       '',
-      'Answer as JSON: {"text": "the message to send", "why": "one line", ' +
+      'Answer as JSON: {"background": "two or three sentences on what this contract is and where it stands", ' +
+        '"text": "the message to send", "why": "one line", ' +
         '"confidence": "high|medium|low", "verdict": {"ok": boolean, "points": ["..."]}, "handTo": null}',
     ].join('\n');
   }
@@ -132,7 +150,8 @@ async function promptFor(item: DeskItem): Promise<string> {
       `Write the Slack message he should post in #${item.target ?? 'the channel'} in answer to this. ` +
         'Slack, so shorter and plainer than mail, and no sign-off.',
       '',
-      'Answer as JSON: {"text": "the message", "why": "one line", "confidence": "high|medium|low", "handTo": null}',
+      'Answer as JSON: {"background": "two or three sentences on what was said in the channel", ' +
+        '"text": "the message", "why": "one line", "confidence": "high|medium|low", "handTo": null}',
     ].join('\n');
   }
 
@@ -144,7 +163,8 @@ async function promptFor(item: DeskItem): Promise<string> {
         'message, friendly, that asks where it stands and makes the next step obvious. ' +
         'Not a reprimand.',
       '',
-      'Answer as JSON: {"text": "the message", "why": "one line", "confidence": "high|medium|low", "handTo": null}',
+      'Answer as JSON: {"background": "two or three sentences on what he handed over and to whom", ' +
+        '"text": "the message", "why": "one line", "confidence": "high|medium|low", "handTo": null}',
     ].join('\n');
   }
 
@@ -156,7 +176,8 @@ async function promptFor(item: DeskItem): Promise<string> {
       'he can take today, not a plan. If the move is a message to somebody, write that ' +
       'message as the text so he can send it.',
     '',
-    'Answer as JSON: {"text": "the next move, or the message to send", "why": "one line", ' +
+    'Answer as JSON: {"background": "two or three sentences on what this is and where it stands", ' +
+      '"text": "the next move, or the message to send", "why": "one line", ' +
       '"confidence": "high|medium|low", "handTo": null}',
   ].join('\n');
 }
