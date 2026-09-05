@@ -25,8 +25,8 @@ import { loadSecrets } from './job-secrets.mjs';
 import { openSource } from './adops-rest.mjs';
 import {
   bidderDays, bidderLine, categoryLine, clampToYear, coreClientDays, coreClientsLine,
-  eachDay, endpointEnvironments, exchangeDays, exchangeEnvLine, googleCtvLine,
-  ignoredSourceNames, publishersDay, seatDaysFrom, seatDays, YEAR_START,
+  endpointEnvironments, exchangeDays, exchangeEnvLine, googleCtvLine, ignoredSourceNames,
+  publishersDaysFromDetail, revShareLookup, seatDaysFrom, seatDays, YEAR_START,
 } from './adops-aggregate.mjs';
 
 const DB = process.env.DATABASE_URL;
@@ -52,40 +52,67 @@ const sql = postgres(DB, { max: 2, onnotice: () => {} });
 
 const day = (offset) => new Date(Date.now() - offset * 86_400_000).toISOString().slice(0, 10);
 
-/** The P&L's money columns, in the order the table holds them. */
-const PL_NUMERIC = [
-  'pub_gross_cents', 'pub_source_fee_cents', 'pub_net_after_fee_cents', 'pub_payout_cents',
-  'pub_profit_cents', 'pub_impressions',
-  'bidder_gross_cents', 'bidder_profit_cents', 'bidder_impressions',
-  'seat_gross_cents', 'seat_payout_cents', 'seat_profit_cents', 'seat_impressions',
-  'xe_revenue_cents', 'xe_cost_cents', 'xe_profit_cents', 'xe_impressions',
-];
+/**
+ * The P&L's four books, and the columns each one owns.
+ *
+ * Grouped rather than listed flat because a book the source refuses must not
+ * be written at all. Flat, every column of every book went into one row and a
+ * refused book arrived as a column of zeroes — which is how the publisher and
+ * seat-lease books were wiped for the last twelve days of August the first
+ * time the source closed its two reports. On the screen a denied grant and a
+ * business that stopped look exactly alike.
+ */
+const PL_BOOKS = {
+  publishers: [
+    'pub_gross_cents', 'pub_source_fee_cents', 'pub_net_after_fee_cents', 'pub_payout_cents',
+    'pub_profit_cents', 'pub_impressions',
+  ],
+  bidder: ['bidder_gross_cents', 'bidder_profit_cents', 'bidder_impressions'],
+  seat: ['seat_gross_cents', 'seat_payout_cents', 'seat_profit_cents', 'seat_impressions'],
+  exchange: ['xe_revenue_cents', 'xe_cost_cents', 'xe_profit_cents', 'xe_impressions'],
+};
+
+const PL_NUMERIC = Object.values(PL_BOOKS).flat();
 
 /**
- * One row per day, with a real zero wherever a line reported nothing.
+ * One row per day, out of the books that actually came back.
  *
- * A line that reported nothing on a day earned nothing on that day. Leaving it
- * undefined would drop the whole day out of a SUM further up.
+ * `books` maps a book's name to its days, or to null when the source refused
+ * it. A book that answered writes its columns, including a real zero on a day
+ * it earned nothing — a line that reported nothing that day earned nothing,
+ * and leaving it undefined would drop the day out of a SUM further up. A book
+ * that was refused writes no columns at all, and the returned `columns` list
+ * is what the upsert is allowed to touch, so yesterday's correct figures stay
+ * where they are and the screen labels their age.
  */
-function mergeDays(sets, pulledAt) {
+function mergeDays(books, pulledAt) {
+  const columns = [];
+  for (const [name, days] of Object.entries(books)) {
+    if (days === null) continue;
+    columns.push(...PL_BOOKS[name]);
+  }
+
   const byDate = new Map();
-  for (const set of sets) {
-    for (const row of set ?? []) {
+  for (const days of Object.values(books)) {
+    for (const row of days ?? []) {
       if (!row?.date) continue;
       const target = byDate.get(row.date) ?? { date: row.date };
       for (const [k, v] of Object.entries(row)) {
-        if (k !== 'date' && PL_NUMERIC.includes(k)) target[k] = Number(v ?? 0);
+        if (k !== 'date' && columns.includes(k)) target[k] = Number(v ?? 0);
       }
       byDate.set(row.date, target);
     }
   }
-  return [...byDate.values()]
+
+  const rows = [...byDate.values()]
     .map((r) => {
       const full = { date: r.date, source: 'adops', pulled_at: pulledAt };
-      for (const k of PL_NUMERIC) full[k] = Number.isFinite(r[k]) ? r[k] : 0;
+      for (const k of columns) full[k] = Number.isFinite(r[k]) ? r[k] : 0;
       return full;
     })
     .sort((a, b) => a.date.localeCompare(b.date));
+
+  return { rows, columns };
 }
 
 /**
@@ -103,6 +130,9 @@ function assertWorthWriting(rows, what) {
   if (!anyMoney) throw new Error(`${what}: every figure came back zero — refusing to write`);
   return rows;
 }
+
+/** A book the source refused, so the upsert leaves its columns alone. */
+const bookOrNull = (rows, denied) => (denied ? null : rows);
 
 async function main() {
   const started = Date.now();
@@ -142,27 +172,12 @@ async function main() {
   console.log(`pulling ${from}..${to}`);
 
   /*
-   * The publisher report is per site for a range, so it is asked one day at a
-   * time — the same shape the old query's lateral join per day had. Batched a
-   * fortnight at a time so a year is not four hundred requests in flight.
+   * The publisher book used to be asked of the source's own overview report,
+   * one day at a time. That report now answers "platform_only: this data is
+   * served through the application, not directly" — a door closed on purpose,
+   * not a grant that lapsed — so the book is built out of the site detail read
+   * below, which reproduces every column of it.
    */
-  const days = eachDay(from, to);
-  const publisherRows = [];
-  console.log(`publishers: ${days.length} days to ask for`);
-  for (let i = 0; i < days.length; i += 14) {
-    const batch = days.slice(i, i + 14);
-    const results = await Promise.all(
-      batch.map((d) =>
-        source
-          .rpc('get_ars_overview_summary', { p_from: d, p_to: d })
-          .then((rows) => publishersDay(d, rows))
-          .catch(() => null),
-      ),
-    );
-    publisherRows.push(...results.filter(Boolean));
-    console.log(`  publishers ${publisherRows.length}/${days.length}`);
-  }
-
   console.log('reading the tables…');
 
   /*
@@ -188,9 +203,9 @@ async function main() {
       throw e;
     });
 
-  const [seatOverview, vidazoo, xeUnsplit, siteDetail, demandSources, gam, endpoints, xeSplit, accounts] =
+  const [seatOverview, vidazoo, xeUnsplit, siteDetail, demandSources, gam, endpoints, xeSplit, accounts, revShares] =
     await Promise.all([
-      ifAllowed('seat lease', source.rpc('get_seat_lease_overview_daily', { p_from: from, p_to: to })),
+      ifAllowed('the seat lease report', source.rpc('get_seat_lease_overview_daily', { p_from: from, p_to: to })),
       ifAllowed('trading_vidazoo_reports', source.selectAll('trading_vidazoo_reports', { filters: window })),
       /*
        * The exchange at its per-demand-endpoint grain. It answers two
@@ -237,40 +252,56 @@ async function main() {
       })),
       ifAllowed('trading_xe_reports (split)', source.selectAll('trading_xe_reports', { filters: window })),
       ifAllowed('ars_accounts', source.selectAll('ars_accounts')),
+      // What Adnimation keeps on each site. Without it the publisher book has
+      // a gross and no margin, which is the half of it he actually acts on.
+      ifAllowed('ars_rev_shares', source.selectAll('ars_rev_shares', {
+        select: 'ars_site_id,effective_date,rev_share_pct',
+      })),
     ]);
 
   console.log(
-    `read: publishers ${publisherRows.length}d, seat lease ${seatOverview.length}, ` +
-      `vidazoo ${vidazoo.length}, exchange ${xeUnsplit.length}, sites ${siteDetail.length}, ` +
+    `read: seat lease ${seatOverview.length}, vidazoo ${vidazoo.length}, ` +
+      `exchange ${xeUnsplit.length}, sites ${siteDetail.length}, ` +
       `demand sources ${demandSources.length}, gam ${gam.length}, endpoints ${endpoints.length}, ` +
-      `seats ${xeSplit.length}, accounts ${accounts.length}`,
+      `seats ${xeSplit.length}, accounts ${accounts.length}, rev shares ${revShares.length}`,
   );
 
-  /* ---- the P&L ---- */
-  const plRows = assertWorthWriting(
-    mergeDays(
-      [publisherRows, seatDays(seatOverview), bidderDays(vidazoo), exchangeDays(xeUnsplit)],
-      pulledAt,
-    ),
-    'the P&L',
-  );
-
-  await sql`
-    insert into company_daily ${sql(plRows, 'date', ...PL_NUMERIC, 'source', 'pulled_at')}
-    on conflict (date) do update set
-      ${sql.unsafe(PL_NUMERIC.map((c) => `${c} = excluded.${c}`).join(', '))},
-      source = excluded.source,
-      pulled_at = excluded.pulled_at
-  `;
-  console.log(`company_daily: ${plRows.length} days`);
-
-  /* ---- the seven engines ---- */
   const ignored = ignoredSourceNames(demandSources);
   const accountsById = new Map(accounts.map((a) => [String(a.ars_id ?? a.id), a]));
   const envByDsp = endpointEnvironments(endpoints);
+  const shareAt = revShareLookup(revShares);
 
+  /* ---- the P&L ---- */
+  const wasDenied = (what) => denied.includes(what);
+  const { rows: plRows, columns: plColumns } = mergeDays(
+    {
+      publishers: bookOrNull(
+        publishersDaysFromDetail(siteDetail, accountsById, ignored, shareAt),
+        wasDenied('ars_site_daily_revenue') || wasDenied('ars_rev_shares'),
+      ),
+      seat: bookOrNull(seatDays(seatOverview), wasDenied('the seat lease report')),
+      bidder: bookOrNull(bidderDays(vidazoo), wasDenied('trading_vidazoo_reports')),
+      exchange: bookOrNull(exchangeDays(xeUnsplit), wasDenied('trading_xe_reports')),
+    },
+    pulledAt,
+  );
+  assertWorthWriting(plRows, 'the P&L');
+
+  await sql`
+    insert into company_daily ${sql(plRows, 'date', ...plColumns, 'source', 'pulled_at')}
+    on conflict (date) do update set
+      ${sql.unsafe(plColumns.map((c) => `${c} = excluded.${c}`).join(', '))},
+      source = excluded.source,
+      pulled_at = excluded.pulled_at
+  `;
+  console.log(
+    `company_daily: ${plRows.length} days, ${plColumns.length}/${PL_NUMERIC.length} columns ` +
+      '(a book the source refused keeps the figures it already had)',
+  );
+
+  /* ---- the seven engines ---- */
   const engines = {
-    core_clients: coreClientsLine(siteDetail, accountsById, ignored),
+    core_clients: coreClientsLine(siteDetail, accountsById, ignored, shareAt),
     ibv: categoryLine(siteDetail, 'video', ignored),
     apps: exchangeEnvLine(xeUnsplit, envByDsp, 'apps'),
     rtb_display: exchangeEnvLine(xeUnsplit, envByDsp, 'rtb_display'),

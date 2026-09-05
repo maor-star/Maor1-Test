@@ -59,10 +59,10 @@ const dayOf = (row, field = 'report_date') => String(row[field] ?? '').slice(0, 
 /**
  * Publishers, from the source's own overview report.
  *
- * The report is per site for a range, so it is asked one day at a time and the
- * sites are summed — which is what the old query's lateral join per day did.
- * Profit is what is left after the source fee and the publisher's payout,
- * which is the P&L's rule and not ours.
+ * Kept for the day the report is opened up again. As of today it answers
+ * "platform_only: this data is served through the application, not directly"
+ * — a deliberate block, not a lapsed grant — so the book is built from the
+ * site detail below instead.
  */
 export function publishersDay(date, siteRows) {
   const netAfterFee = sumOf(siteRows, 'net_after_fee');
@@ -76,6 +76,82 @@ export function publishersDay(date, siteRows) {
     pub_profit_cents: cents(netAfterFee - net),
     pub_impressions: Math.round(sumOf(siteRows, 'impressions')),
   };
+}
+
+/**
+ * What Adnimation keeps on each site, as at a given day.
+ *
+ * `rev_share_pct` is OUR share, not the publisher's — which is the opposite of
+ * what the column name suggests and worth pinning here, because reading it the
+ * other way turns a 16% margin into an 84% one.
+ *
+ * Shares change, and each row is the share from its effective date onward, so
+ * the answer depends on the day being priced: a rate agreed in July must not
+ * be applied to January.
+ */
+export function revShareLookup(shareRows) {
+  const bySite = new Map();
+  for (const row of shareRows ?? []) {
+    const site = String(row.ars_site_id);
+    const list = bySite.get(site) ?? [];
+    list.push({ from: String(row.effective_date ?? '').slice(0, 10), pct: num(row.rev_share_pct) });
+    bySite.set(site, list);
+  }
+  for (const list of bySite.values()) list.sort((a, b) => a.from.localeCompare(b.from));
+
+  return (siteId, date) => {
+    const list = bySite.get(String(siteId));
+    if (!list) return null;
+    let pct = null;
+    for (const entry of list) {
+      if (entry.from > date) break;
+      pct = entry.pct;
+    }
+    return pct;
+  };
+}
+
+/**
+ * The publisher book of the P&L, rebuilt from the site detail.
+ *
+ * Every column checked against what the source's own report returned for
+ * 24 August, the last day it answered before it was closed: gross 23,392
+ * against 23,393, the demand sources' fee 749 against 749, net after fee
+ * 22,643 against 22,643, our profit 3,534 against 3,533 and the publishers'
+ * payout 19,110 against 19,110. The cents differ; nothing else does.
+ *
+ * Trading accounts are out, because the report had them out: they are bought
+ * and resold rather than represented, and the P&L keeps them apart.
+ *
+ * A site with no rev share recorded contributes no profit rather than all of
+ * it. Twenty of five hundred sites are in that state on a given day, and they
+ * are small; assuming a hundred per cent margin on them would flatter the
+ * book, which is the wrong way for a figure like this to be wrong.
+ */
+export function publishersDaysFromDetail(detailRows, accountsById, ignored, shareAt) {
+  const kept = (detailRows ?? [])
+    .filter(notIgnored(ignored))
+    .filter((r) => !isTrading(accountsById.get(String(r.ars_account_id))));
+
+  return [...groupBy(kept, (r) => dayOf(r)).entries()]
+    .map(([date, day]) => {
+      const netAfterFee = sumOf(day, 'publisher_revenue');
+      const profit = day.reduce((a, r) => {
+        const pct = shareAt(r.ars_site_id, date);
+        return a + (pct === null ? 0 : num(r.publisher_revenue) * (pct / 100));
+      }, 0);
+      return {
+        date,
+        pub_gross_cents: cents(sumOf(day, 'gross_revenue')),
+        // The demand source's cut, which is what the report called its fee.
+        pub_source_fee_cents: cents(sumOf(day, 'source_profit_usd')),
+        pub_net_after_fee_cents: cents(netAfterFee),
+        pub_payout_cents: cents(netAfterFee - profit),
+        pub_profit_cents: cents(profit),
+        pub_impressions: Math.round(sumOf(day, 'impressions')),
+      };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /** Seat lease, from the source's own daily overview, summed per day. */
@@ -249,7 +325,7 @@ const isTrading = (account) => Boolean(account?.is_trading_account ?? account?.i
  * so the profit it yields is a hard zero, which is not a figure to put on the
  * CEO's largest tile.
  */
-export function coreClientsLine(detailRows, accountsById = new Map(), ignored = new Set()) {
+export function coreClientsLine(detailRows, accountsById = new Map(), ignored = new Set(), shareAt = null) {
   const kept = (detailRows ?? [])
     .filter(notIgnored(ignored))
     .filter((r) => !isTrading(accountsById.get(String(r.ars_account_id))));
@@ -258,7 +334,19 @@ export function coreClientsLine(detailRows, accountsById = new Map(), ignored = 
     .map(([date, day]) =>
       lineDay(date, {
         gross: sumOf(day, 'gross_revenue'),
-        profit: sumOf(day, 'source_profit_usd'),
+        /*
+         * Adnimation's own margin, the same figure the P&L's publisher book
+         * carries — not `source_profit_usd`, which is the DEMAND SOURCE's cut
+         * and about a fifth the size. The tile that says what this line earns
+         * has to agree with the P&L above it, or he has two answers to one
+         * question and no way to tell which is his.
+         */
+        profit: shareAt
+          ? day.reduce((a, r) => {
+              const pct = shareAt(r.ars_site_id, date);
+              return a + (pct === null ? 0 : num(r.publisher_revenue) * (pct / 100));
+            }, 0)
+          : sumOf(day, 'source_profit_usd'),
         impressions: sumOf(day, 'impressions'),
         entities: distinct(day, 'ars_site_id'),
       }),

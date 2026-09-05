@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 // eslint-disable-next-line prettier/prettier
 // @ts-expect-error — the jobs are plain ESM with no types.
-import { bidderDays, categoryLine, cents, clampToYear, coreClientDays, coreClientsLine, eachDay, endpointEnvironments, environmentOf, exchangeDays, exchangeEnvLine, googleCtvLine, ignoredSourceNames, publishersDay, seatDaysFrom, seatDays, YEAR_START } from '@/deploy/adops-aggregate.mjs';
+import { bidderDays, categoryLine, cents, clampToYear, coreClientDays, coreClientsLine, eachDay, endpointEnvironments, environmentOf, exchangeDays, exchangeEnvLine, googleCtvLine, ignoredSourceNames, publishersDay, publishersDaysFromDetail, revShareLookup, seatDaysFrom, seatDays, YEAR_START } from '@/deploy/adops-aggregate.mjs';
 
 /**
  * The arithmetic that used to live inside SQL.
@@ -310,6 +310,66 @@ describe('Google CTV', () => {
     ]);
     expect(days[0].gross_cents).toBe(1_500);
     expect(days[0].entities).toBe(2);
+  });
+});
+
+/**
+ * The publisher book, rebuilt from the site detail.
+ *
+ * The source's own overview report now answers "platform_only: this data is
+ * served through the application, not directly" — someone closed it on
+ * purpose. Every column below is checked against what that report returned for
+ * 24 August, the last day it answered.
+ */
+describe('the publisher book', () => {
+  const accounts = new Map([
+    ['10', { ars_id: 10, name: 'Represented' }],
+    ['20', { ars_id: 20, name: 'Resold', is_trading_account: true }],
+  ]);
+  const shareAt = revShareLookup([
+    { ars_site_id: 1, effective_date: '2026-01-01', rev_share_pct: 20 },
+    { ars_site_id: 1, effective_date: '2026-07-01', rev_share_pct: 10 },
+  ]);
+  const rows = [
+    { report_date: '2026-08-24', ars_site_id: 1, ars_account_id: 10, source_name: 'OpenX', category: 'header_bidding', gross_revenue: 100, source_profit_usd: 5, publisher_revenue: 95, impressions: 1000 },
+    { report_date: '2026-08-24', ars_site_id: 2, ars_account_id: 10, source_name: 'OpenX', category: 'header_bidding', gross_revenue: 50, source_profit_usd: 2, publisher_revenue: 48, impressions: 500 },
+    { report_date: '2026-08-24', ars_site_id: 9, ars_account_id: 20, source_name: 'OpenX', category: 'header_bidding', gross_revenue: 999, source_profit_usd: 99, publisher_revenue: 900, impressions: 9999 },
+  ];
+
+  it('takes the fee column as the demand source’s cut, which is what the report called it', () => {
+    const [day] = publishersDaysFromDetail(rows, accounts, new Set(), shareAt);
+    expect(day.pub_gross_cents).toBe(15_000);
+    expect(day.pub_source_fee_cents).toBe(700);
+    expect(day.pub_net_after_fee_cents).toBe(14_300);
+  });
+
+  it('splits what is left by our share, not the publisher’s', () => {
+    // rev_share_pct is OURS. Read the other way a 10% margin becomes 90%,
+    // which is the sort of wrong that looks like a very good month.
+    const [day] = publishersDaysFromDetail(rows, accounts, new Set(), shareAt);
+    expect(day.pub_profit_cents).toBe(950); // $95 × 10%
+    expect(day.pub_payout_cents).toBe(13_350);
+  });
+
+  it('prices a day at the share in force on that day', () => {
+    expect(shareAt(1, '2026-08-24')).toBe(10);
+    expect(shareAt(1, '2026-03-01')).toBe(20);
+    // Before the first agreement there is no share to apply.
+    expect(shareAt(1, '2025-12-31')).toBe(null);
+  });
+
+  it('claims no margin on a site nobody has recorded a share for', () => {
+    // Twenty of five hundred sites are in that state on a given day. Treating
+    // a missing share as a hundred per cent would flatter the book, which is
+    // the wrong direction for this figure to be wrong in.
+    const [day] = publishersDaysFromDetail(rows, accounts, new Set(), shareAt);
+    expect(shareAt(2, '2026-08-24')).toBe(null);
+    expect(day.pub_profit_cents).toBe(950);
+  });
+
+  it('leaves trading accounts out, as the report did', () => {
+    const [day] = publishersDaysFromDetail(rows, accounts, new Set(), shareAt);
+    expect(day.pub_gross_cents).toBe(15_000);
   });
 });
 
