@@ -14,14 +14,23 @@
  */
 
 import snapshot from '@/fixtures/trading.json';
+import { PERIODS, PERIOD_TAB, rangeFor, type Period } from '@/lib/revenue/periods';
+import { db, seatDays } from '@/lib/db';
+import { todayInTz } from '@/lib/utils';
 
-export const TRADING_PERIODS = ['YESTERDAY', '7D'] as const;
-export type TradingPeriod = (typeof TRADING_PERIODS)[number];
+/**
+ * Every window the rest of the cockpit offers, not two.
+ *
+ * It was YESTERDAY and 7 DAYS, because the whole page was a checked-in
+ * snapshot with exactly those two windows baked into it. The desk's own
+ * figures now come from `seat_days`, which holds every seat on both sides for
+ * every day of the year, so a month or a quarter is the same question asked
+ * over more rows.
+ */
+export const TRADING_PERIODS = PERIODS;
+export type TradingPeriod = Period;
 
-export const TRADING_PERIOD_LABEL: Record<TradingPeriod, string> = {
-  YESTERDAY: 'YESTERDAY',
-  '7D': '7 DAYS',
-};
+export const TRADING_PERIOD_LABEL = PERIOD_TAB;
 
 /** Below this, a demand endpoint is taking the requests and not buying. */
 export const DEAD_REVENUE_PER_M_CENTS = 100;
@@ -92,6 +101,17 @@ export interface TradingView {
   from: string;
   to: string;
   days: number;
+  /**
+   * The window the ranked bundles, routes and waste actually cover.
+   *
+   * They are the one part of this page still read from the checked-in
+   * snapshot: the bundle grain is a five-gigabyte table that cannot be
+   * aggregated inside the query timeout, and nothing syncs it yet. So they do
+   * NOT follow the selector, and the screen says so where they are shown —
+   * a ranked list quietly answering for a different fortnight is worse than
+   * no list at all.
+   */
+  snapshotWindow: { from: string; to: string };
   totals: {
     revenueCents: number;
     costCents: number;
@@ -114,9 +134,15 @@ export interface TradingView {
   meta: { source: string; pulledAt: string; lastCompleteDay: string; note: string };
 }
 
-function rowsFor(period: TradingPeriod): RawRow[] {
-  const window = snapshot.windows[period];
-  const ids = new Set<string>(window.chunks);
+/**
+ * The ranked rows the snapshot holds, over the widest window it has.
+ *
+ * It used to be asked for the chosen period, which only worked while the page
+ * offered exactly the two periods the snapshot was built with. It now always
+ * answers for its own seven days, and the screen labels them as such.
+ */
+function rowsFor(): RawRow[] {
+  const ids = new Set<string>(snapshot.windows['7D'].chunks);
   const out: RawRow[] = [];
 
   for (const chunk of snapshot.chunks) {
@@ -296,21 +322,101 @@ function waste() {
   };
 }
 
+/**
+ * The desk's own figures for a window, from the seats.
+ *
+ * A demand seat is a buyer and a supply seat is a seller, and the two sides
+ * are the same trades counted from opposite ends — so the totals are taken
+ * from the demand side alone. Adding both would report the exchange at twice
+ * its size, which is the same mistake the P&L makes if it reads the pair rows.
+ */
+async function liveDesk(from: string, to: string) {
+  const rows = await db
+    .select({
+      side: seatDays.side,
+      seat: seatDays.seat,
+      date: seatDays.reportDate,
+      revenueCents: seatDays.revenueCents,
+      costCents: seatDays.costCents,
+      profitCents: seatDays.profitCents,
+      impressions: seatDays.impressions,
+      requests: seatDays.requests,
+    })
+    .from(seatDays)
+    .catch(() => []);
+
+  const inWindow = rows.filter((r) => r.date >= from && r.date <= to);
+  if (inWindow.length === 0) return null;
+
+  const fold = (side: string) => {
+    const m = new Map<string, { revenueCents: number; profitCents: number }>();
+    for (const r of inWindow) {
+      if (r.side !== side) continue;
+      const cur = m.get(r.seat) ?? { revenueCents: 0, profitCents: 0 };
+      cur.revenueCents += r.revenueCents;
+      cur.profitCents += r.profitCents;
+      m.set(r.seat, cur);
+    }
+    return [...m.entries()]
+      .map(([name, v]) => ({ ...v, name, marginPct: marginPct(v.revenueCents, v.profitCents) }))
+      .sort((a, b) => b.profitCents - a.profitCents);
+  };
+
+  const demand = inWindow.filter((r) => r.side === 'demand');
+  const revenueCents = demand.reduce((a, r) => a + r.revenueCents, 0);
+  const profitCents = demand.reduce((a, r) => a + r.profitCents, 0);
+
+  return {
+    days: new Set(demand.map((r) => r.date)).size,
+    totals: {
+      revenueCents,
+      costCents: demand.reduce((a, r) => a + r.costCents, 0),
+      profitCents,
+      marginPct: marginPct(revenueCents, profitCents),
+      requests: demand.reduce((a, r) => a + r.requests, 0),
+      impressions: demand.reduce((a, r) => a + r.impressions, 0),
+    },
+    buyers: fold('demand'),
+    sellers: fold('supply'),
+  };
+}
+
 export async function loadTrading(period: TradingPeriod = 'YESTERDAY'): Promise<TradingView> {
-  const window = snapshot.windows[period];
-  const rows = rowsFor(period);
-  const { days, totals } = totalsFor(window.from, window.to);
+  const rows = rowsFor();
+  const snapshotWindow = { from: snapshot.windows['7D'].from, to: snapshot.windows['7D'].to };
+
+  const range = rangeFor(period, snapshot.lastCompleteDay, todayInTz());
+  const from = range.current.from;
+  const to = range.current.to;
+
+  /*
+   * Live where there is live data, the snapshot where there is not. The
+   * snapshot's own two windows are the only ones it can answer, so falling
+   * back to it for any other period would answer a month with a day.
+   */
+  const live = await liveDesk(from, to);
+
+  /*
+   * With no seat rows — a fresh install, or a window the sync has not reached
+   * — fall back to the snapshot's own accounting. It can answer the two
+   * windows it was built with and nothing else, so anything wider falls back
+   * to its week rather than reporting a quarter as though it were seven days.
+   */
+  const windows = snapshot.windows as Record<string, { from: string; to: string }>;
+  const fallbackWindow = windows[period] ?? snapshotWindow;
+  const fallback = totalsFor(fallbackWindow.from, fallbackWindow.to);
 
   return {
     period,
-    from: window.from,
-    to: window.to,
-    days,
-    totals,
+    from: live ? from : fallbackWindow.from,
+    to: live ? to : fallbackWindow.to,
+    days: live ? live.days : fallback.days,
+    snapshotWindow,
+    totals: live ? live.totals : fallback.totals,
     bundles: foldBundles(rows),
     routes: foldRoutes(rows),
-    buyers: foldSide(rows, (r) => r.buyerCompany),
-    sellers: foldSide(rows, (r) => r.sellerCompany),
+    buyers: live ? live.buyers : foldSide(rows, (r) => r.buyerCompany),
+    sellers: live ? live.sellers : foldSide(rows, (r) => r.sellerCompany),
     waste: waste(),
     meta: {
       source: snapshot.source,

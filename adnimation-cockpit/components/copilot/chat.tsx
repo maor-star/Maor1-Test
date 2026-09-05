@@ -33,12 +33,32 @@ export function CopilotChat({
   const [optimistic, setOptimistic] = useState<StoredMessage[]>([]);
   const router = useRouter();
   const undo = useUndo();
-  const endRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * Keep the newest message in view — inside the conversation, and nowhere
+   * else.
+   *
+   * This used to call scrollIntoView() on a marker at the end of the list, and
+   * that scrolls EVERY scrollable ancestor until the element is visible: the
+   * conversation, and then the page behind it. So every render — opening the
+   * screen, sending a message, any refresh — threw the whole page down to the
+   * chat. Setting scrollTop on the list itself moves the list and leaves the
+   * page where he left it.
+   */
+  const pinToNewest = () => {
+    const list = listRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+  };
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
+    pinToNewest();
     setOptimistic([]);
   }, [messages]);
+
+  // His own message, and the "reading the cockpit" line under it, both arrive
+  // without `messages` changing — they are optimistic until the answer lands.
+  useEffect(pinToNewest, [optimistic, pending]);
 
   const nothingConnected = !providers.anthropic && !providers.gemini;
 
@@ -72,7 +92,7 @@ export function CopilotChat({
 
   return (
     <div className="flex h-full min-h-[60vh] flex-col">
-      <div className="flex-1 space-y-3 overflow-y-auto px-[18px] py-3">
+      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-[18px] py-3">
         {all.length === 0 ? (
           <div className="text-[13px] text-neutral-500">
             <p className="font-semi">Ask about anything the cockpit knows, or tell it to do something.</p>
@@ -88,7 +108,6 @@ export function CopilotChat({
           all.map((m) => <Message key={m.id} m={m} />)
         )}
         {pending ? <p className="font-semi text-[11px] tracking-[0.1em] text-neutral-500">Reading the cockpit…</p> : null}
-        <div ref={endRef} />
       </div>
 
       <div className="border-t border-line px-[18px] py-3">

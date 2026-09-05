@@ -93,8 +93,11 @@ export default async function TradingPage({
                 Sold by · bought by · through
               </span>
             }
+            /* This list does not follow the period picker and must say so. */
           />
         </div>
+
+        <SnapshotWindow view={view} />
 
         {topBundles.length === 0 ? (
           <p className="border-t border-line px-[18px] py-4 font-semi text-[12px] text-neutral-500">
@@ -167,6 +170,7 @@ export default async function TradingPage({
             }
           />
         </div>
+        <SnapshotWindow view={view} />
         <ul>
           {view.routes.slice(0, 12).map((r) => (
             <li
@@ -319,5 +323,29 @@ function Figure({ label, value, big = false }: { label: string; value: string; b
         <Num>{value}</Num>
       </span>
     </div>
+  );
+}
+
+/**
+ * The window the ranked lists actually cover.
+ *
+ * The totals, the buyers and the sellers follow the period picker — they come
+ * from the seats, which the cockpit holds for every day of the year. The
+ * bundles, the routes and the waste do not: they are read from a checked-in
+ * snapshot of one week, because the bundle grain is a five-gigabyte table that
+ * cannot be aggregated inside the query timeout and nothing syncs it yet.
+ *
+ * So the page says which is which. A ranked list quietly answering for a
+ * different fortnight than the one he picked is worse than no list at all —
+ * he would act on it without ever knowing to check.
+ */
+function SnapshotWindow({ view }: { view: Awaited<ReturnType<typeof loadTrading>> }) {
+  if (view.period === '7D') return null;
+  return (
+    <p className="border-t border-line px-[18px] py-2 text-[12px] text-muted">
+      This list is a snapshot of <Num>{view.snapshotWindow.from}</Num> →{' '}
+      <Num>{view.snapshotWindow.to}</Num>, not the window above — the bundle-level
+      figures are not synced yet.
+    </p>
   );
 }

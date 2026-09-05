@@ -11,18 +11,40 @@ import {
  * margin computed against the wrong denominator.
  */
 describe('trading', () => {
-  it('offers both windows', () => {
-    expect([...TRADING_PERIODS]).toEqual(['YESTERDAY', '7D']);
+  it('offers every window the rest of the cockpit does', () => {
+    // It used to be two, because the whole page was a snapshot built with
+    // exactly two windows in it. The desk's own figures come from the seats
+    // now, which the cockpit holds for every day of the year.
+    expect([...TRADING_PERIODS]).toContain('YESTERDAY');
+    expect([...TRADING_PERIODS]).toContain('7D');
+    expect([...TRADING_PERIODS]).toContain('30D');
+    expect([...TRADING_PERIODS]).toContain('YTD');
   });
 
-  it('takes totals from the daily accounting, not from the ranked rows', async () => {
+  it('names the window its ranked lists actually cover', async () => {
+    // The bundles and routes are still snapshot-backed and do not follow the
+    // picker. The page says so from this, rather than letting him read a
+    // fortnight's ranking as though it were the month he asked for.
+    const view = await loadTrading('30D');
+    expect(view.snapshotWindow.from).toBe('2026-08-22');
+    expect(view.snapshotWindow.to).toBe('2026-08-28');
+  });
+
+  it('takes totals from the daily accounting, never from the ranked rows', async () => {
     const view = await loadTrading('YESTERDAY');
-    const rankedProfit = view.bundles.reduce((a, b) => a + b.profitCents, 0);
 
     expect(view.days).toBe(1);
-    // The ranked rows are a top list; the day made more than they account for.
-    expect(view.totals.profitCents).toBeGreaterThan(rankedProfit);
     expect(view.totals.profitCents).toBe(138_241);
+
+    /*
+     * The ranked rows are deliberately not comparable to the totals any more.
+     * They cover the snapshot's week whatever period is picked, because the
+     * bundle grain is not synced — so the two answer different questions over
+     * different windows, and the page says which window each one is.
+     */
+    const rankedProfit = view.bundles.reduce((a, b) => a + b.profitCents, 0);
+    expect(rankedProfit).not.toBe(view.totals.profitCents);
+    expect(view.snapshotWindow).not.toEqual({ from: view.from, to: view.to });
   });
 
   it('sums the seven-day window across its chunks', async () => {

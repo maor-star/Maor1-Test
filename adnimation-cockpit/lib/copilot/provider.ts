@@ -80,7 +80,15 @@ const keyFor = (name: string): string | null => process.env[name] ?? appKeys[nam
 export function providerStatus(): ProviderStatus {
   const anthropic = Boolean(keyFor('ANTHROPIC_API_KEY'));
   const gemini = Boolean(keyFor('GEMINI_API_KEY'));
-  const preferred = process.env.COPILOT_PROVIDER === 'gemini' ? 'gemini' : 'anthropic';
+  /*
+   * Gemini first — he asked for the chat to run on it.
+   *
+   * "Auto" still falls back to Claude when there is no Gemini key, so the
+   * screen keeps answering while he is pasting one in, and COPILOT_PROVIDER
+   * can pin it back to Claude without a deploy. Both read the cockpit through
+   * the same tools, so the answers come from the same place either way.
+   */
+  const preferred = process.env.COPILOT_PROVIDER === 'anthropic' ? 'anthropic' : 'gemini';
   const auto: ProviderName | null =
     preferred === 'gemini' && gemini ? 'gemini' : anthropic ? 'anthropic' : gemini ? 'gemini' : null;
   return { anthropic, gemini, auto };
