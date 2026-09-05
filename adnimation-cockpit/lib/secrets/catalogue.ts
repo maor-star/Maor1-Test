@@ -22,6 +22,50 @@ export interface SecretSpec {
 }
 
 export const SECRETS: SecretSpec[] = [
+  /*
+   * The source, over its own front door.
+   *
+   * The Lovable API needs a key that has never been set, so the panel has been
+   * living on a seeded snapshot. Signing in to the project's Supabase reads the
+   * same data directly and holds the session open. SELECT only, enforced in
+   * lib/integrations/adops.ts — this is the live system the ad ops team works
+   * in (CLAUDE.md).
+   */
+  {
+    key: 'SUPABASE_ANON_KEY',
+    label: 'Source key (Supabase publishable)',
+    unlocks:
+      'Reading the ad ops source directly, so the seven pillars and the P&L show live figures instead of the last snapshot.',
+    where:
+      'Lovable → the adops-architect project → the value of VITE_SUPABASE_PUBLISHABLE_KEY. It is the publishable key — the one that already ships in the app people load in a browser.',
+    group: 'data',
+    placeholder: 'eyJhbGciOi…',
+  },
+  {
+    key: 'SUPABASE_URL',
+    label: 'Source address',
+    unlocks: 'Which Supabase the source lives in.',
+    where: 'The project URL, ending in .supabase.co.',
+    group: 'data',
+    public: true,
+    placeholder: 'https://….supabase.co',
+  },
+  {
+    key: 'SUPABASE_EMAIL',
+    label: 'Source sign-in (email)',
+    unlocks: 'Who the connection signs in as. Your own account, reading only.',
+    where: 'Your login to the ad ops system.',
+    group: 'data',
+    public: true,
+    placeholder: 'maor@adnimation.com',
+  },
+  {
+    key: 'SUPABASE_PASSWORD',
+    label: 'Source sign-in (password)',
+    unlocks: 'The other half of the sign-in. Kept encrypted and never shown back.',
+    where: 'Your login to the ad ops system.',
+    group: 'data',
+  },
   {
     key: 'LOVABLE_API_KEY',
     label: 'Lovable API key',
