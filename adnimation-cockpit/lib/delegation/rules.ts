@@ -54,8 +54,35 @@ export function handoverMessage(
     .join('\n');
 }
 
+/**
+ * Where a hand-over is delivered.
+ *
+ * A person is a direct message, which is what most of them are. A channel is
+ * for work that belongs to a team rather than a name — he asked for channels
+ * as an option and he is right: "whoever picks this up" is a real way to hand
+ * something over. An email is for the people with no Slack at all.
+ *
+ * Whichever it is, a person still owns the answer: the tracker is built on
+ * that, and "the channel owes me an update" is not something anyone chases.
+ */
+export const DELEGATION_TARGETS = ['person', 'channel', 'email'] as const;
+export type DelegationTarget = (typeof DELEGATION_TARGETS)[number];
+
+export const TARGET_LABEL: Record<DelegationTarget, string> = {
+  person: 'A PERSON, IN SLACK',
+  channel: 'A SLACK CHANNEL',
+  email: 'BY EMAIL',
+};
+
 export const newDelegationSchema = z.object({
   delegatedTo: z.string().uuid('Pick who this is going to'),
+  /** Where it is delivered. Defaults to a direct message, as it always was. */
+  targetKind: z.enum(DELEGATION_TARGETS).default('person'),
+  /** The channel or the address, when it is one of those. */
+  targetRef: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().trim().max(200).nullable(),
+  ).optional(),
   title: z.string().trim().min(1, 'Say what you are handing over').max(300),
   note: z.preprocess(
     (v) => (typeof v === 'string' && v.trim() === '' ? null : v),

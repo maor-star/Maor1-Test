@@ -73,9 +73,18 @@ export class AdOpsSource {
     return { apikey: this.#key, Authorization: `Bearer ${token}`, ...extra };
   }
 
-  /** One request, retried only for the failures that are worth retrying. */
-  async #send(path, init) {
+  /**
+   * One request, retried only for the failures that are worth retrying.
+   *
+   * `build` makes the request fresh on every attempt, because a retry after a
+   * sign-in has to carry the NEW token — headers captured once would replay
+   * the expired one for ever.
+   */
+  async #send(build) {
+    let signedInAgain = false;
+
     for (let attempt = 0; attempt < 4; attempt += 1) {
+      const { path, init } = await build();
       /*
        * Every request is bounded. A fetch with no timeout against a report
        * that never returns hangs the whole job with nothing in the log, and
@@ -86,6 +95,23 @@ export class AdOpsSource {
         signal: AbortSignal.timeout(120_000),
       });
       if (res.ok) return res;
+
+      /*
+       * The session expired mid-run.
+       *
+       * A Supabase access token lasts an hour, and a backfill of four hundred
+       * days takes longer than that. When it lapses the request falls back to
+       * the anonymous role and the source answers "permission denied" — which
+       * reads like a permissions problem and is really a clock. So sign in
+       * again, once, and carry on where it stopped.
+       */
+      if ((res.status === 401 || res.status === 403) && !signedInAgain) {
+        signedInAgain = true;
+        this.#token = null;
+        await this.#auth();
+        continue;
+      }
+
       // A rate limit or a server fault may pass; a 400 is a request we built
       // wrong and will build wrong again.
       if (res.status === 429 || res.status >= 500) {
@@ -141,15 +167,18 @@ export class AdOpsSource {
       if (from > 500_000) {
         throw new Error(`${table}: more than half a million rows — narrow the filter`);
       }
-      const res = await this.#send(`/rest/v1/${table}?${params.toString()}`, {
+      const res = await this.#send(async () => ({
+        path: `/rest/v1/${table}?${params.toString()}`,
         // No `count=exact`: it counts the whole matching set on every page,
         // which on a table of hundreds of thousands of rows costs more than
         // the page does. The page's own length says whether there is more.
-        headers: await this.#headers({
-          Range: `${from}-${from + PAGE - 1}`,
-          'Range-Unit': 'items',
-        }),
-      });
+        init: {
+          headers: await this.#headers({
+            Range: `${from}-${from + PAGE - 1}`,
+            'Range-Unit': 'items',
+          }),
+        },
+      }));
       const page = await res.json();
       rows.push(...page);
       if (page.length < PAGE) {
@@ -171,11 +200,14 @@ export class AdOpsSource {
     if (!READ_ONLY_FUNCTIONS.has(fn)) {
       throw new Error(`refusing to call "${fn}" — it is not one of the source's read-only reports`);
     }
-    const res = await this.#send(`/rest/v1/rpc/${fn}`, {
-      method: 'POST',
-      headers: await this.#headers({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(args),
-    });
+    const res = await this.#send(async () => ({
+      path: `/rest/v1/rpc/${fn}`,
+      init: {
+        method: 'POST',
+        headers: await this.#headers({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(args),
+      },
+    }));
     return res.json();
   }
 
@@ -188,9 +220,10 @@ export class AdOpsSource {
   async health(table = 'ars_site_daily_revenue') {
     await this.#auth();
     try {
-      const res = await this.#send(`/rest/v1/${table}?select=report_date`, {
-        headers: await this.#headers({ Range: '0-0', 'Range-Unit': 'items' }),
-      });
+      const res = await this.#send(async () => ({
+        path: `/rest/v1/${table}?select=report_date`,
+        init: { headers: await this.#headers({ Range: '0-0', 'Range-Unit': 'items' }) },
+      }));
       const rows = await res.json();
       return { signedIn: true, canRead: true, rows: rows.length, error: null };
     } catch (e) {

@@ -83,6 +83,9 @@ async function main() {
     // Everything from the source over its own REST door — the one that has a
     // credential. The two above go through the Lovable API and exit 78.
     'source-sync.mjs', 'adops-rest.mjs', 'adops-aggregate.mjs',
+    // The roster from Slack, and the watch that finds answers and marks what
+    // has gone quiet — neither of which used to run on its own.
+    'slack-roster.mjs', 'delegation-watch.mjs',
     // Both syncs read the keys he set on the Keys screen, not only the .env.
     'job-secrets.mjs',
     // opportunity-sweep imports the generated copy of the detection rules.

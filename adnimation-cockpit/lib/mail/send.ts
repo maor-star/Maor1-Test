@@ -142,6 +142,51 @@ export function buildReply(input: {
 }
 
 /**
+ * A new mail, to somebody, about something.
+ *
+ * Not a reply: no threading headers, its own subject. This is what handing
+ * something over by email is — most of the team has no ClickUp and some have
+ * no Slack, and "send them a mail and remember to chase it" is the whole
+ * feature.
+ */
+export async function sendMail(input: {
+  to: string;
+  subject: string;
+  body: string;
+}): Promise<SendResult> {
+  const to = input.to.trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    return { ok: false, error: `"${to}" is not an email address` };
+  }
+
+  const token = await sendToken();
+  if ('error' in token) return { ok: false, error: token.error, needsScope: token.needsScope };
+
+  const headers = [
+    `To: ${to}`,
+    `Subject: ${encodeHeader(input.subject)}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: base64',
+  ];
+  const raw = `${headers.join('\r\n')}\r\n\r\n${Buffer.from(input.body, 'utf8').toString('base64')}`;
+
+  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      raw: Buffer.from(raw).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+    }),
+  });
+
+  if (!res.ok) {
+    const said = await res.text().catch(() => '');
+    return { ok: false, error: `Gmail refused it: http_${res.status} ${said.slice(0, 200)}` };
+  }
+  return { ok: true };
+}
+
+/**
  * Reply to a mirrored thread.
  *
  * The recipient and the threading headers are read from Gmail rather than from

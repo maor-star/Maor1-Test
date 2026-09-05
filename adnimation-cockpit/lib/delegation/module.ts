@@ -2,15 +2,14 @@ import { asc, desc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, delegations, people, tasks } from '@/lib/db';
 import { createClickUpAdapter } from '@/lib/integrations/clickup';
+import { sendMail } from '@/lib/mail/send';
 import { createSlackAdapter } from '@/lib/integrations/slack';
-import { PRIORITY_TO_CLICKUP } from '@/lib/integrations/clickup';
 import { recordFailure, recordSuccess } from '@/lib/integrations/health';
 import type { SlackAdapter, SlackPostResult, ThreadMessage } from '@/lib/integrations/types';
 import { writeAudit } from '@/lib/audit';
 import {
   classify, inView, newDelegationSchema,
-  type DelegationRow, type DelegationView, type NewDelegationInput,
-} from './rules';
+  type DelegationRow, type DelegationView, type NewDelegationInput, handoverMessage, handoverTitle } from './rules';
 
 export * from './rules';
 
@@ -116,10 +115,6 @@ export async function delegatableTeam(ownerEmail: string) {
   return rows.filter((p) => p.email.toLowerCase() !== ownerEmail.toLowerCase());
 }
 
-function slackBody(title: string, note: string | null, dueDate: string | null) {
-  return [`*${title}*`, note ? `\n${note}` : '', dueDate ? `\n*Due:* ${dueDate}` : ''].join('');
-}
-
 export interface CreateResult {
   id: string;
   /** True when the Slack conversation includes him as well as them. */
@@ -169,10 +164,16 @@ export async function createDelegation(
    * they are granted this starts working with no code change.
    */
   const owner = process.env.SLACK_CEO_USER_ID;
-  let target = person.slackId;
+  const kind = parsed.targetKind ?? 'person';
+  const ref = parsed.targetRef ?? null;
+
+  // A channel is delivered to the channel; a person, to a conversation with
+  // them. The person still owns the answer either way — that is what the
+  // tracker chases.
+  let target = kind === 'channel' && ref ? ref : person.slackId;
   let shared = false;
 
-  if (owner && owner !== person.slackId) {
+  if (kind === 'person' && owner && owner !== person.slackId) {
     const group = await deps.slack
       .openConversation([owner, person.slackId])
       .catch(() => ({ ok: false as const, channelId: null }));
@@ -182,58 +183,68 @@ export async function createDelegation(
     }
   }
 
-  const posted = await deps.slack
-    .postMessage({
-      target,
-      text: slackBody(parsed.title, note, dueDate),
-      contextLines: [
-        shared
-          ? 'Handed over from the cockpit — reply in this thread and it is tracked.'
-          : 'Handed over from the cockpit — reply here and it will be tracked.',
-      ],
-    })
-    .catch(
-      (e: unknown): SlackPostResult => ({
-        ok: false,
-        messageUrl: null,
-        channelId: null,
-        ts: null,
-        error: e instanceof Error ? e.message : 'unknown',
-      }),
-    );
+  const body = handoverMessage(parsed.title, note, dueDate);
 
-  await (posted.ok ? recordSuccess('slack') : recordFailure('slack', posted.error ?? 'post_failed'));
+  /*
+   * By email, for the people with no Slack.
+   *
+   * It goes out as its own mail rather than a Slack post, and the tracker
+   * watches the mailbox for their answer instead of a thread. Nothing else
+   * about the hand-over changes — same words, same title, same chase.
+   */
+  let posted: SlackPostResult;
+  if (kind === 'email') {
+    const address = ref ?? person.email;
+    const sent = await sendMail({
+      to: address,
+      subject: handoverTitle(parsed.title),
+      body,
+    }).catch((e: unknown) => ({
+      ok: false as const,
+      error: e instanceof Error ? e.message : 'unknown',
+    }));
 
-  let clickupTaskId: string | null = null;
-  let clickupError: string | undefined;
-
-  const listId = parsed.clickupListId ?? process.env.CLICKUP_DEFAULT_LIST_ID ?? null;
-
-  if (parsed.alsoClickUp && listId) {
-    const task = await deps.clickup
-      .createTask({
-        listId,
-        name: parsed.title,
-        description: note ?? '',
-        // An assignee ClickUp does not consider a member of that list is
-        // rejected outright, taking the whole task with it. The task is worth
-        // more than the assignment, so a non-numeric id is simply left off.
-        assigneeIds: /^\d+$/.test(person.clickupId ?? '') ? [Number(person.clickupId)] : [],
-        priority: PRIORITY_TO_CLICKUP[parsed.priority],
-        dueDateMs: dueDate ? Date.parse(`${dueDate}T12:00:00Z`) : null,
-        tags: ['ceo-delegation'],
+    posted = {
+      ok: sent.ok,
+      messageUrl: null,
+      channelId: null,
+      ts: null,
+      ...(sent.ok ? {} : { error: sent.error ?? 'mail refused' }),
+    };
+    await (sent.ok ? recordSuccess('gmail') : recordFailure('gmail', sent.error ?? 'send_failed'));
+  } else {
+    posted = await deps.slack
+      .postMessage({
+        target,
+        text: body,
+        contextLines: [
+          shared
+            ? 'Handed over from the cockpit — reply in this thread and it is tracked.'
+            : 'Handed over from the cockpit — reply here and it will be tracked.',
+        ],
       })
-      .catch((e: unknown) => ({
-        ok: false as const,
-        taskId: null,
-        url: null,
-        error: e instanceof Error ? e.message : 'unknown',
-      }));
+      .catch(
+        (e: unknown): SlackPostResult => ({
+          ok: false,
+          messageUrl: null,
+          channelId: null,
+          ts: null,
+          error: e instanceof Error ? e.message : 'unknown',
+        }),
+      );
 
-    await (task.ok ? recordSuccess('clickup') : recordFailure('clickup', task.error ?? 'failed'));
-    clickupTaskId = task.taskId;
-    if (!task.ok) clickupError = task.error;
+    await (posted.ok ? recordSuccess('slack') : recordFailure('slack', posted.error ?? 'post_failed'));
   }
+
+  /*
+   * No ClickUp task.
+   *
+   * "I no longer need to update ClickUp, it all stays in my system, and most
+   * people do not have ClickUp anyway." A ticket nobody opens tracked nothing;
+   * what is tracked is the message and whether it was answered.
+   */
+  const clickupTaskId: string | null = null;
+  const clickupError: string | undefined = undefined;
 
   const [row] = await db
     .insert(delegations)
@@ -241,7 +252,9 @@ export async function createDelegation(
       sourceEntityType: 'standalone',
       sourceEntityId: null,
       delegatedTo: person.id,
-      title: parsed.title,
+      title: handoverTitle(parsed.title),
+      targetKind: kind,
+      targetRef: kind === 'email' ? (ref ?? person.email) : ref,
       note,
       dueDate,
       priority: parsed.priority,
