@@ -19,8 +19,12 @@ import { decrypt, encrypt, secret } from '@/lib/secrets/store';
  * the surface at all, and the client is never handed out to a caller who could
  * reach for them.
  *
- * Nothing here is hardcoded to a table. The schema is read from the source, so
- * a table the ad ops team adds next month is visible without a deploy.
+ * Nothing here is hardcoded to a table either. Any table the source lets him
+ * read can be read by name, so one the ad ops team adds next month works the
+ * day it exists, with no deploy and no list to update. What is NOT possible is
+ * enumerating the tables: the source only hands its schema to a `service_role`
+ * key, which is the key that bypasses every permission — we deliberately do
+ * not hold one, and `listTables` says so rather than quietly returning none.
  */
 
 const SESSION_KEY = 'ADOPS_SUPABASE_SESSION';
@@ -158,9 +162,19 @@ export interface AdOpsHealth {
   error: string | null;
   /** The account the connection is signed in as. */
   signedInAs: string | null;
-  /** How many tables the source is exposing, as a sign it is really answering. */
-  tables: number | null;
+  /** The table the check read from, and whether it gave anything back. */
+  probed: string | null;
+  rows: number | null;
 }
+
+/**
+ * The table the health check reads one row from.
+ *
+ * Signing in proves the credentials; reading proves the permissions, and those
+ * fail separately — a session that authenticates but can see nothing is the
+ * failure that looks like success.
+ */
+const PROBE_TABLE = 'ars_site_daily_revenue';
 
 /**
  * Is the connection alive, right now.
@@ -168,23 +182,21 @@ export interface AdOpsHealth {
  * A live check rather than a remembered one: "connected" that means "connected
  * an hour ago" is the answer that wastes an afternoon.
  */
-export async function adopsHealth(): Promise<AdOpsHealth> {
+export async function adopsHealth(probe = PROBE_TABLE): Promise<AdOpsHealth> {
   const connected = await connect();
   if (!connected.ok) {
-    return { ok: false, error: connected.error, signedInAs: null, tables: null };
+    return { ok: false, error: connected.error, signedInAs: null, probed: null, rows: null };
   }
 
   const { data } = await connected.client.auth.getUser();
-  const tables = await listTables();
+  const signedInAs = data.user?.email ?? null;
 
-  if (!tables.ok) return { ok: false, error: tables.error, signedInAs: data.user?.email ?? null, tables: null };
+  const read = await selectRows(probe, { columns: 'report_date', limit: 1 });
+  if (!read.ok) {
+    return { ok: false, error: read.error, signedInAs, probed: probe, rows: null };
+  }
 
-  return {
-    ok: true,
-    error: null,
-    signedInAs: data.user?.email ?? null,
-    tables: tables.tables.length,
-  };
+  return { ok: true, error: null, signedInAs, probed: probe, rows: read.rows.length };
 }
 
 export type TablesResult =
@@ -192,10 +204,16 @@ export type TablesResult =
   | { ok: false; error: string };
 
 /**
- * Every table the source exposes, asked of the source.
+ * Every table the source exposes — when it will say.
  *
- * PostgREST publishes its own schema, so nothing here is a list somebody has
- * to remember to update: a table the ad ops team adds appears on its own.
+ * It will not, with the key we hold. PostgREST publishes its schema at the
+ * root, and this source answers that endpoint only for a `service_role` key:
+ * the one that bypasses row-level security entirely. Holding a key like that
+ * to populate a dropdown is a bad trade against a system the ad ops team works
+ * in live, so this returns the reason instead.
+ *
+ * Reading is unaffected — `selectRows` takes any table name and a new table
+ * works the day it is created. Only listing them is closed.
  */
 export async function listTables(): Promise<TablesResult> {
   const config = await adopsConfig();
@@ -215,10 +233,37 @@ export async function listTables(): Promise<TablesResult> {
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not reach the source' };
   }
-  if (!res.ok) return { ok: false, error: `The source answered http_${res.status}` };
+  if (!res.ok) {
+    const said = (await res.json().catch(() => null)) as { hint?: string; message?: string } | null;
+    return {
+      ok: false,
+      error: said?.hint ?? said?.message ?? `The source answered http_${res.status}`,
+    };
+  }
 
-  const body = (await res.json().catch(() => null)) as { definitions?: Record<string, unknown> } | null;
-  const names = Object.keys(body?.definitions ?? {}).sort();
+  /*
+   * Swagger 2.0 puts them in `definitions`, OpenAPI 3 in `components.schemas`.
+   * Both are read, so a PostgREST upgrade does not quietly empty the list.
+   */
+  const body = (await res.json().catch(() => null)) as
+    | {
+        definitions?: Record<string, unknown>;
+        components?: { schemas?: Record<string, unknown> };
+        message?: string;
+        hint?: string;
+      }
+    | null;
+
+  const names = Object.keys(body?.definitions ?? body?.components?.schemas ?? {}).sort();
+  if (names.length === 0) {
+    return {
+      ok: false,
+      error:
+        body?.hint ??
+        body?.message ??
+        'The source will not list its tables for this key. Reading a table by name still works.',
+    };
+  }
   return { ok: true, tables: names };
 }
 

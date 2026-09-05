@@ -76,6 +76,13 @@ if (signInError) {
 const { data: me } = await supabase.auth.getUser();
 console.log(`signed in as ${me.user?.email ?? 'unknown'}`);
 
+/*
+ * The schema listing, which this source answers only for a service_role key —
+ * the one that bypasses row-level security. We do not hold one on purpose, so
+ * this reports the reason rather than printing a zero that reads like an empty
+ * database. Reading a table by name is unaffected, which the select below is
+ * the proof of.
+ */
 const { data: session } = await supabase.auth.getSession();
 const schema = await fetch(`${config.SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/`, {
   headers: {
@@ -83,10 +90,14 @@ const schema = await fetch(`${config.SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/`
     Authorization: `Bearer ${session.session?.access_token ?? config.SUPABASE_ANON_KEY}`,
   },
 });
-const body = schema.ok ? await schema.json().catch(() => null) : null;
-const tables = Object.keys(body?.definitions ?? {}).sort();
-console.log(`tables exposed: ${tables.length}`);
-if (process.argv.includes('--tables')) console.log(tables.join('\n'));
+const body = await schema.json().catch(() => null);
+const tables = Object.keys(body?.definitions ?? body?.components?.schemas ?? {}).sort();
+if (tables.length > 0) {
+  console.log(`tables exposed: ${tables.length}`);
+  if (process.argv.includes('--tables')) console.log(tables.join('\n'));
+} else {
+  console.log(`tables not listable: ${body?.hint ?? body?.message ?? `http_${schema.status}`}`);
+}
 
 const { data, error } = await supabase.from(TABLE).select('*').limit(ROWS);
 if (error) {
