@@ -7,8 +7,13 @@ import { PageHeader } from '@/components/hud/page-header';
 import { Figure } from '@/components/hud/figure';
 import { Num } from '@/components/num';
 import { CopilotChat } from '@/components/copilot/chat';
+import { CopilotDesk } from '@/components/copilot/desk';
 import { DecisionLog } from '@/components/copilot/decisions';
 import { listThreads, threadMessages } from '@/lib/copilot/service';
+import { collectDesk } from '@/lib/copilot/desk';
+import { storedDrafts, type DeskDraft } from '@/lib/copilot/desk-draft';
+import { draftIsCurrent } from '@/lib/copilot/desk-rules';
+import { delegatableTeam } from '@/lib/delegation/module';
 import { decisionCounts, lastReviewAt, recentDecisions } from '@/lib/copilot/autopilot';
 import { loadProviderKeys, providerStatus } from '@/lib/copilot/provider';
 import { slackReach, type SlackReach } from '@/lib/copilot/slack-view';
@@ -18,20 +23,24 @@ import { fmtDateTime } from '@/lib/utils';
 export const dynamic = 'force-dynamic';
 
 /**
- * The Copilot — the one screen where he talks to the model about the company
- * and reads what the autopilot decided overnight.
+ * The Copilot — his desk.
  *
- * Two halves. The chat answers from the cockpit's own tools and can act on
- * anything reversible inside it. The decision log is the autopilot agent's
- * daily review: what it saw, what it decided, what it did or wants to do. The
- * agent's level and dials — on the agents screen — are what decide whether a
- * decision here is done or only proposed.
+ * It used to be a chat and a log: two things he had to think of a question for
+ * before either was any use. What he actually wanted was the opposite — the
+ * screen thinks first, and he answers. So the desk comes first now: everything
+ * owed, from every channel it is owed in, each card carrying the reply already
+ * written in his voice and a contract already read and judged. What is left is
+ * pressing send, doing it, or handing it to someone — and whichever he presses,
+ * the follow-up is filed where he will see it again.
+ *
+ * The chat and the decision log stay underneath, for the questions the desk
+ * does not answer and for what the autopilot did overnight.
  */
 export default async function CopilotPage({ searchParams }: { searchParams: Promise<{ thread?: string }> }) {
-  await requireUser();
+  const user = await requireUser();
   const sp = await searchParams;
 
-  const [threads, decisions, counts, reviewedAt, [autopilot], slack] = await Promise.all([
+  const [threads, decisions, counts, reviewedAt, [autopilot], slack, desk, drafted, team] = await Promise.all([
     listThreads(),
     recentDecisions(40),
     decisionCounts(),
@@ -45,7 +54,22 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
         setTimeout(() => resolve({ asUser: false, channels: null, why: 'Slack did not answer in time.' }), 3000),
       ),
     ]).catch((): SlackReach => ({ asUser: false, channels: null, why: 'Slack did not answer.' })),
+    collectDesk().catch(() => ({ items: [], gaps: ['The desk could not be gathered.'] })),
+    storedDrafts().catch(() => new Map()),
+    delegatableTeam(user.email).catch(() => []),
   ]);
+
+  /*
+   * A draft written before their last message answers a conversation that has
+   * moved on. It is still shown — his edit of a near-miss beats a blank box —
+   * but the card says so, and "prepare answers" counts it as missing.
+   */
+  const drafts: Record<string, { draft: DeskDraft; stale: boolean }> = {};
+  for (const item of desk.items) {
+    const stored = drafted.get(item.id);
+    if (!stored) continue;
+    drafts[item.id] = { draft: stored.draft, stale: !draftIsCurrent(stored.fingerprint, item) };
+  }
   await loadProviderKeys();
   const providers = providerStatus();
   const threadId = sp.thread && threads.some((t) => t.id === sp.thread) ? sp.thread : (threads[0]?.id ?? null);
@@ -67,6 +91,18 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
           </span>
         }
       />
+
+      <CopilotDesk
+        items={desk.items}
+        drafts={drafts}
+        team={team.map((p) => ({ id: p.id, label: p.role ? `${p.name} — ${p.role}` : p.name }))}
+      />
+
+      {desk.gaps.length > 0 ? (
+        <p className="hud-label whitespace-normal text-[11.5px] tracking-[0.1em]">
+          {desk.gaps.join(' · ')}
+        </p>
+      ) : null}
 
       <HudCard>
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-4">

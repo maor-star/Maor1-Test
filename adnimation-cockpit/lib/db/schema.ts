@@ -465,6 +465,30 @@ export const mailThreads = pgTable(
 
 export type MailThread = typeof mailThreads.$inferSelect;
 
+/**
+ * The Copilot desk's prepared answers.
+ *
+ * Keyed by the desk item's own id so a redraft replaces the old one; the
+ * fingerprint says what the item looked like when it was written, which is how
+ * a draft for a conversation that has since moved on is known to be stale.
+ */
+export const deskDrafts = pgTable(
+  'desk_drafts',
+  {
+    itemId: text('item_id').primaryKey(),
+    channel: text('channel').notNull(),
+    fingerprint: text('fingerprint').notNull(),
+    draft: jsonb('draft').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    /** Set when he sent it, did it, or handed it over. */
+    actedAt: timestamptz('acted_at'),
+    outcome: text('outcome'),
+  },
+  (t) => [index('idx_desk_drafts_channel').on(t.channel)],
+);
+
+export type DeskDraftRow = typeof deskDrafts.$inferSelect;
+
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type TaskComment = typeof taskComments.$inferSelect;

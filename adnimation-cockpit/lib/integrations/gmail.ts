@@ -31,7 +31,8 @@ export interface MimePart {
   partId?: string;
   filename?: string;
   mimeType?: string;
-  body?: { attachmentId?: string; size?: number };
+  /** `data` is base64url and present on text parts; attachments carry an id instead. */
+  body?: { attachmentId?: string; size?: number; data?: string };
   parts?: MimePart[];
 }
 
