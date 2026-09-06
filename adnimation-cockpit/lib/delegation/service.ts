@@ -88,8 +88,30 @@ export async function delegate(
       sourceEntityId: parsed.sourceEntityId,
       taskId: parsed.sourceEntityType === 'task' ? parsed.sourceEntityId : null,
       delegatedTo: parsed.delegatedTo,
+      /*
+       * What it is waiting on, in his words — the same title the message went
+       * out under.
+       *
+       * This was missing. The title was built here, put in the Slack message
+       * and written to the audit row, and then left out of the delegation
+       * itself, so every hand-over made from a task stored a null. The screen
+       * covered for it by falling back to the task's own title, which is why
+       * it looked fine: right on the screen, empty in the record, and
+       * different from what the other hand-over path stores for the same
+       * thing.
+       */
+      title: handoverTitle(parsed.title),
+      priority: parsed.priority,
       clickupTaskId: clickupTask.taskId,
       slackMessageUrl: slackResult.messageUrl,
+      /*
+       * Where the message landed, so the reply watcher can read the thread
+       * directly instead of picking the channel and timestamp back out of the
+       * permalink — which it can only do for a permalink Slack actually
+       * returned.
+       */
+      slackChannelId: slackResult.ok ? (slackResult.channelId ?? null) : null,
+      slackThreadTs: slackResult.ok ? (slackResult.ts ?? null) : null,
       note: parsed.note ?? null,
       dueDate: parsed.dueDate ?? null,
       status: 'sent',
