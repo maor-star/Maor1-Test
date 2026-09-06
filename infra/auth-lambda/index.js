@@ -689,6 +689,11 @@ async function handleCron(event) {
     try { const r = await runReport(to, { sync: true }); await reportSaveCfg({ lastReport: { ok: true, at: r.at, to: r.to, subject: r.subject } }); return { ok: true, report: r }; }
     catch (e) { await reportSaveCfg({ lastReport: { ok: false, at: Date.now(), to, error: e.message } }); return { ok: false, error: e.message }; }
   }
+  if (event.cron === 'status') { // אבחון: מצב החיבורים והחשבונות ב-Open Finance (ללא סודות)
+    const cfg = await ofLoadConfig(); if (!cfg || !cfg.clientSecret) return { ok: false, error: 'no config' };
+    const st = await ofStatusData(cfg, await ofToken(cfg));
+    return { ok: true, connections: st.connections, accounts: st.accounts.map((a) => ({ provider: a.provider, type: a.type, number: a.number, status: a.status, balance: a.balance, balanceType: a.balanceType, balanceCurrency: a.balanceCurrency, available: a.available, txCount: a.txCount })), rawConns: st.rawConns };
+  }
   if (event.cron === 'refresh') { // אבחון: רק בקשת רענון מהבנקים, בלי ייבוא
     const cfg = await ofLoadConfig(); if (!cfg || !cfg.clientSecret) return { ok: false, error: 'no config' };
     return { ok: true, statuses: await ofRefreshAll(cfg, await ofToken(cfg)) };
