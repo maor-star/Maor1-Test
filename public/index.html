@@ -3,31 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ניהול משרד</title>
+  <title>ניהול הבית</title>
   <link rel="stylesheet" href="/styles.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏡</text></svg>" />
 </head>
 <body>
   <div class="app">
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-logo">🏢</span>
-        <span class="brand-name">ניהול משרד</span>
+        <span class="brand-logo">🏡</span>
+        <span class="brand-name">ניהול הבית</span>
       </div>
       <nav id="nav">
         <a href="#/dashboard" data-view="dashboard"><span class="ico">📊</span> דשבורד</a>
-        <a href="#/employees" data-view="employees"><span class="ico">👥</span> עובדים</a>
-        <a href="#/hours" data-view="hours"><span class="ico">⏱️</span> שעות עבודה</a>
-        <a href="#/expenses" data-view="expenses"><span class="ico">💸</span> הוצאות</a>
-        <a href="#/income" data-view="income"><span class="ico">💰</span> הכנסות</a>
+        <a href="#/transactions" data-view="transactions"><span class="ico">💳</span> עסקאות</a>
+        <a href="#/review" data-view="review"><span class="ico">🏷️</span> סיווג עסקאות</a>
+        <a href="#/import" data-view="import"><span class="ico">📥</span> ייבוא תדפיסים</a>
+        <a href="#/recurring" data-view="recurring"><span class="ico">🔁</span> הוצאות קבועות</a>
+        <a href="#/maintenance" data-view="maintenance"><span class="ico">🛠️</span> תחזוקה ורכיבים</a>
+        <a href="#/warranties" data-view="warranties"><span class="ico">📜</span> תעודות אחריות</a>
+        <a href="#/professionals" data-view="professionals"><span class="ico">👷</span> בעלי מקצוע</a>
+        <a href="#/lighting" data-view="lighting"><span class="ico">💡</span> תאורה ונורות</a>
+        <a href="#/categories" data-view="categories"><span class="ico">🗂️</span> קטגוריות וכללים</a>
       </nav>
-      <div class="sidebar-footer">מנוהל ע"י המשרד שלך</div>
+      <div class="sidebar-footer">ניהול הבית שלך · 450 מ״ר</div>
     </aside>
 
     <main class="content">
       <header class="topbar">
         <h1 id="page-title">דשבורד</h1>
-        <div class="month-picker">
+        <div class="month-picker" id="month-wrap">
           <label for="month-filter">חודש:</label>
           <input type="month" id="month-filter" />
           <button id="clear-month" class="btn-ghost" title="הצג הכל">הכל</button>
