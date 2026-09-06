@@ -1884,7 +1884,7 @@ views.transactions=async()=>{
     const page=filtered.slice(0,showN);
     el.querySelector('#tx-table').innerHTML=filtered.length?`<table><thead><tr><th>תאריך</th><th class="wrap">מהות / בית עסק</th><th>מקור</th><th>סיווג (מהות ההוצאה)</th><th>סכום</th><th></th></tr></thead><tbody>${page.map(r=>`<tr>
       <td class="tnum">${fmtDate(r.tx_date)}</td>
-      <td class="wrap"><strong>${esc(r.merchant||r.description)||'—'}</strong>${r.merchant&&r.description&&r.merchant!==r.description?`<div class="hint">${esc(r.description)}</div>`:''}${r.account?`<div class="hint">${esc(r.account)}</div>`:''}</td>
+      <td class="wrap"><strong>${esc(r.merchant||r.description)||'—'}</strong>${r.pending?' <span class="pill status-soon" style="font-size:11px" title="אישור זמני של חברת האשראי — יוחלף בחיוב הסופי כשייסלק">⏳ ממתין</span>':''}${r.merchant&&r.description&&r.merchant!==r.description?`<div class="hint">${esc(r.description)}</div>`:''}${r.account?`<div class="hint">${esc(r.account)}</div>`:''}</td>
       <td><span class="muted">${srcLabel(r.source)}</span></td>
       <td>${isAgg(r)
         ? (compDetail()
@@ -3669,7 +3669,9 @@ function weeklyReportData(){
   const wS=iso(start), wE=iso(end); const ym=wE.slice(0,7); const [yy,mm]=ym.split('-').map(Number); const dim=new Date(yy,mm,0).getDate(); const dayN=Number(wE.slice(8,10));
   const prevYM=(()=>{ const d=new Date(yy,mm-2,1); return d.getFullYear()+'-'+pad(d.getMonth()+1); })();
   const dOf=t=>String(t.tx_date).slice(0,10); const sum=a=>a.reduce((s,t)=>s+t.amount,0);
-  const views_=db.transactions.map(txView).filter(t=>t.kind==='expense');
+  // אישורים זמניים (pending) של חברות האשראי אינם חיובים סופיים — לא נכללים בדוח, מדווחים בנפרד
+  const allExp=db.transactions.map(txView).filter(t=>t.kind==='expense'); const views_=allExp.filter(t=>!t.pending);
+  const pendingRows=allExp.filter(t=>t.pending&&countsHome(t));
   const home=views_.filter(countsHome), ess=views_.filter(t=>countsEssence(t)&&!isRealEstate(t));
   const week=home.filter(t=>dOf(t)>=wS&&dOf(t)<=wE), mtd=home.filter(t=>dOf(t).slice(0,7)===ym&&dOf(t)<=wE), prevSame=home.filter(t=>dOf(t).slice(0,7)===prevYM&&Number(dOf(t).slice(8,10))<=dayN);
   const essWeek=ess.filter(t=>dOf(t)>=wS&&dOf(t)<=wE), essMtd=ess.filter(t=>dOf(t).slice(0,7)===ym&&dOf(t)<=wE);
@@ -3686,6 +3688,7 @@ function weeklyReportData(){
   return {weekStart:wS,weekEnd:wE,month:ym,dayN,dim,cats,totalBudget:cats.reduce((s,x)=>s+x.budget,0),
     homeWeek:sum(week),homeMtd:sum(mtd),homePrevSame:sum(prevSame),homeProjected:dayN?sum(mtd)/dayN*dim:0,
     top,byCat:Object.values(byCat).sort((a,b)=>b.value-a.value),uncatWeek:uncat.length,uncatWeekSum:sum(uncat),uncatAll:uncatAll.length,
+    pending:pendingRows.map(t=>({d:String(t.tx_date).slice(0,10),name:(t.merchant||t.description||'').trim(),value:t.amount,account:t.account})),pendingSum:sum(pendingRows),
     balNow:c.balNow,creditLine:c.creditLine,low30:{d:dm.days[lo],bal:dm.bal[lo]},low30NoIncome:{d:dmNo.days[loN],bal:dmNo.bal[loN]},upcoming,
     lastTx:db.transactions.reduce((mx,t)=>String(t.tx_date)>mx?String(t.tx_date):mx,''),ofLastSync:db.ofLastSync||null};
 }
