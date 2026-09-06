@@ -1066,6 +1066,12 @@ function ensureDefaults(){
     if(drop.size) db.transactions=db.transactions.filter(t=>!drop.has(t.id));
     db.dedupV24={rows:drop.size,sum:Math.round(sum)}; db.defaultsV=24; save();
   }
+  if((db.defaultsV||0)<25){
+    // v25: אישור זמני (PENDING) של אמריקן אקספרס ל-BOOKING.COM ‎₪2,852.27‎ מ-01/09/2026 שנסלק כ-BOOKING.COM B.V. ‎₪2,952.70‎
+    // (מזהה וסכום אחרים בבנק). מהיום שורות ממתינות מסומנות pending ומוסרות אוטומטית כשהבנק מפסיק להחזיר אותן.
+    const n=db.transactions.length; db.transactions=db.transactions.filter(t=>t.of_id!=='01M1G2NAT6RECGTWRAAMWR0462');
+    db.pendingV25={removed:n-db.transactions.length}; db.defaultsV=25; save();
+  }
 }
 // הגנה: תקלה במיגרציה לא תשבית את כל האתר (מסך לבן) — מדווחים וממשיכים עם הנתונים כפי שהם
 try{ ensureDefaults(); }catch(e){ console.error('ensureDefaults failed',e); try{ window.__bootError=e.message; }catch(_){} }
@@ -1232,6 +1238,7 @@ function h_transactions(m,id,sub,b,qp){
     for(const r of b.rows){
       const ofId=strv(r.of_id); if(ofId && ofIds.has(ofId)){ // כבר קיימת — רק מיישרים את זהות הכרטיס לפי הבנק (מקור האמת)
         const ex=ofTx.get(ofId); const acc=strv(r.account); if(ex && acc && strv(r.source)==='credit_card' && /••\d{4}/.test(acc) && ex.account!==acc && (isCardDetail(ex)||!strv(ex.account))){ ex.account=acc; ex.source='credit_card'; }
+        if(ex){ if(String(r.status||'').toUpperCase()==='PENDING') ex.pending=true; else if(ex.pending) delete ex.pending; }
         skipped++;continue; }
       const date=strv(r.date), desc=strv(r.description), merchant=strv(r.merchant||r.description);
       const amount=Math.abs(numv(r.amount)); if(!date||amount<=0){skipped++;continue;}
@@ -1260,6 +1267,8 @@ function h_transactions(m,id,sub,b,qp){
       const cat=matchCategory(desc+' '+merchant, kind); if(cat) autoCategorized++;
       const tx={id:uid(),tx_date:date,source:strv(r.source)||src,account:strv(r.account)||acct,description:desc,merchant,amount,kind,category_id:cat,notes:'',hash};
       if(ref) tx.ref=ref; if(ofId){ tx.of_id=ofId; ofIds.add(ofId); } if(r.of_cat&&r.of_cat.main) tx.of_cat=r.of_cat.main+(r.of_cat.sub?'/'+r.of_cat.sub:'');
+      // עסקה «ממתינה» (אישור זמני של חברת האשראי) — כשהיא נסלקת היא חוזרת מהבנק עם מזהה וסכום אחרים; מסומנת כדי שנוכל להסיר אותה אז
+      if(String(r.status||'').toUpperCase()==='PENDING') tx.pending=true;
       db.transactions.push(tx);
       seen.push(ref); refMap.set(bk,seen); added++;
     }
@@ -2080,17 +2089,25 @@ async function ofFetchRows(opts, onProgress){
   const seen=new Set(); const uniq=rows.filter(r=>{ if(!r.of_id) return true; if(seen.has(r.of_id)) return false; seen.add(r.of_id); return true; });
   return {rows:uniq,accounts,stats,from:windows.length?windows[0][0]:null};
 }
-async function ofImportRows(rows){
+async function ofImportRows(rows, range){
   // סיווג: כלל מקומי קודם; אם אין — מיפוי מהקטגוריה של Open Finance (לא להעברות/מזומן — אותן לא מסווגים)
   rows.forEach(r=>{ const kind=r.kind==='income'?'income':'expense'; const txt=(r.description||'')+' '+(r.merchant||'');
     if(matchCategory(txt,kind)) return; if(kind==='expense' && isMoneyMovement(txt)) return;
     const cid=ofCatToLocal(r.of_cat,kind); if(cid) r._of_cid=cid; });
   const groups={}; rows.forEach(r=>{ const k=(r.source||'bank')+'|'+(r.account||''); (groups[k]=groups[k]||[]).push(r); });
-  let added=0,skipped=0,auto=0,pruned=0;
+  let added=0,skipped=0,auto=0,pruned=0,stale=0;
   for(const k of Object.keys(groups)){ const i=k.indexOf('|'); const source=k.slice(0,i), account=k.slice(i+1);
     const res=await api('/transactions/import',{method:'POST',body:{source,account,rows:groups[k]}});
     added+=res.added||0; skipped+=res.skipped||0; auto+=res.autoCategorized||0; pruned+=res.prunedDup||0; }
-  return {added,skipped,auto,pruned};
+  // עסקאות שהבנק כבר לא מחזיר בחלון שנמשך = אישורים זמניים (PENDING) שנסלקו וחזרו עם מזהה וסכום אחרים
+  // (למשל BOOKING.COM ‎2,852‎ ממתין → BOOKING.COM B.V. ‎2,952‎ סופי). מסירים רק שורות שסומנו pending — לא שורות סופיות (משיכה חלקית מהבנק לא תמחוק נתונים).
+  if(range&&range.from&&range.to){
+    const fresh=new Set(rows.map(r=>r.of_id).filter(Boolean)); const accs=new Set(rows.map(r=>r.account));
+    const before=db.transactions.length;
+    db.transactions=db.transactions.filter(t=>{ if(!t.pending||!t.of_id||fresh.has(t.of_id)) return true; const d=String(t.tx_date).slice(0,10); return d<range.from||d>range.to||!accs.has(t.account); });
+    stale=before-db.transactions.length; if(stale){ _detailMonths=null; save(); }
+  }
+  return {added,skipped,auto,pruned,stale};
 }
 function ofPreview(rows,accounts,stats,from){
   return new Promise(resolve=>{
@@ -2120,7 +2137,7 @@ async function ofSync(opts){
     const {rows,accounts,stats,from}=await ofFetchRows({full:!!opts.full},(i,n,w)=>{ const t=`מושך מהבנק ${i+1}/${n} · ${fmtMonth(w[0].slice(0,7))}…`; syncBadge(t); if(prog) prog.textContent=t; });
     if(prog) prog.textContent='';
     if(!opts.silent){ const ok=await ofPreview(rows,accounts,stats,from); if(!ok){ toast('הסנכרון בוטל'); return null; } }
-    const r=await ofImportRows(rows);
+    const r=await ofImportRows(rows, from?{from,to:isoD(new Date())}:null);
     ofSetState({lastSyncAt:Date.now(),lastAutoAt:Date.now(),lastResult:r,lastRows:rows.length});
     if(!opts.silent || r.added){ toast(`🏦 סנכרון מהבנק: ${r.added} חדשות · ${r.skipped} כבר היו${r.auto?` · ${r.auto} סווגו אוטומטית`:''}`); if(!userBusy()) render({keepScroll:true}); }
     return r;

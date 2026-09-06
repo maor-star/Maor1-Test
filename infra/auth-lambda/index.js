@@ -545,15 +545,15 @@ async function serverSync(opts) {
     const stored = await getJson(key, { data: null, updatedAt: 0 });
     if (!stored.data) throw new Error('אין עדיין נתונים בענן — פתחו את האתר פעם אחת');
     const res = await rt.run(`(async()=>{ db=__io.data; ensureDefaults(); _ofStatus=__io.status;
-      const r=await ofImportRows(__io.rows); ofSetState({lastSyncAt:Date.now(),lastResult:r,lastRows:__io.rows.length}); db.ofServerSync=Date.now();
-      return {r:JSON.parse(JSON.stringify(r)), json:JSON.stringify(db)}; })()`, { data: stored.data, status: { ok: true, accounts: status.accounts, connections: status.connections }, rows });
+      const r=await ofImportRows(__io.rows, __io.range); ofSetState({lastSyncAt:Date.now(),lastResult:r,lastRows:__io.rows.length}); db.ofServerSync=Date.now();
+      return {r:JSON.parse(JSON.stringify(r)), json:JSON.stringify(db)}; })()`, { data: stored.data, status: { ok: true, accounts: status.accounts, connections: status.connections }, rows, range: { from: stats.dateFrom, to: isoDay(new Date()) } });
     // בקרת גרסאות: אם מישהו שמר מהדפדפן בזמן שעבדנו — טוענים שוב וחוזרים על הייבוא (לא דורסים)
     const cur = await getJson(key, { updatedAt: 0 });
     if ((cur.updatedAt || 0) !== (stored.updatedAt || 0)) continue;
     const updatedAt = Date.now();
     await putJson(key, { data: JSON.parse(res.json), updatedAt });
     await putJson(OF_CONFIG_KEY, Object.assign({}, cfg, { lastSync: Date.now(), lastSyncRows: rows.length, debitPositiveDetected: stats.debitPositive }));
-    const result = { ok: true, at: updatedAt, refreshed, refreshStatus: serverSync.lastRefreshStatus || null, rows: rows.length, added: res.r.added || 0, skipped: res.r.skipped || 0, auto: res.r.auto || 0, pruned: res.r.pruned || 0, from: stats.dateFrom, to: stats.dateTo };
+    const result = { ok: true, at: updatedAt, refreshed, refreshStatus: serverSync.lastRefreshStatus || null, rows: rows.length, added: res.r.added || 0, skipped: res.r.skipped || 0, auto: res.r.auto || 0, pruned: res.r.pruned || 0, stale: res.r.stale || 0, from: stats.dateFrom, to: stats.dateTo };
     await reportSaveCfg({ lastSync: result });
     return result;
   }
@@ -693,6 +693,13 @@ async function handleCron(event) {
     const cfg = await ofLoadConfig(); if (!cfg || !cfg.clientSecret) return { ok: false, error: 'no config' };
     const st = await ofStatusData(cfg, await ofToken(cfg));
     return { ok: true, connections: st.connections, accounts: st.accounts.map((a) => ({ provider: a.provider, type: a.type, number: a.number, status: a.status, balance: a.balance, balanceType: a.balanceType, balanceCurrency: a.balanceCurrency, available: a.available, txCount: a.txCount })), rawConns: st.rawConns };
+  }
+  if (event.cron === 'pull') { // אבחון: מה הבנק מחזיר עכשיו לחלון/בית-עסק (ללא ייבוא)
+    const cfg = await ofLoadConfig(); if (!cfg || !cfg.clientSecret) return { ok: false, error: 'no config' };
+    const token = await ofToken(cfg); const from = new Date(); from.setDate(from.getDate() - (event.days || 45));
+    const { rows, stats } = await ofPullRows(cfg, token, isoDay(from), isoDay(new Date(Date.now() + 86400000)));
+    const q = event.q ? new RegExp(event.q, 'i') : null;
+    return { ok: true, stats: { fetched: stats.fetched, rows: stats.rows, from: stats.dateFrom, to: stats.dateTo }, rows: q ? rows.filter((r) => q.test(r.merchant + ' ' + r.description)) : rows.slice(0, 50) };
   }
   if (event.cron === 'refresh') { // אבחון: רק בקשת רענון מהבנקים, בלי ייבוא
     const cfg = await ofLoadConfig(); if (!cfg || !cfg.clientSecret) return { ok: false, error: 'no config' };
