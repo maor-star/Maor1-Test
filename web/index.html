@@ -3675,7 +3675,7 @@ function weeklyReportData(){
   const essWeek=ess.filter(t=>dOf(t)>=wS&&dOf(t)<=wE), essMtd=ess.filter(t=>dOf(t).slice(0,7)===ym&&dOf(t)<=wE);
   const cats=budgetCatIds().map(id=>{ const c=catById(id); const isMain=!c.parent_id; const match=t=>isMain?((catMain(t.category_id)||{}).id===c.id):(t.category_id==c.id);
     const bud=Number(c.monthly_budget)||0; const wk=sum(essWeek.filter(match)); const m=sum(essMtd.filter(match)); const proj=dayN?m/dayN*dim:0;
-    return {name:c.name,color:c.color||'#888',budget:bud,week:wk,weekBudget:bud*7/dim,mtd:m,proRata:bud*dayN/dim,projected:proj,left:bud-m,status:!bud?'none':(proj>bud*1.1?'over':(proj>bud*0.95?'warn':'ok'))}; });
+    return {name:c.name,color:c.color||'#888',parentName:(c.parent_id&&catById(c.parent_id)||{}).name||null,budget:bud,week:wk,weekBudget:bud*7/dim,mtd:m,proRata:bud*dayN/dim,projected:proj,left:bud-m,status:!bud?'none':(proj>bud*1.1?'over':(proj>bud*0.95?'warn':'ok'))}; });
   const byMer={}; week.forEach(t=>{ const k=(t.merchant||t.description||'—').trim(); byMer[k]=byMer[k]||{name:k,value:0,n:0,cat:t.main_name||''}; byMer[k].value+=t.amount; byMer[k].n++; });
   const top=Object.values(byMer).sort((a,b)=>b.value-a.value).slice(0,6);
   const byCat={}; week.forEach(t=>{ const k=t.main_name||'ללא סיווג'; byCat[k]=byCat[k]||{name:k,value:0,color:t.main_color||'#888'}; byCat[k].value+=t.amount; });

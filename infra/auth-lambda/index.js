@@ -582,13 +582,23 @@ function reportHTML(w, meta) {
   const stIc = { ok: '✅', warn: '⚠️', over: '🔴', none: '—' };
   const bar = (v, max, color) => { const p = max > 0 ? Math.min(100, Math.round(v / max * 100)) : 0; return `<div style="background:#e5e7eb;border-radius:6px;height:8px;overflow:hidden;margin-top:4px"><div style="width:${p}%;height:8px;background:${color}"></div></div>`; };
   const tile = (label, value, sub, color) => `<td style="padding:6px" width="33%"><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px"><div style="font-size:12px;color:#64748b">${label}</div><div style="font-size:22px;font-weight:800;color:${color || '#0f172a'};margin-top:2px">${value}</div><div style="font-size:12px;color:#64748b;margin-top:2px">${sub || ''}</div></div></td>`;
-  const catRows = w.cats.map((c) => { const col = c.status === 'over' ? '#dc2626' : c.status === 'warn' ? '#d97706' : '#059669'; return `<tr>
-      <td style="padding:8px 6px;border-bottom:1px solid #eef2f7"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${escH(c.color)};margin-inline-end:6px"></span><strong>${escH(c.name)}</strong>${c.budget > 0 ? bar(c.mtd, c.budget, col) : ''}</td>
-      <td style="padding:8px 6px;border-bottom:1px solid #eef2f7;text-align:center;white-space:nowrap">${fmtILS(c.week)}${c.budget > 0 ? `<div style="font-size:11px;color:#64748b">יעד שבועי ${fmtILS(c.weekBudget)}</div>` : ''}</td>
-      <td style="padding:8px 6px;border-bottom:1px solid #eef2f7;text-align:center;white-space:nowrap">${fmtILS(c.mtd)}${c.budget > 0 ? `<div style="font-size:11px;color:#64748b">מתוך ${fmtILS(c.budget)}</div>` : ''}</td>
-      <td style="padding:8px 6px;border-bottom:1px solid #eef2f7;text-align:center;white-space:nowrap">${c.budget > 0 ? `<span style="color:${c.left < 0 ? '#dc2626' : '#059669'};font-weight:700">${fmtILS(c.left)}</span>` : '—'}</td>
-      <td style="padding:8px 6px;border-bottom:1px solid #eef2f7;text-align:center;white-space:nowrap">${fmtILS(c.projected)}</td>
-      <td style="padding:8px 6px;border-bottom:1px solid #eef2f7;text-align:center;font-size:18px">${stIc[c.status] || ''}</td></tr>`; }).join('');
+  // יעד מול ביצוע מנורמל לשלב בחודש: «יעד עד היום» = תקציב × (ימים שעברו ÷ ימי החודש); «פער» = ביצוע − יעד עד היום (שלילי = מתחת ליעד = טוב)
+  const td = (inner, extra) => `<td style="padding:8px 6px;border-bottom:1px solid #eef2f7;text-align:center;white-space:nowrap;${extra || ''}">${inner}</td>`;
+  const pct = (a, b) => (b > 0 ? Math.round(a / b * 100) + '%' : '—');
+  const gapCell = (gap, ref) => { if (!(ref > 0)) return '—'; const col = gap > ref * 0.1 ? '#dc2626' : gap > -ref * 0.05 ? '#d97706' : '#059669'; return `<span style="color:${col};font-weight:700">${gap > 0 ? '+' : ''}${fmtILS(gap)}</span><div style="font-size:11px;color:#64748b">${pct(ref + gap, ref)} מהיעד</div>`; };
+  const catRows = w.cats.map((c) => { const col = c.status === 'over' ? '#dc2626' : c.status === 'warn' ? '#d97706' : '#059669'; const hasB = c.budget > 0; return `<tr>
+      <td style="padding:8px 6px;border-bottom:1px solid #eef2f7"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${escH(c.color)};margin-inline-end:6px"></span><strong>${escH(c.name)}</strong>${hasB ? `<div style="font-size:11px;color:#64748b">תקציב חודשי ${fmtILS(c.budget)}</div>` + bar(c.mtd, c.budget, col) : '<div style="font-size:11px;color:#94a3b8">ללא תקציב</div>'}</td>
+      ${td(`${fmtILS(c.week)}${hasB ? `<div style="font-size:11px;color:#64748b">יעד ${fmtILS(c.weekBudget)} · ${pct(c.week, c.weekBudget)}</div>` : ''}`)}
+      ${td(hasB ? gapCell(c.week - c.weekBudget, c.weekBudget) : '—')}
+      ${td(`${fmtILS(c.mtd)}${hasB ? `<div style="font-size:11px;color:#64748b">יעד עד היום ${fmtILS(c.proRata)}</div>` : ''}`)}
+      ${td(hasB ? gapCell(c.mtd - c.proRata, c.proRata) : '—')}
+      ${td(`${fmtILS(c.projected)}${hasB ? `<div style="font-size:11px;color:#64748b">${pct(c.projected, c.budget)} מהתקציב</div>` : ''}`)}
+      ${td(stIc[c.status] || '', 'font-size:18px')}</tr>`; }).join('')
+    + (withBudget.length ? (() => { const names = new Set(w.cats.map((c) => c.name)); const tot = withBudget.filter((c) => !(c.parentName && names.has(c.parentName))); /* תת-קטגוריה שגם האב שלה ברשימה לא נספרת פעמיים */ const s = (k) => tot.reduce((a, c) => a + c[k], 0); const wk = s('week'), wb = s('weekBudget'), m = s('mtd'), pr = s('proRata'), pj = s('projected'), b = s('budget'); return `<tr style="background:#f8fafc;font-weight:800">
+      <td style="padding:8px 6px;border-top:2px solid #e2e8f0">סה״כ קטגוריות עם תקציב<div style="font-size:11px;color:#64748b;font-weight:400">תקציב חודשי ${fmtILS(b)}</div></td>
+      ${td(`${fmtILS(wk)}<div style="font-size:11px;color:#64748b;font-weight:400">יעד ${fmtILS(wb)}</div>`, 'border-top:2px solid #e2e8f0')}${td(gapCell(wk - wb, wb), 'border-top:2px solid #e2e8f0')}
+      ${td(`${fmtILS(m)}<div style="font-size:11px;color:#64748b;font-weight:400">יעד עד היום ${fmtILS(pr)}</div>`, 'border-top:2px solid #e2e8f0')}${td(gapCell(m - pr, pr), 'border-top:2px solid #e2e8f0')}
+      ${td(`${fmtILS(pj)}<div style="font-size:11px;color:#64748b;font-weight:400">${pct(pj, b)} מהתקציב</div>`, 'border-top:2px solid #e2e8f0')}${td(pj > b * 1.1 ? '🔴' : pj > b * 0.95 ? '⚠️' : '✅', 'font-size:18px;border-top:2px solid #e2e8f0')}</tr>`; })() : '');
   const topRows = w.top.map((t) => `<tr><td style="padding:6px;border-bottom:1px solid #eef2f7">${escH(t.name)}${t.cat ? `<span style="color:#64748b;font-size:12px"> · ${escH(t.cat)}</span>` : ''}</td><td style="padding:6px;border-bottom:1px solid #eef2f7;text-align:left;white-space:nowrap;direction:ltr"><strong>${fmtILS(t.value)}</strong>${t.n > 1 ? ` <span style="color:#64748b;font-size:12px">(${t.n})</span>` : ''}</td></tr>`).join('');
   const upRows = w.upcoming.filter((e) => e.kind !== 'income' && e.amt >= 300).slice(0, 8).map((e) => `<tr><td style="padding:5px 6px;border-bottom:1px solid #eef2f7;white-space:nowrap">${fmtD(e.d)}</td><td style="padding:5px 6px;border-bottom:1px solid #eef2f7">${e.kind === 'card' ? '💳' : e.kind === 'mortgage' ? '🏦' : '🔁'} ${escH(e.name)}${e.est ? ' <span style="color:#64748b;font-size:12px">(אומדן)</span>' : ''}</td><td style="padding:5px 6px;border-bottom:1px solid #eef2f7;text-align:left;direction:ltr;white-space:nowrap;color:#dc2626">−${fmtILS(e.amt)}</td></tr>`).join('');
   const th = (t) => `<th style="padding:8px 6px;text-align:center;font-size:12px;color:#64748b;border-bottom:2px solid #e2e8f0">${t}</th>`;
@@ -607,8 +617,8 @@ function reportHTML(w, meta) {
     ${tile('מתחילת החודש', fmtILS(w.homeMtd), delta == null ? '' : `${delta > 0 ? '▲' : '▼'} ${Math.abs(delta)}% מול אותם ימים בחודש הקודם (${fmtILS(w.homePrevSame)})`, delta != null && delta > 10 ? '#dc2626' : '#0f172a')}
     ${tile('קצב צפוי לסוף החודש', fmtILS(w.homeProjected), w.totalBudget > 0 ? `תקציב הקטגוריות: ${fmtILS(w.totalBudget)}` : 'לפי הקצב עד כה', w.totalBudget > 0 && w.homeProjected > w.totalBudget * 1.1 ? '#dc2626' : '#0f172a')}
   </tr></table></td></tr>
-  <tr><td style="padding:12px 16px 4px"><div style="font-size:17px;font-weight:800">🎯 תקציב מול ביצוע</div><div style="font-size:12px;color:#64748b">«קצב צפוי» = ההוצאה מתחילת החודש מתורגמת לחודש מלא. 🔴 מעל 110% מהתקציב · ⚠️ 95%–110% · ✅ בתוך התקציב</div></td></tr>
-  <tr><td style="padding:4px 16px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px"><thead><tr>${th('קטגוריה')}${th('השבוע')}${th('מתחילת החודש')}${th('נותר')}${th('קצב צפוי')}${th('')}</tr></thead><tbody>${catRows || `<tr><td colspan="6" style="padding:12px;color:#64748b;text-align:center">אין קטגוריות תקציב — <a href="${SITE_URL}/#/budgets" style="color:#0284c7">הגדירו במסך «תקציבים»</a></td></tr>`}</tbody></table></td></tr>
+  <tr><td style="padding:12px 16px 4px"><div style="font-size:17px;font-weight:800">🎯 יעד מול ביצוע — מנורמל לשלב בחודש (יום ${w.dayN} מתוך ${w.dim})</div><div style="font-size:12px;color:#64748b;line-height:1.6">«יעד עד היום» = התקציב החודשי × החלק של החודש שעבר; «יעד שבועי» = תקציב × 7 ÷ ימי החודש. «פער» שלילי = מתחת ליעד (טוב), חיובי = מעל. «צפי סוף חודש» = הקצב עד כה על חודש מלא. 🔴 מעל 110% · ⚠️ 95%–110% · ✅ בתוך היעד</div></td></tr>
+  <tr><td style="padding:4px 16px 12px"><div style="overflow-x:auto"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13.5px;min-width:600px"><thead><tr>${th('קטגוריה')}${th('השבוע')}${th('פער שבועי')}${th('מתחילת החודש')}${th('פער מהיעד')}${th('צפי סוף חודש')}${th('')}</tr></thead><tbody>${catRows || `<tr><td colspan="7" style="padding:12px;color:#64748b;text-align:center">אין קטגוריות תקציב — <a href="${SITE_URL}/#/budgets" style="color:#0284c7">הגדירו במסך «תקציבים»</a></td></tr>`}</tbody></table></div></td></tr>
   <tr><td style="padding:12px 16px 4px"><div style="font-size:17px;font-weight:800">💧 תזרים</div></td></tr>
   <tr><td style="padding:4px 10px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
     ${tile('יתרת עו״ש כעת', w.balNow != null ? fmtILS(w.balNow) : '—', w.creditLine ? `מסגרת אשראי ${fmtILS(w.creditLine)}` : '', w.balNow != null && w.balNow < 0 ? '#dc2626' : '#0f172a')}
@@ -621,7 +631,8 @@ function reportHTML(w, meta) {
   ${w.uncatWeek ? `<tr><td style="padding:6px 16px 14px"><div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:10px 14px;font-size:14px">🏷️ <strong>${w.uncatWeek} עסקאות</strong> מהשבוע (${fmtILS(w.uncatWeekSum)}) עדיין ללא סיווג${w.uncatAll > w.uncatWeek ? ` · סה״כ ${w.uncatAll} ממתינות` : ''} — <a href="${SITE_URL}/#/review" style="color:#0284c7;font-weight:700">לסיווג באתר ←</a></div></td></tr>` : ''}
   <tr><td style="padding:14px 16px 18px;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b">
     <a href="${SITE_URL}" style="color:#0284c7;font-weight:700">פתיחת האתר</a> · <a href="${SITE_URL}/#/insights" style="color:#0284c7">תזרים יומי</a> · <a href="${SITE_URL}/#/budgets" style="color:#0284c7">תקציבים</a><br>
-    נתונים עד ${fmtD(w.lastTx)}${meta && meta.sync ? (meta.sync.ok ? ` · סונכרן מהבנק לפני השליחה (${meta.sync.added} עסקאות חדשות)` : ` · הסנכרון מהבנק לפני השליחה נכשל: ${escH(meta.sync.error || '')}`) : ''} · נוצר אוטומטית ${new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}.
+    ${meta && meta.warning ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:8px 12px;margin-bottom:8px;color:#991b1b">⚠️ נשלח למרות שלא כל הנתונים עודכנו: ${escH(meta.warning)}</div>` : ''}
+    נתונים עד ${fmtD(w.lastTx)}${meta && meta.sync ? (meta.sync.ok ? ` · סונכרן מהבנק לפני השליחה (${meta.sync.added} עסקאות חדשות)` : ` · הסנכרון מהבנק לפני השליחה נכשל: ${escH(meta.sync.error || '')}`) : ''}${meta && Array.isArray(meta.fresh) && meta.fresh.length ? ` · נמשך מהבנקים: ${meta.fresh.filter((c) => String(c.status || '').toUpperCase() === 'ACTIVE').map((c) => escH(c.provider) + ' ' + fmtD(c.lastFetched)).join(', ')}` : ''} · נוצר אוטומטית ${new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}.
     ${meta && meta.test ? '<br><em>זהו דוח בדיקה שנשלח ידנית ממסך «מפתחות».</em>' : ''}</td></tr>
 </table></td></tr></table></body></html>`;
 }
@@ -631,6 +642,28 @@ async function sendEmail(to, subject, html) {
   const ses = new SESv2Client({});
   await ses.send(new SendEmailCommand({ FromEmailAddress: REPORT_FROM, Destination: { ToAddresses: to },
     Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Html: { Data: html, Charset: 'UTF-8' } } } } }));
+}
+
+// טריות הנתונים: הדוח נשלח רק אחרי שהסנכרון הצליח וכל חיבור פעיל ב-Open Finance נמשך מהבנק לפחות ביום האחרון של השבוע המדווח
+function freshnessCheck(status, sync, weekEnd) {
+  const stale = (status.connections || []).filter((c) => String(c.status || '').toUpperCase() === 'ACTIVE' && String(c.lastFetched || '').slice(0, 10) < weekEnd).map((c) => c.provider + ' (' + (c.lastFetched ? fmtD(c.lastFetched) : 'לא נמשך') + ')');
+  const problems = [];
+  if (!sync || !sync.ok) problems.push('הסנכרון מהבנק נכשל' + (sync && sync.error ? ': ' + sync.error : ''));
+  if (stale.length) problems.push('נתונים לא עדכניים מ־' + stale.join(', '));
+  return { fresh: !problems.length, problems };
+}
+const REPORT_MAX_ATTEMPTS = 4, REPORT_RETRY_MIN = 120;
+async function scheduleReportRetry(attempt, to) {
+  const { SchedulerClient, CreateScheduleCommand } = require('@aws-sdk/client-scheduler');
+  const at = new Date(Date.now() + REPORT_RETRY_MIN * 60000); at.setSeconds(0, 0);
+  const expr = 'at(' + at.toISOString().slice(0, 19) + ')';
+  const region = process.env.AWS_REGION || 'us-east-1';
+  const fnArn = 'arn:aws:lambda:' + region + ':' + (process.env.ACCOUNT_ID || '450118321037') + ':function:' + FN_NAME;
+  const roleArn = 'arn:aws:iam::' + (process.env.ACCOUNT_ID || '450118321037') + ':role/home-management-scheduler-role';
+  await new SchedulerClient({}).send(new CreateScheduleCommand({ Name: 'home-mgmt-report-retry-' + attempt + '-' + at.getTime(), ScheduleExpression: expr, ScheduleExpressionTimezone: 'UTC',
+    FlexibleTimeWindow: { Mode: 'OFF' }, ActionAfterCompletion: 'DELETE', Description: 'Weekly report retry (bank data was not fresh yet)',
+    Target: { Arn: fnArn, RoleArn: roleArn, Input: JSON.stringify({ cron: 'report', attempt, to }) } }));
+  return at.getTime();
 }
 
 async function runReport(to, opts) {
@@ -643,10 +676,17 @@ async function runReport(to, opts) {
   const [rt, stored] = await Promise.all([loadApp(), getJson(dataKeyFor(HOUSEHOLD_CODE), { data: null })]);
   if (!stored.data) throw new Error('אין עדיין נתונים בענן');
   const w = await buildReportData(rt, stored.data, { ok: status.ok, accounts: status.accounts, connections: status.connections });
+  // שליחה רק כשהכול מעודכן; אחרת — ניסיון חוזר בעוד שעתיים (עד 4 ניסיונות), ובניסיון האחרון שולחים עם אזהרה
+  if (opts.sync && !opts.test) {
+    const f = freshnessCheck(status, sync, w.weekEnd);
+    const attempt = opts.attempt || 1;
+    if (!f.fresh && attempt < REPORT_MAX_ATTEMPTS) { const retryAt = await scheduleReportRetry(attempt + 1, to); return { ok: false, deferred: true, attempt, retryAt, problems: f.problems }; }
+    if (!f.fresh) opts.warning = f.problems.join(' · ');
+  }
   const over = w.cats.filter((c) => c.status === 'over').length;
   const subject = `${over ? '🔴' : w.cats.some((c) => c.status === 'warn') ? '⚠️' : '✅'} דוח שבועי לבית · ${fmtD(w.weekStart)}–${fmtD(w.weekEnd)} · הוצאות ${fmtILS(w.homeWeek)}`;
-  await sendEmail(to, subject, reportHTML(w, { sync, test: !!opts.test }));
-  return { ok: true, to, subject, at: Date.now(), sync };
+  await sendEmail(to, subject, reportHTML(w, { sync, test: !!opts.test, warning: opts.warning || null, fresh: status.connections }));
+  return { ok: true, to, subject, at: Date.now(), sync, attempt: opts.attempt || 1 };
 }
 
 async function handleReport(action, event) {
@@ -686,7 +726,9 @@ async function handleCron(event) {
     const to = Array.isArray(event.to) && event.to.length ? event.to : cfg.to;
     if (cfg.enabled === false && !event.force) return { ok: true, skipped: 'disabled' };
     if (!to || !to.length) return { ok: true, skipped: 'no recipients' };
-    try { const r = await runReport(to, { sync: true }); await reportSaveCfg({ lastReport: { ok: true, at: r.at, to: r.to, subject: r.subject } }); return { ok: true, report: r }; }
+    try { const r = await runReport(to, { sync: true, attempt: Number(event.attempt) || 1 });
+      if (r.deferred) { await reportSaveCfg({ lastReport: { ok: false, deferred: true, at: Date.now(), to, retryAt: r.retryAt, error: 'הנתונים מהבנק עדיין לא עדכניים — ניסיון חוזר ב־' + new Date(r.retryAt).toLocaleTimeString('he-IL', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit' }) + ' (' + r.problems.join(' · ') + ')' } }); return { ok: true, deferred: r }; }
+      await reportSaveCfg({ lastReport: { ok: true, at: r.at, to: r.to, subject: r.subject, attempt: r.attempt } }); return { ok: true, report: r }; }
     catch (e) { await reportSaveCfg({ lastReport: { ok: false, at: Date.now(), to, error: e.message } }); return { ok: false, error: e.message }; }
   }
   if (event.cron === 'status') { // אבחון: מצב החיבורים והחשבונות ב-Open Finance (ללא סודות)
