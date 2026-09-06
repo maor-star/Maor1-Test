@@ -1076,8 +1076,10 @@ function ensureDefaults(){
 // הגנה: תקלה במיגרציה לא תשבית את כל האתר (מסך לבן) — מדווחים וממשיכים עם הנתונים כפי שהם
 try{ ensureDefaults(); }catch(e){ console.error('ensureDefaults failed',e); try{ window.__bootError=e.message; }catch(_){} }
 // שגיאות לא-מטופלות: הודעה קצרה למשתמש במקום קריסה שקטה
-window.addEventListener('error',e=>{ try{ const t=document.getElementById('toast'); if(t){ t.textContent='⚠️ שגיאה: '+(e.message||'').slice(0,120); t.className='toast show error'; setTimeout(()=>t.className='toast',4000); } }catch(_){} });
-window.addEventListener('unhandledrejection',e=>{ try{ const msg=(e.reason&&e.reason.message)||String(e.reason||''); if(/unauthorized/.test(msg)) return; const t=document.getElementById('toast'); if(t){ t.textContent='⚠️ '+msg.slice(0,120); t.className='toast show error'; setTimeout(()=>t.className='toast',4000); } }catch(_){} });
+// ResizeObserver loop / Script error = אזהרות דפדפן לא מזיקות (הדפדפן דוחה ציור לפריים הבא) — לא תקלה באתר, לא מציגים
+const BENIGN_ERR=/ResizeObserver loop|Script error\.?$|Load failed|NetworkError|AbortError/i;
+window.addEventListener('error',e=>{ try{ if(BENIGN_ERR.test(e.message||'')) return; const t=document.getElementById('toast'); if(t){ t.textContent='⚠️ שגיאה: '+(e.message||'').slice(0,120); t.className='toast show error'; setTimeout(()=>t.className='toast',4000); } }catch(_){} });
+window.addEventListener('unhandledrejection',e=>{ try{ const msg=(e.reason&&e.reason.message)||String(e.reason||''); if(/unauthorized/.test(msg)||BENIGN_ERR.test(msg)) return; const t=document.getElementById('toast'); if(t){ t.textContent='⚠️ '+msg.slice(0,120); t.className='toast show error'; setTimeout(()=>t.className='toast',4000); } }catch(_){} });
 const catById = (id)=> db.categories.find(c=>c.id==id);
 const proById = (id)=> db.professionals.find(p=>p.id==id);
 
