@@ -21,6 +21,10 @@ import {
   listContracts as listIntake, type ContractView as IntakeView,
 } from '@/lib/contracts/intake-module';
 import { ContractCard } from '@/components/contracts/contract-card';
+import { ContractGroupedView } from '@/components/contracts/grouped-view';
+import {
+  CONTRACT_GROUP_BYS, CONTRACT_GROUP_BY_LABEL, isContractGroupBy, type ContractGroupBy,
+} from '@/lib/contracts/grouping';
 import { driveStatus } from '@/lib/integrations/drive';
 import { linesForMany, PILLAR_OPTIONS } from '@/lib/control/tagging';
 import { PillarFilter } from '@/components/hud/pillar-filter';
@@ -37,13 +41,25 @@ export const dynamic = 'force-dynamic';
 export default async function ContractsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; q?: string; pillar?: string }>;
+  searchParams: Promise<{ view?: string; q?: string; pillar?: string; layout?: string; group?: string }>;
 }) {
   const sp = await searchParams;
   const intakeView: IntakeView = CONTRACT_VIEWS.includes(sp.view as IntakeView)
     ? (sp.view as IntakeView)
     : 'classify';
   const q = sp.q ?? '';
+  /*
+   * Table or cards.
+   *
+   * He asked for this screen to read like the tasks table, so the table is the
+   * default. The cards stay: a card carries the versions, the Drive filing
+   * buttons, the reply and the chase ladder, and no table row has room for
+   * those.
+   */
+  const layout: 'table' | 'cards' = sp.layout === 'cards' ? 'cards' : 'table';
+  /* Which column carries the groups. "Waiting on" first — it is the question
+     the screen exists to answer. */
+  const groupBy: ContractGroupBy = isContractGroupBy(sp.group) ? sp.group : 'waiting';
   // Only one of the seven, and only if it is one of the seven.
   const pillar = PILLAR_OPTIONS.some((p) => p.line === sp.pillar) ? (sp.pillar ?? null) : null;
 
@@ -62,24 +78,39 @@ export default async function ContractsPage({
    * search narrows whichever list he is looking at. Both live in the URL, so a
    * narrowed screen survives a reload.
    */
-  const view = (v: IntakeView) => {
+  /**
+   * The same screen with one thing changed, keeping everything else he chose.
+   *
+   * Every control here builds its own link, and each one that forgot a
+   * parameter silently reset it — switching the layout would have dropped the
+   * pillar he was reading, or the search he had typed.
+   */
+  const withParams = (patch: Partial<Record<'view' | 'layout' | 'group' | 'q' | 'pillar', string>>) => {
+    const current = {
+      view: intakeView === 'classify' ? '' : intakeView,
+      layout: layout === 'table' ? '' : layout,
+      group: groupBy === 'waiting' ? '' : groupBy,
+      q,
+      pillar: pillar ?? '',
+    };
     const params = new URLSearchParams();
-    if (v !== 'classify') params.set('view', v);
-    if (q) params.set('q', q);
-    if (pillar) params.set('pillar', pillar);
+    for (const [k, v] of Object.entries({ ...current, ...patch })) {
+      // A patch back to the default drops the parameter rather than pinning
+      // it, so the plain URL stays the plain URL.
+      const isDefault =
+        (k === 'view' && v === 'classify') ||
+        (k === 'layout' && v === 'table') ||
+        (k === 'group' && v === 'waiting');
+      if (v && !isDefault) params.set(k, v);
+    }
     const query = params.toString();
     return query ? `/contracts?${query}` : '/contracts';
   };
 
+  const view = (v: IntakeView) => withParams({ view: v });
+
   /** The same screen, read on one pillar — or on all of them. */
-  const pillarHref = (line: string | null) => {
-    const params = new URLSearchParams();
-    if (intakeView !== 'classify') params.set('view', intakeView);
-    if (q) params.set('q', q);
-    if (line) params.set('pillar', line);
-    const query = params.toString();
-    return query ? `/contracts?${query}` : '/contracts';
-  };
+  const pillarHref = (line: string | null) => withParams({ pillar: line ?? '' });
   /*
    * The fields a row can be found by, in one place: the server filters on
    * them, and each row carries the same text folded into `data-search` so the
@@ -220,8 +251,31 @@ export default async function ContractsPage({
               </div>
             }
           />
-          <div className="mt-3">
+          <div className="mt-3 space-y-3">
             <PillarFilter current={pillar} href={pillarHref} />
+
+            <div className="flex flex-wrap items-center gap-3">
+              <nav className="segmented" aria-label="Layout">
+                {(['table', 'cards'] as const).map((l) => (
+                  <Link key={l} href={withParams({ layout: l })} aria-current={l === layout ? 'page' : undefined}>
+                    {l === 'table' ? 'TABLE' : 'CARDS'}
+                  </Link>
+                ))}
+              </nav>
+
+              {/* Only the table has groups, so the selector only appears with
+                  it — a control that does nothing on the other view is one he
+                  learns to ignore. */}
+              {layout === 'table' ? (
+                <nav className="segmented flex-wrap" aria-label="Group by">
+                  {CONTRACT_GROUP_BYS.map((g) => (
+                    <Link key={g} href={withParams({ group: g })} aria-current={g === groupBy ? 'page' : undefined}>
+                      {CONTRACT_GROUP_BY_LABEL[g]}
+                    </Link>
+                  ))}
+                </nav>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -235,6 +289,10 @@ export default async function ContractsPage({
                 ? 'Nothing waiting to be classified. Contracts arriving by mail or Slack land here.'
                 : 'Nothing in this view.'}
           </p>
+        ) : layout === 'table' ? (
+          <div className="border-t border-line p-[14px]">
+            <ContractGroupedView rows={rows} groupBy={groupBy} />
+          </div>
         ) : (
           <ul id="contract-list">
             <InstantFilter scope="contract-list" />

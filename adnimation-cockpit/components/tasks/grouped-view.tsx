@@ -184,7 +184,7 @@ function StatusBar({ group }: { group: TaskGroup<TaskRow> }) {
       <span className="flex h-[8px] flex-1 overflow-hidden rounded-full bg-neutral-200">
         {group.mix.map((m) => (
           <span
-            key={m.status}
+            key={m.key}
             title={`${m.label}: ${m.count}`}
             style={{ width: `${m.share * 100}%`, background: GROUP_COLOR[m.tone] }}
           />

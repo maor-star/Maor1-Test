@@ -1,4 +1,12 @@
 import { PRIORITY_META, STATUS_LABEL, TASK_PRIORITIES, TASK_STATUSES, type TaskPriority, type TaskStatus } from '@/lib/tasks/types';
+import {
+  buildGroups, buildMix, GROUP_COLOR, UNSET_SORT, type Bucket, type Group, type GroupTone,
+} from '@/lib/hud/grouping';
+
+// The colours and the group shape are shared with the contracts table, so the
+// two screens cannot drift into looking like different products.
+export { GROUP_COLOR, type GroupTone };
+export type TaskGroup<T> = Group<T>;
 
 /**
  * Tasks in groups, the way he reads them in Monday.
@@ -35,24 +43,6 @@ export const GROUP_BY_LABEL: Record<TaskGroupBy, string> = {
 export const isGroupBy = (v: unknown): v is TaskGroupBy =>
   typeof v === 'string' && (TASK_GROUP_BYS as readonly string[]).includes(v);
 
-/**
- * The colours a group bar can take.
- *
- * Named by meaning rather than by hue, so a status and a priority that mean
- * the same kind of thing — this is fine, this needs you — look the same on a
- * screen he scans rather than reads.
- */
-export type GroupTone = 'done' | 'working' | 'stuck' | 'waiting' | 'idle' | 'later';
-
-export const GROUP_COLOR: Record<GroupTone, string> = {
-  done: '#16a34a',
-  working: '#f97316',
-  stuck: '#dc2626',
-  waiting: '#0ea5e9',
-  idle: '#94a3b8',
-  later: '#8b5cf6',
-};
-
 const STATUS_TONE: Record<TaskStatus, GroupTone> = {
   open: 'idle',
   in_progress: 'working',
@@ -85,17 +75,6 @@ export interface Groupable {
   deptNameHe: string | null;
 }
 
-export interface TaskGroup<T> {
-  key: string;
-  label: string;
-  tone: GroupTone;
-  rows: T[];
-  /** How the statuses inside it divide up, biggest first — the group's bar. */
-  mix: { status: string; label: string; tone: GroupTone; count: number; share: number }[];
-  /** Done over total, for the figure beside the bar. */
-  doneShare: number;
-}
-
 /**
  * Which bucket a due date falls in.
  *
@@ -119,10 +98,7 @@ const DUE_META: Record<string, { label: string; tone: GroupTone; order: number }
   none: { label: 'NO DATE', tone: 'idle', order: 4 },
 };
 
-/** An empty bucket sorts last whatever it is called. */
-const UNSET = '￿';
-
-function bucketOf<T extends Groupable>(row: T, by: TaskGroupBy, today: string) {
+function bucketOf<T extends Groupable>(row: T, by: TaskGroupBy, today: string): Bucket {
   switch (by) {
     case 'status': {
       const i = (TASK_STATUSES as readonly string[]).indexOf(row.status);
@@ -148,7 +124,7 @@ function bucketOf<T extends Groupable>(row: T, by: TaskGroupBy, today: string) {
         key: name || 'unassigned',
         label: name || 'UNASSIGNED',
         tone: (name ? 'waiting' : 'idle') as GroupTone,
-        sort: name ? name.toLowerCase() : UNSET,
+        sort: name ? name.toLowerCase() : UNSET_SORT,
       };
     }
     case 'dept': {
@@ -157,7 +133,7 @@ function bucketOf<T extends Groupable>(row: T, by: TaskGroupBy, today: string) {
         key: name || 'none',
         label: name || 'NO DEPARTMENT',
         tone: (name ? 'later' : 'idle') as GroupTone,
-        sort: name ? name.toLowerCase() : UNSET,
+        sort: name ? name.toLowerCase() : UNSET_SORT,
       };
     }
     case 'due': {
@@ -182,54 +158,20 @@ export function groupTasks<T extends Groupable>(
   by: TaskGroupBy,
   today: string,
 ): TaskGroup<T>[] {
-  const buckets = new Map<string, { label: string; tone: GroupTone; sort: string; rows: T[] }>();
-
-  for (const row of rows) {
-    const b = bucketOf(row, by, today);
-    const found = buckets.get(b.key) ?? { label: b.label, tone: b.tone, sort: b.sort, rows: [] };
-    found.rows.push(row);
-    buckets.set(b.key, found);
-  }
-
-  return [...buckets.entries()]
-    .sort((a, b) => a[1].sort.localeCompare(b[1].sort))
-    .map(([key, b]) => ({
-      key,
-      label: b.label,
-      tone: b.tone,
-      rows: b.rows,
-      mix: statusMix(b.rows),
-      doneShare: b.rows.length === 0 ? 0 : b.rows.filter((r) => r.status === 'done').length / b.rows.length,
-    }));
+  return buildGroups(rows, (row) => bucketOf(row, by, today), statusMix, (row) => row.status === 'done');
 }
 
-/**
- * How a group's statuses divide up — Monday's battery.
- *
- * The one device on that screen that answers a question without being read:
- * a group that is mostly green is finished, one with a red band in it has
- * something stuck in it, and he can see which from across the room.
- *
- * In workflow order rather than by size, so the bar means the same thing in
- * every group and the eye can compare two of them.
- */
-export function statusMix<T extends Groupable>(rows: readonly T[]) {
-  if (rows.length === 0) return [];
-  const counts = new Map<string, number>();
-  for (const r of rows) counts.set(r.status, (counts.get(r.status) ?? 0) + 1);
-
-  const order = (s: string) => {
-    const i = (TASK_STATUSES as readonly string[]).indexOf(s);
+/** What a status contributes to a group's bar. */
+const statusMeta = (key: string) => ({
+  label: STATUS_LABEL[key as TaskStatus] ?? key.toUpperCase(),
+  tone: toneForStatus(key),
+  order: (() => {
+    const i = (TASK_STATUSES as readonly string[]).indexOf(key);
     return i === -1 ? 99 : i;
-  };
+  })(),
+});
 
-  return [...counts.entries()]
-    .sort((a, b) => order(a[0]) - order(b[0]))
-    .map(([status, count]) => ({
-      status,
-      label: STATUS_LABEL[status as TaskStatus] ?? status.toUpperCase(),
-      tone: toneForStatus(status),
-      count,
-      share: count / rows.length,
-    }));
+/** How a group's statuses divide up — the bar across its heading. */
+export function statusMix<T extends Groupable>(rows: readonly T[]) {
+  return buildMix(rows, (r) => r.status, statusMeta);
 }

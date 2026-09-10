@@ -131,7 +131,7 @@ describe('the bar across a group', () => {
   it('runs in workflow order so two groups can be compared', () => {
     // By size, a group's bar would reorder itself every time something moved,
     // and the eye could not compare one group to the next.
-    expect(statusMix(rows).map((m) => m.status)).toEqual(['open', 'blocked', 'done']);
+    expect(statusMix(rows).map((m) => m.key)).toEqual(['open', 'blocked', 'done']);
   });
 
   it('says what share is finished', () => {

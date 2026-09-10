@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { CONTRACT_CATEGORIES, type ContractCategory } from '@/lib/contracts/drive';
 import { requireUser } from '@/lib/auth/session';
 import { confirmCategory, createContract, setContractStatus } from '@/lib/contracts/service';
 import { CONTRACT_STATUSES } from '@/lib/contracts/status';
@@ -90,9 +91,17 @@ export async function setContractStatusAction(formData: FormData): Promise<Actio
   }
 }
 
+/*
+ * Every category, not the three this used to accept.
+ *
+ * `confirmCategory` has always taken the full set and the pickers have offered
+ * six since `mutual` and `quote` were added, but this schema still named three
+ * — so choosing one of the other three was rejected here, after the click,
+ * with a validation error about a field he had filled in correctly.
+ */
 const categorySchema = z.object({
   id: z.string().uuid(),
-  category: z.enum(['demand', 'supply', 'general']),
+  category: z.enum(CONTRACT_CATEGORIES as unknown as [ContractCategory, ...ContractCategory[]]),
 });
 
 export async function confirmCategoryAction(formData: FormData): Promise<ActionResult> {
