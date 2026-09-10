@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { matchTerms } from '@/lib/delegation/reply-match';
-import { FakeSlackAdapter, parsePermalink } from '@/lib/integrations/slack';
+import { createSlackAdapter, FakeSlackAdapter, parsePermalink } from '@/lib/integrations/slack';
 import { FakeGmailAdapter } from '@/lib/integrations/gmail';
 
 /**
@@ -68,5 +68,83 @@ describe('fake adapters', () => {
 
     expect((await slack.findThreadReply())?.excerpt).toBe('done, sent it this morning');
     expect(await slack.findThreadReply()).toBeNull();
+  });
+});
+
+/**
+ * A reply that was never in a thread.
+ *
+ * The reply radar read `conversations.replies` and nothing else, which is not
+ * how anybody answers a direct message. A hand-over to one person goes to
+ * their DM, and a person replying in a DM types into the conversation — they
+ * do not hover the message and pick "reply in thread". So the answer arrived,
+ * sat in the DM, and the tracker said nobody had replied until it marked the
+ * whole thing stale three days later.
+ *
+ * That was the state of the one real hand-over on the board: sent to Assaf in
+ * a DM, with nothing that would have noticed an answer.
+ */
+describe('finding an answer that is not in the thread', () => {
+  const PERMALINK = 'https://slack.com/archives/D0BV2LP6PMZ/p1788640763076759';
+  const PARENT_TS = '1788640763.076759';
+
+  /** Slack that answers each endpoint from a script. */
+  const slackWith = (thread: unknown[], history: unknown[]) => {
+    const calls: string[] = [];
+    globalThis.fetch = (async (url: string) => {
+      calls.push(String(url));
+      const which = String(url).includes('conversations.replies') ? thread : history;
+      return { json: async () => ({ ok: true, messages: which }) } as unknown as Response;
+    }) as unknown as typeof fetch;
+    return calls;
+  };
+
+  const ours = { ts: PARENT_TS, bot_id: 'B0BTP2HGH8A', text: 'לטיפולך בבקשה ועדכן.' };
+  const theirs = { ts: '1788700000.000100', user: 'U0Y3M6LFM', text: 'בסדר, אני על זה' };
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+  const realFetch = globalThis.fetch;
+
+  it('reads the conversation when the thread holds only our own message', async () => {
+    const calls = slackWith([ours], [ours, theirs]);
+    const found = await createSlackAdapter('xoxb-test').findThreadReply(PERMALINK);
+    expect(found?.excerpt).toBe('בסדר, אני על זה');
+    expect(found?.author).toBe('U0Y3M6LFM');
+
+    /*
+     * That it went to the conversation at all, not only the thread. Without
+     * this the suite would keep passing if a future change swapped the real
+     * adapter for the fake one — the assertions above would be checking a stub
+     * against itself.
+     */
+    expect(calls.some((c) => c.includes('conversations.replies'))).toBe(true);
+    expect(calls.some((c) => c.includes('conversations.history'))).toBe(true);
+  });
+
+  it('still prefers a threaded reply, which is unambiguously about this ask', async () => {
+    const inThread = { ts: '1788650000.000100', user: 'U0Y3M6LFM', text: 'בתוך הת׳רד' };
+    slackWith([ours, inThread], [ours, theirs]);
+    const found = await createSlackAdapter('xoxb-test').findThreadReply(PERMALINK);
+    expect(found?.excerpt).toBe('בתוך הת׳רד');
+  });
+
+  it('never reads our own message back as their answer', async () => {
+    slackWith([ours], [ours]);
+    expect(await createSlackAdapter('xoxb-test').findThreadReply(PERMALINK)).toBe(null);
+  });
+
+  it('reports the first answer, not the latest remark', async () => {
+    const later = { ts: '1788800000.000100', user: 'U0Y3M6LFM', text: 'ועוד משהו' };
+    // Slack hands history back newest first.
+    slackWith([ours], [later, theirs, ours]);
+    const found = await createSlackAdapter('xoxb-test').findThreadReply(PERMALINK);
+    expect(found?.excerpt).toBe('בסדר, אני על זה');
+  });
+
+  it('leaves out somebody it was told to ignore', async () => {
+    slackWith([ours], [ours, theirs]);
+    expect(await createSlackAdapter('xoxb-test').findThreadReply(PERMALINK, 'U0Y3M6LFM')).toBe(null);
   });
 });

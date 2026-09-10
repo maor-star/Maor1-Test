@@ -288,34 +288,54 @@ class RealSlackAdapter implements SlackAdapter {
     return hits;
   }
 
+  /**
+   * Their answer to a message the cockpit posted — in the thread, or not.
+   *
+   * It read the thread alone, and that is not how anybody answers a direct
+   * message. A hand-over to one person goes to their DM, and a person replying
+   * in a DM types into the conversation; they do not hover the message and
+   * choose "reply in thread". So the answer arrived, sat there, and the
+   * tracker went on saying nobody had replied.
+   *
+   * The thread first, because a threaded reply is unambiguously about this
+   * ask; then the conversation itself, oldest first, so it reports the first
+   * answer rather than the latest remark.
+   */
   async findThreadReply(permalink: string, notFrom?: string): Promise<FoundReply | null> {
     const ref = parsePermalink(permalink);
     if (!ref) return null;
 
-    const url = `${SLACK_REPLIES}?channel=${ref.channel}&ts=${ref.ts}&limit=50`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${this.token}` } });
-    const body = (await res.json().catch(() => null)) as {
-      ok?: boolean;
-      messages?: { user?: string; bot_id?: string; text?: string; ts?: string }[];
-    } | null;
-    if (!body?.ok || !body.messages) return null;
+    const read = async (url: string) => {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${this.token}` } });
+      const body = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        messages?: { user?: string; bot_id?: string; text?: string; ts?: string }[];
+      } | null;
+      return body?.ok ? (body.messages ?? []) : [];
+    };
 
-    for (const m of body.messages) {
-      // The parent message is the cockpit's own post, and so is anything from
-      // the bot. A reply is somebody else answering.
-      if (m.ts === ref.ts || m.bot_id) continue;
-      if (notFrom && m.user === notFrom) continue;
-      if (!m.text?.trim() || !m.ts) continue;
+    const theirs = (m: { user?: string; bot_id?: string; text?: string; ts?: string }) =>
+      m.ts !== ref.ts && !m.bot_id && !(notFrom && m.user === notFrom) && Boolean(m.text?.trim()) && Boolean(m.ts);
 
-      return {
-        channel: 'slack',
-        author: m.user ?? 'unknown',
-        excerpt: m.text.trim().slice(0, 500),
-        at: new Date(Number(m.ts.split('.')[0]) * 1000),
-        url: `https://slack.com/archives/${ref.channel}/p${m.ts.replace('.', '')}`,
-      };
-    }
-    return null;
+    const found = (m: { user?: string; text?: string; ts?: string }): FoundReply => ({
+      channel: 'slack',
+      author: m.user ?? 'unknown',
+      excerpt: m.text!.trim().slice(0, 500),
+      at: new Date(Number(m.ts!.split('.')[0]) * 1000),
+      url: `https://slack.com/archives/${ref.channel}/p${m.ts!.replace('.', '')}`,
+    });
+
+    const thread = await read(`${SLACK_REPLIES}?channel=${ref.channel}&ts=${ref.ts}&limit=50`);
+    const inThread = thread.find(theirs);
+    if (inThread) return found(inThread);
+
+    const history = await read(
+      `${SLACK_HISTORY}?channel=${ref.channel}&oldest=${ref.ts}&limit=50`,
+    );
+    const inChannel = [...history]
+      .sort((a, b) => Number(a.ts ?? 0) - Number(b.ts ?? 0))
+      .find(theirs);
+    return inChannel ? found(inChannel) : null;
   }
 }
 
