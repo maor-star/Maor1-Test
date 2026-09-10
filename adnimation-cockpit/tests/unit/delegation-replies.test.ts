@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { matchTerms } from '@/lib/delegation/reply-match';
-import { createSlackAdapter, FakeSlackAdapter, parsePermalink } from '@/lib/integrations/slack';
+import { createSlackAdapter, explainPostError, FakeSlackAdapter, parsePermalink } from '@/lib/integrations/slack';
 import { FakeGmailAdapter } from '@/lib/integrations/gmail';
 
 /**
@@ -146,5 +146,38 @@ describe('finding an answer that is not in the thread', () => {
   it('leaves out somebody it was told to ignore', async () => {
     slackWith([ours], [ours, theirs]);
     expect(await createSlackAdapter('xoxb-test').findThreadReply(PERMALINK, 'U0Y3M6LFM')).toBe(null);
+  });
+});
+
+/**
+ * What a failed channel post tells him to do.
+ *
+ * The cockpit can list all 79 public channels and post to none of them: Slack
+ * only lets an app post where it is a member, unless it holds
+ * chat:write.public. Tested against the live workspace with a scheduled
+ * message that was deleted before it could appear — `not_in_channel`.
+ *
+ * So a hand-over to a channel offers seventy-nine and then fails, and the bare
+ * word "not_in_channel" sends him looking at the channel instead of at the one
+ * scope that fixes all of them at once.
+ */
+describe('when a post to a channel is refused', () => {
+  it('names the scope that fixes every channel at once', () => {
+    const said = explainPostError('not_in_channel');
+    expect(said).toContain('chat:write.public');
+    expect(said).toContain('Reinstall');
+    // The raw word stays, so a search for it still lands here.
+    expect(said).toContain('not_in_channel');
+  });
+
+  it('tells a private channel apart, where the scope will not help', () => {
+    // chat:write.public covers public channels only; a private one has to
+    // invite the bot, so pointing him at the scope would waste his time.
+    expect(explainPostError('channel_not_found')).toContain('/invite');
+    expect(explainPostError('channel_not_found')).not.toContain('chat:write.public');
+  });
+
+  it('leaves an error it has nothing to add to alone', () => {
+    expect(explainPostError('rate_limited')).toBe('rate_limited');
   });
 });

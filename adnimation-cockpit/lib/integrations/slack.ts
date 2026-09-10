@@ -21,6 +21,29 @@ export function parsePermalink(permalink: string): { channel: string; ts: string
   return { channel: m[1], ts: `${m[2]}.${m[3]}` };
 }
 
+/**
+ * Slack's word for what went wrong, turned into the thing to do about it.
+ *
+ * `not_in_channel` is the one that matters. The cockpit can LIST every public
+ * channel and post to none of them, because Slack only lets an app post where
+ * it is a member — unless it holds chat:write.public. So a hand-over to a
+ * channel offers seventy-nine of them and then fails, and "not_in_channel" on
+ * the screen sends him looking at the channel rather than at the one scope
+ * that fixes all of them at once.
+ */
+export function explainPostError(error: string): string {
+  switch (error) {
+    case 'not_in_channel':
+      return 'not_in_channel — the bot is not in that channel. Add the chat:write.public scope at api.slack.com/apps → OAuth & Permissions (then Reinstall), or invite it with /invite @claud.';
+    case 'channel_not_found':
+      return 'channel_not_found — a private channel the bot has not been invited to, or one that was archived. Invite it with /invite @claud.';
+    case 'missing_scope':
+      return 'missing_scope — the bot needs another permission at api.slack.com/apps → OAuth & Permissions, then Reinstall.';
+    default:
+      return error;
+  }
+}
+
 function buildBlocks(message: SlackMessage) {
   const blocks: unknown[] = [
     { type: 'section', text: { type: 'mrkdwn', text: message.text } },
@@ -63,7 +86,7 @@ class RealSlackAdapter implements SlackAdapter {
     const body: unknown = await res.json().catch(() => null);
     const parsed = body as { ok?: boolean; error?: string; ts?: string; channel?: string } | null;
     if (!parsed?.ok) {
-      return { ok: false, messageUrl: null, error: parsed?.error ?? `http_${res.status}` };
+      return { ok: false, messageUrl: null, error: explainPostError(parsed?.error ?? `http_${res.status}`) };
     }
     const permalink =
       parsed.ts && parsed.channel
