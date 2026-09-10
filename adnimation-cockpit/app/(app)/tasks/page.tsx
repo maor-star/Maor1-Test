@@ -16,6 +16,7 @@ import { NewTaskForm } from '@/components/tasks/new-task-form';
 import { linesForMany, PILLAR_OPTIONS } from '@/lib/control/tagging';
 import { PillarFilter } from '@/components/hud/pillar-filter';
 import { GROUP_BY_LABEL, isGroupBy, TASK_GROUP_BYS, type TaskGroupBy } from '@/lib/tasks/grouping';
+import { delegationsForMany, type DelegationMark } from '@/lib/delegation/for-many';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,8 +104,13 @@ export default async function TasksPage({
     listPeople(),
   ]);
 
-  // Which pillars each task belongs to, in one query for the whole list.
-  const pillars = await linesForMany('task', all.map((r) => r.id));
+  // Which pillars each task belongs to, and who is holding it — one query
+  // each for the whole list rather than one per row.
+  const ids = all.map((r) => r.id);
+  const [pillars, delegated] = await Promise.all([
+    linesForMany('task', ids),
+    delegationsForMany('task', ids),
+  ]);
 
   // Only one of the seven, and only if it is one of the seven.
   const pillar = PILLAR_OPTIONS.some((p) => p.line === sp.pillar) ? (sp.pillar ?? null) : null;
@@ -211,6 +217,7 @@ export default async function TasksPage({
         lines={pillars}
         groupBy={groupBy}
         today={todayInTz()}
+        delegated={delegated}
       />
     </div>
   );
@@ -224,6 +231,7 @@ function TaskViewSwitch({
   lines,
   groupBy,
   today,
+  delegated,
 }: {
   view: View;
   rows: TaskRow[];
@@ -232,6 +240,7 @@ function TaskViewSwitch({
   lines?: Map<string, string[]>;
   groupBy: TaskGroupBy;
   today: string;
+  delegated: Map<string, DelegationMark>;
 }) {
   if (view === 'board') return <TaskBoardView rows={rows} people={people} departments={departments} />;
   if (view === 'calendar') return <TaskCalendarView rows={rows} today={today} />;
@@ -245,6 +254,7 @@ function TaskViewSwitch({
       departments={departments}
       groupBy={groupBy}
       today={today}
+      delegated={delegated}
     />
   );
 }

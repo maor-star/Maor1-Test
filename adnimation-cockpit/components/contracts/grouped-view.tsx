@@ -10,6 +10,8 @@ import {
   GROUP_COLOR, groupContracts, toneForContractStatus,
   type ContractGroup, type ContractGroupBy, type GroupableContract,
 } from '@/lib/contracts/grouping';
+import { DelegateCell } from '@/components/hud/delegate-cell';
+import type { DelegationMark } from '@/lib/delegation/for-many';
 import { InstantFilter } from '@/components/hud/instant-filter';
 import { Num } from '@/components/num';
 import { fmtMoney } from '@/lib/utils';
@@ -29,8 +31,8 @@ import { foldForSearch } from '@/lib/search';
  * thing.
  */
 
-/** Counterparty · status · filing · value · age. The name carries the eye. */
-const COLS = 'minmax(0,1fr) 11rem 9.5rem 7.5rem 7rem';
+/** Counterparty · status · filing · value · age · who has it. */
+const COLS = 'minmax(0,1fr) 11rem 9.5rem 7.5rem 6rem 9rem';
 
 /** One row, as this table needs it — the card view carries the rest. */
 export interface ContractTableRow extends GroupableContract {
@@ -44,9 +46,14 @@ export interface ContractTableRow extends GroupableContract {
 export function ContractGroupedView({
   rows,
   groupBy,
+  people,
+  delegated,
 }: {
   rows: ContractTableRow[];
   groupBy: ContractGroupBy;
+  people: { id: string; label: string }[];
+  /** Contract id → who is holding it, fetched for the whole list at once. */
+  delegated: Map<string, DelegationMark>;
 }) {
   if (rows.length === 0) {
     return (
@@ -62,7 +69,7 @@ export function ContractGroupedView({
     <div className="space-y-3" id="contract-table">
       <InstantFilter scope="contract-table" />
       {groups.map((g) => (
-        <Group key={g.key} group={g} />
+        <Group key={g.key} group={g} people={people} delegated={delegated} />
       ))}
       <p className="px-1 text-[12.5px] text-muted">
         <Num>{rows.length}</Num> contracts in <Num>{groups.length}</Num> groups
@@ -71,7 +78,15 @@ export function ContractGroupedView({
   );
 }
 
-function Group({ group }: { group: ContractGroup<ContractTableRow> }) {
+function Group({
+  group,
+  people,
+  delegated,
+}: {
+  group: ContractGroup<ContractTableRow>;
+  people: { id: string; label: string }[];
+  delegated: Map<string, DelegationMark>;
+}) {
   const [open, setOpen] = useState(true);
   const colour = GROUP_COLOR[group.tone];
 
@@ -125,7 +140,7 @@ function Group({ group }: { group: ContractGroup<ContractTableRow> }) {
             className="hidden border-b border-line px-[14px] py-1.5 md:grid"
             style={{ gridTemplateColumns: COLS }}
           >
-            {['COUNTERPARTY', 'STATUS', 'FILING', 'VALUE', 'IN STATUS'].map((h, i) => (
+            {['COUNTERPARTY', 'STATUS', 'FILING', 'VALUE', 'IN STATUS', 'DELEGATED TO'].map((h, i) => (
               <span
                 key={h}
                 className={`hud-label text-[10.5px] ${i === 0 ? 'text-start' : 'text-center'}`}
@@ -136,7 +151,7 @@ function Group({ group }: { group: ContractGroup<ContractTableRow> }) {
           </div>
           <ul>
             {group.rows.map((c) => (
-              <Row key={c.id} contract={c} />
+              <Row key={c.id} contract={c} people={people} mark={delegated.get(c.id)} />
             ))}
           </ul>
         </>
@@ -145,7 +160,15 @@ function Group({ group }: { group: ContractGroup<ContractTableRow> }) {
   );
 }
 
-function Row({ contract }: { contract: ContractTableRow }) {
+function Row({
+  contract,
+  people,
+  mark,
+}: {
+  contract: ContractTableRow;
+  people: { id: string; label: string }[];
+  mark: DelegationMark | undefined;
+}) {
   const statusColour = GROUP_COLOR[toneForContractStatus(contract.status)];
 
   return (
@@ -156,6 +179,8 @@ function Row({ contract }: { contract: ContractTableRow }) {
         contract.category,
         contract.notes,
         contract.drivePath,
+        // So searching a colleague's name finds what he handed them.
+        mark?.personName,
       )}
       className="grid items-center gap-x-2 gap-y-1 border-b border-line px-[14px] py-1.5 last:border-b-0 hover:bg-neutral-50 md:gap-y-0"
       style={{ gridTemplateColumns: COLS }}
@@ -213,6 +238,16 @@ function Row({ contract }: { contract: ContractTableRow }) {
       <span className="text-center font-mono text-[12.5px] text-muted">
         <Num>{`${contract.daysInStatus}d`}</Num>
       </span>
+
+      {/* Whether he passed it on, and to whom — the same cell the tasks table
+          uses, so the colour means the same thing on both screens. */}
+      <DelegateCell
+        mark={mark}
+        entityId={contract.id}
+        entityType="contract"
+        title={contract.counterpartyName}
+        people={people}
+      />
     </li>
   );
 }

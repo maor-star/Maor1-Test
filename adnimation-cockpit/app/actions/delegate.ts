@@ -23,15 +23,14 @@ export async function delegateAction(formData: FormData): Promise<ActionResult> 
     note: formData.get('note'),
     dueDate: formData.get('dueDate') || null,
     priority: formData.get('priority') ?? 'P2',
-    clickupListId: formData.get('clickupListId') || process.env.CLICKUP_DEFAULT_LIST_ID || '',
+    clickupListId: formData.get('clickupListId') ?? undefined,
   });
 
   if (!parsed.success) {
     const flat = parsed.error.flatten();
     const fieldErrors = flat.fieldErrors as Record<string, string[]>;
-    // Surface the first field message rather than a generic one: the most
-    // common cause is an unset CLICKUP_DEFAULT_LIST_ID, and "missing details"
-    // sends the reader looking at the form instead of the configuration.
+    // Surface the first field message rather than a generic one: "missing
+    // details" sends the reader looking over a form they filled in correctly.
     const firstFieldError = Object.values(fieldErrors).flat()[0];
     return {
       ok: false,

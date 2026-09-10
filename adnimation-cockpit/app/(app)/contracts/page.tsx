@@ -22,6 +22,8 @@ import {
 } from '@/lib/contracts/intake-module';
 import { ContractCard } from '@/components/contracts/contract-card';
 import { ContractGroupedView } from '@/components/contracts/grouped-view';
+import { listPeople } from '@/lib/tasks/queries';
+import { delegationsForMany } from '@/lib/delegation/for-many';
 import {
   CONTRACT_GROUP_BYS, CONTRACT_GROUP_BY_LABEL, isContractGroupBy, type ContractGroupBy,
 } from '@/lib/contracts/grouping';
@@ -63,9 +65,10 @@ export default async function ContractsPage({
   // Only one of the seven, and only if it is one of the seven.
   const pillar = PILLAR_OPTIONS.some((p) => p.line === sp.pillar) ? (sp.pillar ?? null) : null;
 
-  const [board, departments, intake, counts, drive] = await Promise.all([
+  const [board, departments, staff, intake, counts, drive] = await Promise.all([
     contractBoard(),
     listDepartments(),
+    listPeople(),
     listIntake(intakeView),
     contractCounts(),
     driveStatus().catch(() => ({ configured: false, authorised: false, reason: 'unknown' })),
@@ -142,6 +145,10 @@ export default async function ContractsPage({
   const rows = pillar
     ? found.filter((c) => (pillars.get(c.id) ?? []).some((l) => l === pillar))
     : found;
+
+  // Who is holding each contract, in one query for the whole list.
+  const delegated = await delegationsForMany('contract', rows.map((c) => c.id));
+  const people = staff.map((p) => ({ id: p.id, label: p.name }));
 
   return (
     <div className="space-y-5">
@@ -291,7 +298,12 @@ export default async function ContractsPage({
           </p>
         ) : layout === 'table' ? (
           <div className="border-t border-line p-[14px]">
-            <ContractGroupedView rows={rows} groupBy={groupBy} />
+            <ContractGroupedView
+              rows={rows}
+              groupBy={groupBy}
+              people={people}
+              delegated={delegated}
+            />
           </div>
         ) : (
           <ul id="contract-list">

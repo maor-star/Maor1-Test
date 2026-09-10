@@ -9,6 +9,8 @@ import {
   type TaskGroup, type TaskGroupBy,
 } from '@/lib/tasks/grouping';
 import { CellDate, CellSelect } from '@/components/tasks/cell-select';
+import { DelegateCell } from '@/components/hud/delegate-cell';
+import type { DelegationMark } from '@/lib/delegation/for-many';
 import { InstantFilter } from '@/components/hud/instant-filter';
 import { Num } from '@/components/num';
 import { foldForSearch } from '@/lib/search';
@@ -30,7 +32,7 @@ import { foldForSearch } from '@/lib/search';
  */
 
 /** The columns, and the width each one gets. Owner and status carry the eye. */
-const COLS = 'minmax(0,1fr) 9rem 9.5rem 8.5rem 8rem 8rem';
+const COLS = 'minmax(0,1fr) 9rem 9.5rem 8.5rem 8rem 8rem 9rem';
 
 export function TaskGroupedView({
   rows,
@@ -38,12 +40,15 @@ export function TaskGroupedView({
   departments,
   groupBy,
   today,
+  delegated,
 }: {
   rows: TaskRow[];
   people: { id: string; label: string }[];
   departments: { id: string; label: string }[];
   groupBy: TaskGroupBy;
   today: string;
+  /** Task id → who is holding it, fetched for the whole list at once. */
+  delegated: Map<string, DelegationMark>;
 }) {
   if (rows.length === 0) {
     return (
@@ -76,6 +81,8 @@ export function TaskGroupedView({
           ownerOptions={ownerOptions}
           deptOptions={deptOptions}
           today={today}
+          people={people}
+          delegated={delegated}
         />
       ))}
       <p className="px-1 text-[12.5px] text-muted">
@@ -95,6 +102,8 @@ function Group({
   ownerOptions,
   deptOptions,
   today,
+  people,
+  delegated,
 }: {
   group: TaskGroup<TaskRow>;
   statusOptions: { value: string; label: string }[];
@@ -102,6 +111,8 @@ function Group({
   ownerOptions: { value: string; label: string }[];
   deptOptions: { value: string; label: string }[];
   today: string;
+  people: { id: string; label: string }[];
+  delegated: Map<string, DelegationMark>;
 }) {
   const [open, setOpen] = useState(true);
   const colour = GROUP_COLOR[group.tone];
@@ -141,7 +152,7 @@ function Group({
             className="hidden border-b border-line px-[14px] py-1.5 md:grid"
             style={{ gridTemplateColumns: COLS }}
           >
-            {['TASK', 'OWNER', 'STATUS', 'PRIORITY', 'DUE', 'DEPARTMENT'].map((h, i) => (
+            {['TASK', 'OWNER', 'STATUS', 'PRIORITY', 'DUE', 'DEPARTMENT', 'DELEGATED TO'].map((h, i) => (
               <span
                 key={h}
                 className={`hud-label text-[10.5px] ${i === 0 ? 'text-start' : 'text-center'}`}
@@ -161,6 +172,8 @@ function Group({
                 ownerOptions={ownerOptions}
                 deptOptions={deptOptions}
                 today={today}
+                people={people}
+                mark={delegated.get(t.id)}
               />
             ))}
           </ul>
@@ -204,6 +217,8 @@ function Row({
   ownerOptions,
   deptOptions,
   today,
+  people,
+  mark,
 }: {
   task: TaskRow;
   statusOptions: { value: string; label: string }[];
@@ -211,6 +226,8 @@ function Row({
   ownerOptions: { value: string; label: string }[];
   deptOptions: { value: string; label: string }[];
   today: string;
+  people: { id: string; label: string }[];
+  mark: DelegationMark | undefined;
 }) {
   const overdue = task.dueDate !== null && task.dueDate < today && task.status !== 'done';
   const statusColour = GROUP_COLOR[toneForStatus(task.status)];
@@ -227,6 +244,8 @@ function Row({
         task.status,
         task.priority,
         task.dueDate,
+        // So searching a colleague's name finds what he handed them.
+        mark?.personName,
         ...task.tags,
       )}
       className="grid items-center gap-x-2 gap-y-1 border-b border-line px-[14px] py-1.5 last:border-b-0 hover:bg-neutral-50 md:gap-y-0"
@@ -290,6 +309,17 @@ function Row({
         options={deptOptions}
         title="Department"
         className="text-[11.5px] text-ink"
+      />
+
+      {/* Whether he passed it on, and to whom. Nothing on the row said this
+          before, so a task he delegated on Tuesday looked exactly like one
+          nobody had touched. */}
+      <DelegateCell
+        mark={mark}
+        entityId={task.id}
+        entityType="task"
+        title={task.title}
+        people={people}
       />
     </li>
   );

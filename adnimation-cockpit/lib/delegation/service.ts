@@ -16,7 +16,16 @@ export const delegateInputSchema = z.object({
   note: z.string().trim().max(5000).nullish(),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
   priority: z.enum(TASK_PRIORITIES).default('P2'),
-  clickupListId: z.string().min(1, 'CLICKUP_DEFAULT_LIST_ID is not configured'),
+  /*
+   * Left in the shape so old callers still parse, but no longer required.
+   *
+   * It gated every hand-over on a ClickUp list id back when delegating also
+   * opened a ticket. It does not any more — "I no longer need to keep ClickUp
+   * up to date, it all stays in my system" — so the only thing this could
+   * still do is refuse a hand-over with an error naming a system he does not
+   * use, on a day somebody cleared the variable.
+   */
+  clickupListId: z.string().optional(),
   backlinkUrl: z.string().url().optional(),
 });
 

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db, delegations, people, tasks } from '@/lib/db';
-import { delegate } from '@/lib/delegation/service';
+import { delegate, delegateInputSchema } from '@/lib/delegation/service';
 import { handoverTitle } from '@/lib/delegation/rules';
 import type { SlackAdapter } from '@/lib/integrations/types';
 
@@ -118,5 +118,42 @@ describe('the row a hand-over leaves behind', () => {
   it('keeps his note as he typed it', async () => {
     const row = await handOver();
     expect(row.note).toBe('צריך ממך החלטה לגבי זה');
+  });
+});
+
+/**
+ * Handing something over from a table row.
+ *
+ * He asked for a DELEGATE TO column "so I know if I passed it on", which puts
+ * a hand-over button on every row of two screens. That made a gate matter that
+ * had been harmless while the only way in was a form: the input still demanded
+ * a ClickUp list id, left over from when delegating also opened a ticket.
+ *
+ * It does not open one any more. So the only thing that requirement could
+ * still do was refuse a hand-over, on a day somebody cleared the variable,
+ * with an error naming a system he told me he had stopped using.
+ */
+describe('what a hand-over needs to be allowed', () => {
+  it('does not ask for a ClickUp list any more', () => {
+    const parsed = delegateInputSchema.safeParse({
+      sourceEntityType: 'task',
+      sourceEntityId: '00000000-0000-4000-8000-000000000000',
+      delegatedTo: '00000000-0000-4000-8000-000000000001',
+      title: 'Something',
+      priority: 'P2',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('still insists on the things a hand-over cannot go out without', () => {
+    // Who it goes to and what it is about are the message. Without them there
+    // is nothing to send.
+    const missingTitle = delegateInputSchema.safeParse({
+      sourceEntityType: 'task',
+      sourceEntityId: '00000000-0000-4000-8000-000000000000',
+      delegatedTo: '00000000-0000-4000-8000-000000000001',
+      title: '   ',
+    });
+    expect(missingTitle.success).toBe(false);
   });
 });
