@@ -8,26 +8,38 @@ import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
 import { SearchBox } from '@/components/hud/search-box';
 import { TaskListView } from '@/components/tasks/list-view';
+import { TaskGroupedView } from '@/components/tasks/grouped-view';
 import { TaskBoardView } from '@/components/tasks/board-view';
 import { TaskCalendarView } from '@/components/tasks/calendar-view';
 import { TaskFilters } from '@/components/tasks/filters';
 import { NewTaskForm } from '@/components/tasks/new-task-form';
 import { linesForMany, PILLAR_OPTIONS } from '@/lib/control/tagging';
 import { PillarFilter } from '@/components/hud/pillar-filter';
+import { GROUP_BY_LABEL, isGroupBy, TASK_GROUP_BYS, type TaskGroupBy } from '@/lib/tasks/grouping';
 
 export const dynamic = 'force-dynamic';
 
-const VIEWS = ['list', 'board', 'calendar'] as const;
+/**
+ * Four ways to read the same tasks.
+ *
+ * `table` is the default and is the one he asked for: rows in groups, the way
+ * he reads them in Monday. `list` is the card stack it replaced — kept because
+ * a card carries the description, the attachments and the money, which no
+ * table row has room for.
+ */
+const VIEWS = ['table', 'list', 'board', 'calendar'] as const;
 type View = (typeof VIEWS)[number];
 
 const VIEW_LABEL: Record<View, string> = {
-  list: 'LIST',
+  table: 'TABLE',
+  list: 'CARDS',
   board: 'BOARD',
   calendar: 'CALENDAR',
 };
 
 interface SearchParams {
   view?: string;
+  group?: string;
   layer?: string;
   q?: string;
   priority?: string;
@@ -44,7 +56,14 @@ export default async function TasksPage({
   searchParams: Promise<SearchParams>;
 }) {
   const sp = await searchParams;
-  const view: View = VIEWS.includes(sp.view as View) ? (sp.view as View) : 'list';
+  const view: View = VIEWS.includes(sp.view as View) ? (sp.view as View) : 'table';
+  /*
+   * Which column the groups come from. Status by default, because that is the
+   * question the screen is usually open to answer — grouping by owner asks who
+   * is carrying what, by due date asks what is late. Same rows, different
+   * question, and it lives in the URL so a narrowed screen is a link.
+   */
+  const groupBy: TaskGroupBy = isGroupBy(sp.group) ? sp.group : 'status';
   // Default to every layer. Every real task now arrives through the ClickUp
   // mirror as `company`, so defaulting to `mine` opened the page on an empty
   // list while 200+ live tasks sat one click away.
@@ -167,12 +186,31 @@ export default async function TasksPage({
         />
       </HudCard>
 
+      {/* Only the table has groups, so the selector only appears with it —
+          a control that does nothing on three views out of four is a control
+          he learns to ignore. */}
+      {view === 'table' ? (
+        <nav className="segmented" aria-label="Group by">
+          {TASK_GROUP_BYS.map((g) => (
+            <Link
+              key={g}
+              href={query({ group: g })}
+              aria-current={g === groupBy ? 'page' : undefined}
+            >
+              {GROUP_BY_LABEL[g]}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
+
       <TaskViewSwitch
         view={view}
         rows={rows}
         people={people.map((p) => ({ id: p.id, label: p.name }))}
         departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
         lines={pillars}
+        groupBy={groupBy}
+        today={todayInTz()}
       />
     </div>
   );
@@ -184,14 +222,29 @@ function TaskViewSwitch({
   people,
   departments,
   lines,
+  groupBy,
+  today,
 }: {
   view: View;
   rows: TaskRow[];
   people: { id: string; label: string }[];
   departments: { id: string; label: string }[];
   lines?: Map<string, string[]>;
+  groupBy: TaskGroupBy;
+  today: string;
 }) {
   if (view === 'board') return <TaskBoardView rows={rows} people={people} departments={departments} />;
-  if (view === 'calendar') return <TaskCalendarView rows={rows} today={todayInTz()} />;
-  return <TaskListView rows={rows} people={people} departments={departments} lines={lines} />;
+  if (view === 'calendar') return <TaskCalendarView rows={rows} today={today} />;
+  if (view === 'list') {
+    return <TaskListView rows={rows} people={people} departments={departments} lines={lines} />;
+  }
+  return (
+    <TaskGroupedView
+      rows={rows}
+      people={people}
+      departments={departments}
+      groupBy={groupBy}
+      today={today}
+    />
+  );
 }
