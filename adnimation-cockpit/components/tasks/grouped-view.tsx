@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import type { TaskRow } from '@/lib/tasks/queries';
-import { TASK_PRIORITIES, TASK_STATUSES, PRIORITY_META, STATUS_LABEL } from '@/lib/tasks/types';
+import { TASK_PRIORITIES, PRIORITY_META, statusOptionsFor } from '@/lib/tasks/types';
 import {
   GROUP_COLOR, groupTasks, toneForPriority, toneForStatus,
   type TaskGroup, type TaskGroupBy,
@@ -11,6 +11,7 @@ import {
 import { CellDate, CellSelect } from '@/components/tasks/cell-select';
 import { DelegateCell } from '@/components/hud/delegate-cell';
 import { StarCell } from '@/components/tasks/star-cell';
+import { QuickEditPanel, QuickEditToggle } from '@/components/tasks/quick-edit';
 import type { DelegationMark } from '@/lib/delegation/for-many';
 import { InstantFilter } from '@/components/hud/instant-filter';
 import { Num } from '@/components/num';
@@ -33,8 +34,8 @@ import { foldForSearch } from '@/lib/search';
  */
 
 /** The columns, and the width each one gets. Owner and status carry the eye. */
-const COLS_OWNER = '2rem minmax(0,1fr) 9rem 9.5rem 8.5rem 8rem 8rem 9rem';
-const COLS_GUEST = 'minmax(0,1fr) 9rem 9.5rem 8.5rem 8rem 8rem 9rem';
+const COLS_OWNER = '2rem minmax(0,1fr) 9rem 9.5rem 8.5rem 8rem 8rem 9rem 1.75rem';
+const COLS_GUEST = 'minmax(0,1fr) 9rem 9.5rem 8.5rem 8rem 8rem 9rem 1.75rem';
 
 export function TaskGroupedView({
   rows,
@@ -69,7 +70,16 @@ export function TaskGroupedView({
 
   const groups = groupTasks(rows, groupBy, today);
 
-  const statusOptions = TASK_STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s] }));
+  /*
+   * Every status on the board is offered, not only the five the cockpit knows.
+   *
+   * Most tasks here are mirrored from ClickUp and carry that list's own words —
+   * MAKE IT HAPPENED and STUCK among them. Offering only the cockpit's five
+   * made a `<select>` whose value matched no option, and a browser shows the
+   * first option when that happens: thirty-one rows read OPEN while holding
+   * something else.
+   */
+  const statusOptions = statusOptionsFor(rows.map((r) => r.status));
   const priorityOptions = TASK_PRIORITIES.map((p) => ({
     value: p,
     label: `${p} ${PRIORITY_META[p].label}`,
@@ -165,11 +175,11 @@ function Group({
             style={{ gridTemplateColumns: canStar ? COLS_OWNER : COLS_GUEST }}
           >
             {(canStar
-              ? ['', 'TASK', 'OWNER', 'STATUS', 'PRIORITY', 'DUE', 'DEPARTMENT', 'DELEGATED TO']
-              : ['TASK', 'OWNER', 'STATUS', 'PRIORITY', 'DUE', 'DEPARTMENT', 'DELEGATED TO']
-            ).map((h, i) => (
+              ? ['', 'TASK', 'OWNER', 'STATUS', 'PRIORITY', 'DUE', 'DEPARTMENT', 'DELEGATED TO', ' ']
+              : ['TASK', 'OWNER', 'STATUS', 'PRIORITY', 'DUE', 'DEPARTMENT', 'DELEGATED TO', ' ']
+            ).map((h) => (
               <span
-                key={h || 'star'}
+                key={h.trim() || (h === '' ? 'star' : 'edit')}
                 className={`hud-label text-[10.5px] ${h === 'TASK' ? 'text-start' : 'text-center'}`}
                 title={h === '' ? 'Private' : undefined}
               >
@@ -248,11 +258,13 @@ function Row({
   mark: DelegationMark | undefined;
   canStar: boolean;
 }) {
+  const [editing, setEditing] = useState(false);
   const overdue = task.dueDate !== null && task.dueDate < today && task.status !== 'done';
   const statusColour = GROUP_COLOR[toneForStatus(task.status)];
   const priorityColour = GROUP_COLOR[toneForPriority(task.priority)];
 
   return (
+    <>
     <li
       data-search={foldForSearch(
         task.title,
@@ -342,6 +354,27 @@ function Row({
         title={task.title}
         people={people}
       />
+
+      {/* Everything the row has no column for — description, next step, start
+          date, tags, money — without leaving the list. */}
+      <QuickEditToggle
+        open={editing}
+        title={task.title}
+        onToggle={() => setEditing((v) => !v)}
+      />
     </li>
+
+    {editing ? (
+      <li className="border-b border-line last:border-b-0">
+        <QuickEditPanel
+          task={task}
+          statusOptions={statusOptions}
+          ownerOptions={ownerOptions}
+          deptOptions={deptOptions}
+          onClose={() => setEditing(false)}
+        />
+      </li>
+    ) : null}
+    </>
   );
 }

@@ -1,4 +1,7 @@
-import { PRIORITY_META, STATUS_LABEL, TASK_PRIORITIES, TASK_STATUSES, type TaskPriority, type TaskStatus } from '@/lib/tasks/types';
+import {
+  PRIORITY_META, statusLabel, TASK_PRIORITIES, TASK_STATUSES,
+  type TaskPriority, type TaskStatus,
+} from '@/lib/tasks/types';
 import {
   buildGroups, buildMix, GROUP_COLOR, UNSET_SORT, type Bucket, type Group, type GroupTone,
 } from '@/lib/hud/grouping';
@@ -58,9 +61,27 @@ const PRIORITY_TONE: Record<TaskPriority, GroupTone> = {
   P3: 'idle',
 };
 
-/** The tone a status carries wherever it is shown. */
-export const toneForStatus = (status: string): GroupTone =>
-  STATUS_TONE[status as TaskStatus] ?? 'idle';
+/**
+ * The tone a status carries wherever it is shown.
+ *
+ * Most statuses on the board come from ClickUp and are not in TASK_STATUSES —
+ * STUCK and MAKE IT HAPPENED are this company's. Falling through to 'idle'
+ * painted a stuck task the same grey as an untouched one, so the words are
+ * read for what they mean before giving up.
+ */
+const TONE_WORDS: [RegExp, GroupTone][] = [
+  [/stuck|block/, 'stuck'],
+  [/progress|doing|active|happen/, 'working'],
+  [/wait|hold|review|pending|delegat/, 'waiting'],
+  [/done|complete|closed|shipped|live/, 'done'],
+];
+
+export const toneForStatus = (status: string): GroupTone => {
+  const known = STATUS_TONE[status as TaskStatus];
+  if (known) return known;
+  const s = status.toLowerCase();
+  return TONE_WORDS.find(([re]) => re.test(s))?.[1] ?? 'idle';
+};
 
 export const toneForPriority = (priority: string): GroupTone =>
   PRIORITY_TONE[priority as TaskPriority] ?? 'idle';
@@ -104,7 +125,7 @@ function bucketOf<T extends Groupable>(row: T, by: TaskGroupBy, today: string): 
       const i = (TASK_STATUSES as readonly string[]).indexOf(row.status);
       return {
         key: row.status,
-        label: STATUS_LABEL[row.status as TaskStatus] ?? row.status.toUpperCase(),
+        label: statusLabel(row.status),
         tone: toneForStatus(row.status),
         sort: String(i === -1 ? 99 : i).padStart(2, '0'),
       };
@@ -163,7 +184,7 @@ export function groupTasks<T extends Groupable>(
 
 /** What a status contributes to a group's bar. */
 const statusMeta = (key: string) => ({
-  label: STATUS_LABEL[key as TaskStatus] ?? key.toUpperCase(),
+  label: statusLabel(key),
   tone: toneForStatus(key),
   order: (() => {
     const i = (TASK_STATUSES as readonly string[]).indexOf(key);

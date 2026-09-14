@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { keepList, shouldMirror, skipPair } from '@/lib/sync/mirror-skip';
+import { keepList, shouldMirror, skipPair, skipSolo } from '@/lib/sync/mirror-skip';
 // @ts-expect-error — the generated job copy is plain ESM with no types.
 import * as js from '@/deploy/mirror-skip.mjs';
 
@@ -25,12 +25,15 @@ describe('mirror skip parity', () => {
   it('agrees on every case, under every setting', () => {
     for (const raw of [undefined, 'mor@adnimation.com,treves@adnimation.com', '']) {
       expect(js.skipPair(raw)).toEqual(skipPair(raw));
+      expect(js.skipSolo(raw)).toEqual(skipSolo(raw));
       expect(js.keepList(raw)).toEqual(keepList(raw));
 
       for (const assignees of CASES) {
-        expect(js.shouldMirror(assignees, js.skipPair(raw)), assignees.join('+')).toBe(
-          shouldMirror(assignees, skipPair(raw)),
-        );
+        expect(js.shouldMirror(assignees), assignees.join('+')).toBe(shouldMirror(assignees));
+        expect(
+          js.shouldMirror(assignees, js.skipPair(raw), js.keepList(), js.skipSolo(raw)),
+          `${assignees.join('+')} @ ${String(raw)}`,
+        ).toBe(shouldMirror(assignees, skipPair(raw), keepList(), skipSolo(raw)));
       }
     }
   });

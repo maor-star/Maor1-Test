@@ -145,8 +145,9 @@ export const TARGETS = [
     test: 'tests/unit/mirror-skip-parity.test.ts',
     rewrites: [
       ['export function skipPair(raw: string | undefined = process.env.TASK_MIRROR_SKIP_PAIR): string[] {', 'export function skipPair(raw = process.env.TASK_MIRROR_SKIP_PAIR) {'],
+      ['export function skipSolo(raw: string | undefined = process.env.TASK_MIRROR_SKIP_SOLO): string[] {', 'export function skipSolo(raw = process.env.TASK_MIRROR_SKIP_SOLO) {'],
       ['export function keepList(raw: string | undefined = process.env.TASK_MIRROR_KEEP): string[] {', 'export function keepList(raw = process.env.TASK_MIRROR_KEEP) {'],
-      [/export function shouldMirror\(\n  assigneeEmails: string\[\],\n  pair: string\[\] = skipPair\(\),\n  keep: string\[\] = keepList\(\),\n\): boolean \{/, 'export function shouldMirror(assigneeEmails, pair = skipPair(), keep = keepList()) {'],
+      [/export function shouldMirror\(\n  assigneeEmails: string\[\],\n  pair: string\[\] = skipPair\(\),\n  keep: string\[\] = keepList\(\),\n  solo: string\[\] = skipSolo\(\),\n\): boolean \{/, 'export function shouldMirror(assigneeEmails, pair = skipPair(), keep = keepList(), solo = skipSolo()) {'],
       ['const parse = (raw: string) =>', 'const parse = (raw) =>'],
     ],
   },

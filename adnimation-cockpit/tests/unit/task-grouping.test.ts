@@ -3,6 +3,7 @@ import {
   dueBucket, groupTasks, isGroupBy, statusMix, TASK_GROUP_BYS, toneForStatus,
   type Groupable,
 } from '@/lib/tasks/grouping';
+import { statusLabel, statusOptionsFor, TASK_STATUSES } from '@/lib/tasks/types';
 
 /**
  * Tasks in groups, the way he reads them in Monday.
@@ -152,5 +153,45 @@ describe('grouping by priority', () => {
       task({ id: '3', priority: 'P2' }),
     ];
     expect(groupTasks(rows, 'priority', TODAY).map((g) => g.key)).toEqual(['P0', 'P2', 'P3']);
+  });
+});
+
+/**
+ * The statuses on this board are not the five the cockpit invented.
+ *
+ * Nearly every task is mirrored from ClickUp and carries that list's own word:
+ * 27 of his are MAKE IT HAPPENED and 4 are STUCK, and neither is in
+ * TASK_STATUSES. A `<select>` whose value matches no option shows the first
+ * option instead — so 31 rows read OPEN while holding something else, and one
+ * click on the cell would have made that true.
+ */
+describe('statuses the cockpit did not invent', () => {
+  it('offers every status the loaded rows are actually in', () => {
+    const options = statusOptionsFor(['open', 'make_it_happened', 'stuck', 'done']);
+    const values = options.map((o) => o.value);
+    expect(values).toContain('make_it_happened');
+    expect(values).toContain('stuck');
+    // And the five it knows, so a task can still be moved to any of them.
+    for (const s of TASK_STATUSES) expect(values).toContain(s);
+  });
+
+  it('lists each status once, with the cockpit\u2019s five first', () => {
+    const values = statusOptionsFor(['done', 'done', 'stuck', 'open']).map((o) => o.value);
+    expect(values.slice(0, TASK_STATUSES.length)).toEqual([...TASK_STATUSES]);
+    expect(values.filter((v) => v === 'done')).toHaveLength(1);
+    expect(new Set(values).size).toBe(values.length);
+  });
+
+  it('reads an unknown status out loud rather than dropping it', () => {
+    expect(statusLabel('make_it_happened')).toBe('MAKE IT HAPPENED');
+    expect(statusLabel('stuck')).toBe('STUCK');
+    expect(statusLabel('in_progress')).toBe('IN PROGRESS');
+  });
+
+  it('colours one by what it means, not by whether the cockpit knows it', () => {
+    expect(toneForStatus('stuck')).toBe('stuck');
+    expect(toneForStatus('make_it_happened')).toBe('working');
+    // Nothing recognisable is still the neutral one rather than a wrong colour.
+    expect(toneForStatus('פנימי')).toBe('idle');
   });
 });

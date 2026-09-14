@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db, tasks } from '@/lib/db';
 import { FakeClickUpAdapter } from '@/lib/integrations/clickup';
-import { editMirroredTask } from '@/lib/tasks/clickup-edit';
+import { editMirroredTask, remoteStatusFor } from '@/lib/tasks/clickup-edit';
 import { purgeFinishedMirror, removeFinished, syncSingleTask } from '@/lib/sync/clickup-mirror';
 
 /**
@@ -195,5 +195,110 @@ describe('the sync, over a task he has taken over', () => {
 
     // ClickUp's task carries no tags, so the mirror's copy goes.
     expect((await reload(row.id)).tags).toEqual([]);
+  });
+});
+
+/**
+ * Moving a mirrored task to another status.
+ *
+ * He moved several tasks to completed and none of them moved. The table's
+ * status cell wrote through the cockpit's own updateTask, which refuses a
+ * mirrored task outright — and 209 of the 222 tasks on his board are mirrored,
+ * so the change failed for all but thirteen of them, silently.
+ */
+describe('moving a mirrored task to another status', () => {
+  it('closes it in ClickUp and mirrors the result', async () => {
+    const row = await seed();
+    const adapter = adapterWith();
+
+    const result = await editMirroredTask(row.id, { status: 'done' }, ACTOR, adapter);
+
+    expect(result.ok).toBe(true);
+    // ClickUp does not have the word "done"; its list says "complete".
+    expect((await adapter.getTask(CLICKUP_ID))?.status).toBe('complete');
+    expect((await reload(row.id)).status).toBe('done');
+  });
+
+  it("moves it to one of this list's own words, not the cockpit's slug", async () => {
+    const row = await seed();
+    const adapter = adapterWith();
+
+    await editMirroredTask(row.id, { status: 'in_progress' }, ACTOR, adapter);
+
+    expect((await adapter.getTask(CLICKUP_ID))?.status).toBe('in progress');
+    expect((await reload(row.id)).status).toBe('in_progress');
+  });
+
+  it("handles a status only this company's list has", async () => {
+    const row = await seed();
+    const adapter = adapterWith();
+
+    const result = await editMirroredTask(row.id, { status: 'make_it_happened' }, ACTOR, adapter);
+
+    expect(result.ok).toBe(true);
+    expect((await adapter.getTask(CLICKUP_ID))?.status).toBe('make it happened');
+    expect((await reload(row.id)).status).toBe('make_it_happened');
+  });
+
+  it('changes nothing here when ClickUp refuses the move', async () => {
+    const row = await seed();
+    const adapter = adapterWith();
+    adapter.failNext = true;
+
+    const result = await editMirroredTask(row.id, { status: 'done' }, ACTOR, adapter);
+
+    expect(result.ok).toBe(false);
+    expect((await reload(row.id)).status).toBe('open');
+  });
+
+  it('says so, and writes nothing, when the list has no such status', async () => {
+    const row = await seed();
+    const adapter = adapterWith();
+
+    const result = await editMirroredTask(row.id, { status: 'delegated' }, ACTOR, adapter);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain('make it happened');
+    expect((await reload(row.id)).status).toBe('open');
+  });
+
+  it('carries the fields ClickUp has nowhere to keep, in the same save', async () => {
+    const row = await seed();
+    const adapter = adapterWith();
+
+    const result = await editMirroredTask(
+      row.id,
+      { status: 'in_progress', nextStep: 'chase the contract', nextStepDate: '2026-10-01' },
+      ACTOR,
+      adapter,
+    );
+
+    expect(result.ok).toBe(true);
+    const after = await reload(row.id);
+    expect(after.status).toBe('in_progress');
+    expect(after.nextStep).toBe('chase the contract');
+    expect(after.nextStepDate).toBe('2026-10-01');
+  });
+});
+
+describe('which of a list\u2019s words means the status he picked', () => {
+  const LIST = ['to do', 'in progress', 'stuck', 'make it happened', 'complete'];
+
+  it('prefers the exact word over one that merely maps to it', () => {
+    expect(remoteStatusFor('open', ['To Do', 'Open'])).toBe('Open');
+    expect(remoteStatusFor('open', ['To Do'])).toBe('To Do');
+  });
+
+  it('finds the list word behind every slug the mirror makes', () => {
+    expect(remoteStatusFor('done', LIST)).toBe('complete');
+    expect(remoteStatusFor('in_progress', LIST)).toBe('in progress');
+    expect(remoteStatusFor('stuck', LIST)).toBe('stuck');
+    expect(remoteStatusFor('make_it_happened', LIST)).toBe('make it happened');
+  });
+
+  it('answers null rather than guessing', () => {
+    expect(remoteStatusFor('delegated', LIST)).toBeNull();
+    expect(remoteStatusFor('done', [])).toBeNull();
+    expect(remoteStatusFor('', LIST)).toBeNull();
   });
 });

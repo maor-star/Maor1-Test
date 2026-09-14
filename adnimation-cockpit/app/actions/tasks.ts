@@ -9,7 +9,8 @@ import {
   addComment, archiveTask, completeTask, createTask, snoozeTask, updateTask,
 } from '@/lib/tasks/mutations';
 import { commentInputSchema, taskInputSchema, taskPatchSchema } from '@/lib/tasks/types';
-import { getTask } from '@/lib/tasks/queries';
+import { getTask, type TaskRow } from '@/lib/tasks/queries';
+import { editMirroredTask } from '@/lib/tasks/clickup-edit';
 import { canEditTask, canSeePrivate, isAccountHolder } from '@/lib/tasks/access';
 import type { CockpitUser } from '@/lib/auth/session';
 
@@ -45,15 +46,24 @@ function fromZod(error: z.ZodError): ActionResult {
  * or was simply not theirs — which is the right answer to give them, but the
  * wrong one to decide on.
  */
-async function mayEdit(user: CockpitUser, id: string): Promise<ActionResult | null> {
+async function forEdit(
+  user: CockpitUser,
+  id: string,
+): Promise<{ error: ActionResult; task?: undefined } | { error?: undefined; task: TaskRow }> {
   const task = await getTask(id, true);
-  if (!task) return { ok: false, error: 'No task with that id' };
+  if (!task) return { error: { ok: false, error: 'No task with that id' } };
   if (!canEditTask(task, user)) {
     // The same words either way, so this never becomes a way to find out that
     // a private task exists.
-    return { ok: false, error: 'No task with that id' };
+    return { error: { ok: false, error: 'No task with that id' } };
   }
-  return null;
+  return { task };
+}
+
+/** The gate on its own, for the mutations that do not need the task itself. */
+async function mayEdit(user: CockpitUser, id: string): Promise<ActionResult | null> {
+  const gate = await forEdit(user, id);
+  return gate.error ?? null;
 }
 
 const parseTags = (raw: FormDataEntryValue | null): string[] =>
@@ -115,13 +125,29 @@ export async function updateTaskAction(formData: FormData): Promise<ActionResult
   const parsed = taskPatchSchema.safeParse(raw);
   if (!parsed.success) return fromZod(parsed.error);
 
-  const denied = await mayEdit(user, parsed.data.id);
-  if (denied) return denied;
+  const gate = await forEdit(user, parsed.data.id);
+  if (gate.error) return gate.error;
 
-  try {
-    await updateTask(parsed.data, user.email);
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Update failed' };
+  /*
+   * Nearly every task on his board is mirrored from ClickUp, and ClickUp stays
+   * the system of record — so an edit to one is written there first and
+   * mirrored only once it is accepted.
+   *
+   * This used to throw instead, which was fine while mirrored tasks were only
+   * edited through their own screen, and stopped being fine the moment the
+   * table let him change a status in the cell: 209 of his 222 tasks are
+   * mirrored, so moving one to done failed silently on all but thirteen.
+   */
+  if (gate.task.layer === 'company') {
+    const { id, ...patch } = parsed.data;
+    const pushed = await editMirroredTask(id, patch, user.email);
+    if (!pushed.ok) return { ok: false, error: pushed.error };
+  } else {
+    try {
+      await updateTask(parsed.data, user.email);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'Update failed' };
+    }
   }
   // Which pillars it belongs to, when the form carried the picker. A form
   // without it leaves the tags alone rather than clearing them — the quick
