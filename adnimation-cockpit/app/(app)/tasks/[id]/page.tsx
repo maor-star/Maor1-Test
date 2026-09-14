@@ -14,6 +14,7 @@ import { ClickUpStatus } from '@/components/tasks/clickup-status';
 import { NudgeButton } from '@/components/tasks/nudge-button';
 import { assigneesOf, chipsFor } from '@/lib/tasks/assignees';
 import { lastNudges } from '@/lib/tasks/nudge';
+import { peopleByUse } from '@/lib/tasks/people-order';
 import { Attachments } from '@/components/attachments';
 import { NewTaskForm } from '@/components/tasks/new-task-form';
 import { DelegateButton } from '@/components/tasks/delegate-button';
@@ -42,6 +43,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
     assigneesOf(id),
     lastNudges([id]),
   ]);
+  const ranked = await peopleByUse();
 
   // A mirrored task has an owner and no picked assignees, so an empty list
   // means the lead alone — the same rule the board's rows use.
@@ -164,7 +166,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                 <div className="border-t pt-2">
                   <NewTaskForm
                     departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
-                    people={peopleOptions}
+                    people={ranked}
                     parentId={task.id}
                   />
                 </div>

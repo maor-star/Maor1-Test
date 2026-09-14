@@ -6,17 +6,28 @@ import { createTaskAction } from '@/app/actions/tasks';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { PRIORITY_META, TASK_PRIORITIES } from '@/lib/tasks/types';
+import { PeoplePicker } from '@/components/tasks/people-picker';
 
-/** Spec 6.1.1 — native task creation, with the fields the heat score needs. */
+/**
+ * Spec 6.1.1 — native task creation, with the fields the heat score needs.
+ *
+ * Who it is for sits on the first row rather than behind MORE FIELDS, because
+ * almost every task he writes here is one he is handing to somebody: burying
+ * the owner two clicks down made the common case the slow one, and left most
+ * new tasks owned by nobody.
+ *
+ * Several people, and the most-used first — see lib/tasks/people-order.ts.
+ */
 export function NewTaskForm({
   departments,
   people,
   parentId,
 }: {
   departments: { id: string; label: string }[];
-  people: { id: string; label: string }[];
+  people: { id: string; label: string; onTasks?: number }[];
   parentId?: string;
 }) {
+  const [assignees, setAssignees] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -35,6 +46,7 @@ export function NewTaskForm({
           setFormError(result.ok ? null : (result.error ?? null));
           if (result.ok) {
             formRef.current?.reset();
+            setAssignees([]);
             setExpanded(false);
             router.refresh();
           }
@@ -72,6 +84,14 @@ export function NewTaskForm({
         </Button>
       </div>
 
+      {/* Whoever it is for. They are told in Slack the moment it is saved. */}
+      <PeoplePicker
+        people={people}
+        value={assignees}
+        onChange={setAssignees}
+        label="Who is on it"
+      />
+
       {expanded ? (
         <div className="grid gap-2 border-t pt-2 md:grid-cols-3">
           <div className="md:col-span-3">
@@ -84,15 +104,6 @@ export function NewTaskForm({
               <option value="">None</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>{d.label}</option>
-              ))}
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="new-task-owner">Owner</Label>
-            <Select id="new-task-owner" name="ownerPersonId" defaultValue="" className="w-full">
-              <option value="">Me</option>
-              {people.map((p) => (
-                <option key={p.id} value={p.id}>{p.label}</option>
               ))}
             </Select>
           </div>

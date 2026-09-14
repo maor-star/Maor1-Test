@@ -148,6 +148,8 @@ export const taskNudges = pgTable(
     taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
     personId: uuid('person_id').notNull().references(() => people.id, { onDelete: 'cascade' }),
     actor: text('actor').notNull(),
+    /** 'nudge' — what's happening with this; 'assigned' — you are on this. */
+    kind: text('kind').notNull().default('nudge'),
     body: text('body').notNull(),
     delivered: boolean('delivered').notNull().default(false),
     error: text('error'),

@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db, tasks } from '@/lib/db';
 import { FakeClickUpAdapter } from '@/lib/integrations/clickup';
-import { db as _db, people } from '@/lib/db';
+import { db as _db, people, taskNudges } from '@/lib/db';
 import { assigneesOf } from '@/lib/tasks/assignees';
+import { FakeSlackAdapter } from '@/lib/integrations/slack';
 
 /**
  * Changing a task from the board, whoever owns it.
@@ -27,6 +28,11 @@ vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
 vi.mock('@/lib/auth/session', () => ({
   requireUser: async () => ({ id: 'u1', email: 'maor@adnimation.com', name: 'Maor', role: 'owner' }),
 }));
+const slack = new FakeSlackAdapter();
+vi.mock('@/lib/integrations/slack', async (orig) => {
+  const real = await orig<typeof import('@/lib/integrations/slack')>();
+  return { ...real, createSlackAdapter: () => slack };
+});
 vi.mock('@/lib/integrations/clickup', async (orig) => {
   const real = await orig<typeof import('@/lib/integrations/clickup')>();
   return { ...real, createClickUpAdapter: () => adapter };
@@ -167,6 +173,37 @@ describe('several people on one task', () => {
   afterEach(async () => {
     for (const id of made) await _db.delete(people).where(eq(people.id, id));
     made.length = 0;
+  });
+
+  it('tells the people it just put on it, and only them', async () => {
+    const row = await seed('mine');
+    const a = await someone('Hey');
+    const b = await someone('Vav');
+    slack.sent.length = 0;
+
+    const first = form({ id: row.id });
+    first.append('assignees', a.id);
+    await updateTaskAction(first);
+    expect(slack.sent).toHaveLength(1);
+
+    // Adding a second person must not re-send to the first.
+    const second = form({ id: row.id });
+    second.append('assignees', a.id);
+    second.append('assignees', b.id);
+    await updateTaskAction(second);
+
+    expect(slack.sent).toHaveLength(2);
+    expect(slack.sent[1]?.text).toContain('Close the seat lease');
+
+    // And re-saving with the same people says nothing at all.
+    const third = form({ id: row.id });
+    third.append('assignees', a.id);
+    third.append('assignees', b.id);
+    await updateTaskAction(third);
+    expect(slack.sent).toHaveLength(2);
+
+    await _db.delete(taskNudges).where(eq(taskNudges.taskId, row.id));
+    await _db.delete(tasks).where(eq(tasks.id, row.id));
   });
 
   it('saves everyone, and makes the first of them the lead', async () => {

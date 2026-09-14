@@ -11,7 +11,8 @@ import {
 import { commentInputSchema, taskInputSchema, taskPatchSchema } from '@/lib/tasks/types';
 import { getTask, type TaskRow } from '@/lib/tasks/queries';
 import { editMirroredTask } from '@/lib/tasks/clickup-edit';
-import { setAssignees } from '@/lib/tasks/assignees';
+import { assigneesOf, setAssignees } from '@/lib/tasks/assignees';
+import { notifyAssigned, senderIdentity } from '@/lib/tasks/nudge';
 import { canEditTask, canSeePrivate, isAccountHolder } from '@/lib/tasks/access';
 import type { CockpitUser } from '@/lib/auth/session';
 
@@ -94,6 +95,10 @@ export async function createTaskAction(formData: FormData): Promise<ActionResult
   if (!isAccountHolder(user) && user.taskLevel !== 'edit') {
     return { ok: false, error: 'You have view-only access to this board' };
   }
+  // Several people, the first of them the lead — same rule as the board's.
+  const picked = formData.has('assignees') ? formData.getAll('assignees').map(String) : null;
+  const lead = picked?.find((id) => id.trim() !== '') ?? null;
+
   const parsed = taskInputSchema.safeParse({
     title: formData.get('title'),
     description: formData.get('description'),
@@ -104,7 +109,7 @@ export async function createTaskAction(formData: FormData): Promise<ActionResult
     nextStep: formData.get('nextStep'),
     nextStepDate: formData.get('nextStepDate'),
     deptId: formData.get('deptId'),
-    ownerPersonId: formData.get('ownerPersonId'),
+    ownerPersonId: lead ?? formData.get('ownerPersonId'),
     parentId: formData.get('parentId'),
     tags: parseTags(formData.get('tags')),
     moneyImpactCents: parseMoney(formData.get('moneyImpact')),
@@ -114,6 +119,33 @@ export async function createTaskAction(formData: FormData): Promise<ActionResult
   if (!parsed.success) return fromZod(parsed.error);
 
   const task = await createTask(parsed.data, user.email);
+
+  // Everyone the form put on it, and the first of them as the lead.
+  if (picked) {
+    const lead = await setAssignees(task.id, picked);
+    if (lead !== parsed.data.ownerPersonId) {
+      await updateTask({ id: task.id, ownerPersonId: lead }, user.email);
+    }
+    const told = await notifyAssigned(
+      task.id,
+      picked.filter((id) => id.trim() !== ''),
+      user.email,
+      { sender: await senderIdentity(user.email) },
+    ).catch(() => []);
+    const failed = told.filter((t) => !t.ok);
+    if (failed.length > 0) {
+      return {
+        ok: true,
+        id: task.id,
+        notice: `Saved. Slack did not reach everyone — ${failed
+          .map((f) =>
+            f.error === 'no_slack_id' ? `${f.name} has no Slack account on file` : `${f.name}: ${f.error}`,
+          )
+          .join('; ')}.`,
+      };
+    }
+  }
+
   revalidatePath('/tasks');
   revalidatePath('/');
   return { ok: true, id: task.id };
@@ -147,7 +179,20 @@ export async function updateTaskAction(formData: FormData): Promise<ActionResult
   const gate = await forEdit(user, parsed.data.id);
   if (gate.error) return gate.error;
 
-  if (picked) await setAssignees(parsed.data.id, picked);
+  /*
+   * Whoever he has just put on it is told in Slack, and only them.
+   *
+   * Who was already on it is read BEFORE the write, because "new" is the
+   * difference between the two — re-saving a task or moving its due date must
+   * not send the same hand-over again to somebody who has had it a week. That
+   * is how a message people read becomes a message people mute.
+   */
+  let newcomers: string[] = [];
+  if (picked) {
+    const before = new Set((await assigneesOf(parsed.data.id)).map((p) => p.id));
+    await setAssignees(parsed.data.id, picked);
+    newcomers = picked.filter((id) => id.trim() !== '' && !before.has(id));
+  }
 
   /*
    * Nearly every task on his board is mirrored from ClickUp, and until now an
@@ -174,6 +219,23 @@ export async function updateTaskAction(formData: FormData): Promise<ActionResult
   // untag the task.
   if (formData.has('lines')) {
     await setLines('task', parsed.data.id, formData.getAll('lines').map(String), user.email);
+  }
+
+  // After the write, so the message describes the task as it now is — the due
+  // date he set in the same save is in it.
+  if (newcomers.length > 0) {
+    const told = await notifyAssigned(parsed.data.id, newcomers, user.email, {
+      sender: await senderIdentity(user.email),
+    }).catch(() => []);
+    const failed = told.filter((t) => !t.ok);
+    if (failed.length > 0) {
+      const explain = failed
+        .map((f) =>
+          f.error === 'no_slack_id' ? `${f.name} has no Slack account on file` : `${f.name}: ${f.error}`,
+        )
+        .join('; ');
+      notice = notice ? `${notice} ${explain}` : `Saved. Slack did not reach everyone — ${explain}.`;
+    }
   }
 
   revalidatePath('/tasks');

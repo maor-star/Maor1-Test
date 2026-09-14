@@ -3,7 +3,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { db, people, taskAssignees, taskNudges, tasks } from '@/lib/db';
 import { FakeSlackAdapter } from '@/lib/integrations/slack';
 import { assigneesForMany, assigneesOf, chipsFor, setAssignees } from '@/lib/tasks/assignees';
-import { lastNudges, nudgeMessage, nudgeTask } from '@/lib/tasks/nudge';
+import { assignedMessage, lastNudges, notifyAssigned, nudgeMessage, nudgeTask } from '@/lib/tasks/nudge';
 
 /**
  * Several people on one task, and the chase that follows.
@@ -222,4 +222,105 @@ afterEach(async () => {
   if (madeTasks.length > 0) {
     await db.delete(taskAssignees).where(inArray(taskAssignees.taskId, madeTasks));
   }
+});
+
+/**
+ * Being put on a task is news, and has to arrive as news.
+ *
+ * Adding a name to a row told nobody anything: the person found out they owned
+ * something when he chased them about it, so the chase was the first they had
+ * heard of the work — which reads as an accusation rather than a hand-over.
+ */
+describe('telling somebody he has put them on a task', () => {
+  it('sends the hand-over with the task in it', async () => {
+    const { maor, tomer, t } = await scene();
+    await setAssignees(t.id, [maor.id, tomer.id]);
+    const slack = new FakeSlackAdapter();
+
+    const told = await notifyAssigned(t.id, [tomer.id], ACTOR, { slack });
+
+    expect(told).toHaveLength(1);
+    expect(told[0]?.ok).toBe(true);
+    expect(slack.sent).toHaveLength(1);
+    expect(slack.sent[0]?.target).toBe('U-TOMER');
+    expect(slack.sent[0]?.text).toContain('Close the seat lease');
+    expect(slack.sent[0]?.text).toContain('לטיפולך בבקשה ועדכן');
+    // And who else is carrying it, so they know who to talk to.
+    expect(slack.sent[0]?.text).toContain(`Maor${STAMP}`);
+  });
+
+  it('tells only the new name, not everybody again', async () => {
+    const { maor, tomer, t } = await scene();
+    await setAssignees(t.id, [maor.id, tomer.id]);
+    const slack = new FakeSlackAdapter();
+
+    await notifyAssigned(t.id, [tomer.id], ACTOR, { slack });
+
+    expect(slack.sent.map((m) => m.target)).toEqual(['U-TOMER']);
+  });
+
+  it('says nothing at all about a starred task', async () => {
+    const { maor, t } = await scene();
+    await db.update(tasks).set({ isPrivate: true }).where(eq(tasks.id, t.id));
+    await setAssignees(t.id, [maor.id]);
+    const slack = new FakeSlackAdapter();
+
+    const told = await notifyAssigned(t.id, [maor.id], ACTOR, { slack });
+
+    // The star means it is his alone; announcing it in Slack is out of his
+    // hands the moment it is sent.
+    expect(told).toEqual([]);
+    expect(slack.sent).toHaveLength(0);
+  });
+
+  it('records somebody it could not reach rather than reporting it sent', async () => {
+    const { silent, t } = await scene();
+    await setAssignees(t.id, [silent.id]);
+    const slack = new FakeSlackAdapter();
+
+    const told = await notifyAssigned(t.id, [silent.id], ACTOR, { slack });
+
+    expect(told[0]?.ok).toBe(false);
+    expect(told[0]?.error).toBe('no_slack_id');
+    const stored = await db.select().from(taskNudges).where(eq(taskNudges.taskId, t.id));
+    expect(stored[0]?.kind).toBe('assigned');
+  });
+
+  /*
+   * The ASK button says "last asked". Counting the hand-over that created the
+   * task would have it claim he had chased somebody he had only just told.
+   */
+  it('does not count as having chased them', async () => {
+    const { maor, t } = await scene();
+    await setAssignees(t.id, [maor.id]);
+    const slack = new FakeSlackAdapter();
+
+    await notifyAssigned(t.id, [maor.id], ACTOR, { slack });
+
+    expect((await lastNudges([t.id])).get(t.id)).toBeUndefined();
+
+    await nudgeTask(t.id, ACTOR, null, { slack });
+    expect((await lastNudges([t.id])).get(t.id)).toBeDefined();
+  });
+
+  it('carries the due date and the next step, and leaves out what is not set', () => {
+    const full = assignedMessage(
+      { title: 'Seat lease', status: 'open', priority: 'P1', dueDate: '2026-10-05', nextStep: 'send terms' },
+      ['Mor Azagury'],
+      'https://cockpit.example/tasks/1',
+    );
+    expect(full).toContain('*עד:* 2026-10-05');
+    expect(full).toContain('send terms');
+    expect(full).toContain('Mor Azagury');
+    expect(full).toContain('https://cockpit.example/tasks/1');
+
+    const bare = assignedMessage(
+      { title: 'Seat lease', status: 'open', priority: 'P1', dueDate: null, nextStep: null },
+      [],
+      null,
+    );
+    expect(bare).not.toContain('עד:');
+    expect(bare).not.toContain('גם על זה');
+    expect(bare).toContain('תודה,\nמאור');
+  });
 });

@@ -24,6 +24,7 @@ import { canManageAccess, canSeePrivate } from '@/lib/tasks/access';
 import { listGrants } from '@/lib/tasks/access-service';
 import { TaskAccessPanel } from '@/components/tasks/access-panel';
 import { pendingInvites } from '@/lib/tasks/invite-service';
+import { peopleByUse } from '@/lib/tasks/people-order';
 
 export const dynamic = 'force-dynamic';
 
@@ -126,11 +127,14 @@ export default async function TasksPage({
   // Which pillars each task belongs to, and who is holding it — one query
   // each for the whole list rather than one per row.
   const ids = all.map((r) => r.id);
-  const [pillars, delegated, assignees, nudges] = await Promise.all([
+  const [pillars, delegated, assignees, nudges, ranked] = await Promise.all([
     linesForMany('task', ids),
     delegationsForMany('task', ids),
     assigneesForMany(ids),
     lastNudges(ids),
+    // The team in the order he actually uses them, so the picker opens on the
+    // four names that carry the board rather than on the alphabet.
+    peopleByUse(),
   ]);
 
   // Only one of the seven, and only if it is one of the seven.
@@ -220,7 +224,7 @@ export default async function TasksPage({
         <HudCardHeader title="New task" index="T02" />
         <NewTaskForm
           departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
-          people={people.map((p) => ({ id: p.id, label: p.name }))}
+          people={ranked}
         />
       </HudCard>
 
@@ -244,7 +248,7 @@ export default async function TasksPage({
       <TaskViewSwitch
         view={view}
         rows={rows}
-        people={people.map((p) => ({ id: p.id, label: p.name }))}
+        people={ranked}
         departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
         lines={pillars}
         groupBy={groupBy}

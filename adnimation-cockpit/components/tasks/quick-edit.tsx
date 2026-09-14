@@ -8,6 +8,7 @@ import { Input, Select, Textarea } from '@/components/ui/input';
 import { PRIORITY_META, TASK_PRIORITIES } from '@/lib/tasks/types';
 import type { AssigneeChip } from '@/lib/tasks/assignee-chip';
 import { InviteToTask } from '@/components/tasks/invite-to-task';
+import { PeoplePicker } from '@/components/tasks/people-picker';
 
 /**
  * The whole task, edited from its row.
@@ -56,7 +57,7 @@ export function QuickEditPanel({
 }: {
   task: QuickEditTask;
   statusOptions: { value: string; label: string }[];
-  people: { id: string; label: string }[];
+  people: { id: string; label: string; onTasks?: number }[];
   /** Who is on it now — the boxes that start ticked. */
   assignees: AssigneeChip[];
   deptOptions: { value: string; label: string }[];
@@ -184,42 +185,9 @@ export function QuickEditPanel({
         </Field>
       </div>
 
-      {/*
-        Several people on one task, because most of them are. The first one
-        ticked is the lead — the name the row sorts under and the one the heat
-        score reads — so the order is shown rather than left to be guessed.
-      */}
-      <fieldset className="space-y-1">
-        <legend className="hud-label text-[10.5px]">
-          On this task {picked.length > 1 ? `· ${picked.length} people, first is lead` : ''}
-        </legend>
-        <div className="flex flex-wrap gap-1.5">
-          {people.map((p) => {
-            const at = picked.indexOf(p.id);
-            const on = at !== -1;
-            return (
-              <button
-                key={p.id}
-                type="button"
-                aria-pressed={on}
-                onClick={() =>
-                  setPicked((cur) =>
-                    cur.includes(p.id) ? cur.filter((id) => id !== p.id) : [...cur, p.id],
-                  )
-                }
-                className={`rounded-full border px-2.5 py-1 text-[12px] ${
-                  on
-                    ? 'border-accent bg-accent/10 font-semibold text-accent'
-                    : 'border-line text-muted hover:bg-neutral-100'
-                }`}
-              >
-                {on && picked.length > 1 ? `${at + 1}. ` : ''}
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
-      </fieldset>
+      {/* Several people on one task, because most of them are — ordered by who
+          he actually hands work to rather than by name. */}
+      <PeoplePicker people={people} value={picked} onChange={setPicked} />
 
       {/* Somebody outside the cockpit, sent this task and a way in to see it. */}
       {canInvite ? <InviteToTask taskId={task.id} isPrivate={task.isPrivate} /> : null}

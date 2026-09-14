@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import { db, collaboratorLogins, people, taskAccess, taskInvites, tasks } from '@/lib/db';
 import { inviteLetter } from '@/lib/tasks/invite-message';
 import { setAssignees } from '@/lib/tasks/assignees';

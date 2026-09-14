@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db, people, taskNudges, tasks } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 import { createSlackAdapter } from '@/lib/integrations/slack';
@@ -30,6 +30,48 @@ import { assigneesOf } from './assignees';
 
 /** His words. The same ones the hand-over uses, asking the other question. */
 export const NUDGE_BODY = 'מה קורה עם זה?';
+
+/**
+ * What somebody is told when he puts them on a task.
+ *
+ * Adding a name to a row is not a notification. Until this existed, the person
+ * found out they owned something when he chased them about it — so the chase
+ * was the first they had heard of the work, which is the wrong way round and
+ * reads as an accusation.
+ *
+ * His wording, the same as the hand-over: over to you please, and let me know.
+ * The task travels with it — the title, what state it is in, when it is due
+ * and the next move — because a message saying only "you have a new task"
+ * sends the person looking for it.
+ */
+export function assignedMessage(
+  task: {
+    title: string;
+    status: string;
+    priority: string;
+    dueDate: string | null;
+    nextStep: string | null;
+  },
+  others: string[],
+  link: string | null,
+): string {
+  const facts: string[] = [];
+  if (task.dueDate) facts.push(`*עד:* ${task.dueDate}`);
+  if (others.length > 0) facts.push(`*גם על זה:* ${others.join(', ')}`);
+
+  return [
+    `*${task.title.trim()}*`,
+    '',
+    'לטיפולך בבקשה ועדכן.',
+    task.nextStep?.trim() ? `\n*הצעד הבא:* ${task.nextStep.trim()}` : '',
+    facts.length > 0 ? `\n${facts.join('\n')}` : '',
+    link ? `\n${link}` : '',
+    '',
+    'תודה,\nמאור',
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+}
 
 export function nudgeMessage(title: string, note?: string | null): string {
   return [
@@ -104,6 +146,114 @@ async function signer(): Promise<{ slack: SlackAdapter; asHimself: boolean }> {
     return { slack: createSlackAdapter(userToken), asHimself: true };
   }
   return { slack: createSlackAdapter(), asHimself: false };
+}
+
+/**
+ * Telling the people he just put on a task that they are on it.
+ *
+ * Only the NEW names. Re-saving a task, or changing its due date, must not
+ * send the same message again to somebody who has had it for a week — that is
+ * how a useful message becomes one people mute.
+ *
+ * A failure here never fails the assignment. He has already decided who is on
+ * the task; Slack being unreachable is worth recording and worth showing, and
+ * is not a reason to refuse the edit.
+ */
+export async function notifyAssigned(
+  taskId: string,
+  personIds: string[],
+  actor: string,
+  deps?: { slack?: SlackAdapter; asHimself?: boolean; sender?: { name: string; iconUrl?: string } },
+): Promise<NudgeOutcome[]> {
+  if (personIds.length === 0) return [];
+
+  const [task] = await db
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      status: tasks.status,
+      priority: tasks.priority,
+      dueDate: tasks.dueDate,
+      nextStep: tasks.nextStep,
+      isPrivate: tasks.isPrivate,
+    })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+  if (!task) return [];
+
+  /*
+   * A starred task is his alone. Putting somebody on one is a contradiction he
+   * is allowed to make — they may be helping quietly — but the cockpit must
+   * not then announce it in Slack, where it is out of his hands for good.
+   */
+  if (task.isPrivate) return [];
+
+  const everyone = await assigneesOf(taskId);
+  const newcomers = everyone.filter((p) => personIds.includes(p.id));
+  if (newcomers.length === 0) return [];
+
+  const chosen = deps?.slack
+    ? { slack: deps.slack, asHimself: deps.asHimself ?? false }
+    : await signer();
+
+  const base = process.env.APP_URL ?? process.env.AUTH_URL ?? null;
+  const link = base ? `${base.replace(/\/+$/, '')}/tasks/${task.id}` : null;
+
+  const sent: NudgeOutcome[] = [];
+  for (const person of newcomers) {
+    const body = assignedMessage(
+      task,
+      everyone.filter((p) => p.id !== person.id).map((p) => p.name),
+      link,
+    );
+
+    if (!person.slackId) {
+      sent.push({ personId: person.id, name: person.name, ok: false, error: 'no_slack_id' });
+      await record(task.id, person.id, actor, body, chosen.asHimself, {
+        ok: false,
+        messageUrl: null,
+        error: 'no_slack_id',
+      }, 'assigned');
+      continue;
+    }
+
+    const result = await chosen.slack
+      .postMessage({
+        target: person.slackId,
+        text: body,
+        ...(chosen.asHimself
+          ? {}
+          : {
+              username: deps?.sender?.name ?? 'מאור',
+              ...(deps?.sender?.iconUrl ? { iconUrl: deps.sender.iconUrl } : { icon: ':wave:' }),
+            }),
+      })
+      .catch((e: unknown) => ({
+        ok: false as const,
+        messageUrl: null,
+        error: e instanceof Error ? e.message : 'unknown',
+      }));
+
+    sent.push({
+      personId: person.id,
+      name: person.name,
+      ok: result.ok,
+      ...(result.ok ? { messageUrl: result.messageUrl } : { error: result.error }),
+    });
+    await record(task.id, person.id, actor, body, chosen.asHimself, result, 'assigned');
+  }
+
+  await writeAudit({
+    actor,
+    action: 'task.assigned_notified',
+    entityType: 'task',
+    entityId: task.id,
+    before: null,
+    after: { to: sent.map((s) => ({ name: s.name, ok: s.ok, error: s.error })) },
+  });
+
+  return sent;
 }
 
 export async function nudgeTask(
@@ -194,11 +344,13 @@ async function record(
   body: string,
   asHimself: boolean,
   result: { ok: boolean; messageUrl?: string | null; error?: string; channelId?: string | null; ts?: string | null },
+  kind: 'nudge' | 'assigned' = 'nudge',
 ): Promise<void> {
   await db.insert(taskNudges).values({
     taskId,
     personId,
     actor,
+    kind,
     body,
     asHimself,
     delivered: result.ok,
@@ -235,7 +387,10 @@ export async function lastNudges(taskIds: string[]): Promise<Map<string, NudgeMa
     })
     .from(taskNudges)
     .innerJoin(people, eq(people.id, taskNudges.personId))
-    .where(inArray(taskNudges.taskId, taskIds))
+    // Chases only. The button says "last asked", and counting the hand-over
+    // that created the task would have it claim he had already chased somebody
+    // he had only just told.
+    .where(and(inArray(taskNudges.taskId, taskIds), eq(taskNudges.kind, 'nudge')))
     .orderBy(desc(taskNudges.sentAt));
 
   for (const row of rows) {
