@@ -22,6 +22,13 @@ import { verifyPassword } from '@/lib/auth/password';
 /** Public surfaces: auth endpoints, webhooks and the Inngest handler. */
 const PUBLIC_PREFIXES = [
   '/login',
+  /*
+   * Taking up an invitation happens before there is any session to check —
+   * that is the whole point of it. The page itself proves nothing by being
+   * reachable: it shows nothing until the token in the URL resolves to a live
+   * invitation, and answers the same way for every kind of invalid one.
+   */
+  '/join',
   '/api/auth',
   '/api/webhooks',
   '/api/inngest',

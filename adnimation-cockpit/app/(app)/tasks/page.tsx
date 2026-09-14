@@ -23,6 +23,7 @@ import { requireUser } from '@/lib/auth/session';
 import { canManageAccess, canSeePrivate } from '@/lib/tasks/access';
 import { listGrants } from '@/lib/tasks/access-service';
 import { TaskAccessPanel } from '@/components/tasks/access-panel';
+import { pendingInvites } from '@/lib/tasks/invite-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -120,6 +121,7 @@ export default async function TasksPage({
    * list a guest should be able to read.
    */
   const grants = canManageAccess(viewer) ? await listGrants() : [];
+  const invites = canManageAccess(viewer) ? await pendingInvites() : [];
 
   // Which pillars each task belongs to, and who is holding it — one query
   // each for the whole list rather than one per row.
@@ -169,6 +171,7 @@ export default async function TasksPage({
             {canManageAccess(viewer) ? (
               <TaskAccessPanel
                 grants={grants}
+                invites={invites}
                 people={people
                   .filter((p) => !p.email.endsWith('@slack.local'))
                   .map((p) => ({ id: p.id, label: p.name, email: p.email }))}

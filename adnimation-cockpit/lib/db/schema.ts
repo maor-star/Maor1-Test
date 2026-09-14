@@ -161,6 +161,59 @@ export const taskNudges = pgTable(
   (t) => [index('idx_task_nudges_task').on(t.taskId, t.sentAt)],
 );
 
+/**
+ * An invitation to the tasks board.
+ *
+ * Granting access already worked and still got nobody in: a grant is half a
+ * door, and the cockpit's only sign-in was a password provider that accepts
+ * the owner address alone. So the invitation carries a one-time link, the
+ * person sets their own password behind it, and that is what they sign in
+ * with — no OAuth client and no admin console in the way.
+ *
+ * Only the hash of the token is kept. A link sitting in somebody's inbox is a
+ * credential, and storing the credential itself would hand over every pending
+ * invitation to anybody who can read one row.
+ */
+export const taskInvites = pgTable(
+  'task_invites',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    email: text('email').notNull(),
+    name: text('name'),
+    level: text('level').notNull().default('view'),
+    /** The task it was sent about, when it was sent from one. */
+    taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'set null' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    invitedBy: text('invited_by').notNull(),
+    note: text('note'),
+    sentAt: timestamptz('sent_at'),
+    sendError: text('send_error'),
+    expiresAt: timestamptz('expires_at').notNull(),
+    acceptedAt: timestamptz('accepted_at'),
+    revokedAt: timestamptz('revoked_at'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('idx_task_invites_email').on(t.email)],
+);
+
+/**
+ * The account an invited person builds for themselves.
+ *
+ * Deliberately not the `users` table: that one holds the two real accounts,
+ * whose role reads the whole cockpit. This holds a password and nothing else,
+ * and it opens exactly one door — whatever `task_access` says at the moment of
+ * each sign-in, so revoking a grant locks them out the same minute rather than
+ * when their session happens to expire.
+ */
+export const collaboratorLogins = pgTable('collaborator_logins', {
+  email: text('email').primaryKey(),
+  name: text('name').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  inviteId: uuid('invite_id'),
+  createdAt: timestamptz('created_at').notNull().defaultNow(),
+  lastLoginAt: timestamptz('last_login_at'),
+});
+
 export const taskComments = pgTable('task_comments', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),

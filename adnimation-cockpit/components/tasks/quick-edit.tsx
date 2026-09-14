@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { PRIORITY_META, TASK_PRIORITIES } from '@/lib/tasks/types';
 import type { AssigneeChip } from '@/lib/tasks/assignee-chip';
+import { InviteToTask } from '@/components/tasks/invite-to-task';
 
 /**
  * The whole task, edited from its row.
@@ -41,6 +42,7 @@ export interface QuickEditTask {
   tags: string[];
   moneyImpactCents: number | null;
   layer: 'mine' | 'company';
+  isPrivate: boolean;
 }
 
 export function QuickEditPanel({
@@ -49,6 +51,7 @@ export function QuickEditPanel({
   people,
   assignees,
   deptOptions,
+  canInvite,
   onClose,
 }: {
   task: QuickEditTask;
@@ -57,6 +60,8 @@ export function QuickEditPanel({
   /** Who is on it now — the boxes that start ticked. */
   assignees: AssigneeChip[];
   deptOptions: { value: string; label: string }[];
+  /** Only the owner hands out access, so only he sees the way to. */
+  canInvite: boolean;
   onClose: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -215,6 +220,9 @@ export function QuickEditPanel({
           })}
         </div>
       </fieldset>
+
+      {/* Somebody outside the cockpit, sent this task and a way in to see it. */}
+      {canInvite ? <InviteToTask taskId={task.id} isPrivate={task.isPrivate} /> : null}
 
       {error ? <p className="text-[12.5px] text-neg">{error}</p> : null}
       {notice ? <p className="text-[12.5px] text-warn">{notice}</p> : null}

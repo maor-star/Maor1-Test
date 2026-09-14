@@ -1,14 +1,58 @@
 import NextAuth from 'next-auth';
+import Credentials from 'next-auth/providers/credentials';
 import { eq } from 'drizzle-orm';
 import { authConfig } from '@/auth.config';
 import { isAllowedEmail, roleForEmail } from '@/lib/auth/allowlist';
+import { verifyPassword } from '@/lib/auth/password';
 
 /**
  * Node-runtime Auth.js instance. Extends the edge-safe config in
- * `auth.config.ts` with the one callback that needs database access.
+ * `auth.config.ts` with the parts that need database access.
+ *
+ * The password provider is one of them now. The edge copy accepts the owner
+ * address and nothing else, which is all it can do without a database — and
+ * that was the whole reason granting somebody access got them nowhere: the
+ * grant stored, the middleware honoured it, and there was no way for them to
+ * obtain a session, because Google OAuth is not configured on this server so
+ * that button is not even drawn.
+ *
+ * This one accepts the owner OR somebody who took up an invitation and chose
+ * their own password. Same provider id, so the sign-in form is unchanged, and
+ * this definition is the one that runs: Auth.js authorises credentials in the
+ * route handler, which is this instance and never the middleware.
  */
+const password = Credentials({
+  id: 'password',
+  name: 'Password',
+  credentials: {
+    email: { label: 'Email', type: 'email' },
+    password: { label: 'Password', type: 'password' },
+  },
+  async authorize(raw) {
+    const email = String(raw?.email ?? '').trim().toLowerCase();
+    const secret = String(raw?.password ?? '');
+    if (!email || !secret) return null;
+
+    const owner = process.env.OWNER_EMAIL?.trim().toLowerCase();
+    if (owner && email === owner) {
+      // The owner is still gated on the allowlist, so the two real accounts
+      // never depend on a table being readable to get in.
+      if (!isAllowedEmail(email, process.env.ALLOWED_EMAILS)) return null;
+      if (!(await verifyPassword(secret, process.env.OWNER_PASSWORD_HASH))) return null;
+      return { id: email, email, name: process.env.OWNER_NAME ?? email };
+    }
+
+    const { verifyCollaborator } = await import('@/lib/tasks/invite-service');
+    const person = await verifyCollaborator(email, secret).catch(() => null);
+    // A correct password is not a key on its own: signIn below still asks
+    // whether they have a live grant, so revoking one shuts the door at once.
+    return person ? { id: person.email, email: person.email, name: person.name } : null;
+  },
+});
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  providers: [password, ...authConfig.providers.filter((p) => p.id !== 'password')],
   callbacks: {
     ...authConfig.callbacks,
 

@@ -389,6 +389,7 @@ function Row({
           people={people}
           assignees={on}
           deptOptions={deptOptions}
+          canInvite={canStar}
           onClose={() => setEditing(false)}
         />
       </li>
