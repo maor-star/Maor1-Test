@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { nudgeTaskAction } from '@/app/actions/task-nudge';
@@ -30,11 +30,26 @@ export function NudgeButton({
   compact?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
+  const [armed, setArmed] = useState(false);
   const [said, setSaid] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const router = useRouter();
 
+  /*
+   * It asks twice, because the second half of this button is a Slack message
+   * to a colleague and there is no taking one back. One press arms it and says
+   * who it is about to reach; the next sends. It disarms itself after a few
+   * seconds so an armed button he walked away from is not left waiting for a
+   * stray click.
+   */
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 5000);
+    return () => clearTimeout(t);
+  }, [armed]);
+
   const send = () => {
+    setArmed(false);
     const data = new FormData();
     data.set('taskId', taskId);
     setSaid(null);
@@ -58,7 +73,7 @@ export function NudgeButton({
     <span className="inline-flex flex-col items-center gap-0.5">
       <button
         type="button"
-        onClick={send}
+        onClick={() => (armed ? send() : setArmed(true))}
         disabled={disabled}
         title={
           people.length === 0
@@ -67,12 +82,21 @@ export function NudgeButton({
                 ago ? `. Last asked ${ago}.` : ''
               }`
         }
-        className={`rounded-[5px] border border-line px-1.5 py-1 text-[10.5px] font-semibold uppercase tracking-[0.06em] ${
-          disabled ? 'cursor-not-allowed text-muted opacity-50' : 'text-info hover:bg-info/10'
+        className={`rounded-[5px] border px-1.5 py-1 text-[10.5px] font-semibold uppercase tracking-[0.06em] ${
+          disabled
+            ? 'cursor-not-allowed border-line text-muted opacity-50'
+            : armed
+              ? 'border-accent bg-accent text-white'
+              : 'border-line text-info hover:bg-info/10'
         }`}
       >
-        {pending ? '…' : compact ? 'מה קורה?' : 'ASK'}
+        {pending ? '…' : armed ? 'SEND' : compact ? 'מה קורה?' : 'ASK'}
       </button>
+      {armed && !pending ? (
+        <span className="text-[10px] text-accent">
+          → {people.map((p) => p.name).join(', ')}
+        </span>
+      ) : null}
       {said ? <span className="text-[10px] text-pos">{said}</span> : null}
       {problem ? (
         <span className="max-w-[10rem] text-[10px] text-neg" title={problem}>
