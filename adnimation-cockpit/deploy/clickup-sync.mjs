@@ -160,19 +160,35 @@ async function main() {
                 ${dueDate}, ${msToDate(toMs(t.start_date))}, ${tags}, ${ownerPersonId}, ${deptId},
                 ${heat(priority, dueDate, ownerPersonId !== null, now)}, 'manual', ${now}, ${now})
         on conflict (clickup_id) do update set
-          clickup_url = excluded.clickup_url, title = excluded.title,
-          description = excluded.description, status = excluded.status,
-          priority = excluded.priority, due_date = excluded.due_date,
-          start_date = excluded.start_date,
+          clickup_url = excluded.clickup_url,
           /*
            * What he has taken over stays his.
            *
-           * A department he filed the task under, an owner he assigned here or
-           * a tag he added exists nowhere in ClickUp — so writing ClickUp's
-           * version back over his would clear it at the next poll, five
-           * minutes after he set it, with nothing on screen to say why. The
-           * row names which of its fields the cockpit owns.
+           * It used to be three fields — the tags, the owner and the
+           * department — because those existed nowhere in ClickUp and nothing
+           * else was his to keep. It is every field he edits now: he does not
+           * work in ClickUp any more, so a title or a status he set here must
+           * survive the poll, or it is quietly rolled back five minutes later
+           * with nothing on screen to say why. The row names which of its
+           * fields the cockpit owns, and a field is named only once he has
+           * actually set it — so everything he has not touched still follows
+           * ClickUp, and the team's work still arrives.
+           *
+           * A task ClickUp CLOSES is still marked done below whatever is
+           * pinned: the team finishing something is news, not a revert.
            */
+          title = case when 'title' = any(tasks.pinned_fields)
+                       then tasks.title else excluded.title end,
+          description = case when 'description' = any(tasks.pinned_fields)
+                             then tasks.description else excluded.description end,
+          status = case when 'status' = any(tasks.pinned_fields)
+                        then tasks.status else excluded.status end,
+          priority = case when 'priority' = any(tasks.pinned_fields)
+                          then tasks.priority else excluded.priority end,
+          due_date = case when 'dueDate' = any(tasks.pinned_fields)
+                          then tasks.due_date else excluded.due_date end,
+          start_date = case when 'startDate' = any(tasks.pinned_fields)
+                            then tasks.start_date else excluded.start_date end,
           tags = case when 'tags' = any(tasks.pinned_fields)
                       then tasks.tags else excluded.tags end,
           owner_person_id = case when 'ownerPersonId' = any(tasks.pinned_fields)

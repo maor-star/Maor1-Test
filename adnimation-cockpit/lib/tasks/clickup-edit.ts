@@ -9,21 +9,27 @@ import type { TaskPriority } from './types';
 /**
  * Editing a task that came from ClickUp.
  *
- * The company layer used to be read-only here, which was defensible when the
- * cockpit could only read ClickUp — and it made most of his own task list a
- * screen he could look at and not use. So:
+ * This used to write to ClickUp FIRST and keep the edit here only once ClickUp
+ * accepted it, on the reasoning that ClickUp was the system of record and a
+ * cockpit showing an edit the team never saw was the worse failure.
  *
- * · The fields ClickUp owns — title, description, priority, due date — are
- *   written there first, and mirrored only once ClickUp accepts them. If it
- *   refuses, nothing changes here either: a cockpit showing an edit the team
- *   never sees is worse than an edit that failed loudly.
- * · The status is written there too, but it needs translating first: the
- *   cockpit's word for a status is a slug, and ClickUp only accepts one of the
- *   words its own list defines. See remoteStatusFor.
- * · The fields ClickUp has nowhere to keep — the department he filed it under,
- *   the owner he assigned here, his tags, the money he attached — are written
- *   here and pinned, so the next poll stops overwriting them. Without that,
- *   what he set would be gone five minutes later with nothing to show why.
+ * That reasoning is spent. "I don't have to update ClickUp because I don't
+ * update there any more" — the cockpit is where he works, so an edit of his
+ * failing because a ClickUp list does not have a matching word, or because a
+ * token lapsed, is a task that did not move for a reason that is no longer
+ * about his business. So the order is now the other way round:
+ *
+ * · The edit is written here, always. It is his system and his edit.
+ * · ClickUp is TOLD, best effort. If it takes the change the team sees it; if
+ *   it refuses, that is reported back for the screen to mention and nothing
+ *   here is undone.
+ * · Every field he sets is pinned, so the next poll cannot quietly revert it.
+ *   That is what makes the first rule true five minutes later: without it, a
+ *   push that failed would be silently rolled back by the sync.
+ *
+ * One thing the poll still wins: a task ClickUp has CLOSED is marked done here
+ * regardless of pinning, because that happens outside this upsert path (see
+ * removeFinished). The team closing something is news, not a revert.
  */
 export interface MirroredTaskPatch {
   title?: string;
@@ -39,6 +45,18 @@ export interface MirroredTaskPatch {
   tags?: string[];
   moneyImpactCents?: number | null;
 }
+
+/**
+ * The fields worth pinning when he sets them.
+ *
+ * Everything ClickUp and the cockpit both hold. The fields only the cockpit
+ * has — next step, its date, the money — need no pin, because the mirror's
+ * upsert does not write them at all.
+ */
+const PIN_ON_EDIT = [
+  'title', 'description', 'priority', 'status', 'dueDate', 'startDate',
+  'deptId', 'ownerPersonId', 'tags',
+] as const;
 
 /**
  * Which of a ClickUp list's own words means the status he picked.
@@ -61,12 +79,23 @@ export function remoteStatusFor(target: string, listStatuses: readonly string[])
   return listStatuses.find((s) => mapClickUpStatus(s) === want) ?? null;
 }
 
+export interface MirroredEditResult {
+  ok: true;
+  /** The fields ClickUp took. */
+  pushed: string[];
+  /**
+   * Why ClickUp did not take the rest, if it did not. The edit is saved either
+   * way — this is for the screen to mention, not to fail on.
+   */
+  clickupError?: string;
+}
+
 export async function editMirroredTask(
   taskId: string,
   patch: MirroredTaskPatch,
   actor: string,
   adapter: ClickUpAdapter = createClickUpAdapter(),
-): Promise<{ ok: true; pushed: string[] } | { ok: false; error: string }> {
+): Promise<MirroredEditResult | { ok: false; error: string }> {
   const [row] = await db
     .select()
     .from(tasks)
@@ -91,60 +120,59 @@ export async function editMirroredTask(
     remote.dueDateMs = patch.dueDate ? Date.parse(`${patch.dueDate}T23:59:00+03:00`) : null;
   }
 
+  const troubles: string[] = [];
+  const pushed: string[] = [];
+
   if (Object.keys(remote).length > 0) {
     const result = await adapter.updateTask(row.clickupId, remote).catch((e: unknown) => ({
       ok: false as const,
       error: e instanceof Error ? e.message : 'unknown',
     }));
-    if (!result.ok) {
-      return {
-        ok: false,
-        error: `ClickUp rejected the edit: ${result.error ?? 'unknown'}. Nothing was changed here either.`,
-      };
-    }
+    if (result.ok) pushed.push(...Object.keys(remote));
+    else troubles.push(`it would not take the edit (${result.error ?? 'unknown'})`);
   }
 
   /*
    * The status is its own call: ClickUp has a separate endpoint for it, and it
    * only takes one of the words this task's list defines.
    *
-   * What is stored here is whatever the mirror makes of the word ClickUp
-   * confirms — not the word he picked — so the row says what ClickUp says even
-   * when the list's spelling differs from the cockpit's slug.
+   * What is stored here is what HE picked. It used to be whatever the mirror
+   * made of ClickUp's confirmation, which was right while ClickUp decided —
+   * and is wrong now that it does not: a push that fails would have left the
+   * cell showing the old status with no explanation.
    */
-  let storedStatus: string | undefined;
   if (patch.status !== undefined && patch.status !== row.status) {
     const listStatuses = await adapter.listStatuses(row.clickupId).catch(() => [] as string[]);
     const word = remoteStatusFor(patch.status, listStatuses);
     if (word === null) {
-      return {
-        ok: false,
-        error:
-          listStatuses.length === 0
-            ? 'ClickUp would not say which statuses this task\u2019s list allows, so the status was left alone.'
-            : `This task\u2019s ClickUp list has no status like \u201C${patch.status}\u201D. It offers: ${listStatuses.join(', ')}.`,
-      };
+      troubles.push(
+        listStatuses.length === 0
+          ? 'it would not say which statuses this list allows, so the status was not sent'
+          : `its list here has no status like “${patch.status}” (it offers ${listStatuses.join(', ')})`,
+      );
+    } else {
+      const moved = await adapter.setTaskStatus(row.clickupId, word).catch((e: unknown) => ({
+        ok: false as const,
+        status: null,
+        error: e instanceof Error ? e.message : 'unknown',
+      }));
+      if (moved.ok) pushed.push('status');
+      else troubles.push(`it would not move the status (${moved.error ?? 'unknown'})`);
     }
-    const moved = await adapter.setTaskStatus(row.clickupId, word).catch((e: unknown) => ({
-      ok: false as const,
-      status: null,
-      error: e instanceof Error ? e.message : 'unknown',
-    }));
-    if (!moved.ok) {
-      return {
-        ok: false,
-        error: `ClickUp rejected the status change: ${moved.error ?? 'unknown'}. Nothing was changed here either.`,
-      };
-    }
-    storedStatus = mapClickUpStatus(moved.status ?? word);
   }
 
+  /*
+   * Everything he touched becomes his.
+   *
+   * Without this the sync would revert, five minutes later and with nothing on
+   * screen to say why, exactly the edits ClickUp declined — which is the case
+   * this rewrite exists to survive. Pinning only what the patch carried keeps
+   * the rest of the row following ClickUp, so the team's work still arrives.
+   */
   const pinned = new Set(row.pinnedFields);
-  if (patch.deptId !== undefined && patch.deptId !== row.deptId) pinned.add('deptId');
-  if (patch.ownerPersonId !== undefined && patch.ownerPersonId !== row.ownerPersonId) {
-    pinned.add('ownerPersonId');
+  for (const field of PIN_ON_EDIT) {
+    if (patch[field] !== undefined) pinned.add(field);
   }
-  if (patch.tags !== undefined && patch.tags.join('|') !== row.tags.join('|')) pinned.add('tags');
 
   await writeAudit({
     actor,
@@ -162,11 +190,7 @@ export async function editMirroredTask(
       tags: row.tags,
       moneyImpactCents: row.moneyImpactCents,
     },
-    after: {
-      ...patch,
-      ...(storedStatus !== undefined ? { status: storedStatus } : {}),
-      pushedToClickUp: [...Object.keys(remote), ...(storedStatus !== undefined ? ['status'] : [])],
-    },
+    after: { ...patch, pushedToClickUp: pushed, clickupRefused: troubles },
   });
 
   await db
@@ -175,10 +199,8 @@ export async function editMirroredTask(
       ...(patch.title !== undefined ? { title: patch.title } : {}),
       ...(patch.description !== undefined ? { description: patch.description } : {}),
       ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
-      ...(storedStatus !== undefined ? { status: storedStatus } : {}),
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
       ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate } : {}),
-      // ClickUp has nowhere to keep these, and the mirror's upsert does not
-      // write them, so they simply stay put across a poll without pinning.
       ...(patch.startDate !== undefined ? { startDate: patch.startDate } : {}),
       ...(patch.nextStep !== undefined ? { nextStep: patch.nextStep } : {}),
       ...(patch.nextStepDate !== undefined ? { nextStepDate: patch.nextStepDate } : {}),
@@ -189,12 +211,16 @@ export async function editMirroredTask(
         ? { moneyImpactCents: patch.moneyImpactCents }
         : {}),
       pinnedFields: [...pinned],
+      lastTouchAt: new Date(),
       updatedAt: new Date(),
     })
     .where(eq(tasks.id, row.id));
 
   return {
     ok: true,
-    pushed: [...Object.keys(remote), ...(storedStatus !== undefined ? ['status'] : [])],
+    pushed,
+    ...(troubles.length > 0
+      ? { clickupError: `Saved here. ClickUp was not updated — ${troubles.join('; ')}.` }
+      : {}),
   };
 }

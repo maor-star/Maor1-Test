@@ -17,6 +17,8 @@ import { linesForMany, PILLAR_OPTIONS } from '@/lib/control/tagging';
 import { PillarFilter } from '@/components/hud/pillar-filter';
 import { GROUP_BY_LABEL, isGroupBy, TASK_GROUP_BYS, type TaskGroupBy } from '@/lib/tasks/grouping';
 import { delegationsForMany, type DelegationMark } from '@/lib/delegation/for-many';
+import { assigneesForMany, type AssigneeChip } from '@/lib/tasks/assignees';
+import { lastNudges, type NudgeMark } from '@/lib/tasks/nudge';
 import { requireUser } from '@/lib/auth/session';
 import { canManageAccess, canSeePrivate } from '@/lib/tasks/access';
 import { listGrants } from '@/lib/tasks/access-service';
@@ -122,9 +124,11 @@ export default async function TasksPage({
   // Which pillars each task belongs to, and who is holding it — one query
   // each for the whole list rather than one per row.
   const ids = all.map((r) => r.id);
-  const [pillars, delegated] = await Promise.all([
+  const [pillars, delegated, assignees, nudges] = await Promise.all([
     linesForMany('task', ids),
     delegationsForMany('task', ids),
+    assigneesForMany(ids),
+    lastNudges(ids),
   ]);
 
   // Only one of the seven, and only if it is one of the seven.
@@ -243,6 +247,8 @@ export default async function TasksPage({
         groupBy={groupBy}
         today={todayInTz()}
         delegated={delegated}
+        assignees={assignees}
+        nudges={nudges}
         canStar={canManageAccess(viewer)}
       />
     </div>
@@ -258,6 +264,8 @@ function TaskViewSwitch({
   groupBy,
   today,
   delegated,
+  assignees,
+  nudges,
   canStar,
 }: {
   view: View;
@@ -268,6 +276,8 @@ function TaskViewSwitch({
   groupBy: TaskGroupBy;
   today: string;
   delegated: Map<string, DelegationMark>;
+  assignees: Map<string, AssigneeChip[]>;
+  nudges: Map<string, NudgeMark>;
   canStar: boolean;
 }) {
   if (view === 'board') return <TaskBoardView rows={rows} people={people} departments={departments} />;
@@ -283,6 +293,8 @@ function TaskViewSwitch({
       groupBy={groupBy}
       today={today}
       delegated={delegated}
+      assignees={assignees}
+      nudges={nudges}
       canStar={canStar}
     />
   );

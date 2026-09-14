@@ -11,6 +11,9 @@ import { HeatBar, OverdueChip, PriorityBadge, StatusBadge, TaskTitleLink } from 
 import { CommentForm } from '@/components/tasks/comment-form';
 import { EditTaskForm } from '@/components/tasks/edit-task-form';
 import { ClickUpStatus } from '@/components/tasks/clickup-status';
+import { NudgeButton } from '@/components/tasks/nudge-button';
+import { assigneesOf, chipsFor } from '@/lib/tasks/assignees';
+import { lastNudges } from '@/lib/tasks/nudge';
 import { Attachments } from '@/components/attachments';
 import { NewTaskForm } from '@/components/tasks/new-task-form';
 import { DelegateButton } from '@/components/tasks/delegate-button';
@@ -31,13 +34,18 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
   const task = await getTask(id, mine);
   if (!task) notFound();
 
-  const [subtasks, comments, departments, people] = await Promise.all([
+  const [subtasks, comments, departments, people, assigned, nudged] = await Promise.all([
     getSubtasks(id, mine),
     listComments(id),
     listDepartments(),
     listPeople(),
+    assigneesOf(id),
+    lastNudges([id]),
   ]);
 
+  // A mirrored task has an owner and no picked assignees, so an empty list
+  // means the lead alone — the same rule the board's rows use.
+  const onIt = chipsFor(task, assigned);
   const isMirror = task.layer === 'company';
   const peopleOptions = people.map((p) => ({ id: p.id, label: p.name }));
 
@@ -49,10 +57,19 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
             ← ALL TASKS
           </Link>
           <h1 className="mt-0.5 text-base font-semibold">{task.title}</h1>
+          {/* The same one button as on the board: a Slack DM to each person on
+              it, in his name, asking what is happening. */}
+          <div className="mt-1.5">
+            <NudgeButton
+              taskId={task.id}
+              people={onIt}
+              lastAsked={nudged.get(task.id)?.sentAt ?? null}
+            />
+          </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <PriorityBadge priority={task.priority} />
             <StatusBadge status={task.status} />
-            {isMirror ? <Tag tone="outline">CLICKUP — READ ONLY</Tag> : null}
+            {isMirror ? <Tag tone="outline">MIRRORED FROM CLICKUP</Tag> : null}
             {isZombie(task.snoozeCount) ? (
               <Tag tone="watch" title={`Snoozed ${task.snoozeCount} times`}>Zombie</Tag>
             ) : null}
@@ -164,7 +181,12 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
             <div>
               <dl className="space-y-1.5 text-xs">
                 <Field label="Department" value={task.deptNameHe ?? '—'} />
-                <Field label="Owner" value={task.ownerName ?? 'Unowned'} />
+                {/* Everyone on it, not only the first — the row on the board
+                    says the same thing, and the two must not disagree. */}
+                <Field
+                  label={onIt.length > 1 ? 'On it' : 'Owner'}
+                  value={onIt.length > 0 ? onIt.map((p) => p.name).join(', ') : 'Unowned'}
+                />
                 <Field label="Money impact" value={fmtMoney(task.moneyImpactCents)} ltr />
                 <Field label="Source" value={task.source} ltr />
                 <Field label="Snoozed" value={`${task.snoozeCount} times`} />

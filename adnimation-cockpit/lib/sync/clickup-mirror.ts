@@ -209,11 +209,27 @@ async function loadDepartments(): Promise<Map<string, string>> {
 /**
  * The fields the cockpit may take over on a mirrored task.
  *
- * Everything else on the row is ClickUp's and is rewritten on every poll —
- * which is right: the team's edits must not be silently reverted by a stale
- * copy here.
+ * It used to be three — the department, the tags and the owner — on the
+ * reasoning that everything else was ClickUp's and had to be rewritten on
+ * every poll, because the team's edits must not be reverted by a stale copy
+ * here.
+ *
+ * That held while he worked in ClickUp too. He does not: "I don't have to
+ * update ClickUp because I don't update there any more." So an edit he makes
+ * here is his, and the poll must leave it alone — otherwise a title or a
+ * status ClickUp would not take gets quietly rolled back five minutes later,
+ * which is the whole failure this is meant to end.
+ *
+ * A field is pinned only once he actually sets it, so everything he has not
+ * touched still follows ClickUp and the team's work still arrives. And a task
+ * ClickUp CLOSES is still marked done regardless — that happens in
+ * removeFinished, not here, because the team finishing something is news
+ * rather than a revert.
  */
-export const PINNABLE = ['deptId', 'tags', 'ownerPersonId'] as const;
+export const PINNABLE = [
+  'title', 'description', 'priority', 'status', 'dueDate', 'startDate',
+  'deptId', 'tags', 'ownerPersonId',
+] as const;
 export type Pinnable = (typeof PINNABLE)[number];
 
 async function upsert(
@@ -264,25 +280,36 @@ async function upsert(
    * them five minutes after he set them, with nothing to show what happened.
    */
   const [existing] = await db
-    .select({ pinned: tasks.pinnedFields, deptId: tasks.deptId, tags: tasks.tags, ownerPersonId: tasks.ownerPersonId })
+    .select()
     .from(tasks)
     .where(eq(tasks.clickupId, row.clickupId))
     .limit(1);
 
-  const pinned = new Set(existing?.pinned ?? []);
-  const update = { ...values };
-  if (pinned.has('deptId')) update.deptId = existing?.deptId ?? null;
-  if (pinned.has('tags')) update.tags = existing?.tags ?? [];
-  if (pinned.has('ownerPersonId')) {
-    update.ownerPersonId = existing?.ownerPersonId ?? null;
-    // Heat depends on whether a task is owned, so it follows the owner he set.
+  /*
+   * A pinned field simply does not take part in the update.
+   *
+   * Dropping it from the SET is the whole mechanism, and it is done by name
+   * rather than field by field so that pinning a new column later needs no
+   * second edit here — the previous version honoured exactly three names and
+   * silently ignored anything else that was pinned.
+   */
+  const pinned = new Set<string>(existing?.pinnedFields ?? []);
+  const update: Record<string, unknown> = { ...values };
+  for (const field of PINNABLE) {
+    if (pinned.has(field)) delete update[field];
+  }
+
+  // Heat reads the priority and the owner, so it follows whichever of those
+  // survived rather than ClickUp's copy of both.
+  if (pinned.has('ownerPersonId') || pinned.has('priority') || pinned.has('dueDate')) {
     update.heatScore = computeHeat(
       {
-        priority: row.priority,
-        dueDate: row.dueDate,
+        priority: (pinned.has('priority') ? existing?.priority : row.priority) ?? row.priority,
+        dueDate: (pinned.has('dueDate') ? existing?.dueDate : row.dueDate) ?? null,
         moneyImpactCents: null,
         blockedPeople: [],
-        ownerPersonId: update.ownerPersonId,
+        ownerPersonId:
+          (pinned.has('ownerPersonId') ? existing?.ownerPersonId : ownerPersonId) ?? null,
       },
       now,
     );

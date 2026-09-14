@@ -6,6 +6,7 @@ import { updateTaskAction } from '@/app/actions/tasks';
 import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { PRIORITY_META, TASK_PRIORITIES } from '@/lib/tasks/types';
+import type { AssigneeChip } from '@/lib/tasks/assignee-chip';
 
 /**
  * The whole task, edited from its row.
@@ -39,24 +40,28 @@ export interface QuickEditTask {
   ownerPersonId: string | null;
   tags: string[];
   moneyImpactCents: number | null;
-  /** Mirrored tasks are written to ClickUp first; the panel says so. */
   layer: 'mine' | 'company';
 }
 
 export function QuickEditPanel({
   task,
   statusOptions,
-  ownerOptions,
+  people,
+  assignees,
   deptOptions,
   onClose,
 }: {
   task: QuickEditTask;
   statusOptions: { value: string; label: string }[];
-  ownerOptions: { value: string; label: string }[];
+  people: { id: string; label: string }[];
+  /** Who is on it now — the boxes that start ticked. */
+  assignees: AssigneeChip[];
   deptOptions: { value: string; label: string }[];
   onClose: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string[]>(() => assignees.map((a) => a.id));
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -73,14 +78,28 @@ export function QuickEditPanel({
   const save = (form: HTMLFormElement) => {
     const data = new FormData(form);
     data.set('id', task.id);
+    /*
+     * Always sent, even when empty — an absent field means "leave it alone" to
+     * the action, so taking the last person off a task has to arrive as an
+     * empty list rather than as nothing at all. FormData carries no empty
+     * multi-value, so one blank entry stands in for it.
+     */
+    data.delete('assignees');
+    if (picked.length === 0) data.append('assignees', '');
+    else for (const id of picked) data.append('assignees', id);
+
     setError(null);
+    setNotice(null);
     startTransition(async () => {
       const result = await updateTaskAction(data);
       if (!result.ok) {
         setError(result.error ?? 'That did not save');
         return;
       }
-      onClose();
+      // Saved — but ClickUp may not have taken its copy, which is worth saying
+      // and is not a reason to keep the panel open.
+      if (result.notice) setNotice(result.notice);
+      else onClose();
       router.refresh();
     });
   };
@@ -128,15 +147,6 @@ export function QuickEditPanel({
           </Select>
         </Field>
 
-        <Field label="Owner">
-          <Select name="ownerPersonId" defaultValue={task.ownerPersonId ?? ''}>
-            {ownerOptions.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
         <Field label="Department">
           <Select name="deptId" defaultValue={task.deptId ?? ''}>
             {deptOptions.map((o) => (
@@ -169,12 +179,50 @@ export function QuickEditPanel({
         </Field>
       </div>
 
+      {/*
+        Several people on one task, because most of them are. The first one
+        ticked is the lead — the name the row sorts under and the one the heat
+        score reads — so the order is shown rather than left to be guessed.
+      */}
+      <fieldset className="space-y-1">
+        <legend className="hud-label text-[10.5px]">
+          On this task {picked.length > 1 ? `· ${picked.length} people, first is lead` : ''}
+        </legend>
+        <div className="flex flex-wrap gap-1.5">
+          {people.map((p) => {
+            const at = picked.indexOf(p.id);
+            const on = at !== -1;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                aria-pressed={on}
+                onClick={() =>
+                  setPicked((cur) =>
+                    cur.includes(p.id) ? cur.filter((id) => id !== p.id) : [...cur, p.id],
+                  )
+                }
+                className={`rounded-full border px-2.5 py-1 text-[12px] ${
+                  on
+                    ? 'border-accent bg-accent/10 font-semibold text-accent'
+                    : 'border-line text-muted hover:bg-neutral-100'
+                }`}
+              >
+                {on && picked.length > 1 ? `${at + 1}. ` : ''}
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
+
       {error ? <p className="text-[12.5px] text-neg">{error}</p> : null}
+      {notice ? <p className="text-[12.5px] text-warn">{notice}</p> : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
         <span className="text-[11.5px] text-muted">
           {task.layer === 'company'
-            ? 'Mirrored from ClickUp — written there first, and kept here only once it accepts.'
+            ? 'Saved here, and ClickUp is told. It stays yours either way.'
             : 'Yours, saved here.'}
         </span>
         <span className="flex gap-2">

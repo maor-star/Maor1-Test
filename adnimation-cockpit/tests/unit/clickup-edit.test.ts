@@ -93,16 +93,38 @@ describe('editing a mirrored ClickUp task', () => {
     expect(after.dueDate).toBe('2026-10-05');
   });
 
-  it('changes nothing here when ClickUp refuses', async () => {
+  /*
+   * "I don't have to update ClickUp because I don't update there any more."
+   *
+   * This used to assert the opposite — that a refusal from ClickUp undid the
+   * edit here — on the reasoning that a cockpit showing an edit the team never
+   * saw was the worse failure. It is not the worse failure any more: he works
+   * here, so an edit of his lost to a lapsed token is.
+   */
+  it('keeps the edit when ClickUp refuses, and says ClickUp was not updated', async () => {
     const row = await seed();
     const adapter = adapterWith();
     adapter.failNextUpdate = true;
 
     const result = await editMirroredTask(row.id, { title: 'Renamed' }, ACTOR, adapter);
 
-    expect(result.ok).toBe(false);
-    // The whole point: he must not believe the team was told.
-    expect((await reload(row.id)).title).toBe('Ship the bidder integration');
+    expect(result.ok).toBe(true);
+    expect((await reload(row.id)).title).toBe('Renamed');
+    if (result.ok) expect(result.clickupError).toContain('ClickUp was not updated');
+  });
+
+  it('pins what he set, so the next poll cannot revert it', async () => {
+    const row = await seed();
+    const adapter = adapterWith();
+    adapter.failNextUpdate = true;
+
+    await editMirroredTask(row.id, { title: 'Renamed' }, ACTOR, adapter);
+    // ClickUp still says the old title; the poll must leave his alone.
+    await syncSingleTask(adapter, CLICKUP_ID);
+
+    const after = await reload(row.id);
+    expect(after.title).toBe('Renamed');
+    expect(after.pinnedFields).toContain('title');
   });
 
   it('sends only what changed', async () => {
@@ -240,26 +262,30 @@ describe('moving a mirrored task to another status', () => {
     expect((await reload(row.id)).status).toBe('make_it_happened');
   });
 
-  it('changes nothing here when ClickUp refuses the move', async () => {
+  it('still moves it here when ClickUp refuses the move', async () => {
     const row = await seed();
     const adapter = adapterWith();
     adapter.failNext = true;
 
     const result = await editMirroredTask(row.id, { status: 'done' }, ACTOR, adapter);
 
-    expect(result.ok).toBe(false);
-    expect((await reload(row.id)).status).toBe('open');
+    expect(result.ok).toBe(true);
+    expect((await reload(row.id)).status).toBe('done');
+    if (result.ok) expect(result.clickupError).toContain('status');
   });
 
-  it('says so, and writes nothing, when the list has no such status', async () => {
+  it('takes a status this list does not have, and says ClickUp was not told', async () => {
     const row = await seed();
     const adapter = adapterWith();
 
     const result = await editMirroredTask(row.id, { status: 'delegated' }, ACTOR, adapter);
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain('make it happened');
-    expect((await reload(row.id)).status).toBe('open');
+    expect(result.ok).toBe(true);
+    expect((await reload(row.id)).status).toBe('delegated');
+    if (result.ok) expect(result.clickupError).toContain('make it happened');
+    // And the poll must not put it back to ClickUp's word for it.
+    await syncSingleTask(adapter, CLICKUP_ID);
+    expect((await reload(row.id)).status).toBe('delegated');
   });
 
   it('carries the fields ClickUp has nowhere to keep, in the same save', async () => {

@@ -12,6 +12,10 @@ import { CellDate, CellSelect } from '@/components/tasks/cell-select';
 import { DelegateCell } from '@/components/hud/delegate-cell';
 import { StarCell } from '@/components/tasks/star-cell';
 import { QuickEditPanel, QuickEditToggle } from '@/components/tasks/quick-edit';
+import { AssigneeCell } from '@/components/tasks/assignee-cell';
+import { NudgeButton } from '@/components/tasks/nudge-button';
+import { chipsFor, type AssigneeChip } from '@/lib/tasks/assignee-chip';
+import type { NudgeMark } from '@/lib/tasks/nudge';
 import type { DelegationMark } from '@/lib/delegation/for-many';
 import { InstantFilter } from '@/components/hud/instant-filter';
 import { Num } from '@/components/num';
@@ -34,8 +38,8 @@ import { foldForSearch } from '@/lib/search';
  */
 
 /** The columns, and the width each one gets. Owner and status carry the eye. */
-const COLS_OWNER = '2rem minmax(0,1fr) 9rem 9.5rem 8.5rem 8rem 8rem 9rem 1.75rem';
-const COLS_GUEST = 'minmax(0,1fr) 9rem 9.5rem 8.5rem 8rem 8rem 9rem 1.75rem';
+const COLS_OWNER = '2rem minmax(0,1fr) 9rem 9.5rem 8.5rem 8rem 8rem 9rem 5rem 1.75rem';
+const COLS_GUEST = 'minmax(0,1fr) 9rem 9.5rem 8.5rem 8rem 8rem 9rem 5rem 1.75rem';
 
 export function TaskGroupedView({
   rows,
@@ -44,6 +48,8 @@ export function TaskGroupedView({
   groupBy,
   today,
   delegated,
+  assignees,
+  nudges,
   canStar,
 }: {
   rows: TaskRow[];
@@ -53,6 +59,10 @@ export function TaskGroupedView({
   today: string;
   /** Task id → who is holding it, fetched for the whole list at once. */
   delegated: Map<string, DelegationMark>;
+  /** Task id → everyone on it. Empty means the lead alone; see chipsFor. */
+  assignees: Map<string, AssigneeChip[]>;
+  /** Task id → when he last asked what was happening with it. */
+  nudges: Map<string, NudgeMark>;
   /**
    * Whether the star is his to press. Only the owner marks a task private, so
    * for anyone else the column is not there at all rather than disabled — a
@@ -84,7 +94,6 @@ export function TaskGroupedView({
     value: p,
     label: `${p} ${PRIORITY_META[p].label}`,
   }));
-  const ownerOptions = [{ value: '', label: 'UNASSIGNED' }, ...people.map((p) => ({ value: p.id, label: p.label }))];
   const deptOptions = [{ value: '', label: 'NO DEPARTMENT' }, ...departments.map((d) => ({ value: d.id, label: d.label }))];
 
   return (
@@ -97,11 +106,12 @@ export function TaskGroupedView({
           group={g}
           statusOptions={statusOptions}
           priorityOptions={priorityOptions}
-          ownerOptions={ownerOptions}
           deptOptions={deptOptions}
           today={today}
           people={people}
           delegated={delegated}
+          assignees={assignees}
+          nudges={nudges}
           canStar={canStar}
         />
       ))}
@@ -119,21 +129,23 @@ function Group({
   group,
   statusOptions,
   priorityOptions,
-  ownerOptions,
   deptOptions,
   today,
   people,
   delegated,
+  assignees,
+  nudges,
   canStar,
 }: {
   group: TaskGroup<TaskRow>;
   statusOptions: { value: string; label: string }[];
   priorityOptions: { value: string; label: string }[];
-  ownerOptions: { value: string; label: string }[];
   deptOptions: { value: string; label: string }[];
   today: string;
   people: { id: string; label: string }[];
   delegated: Map<string, DelegationMark>;
+  assignees: Map<string, AssigneeChip[]>;
+  nudges: Map<string, NudgeMark>;
   canStar: boolean;
 }) {
   const [open, setOpen] = useState(true);
@@ -175,8 +187,8 @@ function Group({
             style={{ gridTemplateColumns: canStar ? COLS_OWNER : COLS_GUEST }}
           >
             {(canStar
-              ? ['', 'TASK', 'OWNER', 'STATUS', 'PRIORITY', 'DUE', 'DEPARTMENT', 'DELEGATED TO', ' ']
-              : ['TASK', 'OWNER', 'STATUS', 'PRIORITY', 'DUE', 'DEPARTMENT', 'DELEGATED TO', ' ']
+              ? ['', 'TASK', 'ON IT', 'STATUS', 'PRIORITY', 'DUE', 'DEPARTMENT', 'DELEGATED TO', 'ASK', ' ']
+              : ['TASK', 'ON IT', 'STATUS', 'PRIORITY', 'DUE', 'DEPARTMENT', 'DELEGATED TO', 'ASK', ' ']
             ).map((h) => (
               <span
                 key={h.trim() || (h === '' ? 'star' : 'edit')}
@@ -195,11 +207,12 @@ function Group({
                 task={t}
                 statusOptions={statusOptions}
                 priorityOptions={priorityOptions}
-                ownerOptions={ownerOptions}
                 deptOptions={deptOptions}
                 today={today}
                 people={people}
                 mark={delegated.get(t.id)}
+                on={chipsFor(t, assignees.get(t.id))}
+                nudge={nudges.get(t.id) ?? null}
                 canStar={canStar}
               />
             ))}
@@ -241,21 +254,24 @@ function Row({
   task,
   statusOptions,
   priorityOptions,
-  ownerOptions,
   deptOptions,
   today,
   people,
   mark,
+  on,
+  nudge,
   canStar,
 }: {
   task: TaskRow;
   statusOptions: { value: string; label: string }[];
   priorityOptions: { value: string; label: string }[];
-  ownerOptions: { value: string; label: string }[];
   deptOptions: { value: string; label: string }[];
   today: string;
   people: { id: string; label: string }[];
   mark: DelegationMark | undefined;
+  /** Everyone on this task, lead first. */
+  on: AssigneeChip[];
+  nudge: NudgeMark | null;
   canStar: boolean;
 }) {
   const [editing, setEditing] = useState(false);
@@ -270,7 +286,7 @@ function Row({
         task.title,
         task.description,
         task.nextStep,
-        task.ownerName,
+        ...on.map((p) => p.name),
         task.deptNameHe,
         task.status,
         task.priority,
@@ -299,14 +315,7 @@ function Row({
         ) : null}
       </span>
 
-      <CellSelect
-        taskId={task.id}
-        field="ownerPersonId"
-        value={task.ownerPersonId ?? ''}
-        options={ownerOptions}
-        title="Owner"
-        className="text-[11.5px] text-ink"
-      />
+      <AssigneeCell people={on} onEdit={() => setEditing(true)} />
 
       {/* Monday fills the whole status cell with the colour. It is the thing
           the eye lands on, and the reason the row can be read without being
@@ -357,6 +366,14 @@ function Row({
 
       {/* Everything the row has no column for — description, next step, start
           date, tags, money — without leaving the list. */}
+      {/* One button for the follow-up he types out by hand today: a Slack DM
+          to each person on it, in his name, asking what is happening. */}
+      <NudgeButton
+        taskId={task.id}
+        people={on}
+        lastAsked={nudge?.sentAt ?? null}
+      />
+
       <QuickEditToggle
         open={editing}
         title={task.title}
@@ -369,7 +386,8 @@ function Row({
         <QuickEditPanel
           task={task}
           statusOptions={statusOptions}
-          ownerOptions={ownerOptions}
+          people={people}
+          assignees={on}
           deptOptions={deptOptions}
           onClose={() => setEditing(false)}
         />

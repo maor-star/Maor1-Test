@@ -78,7 +78,11 @@ class RealSlackAdapter implements SlackAdapter {
         unfurl_links: false,
         // Only sent when asked for: an unset username leaves the app's own.
         ...(message.username ? { username: message.username } : {}),
-        ...(message.icon ? { icon_emoji: message.icon } : {}),
+        ...(message.iconUrl
+          ? { icon_url: message.iconUrl }
+          : message.icon
+            ? { icon_emoji: message.icon }
+            : {}),
       }),
     });
 

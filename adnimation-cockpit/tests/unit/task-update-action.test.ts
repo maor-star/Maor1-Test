@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db, tasks } from '@/lib/db';
 import { FakeClickUpAdapter } from '@/lib/integrations/clickup';
+import { db as _db, people } from '@/lib/db';
+import { assigneesOf } from '@/lib/tasks/assignees';
 
 /**
  * Changing a task from the board, whoever owns it.
@@ -126,14 +128,94 @@ describe('changing a task from the board', () => {
     expect((await reload(row.id)).status).toBe('make_it_happened');
   });
 
-  it('says what went wrong rather than reporting a save that did not happen', async () => {
+  /*
+   * He does not work in ClickUp any more, so ClickUp not taking the copy it
+   * keeps is news, not a failure — the task still moved.
+   */
+  it('saves it anyway when ClickUp will not take it, and says so', async () => {
     const row = await seed('company');
     adapter.failNext = true;
 
     const result = await updateTaskAction(form({ id: row.id, status: 'done' }));
 
-    expect(result.ok).toBe(false);
-    expect(result.error).toContain('ClickUp');
-    expect((await reload(row.id)).status).toBe('open');
+    expect(result.ok).toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(result.notice).toContain('ClickUp was not updated');
+    expect((await reload(row.id)).status).toBe('done');
+  });
+});
+
+/**
+ * Several people under the owner of a task.
+ *
+ * The first one ticked is the lead — the name the row sorts under, the one
+ * heat scoring reads, and the one the mirror keeps — so it has to be written
+ * to the task itself and not only to the join table, or the two disagree.
+ */
+describe('several people on one task', () => {
+  const made: string[] = [];
+
+  const someone = async (name: string) => {
+    const [row] = await _db
+      .insert(people)
+      .values({ name, email: `${name}-${Date.now()}@test.local`.toLowerCase(), slackId: 'U1' })
+      .returning();
+    made.push(row!.id);
+    return row!;
+  };
+
+  afterEach(async () => {
+    for (const id of made) await _db.delete(people).where(eq(people.id, id));
+    made.length = 0;
+  });
+
+  it('saves everyone, and makes the first of them the lead', async () => {
+    const row = await seed('mine');
+    const a = await someone('Alef');
+    const b = await someone('Bet');
+
+    const data = form({ id: row.id });
+    data.append('assignees', b.id);
+    data.append('assignees', a.id);
+    const result = await updateTaskAction(data);
+
+    expect(result.ok).toBe(true);
+    expect((await assigneesOf(row.id)).map((p) => p.id)).toEqual([b.id, a.id]);
+    expect((await reload(row.id)).ownerPersonId).toBe(b.id);
+
+    await _db.delete(tasks).where(eq(tasks.id, row.id));
+  });
+
+  it('takes the last person off, and clears the lead with them', async () => {
+    const row = await seed('mine');
+    const a = await someone('Gimel');
+    const first = form({ id: row.id });
+    first.append('assignees', a.id);
+    await updateTaskAction(first);
+
+    const cleared = form({ id: row.id });
+    cleared.append('assignees', '');
+    const result = await updateTaskAction(cleared);
+
+    expect(result.ok).toBe(true);
+    expect(await assigneesOf(row.id)).toEqual([]);
+    expect((await reload(row.id)).ownerPersonId).toBeNull();
+
+    await _db.delete(tasks).where(eq(tasks.id, row.id));
+  });
+
+  it('leaves the people alone when the form does not carry them', async () => {
+    const row = await seed('mine');
+    const a = await someone('Dalet');
+    const first = form({ id: row.id });
+    first.append('assignees', a.id);
+    await updateTaskAction(first);
+
+    // A quick status change from the cell sends no assignees at all.
+    await updateTaskAction(form({ id: row.id, status: 'in_progress' }));
+
+    expect((await assigneesOf(row.id)).map((p) => p.id)).toEqual([a.id]);
+
+    await _db.delete(tasks).where(eq(tasks.id, row.id));
   });
 });

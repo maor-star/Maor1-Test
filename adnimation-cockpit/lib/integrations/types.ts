@@ -17,6 +17,13 @@ export interface SlackMessage {
    */
   username?: string;
   icon?: string;
+  /**
+   * A picture to post under, when there is a real one to use — his Slack
+   * avatar, so a nudge in his name looks like a nudge from him rather than
+   * from an app wearing his name. Same scope as `username`; Slack takes
+   * whichever of icon_emoji and icon_url is set, and this wins.
+   */
+  iconUrl?: string;
 }
 
 export interface SlackPostResult {

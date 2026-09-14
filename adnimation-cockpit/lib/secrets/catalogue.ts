@@ -86,9 +86,9 @@ export const SECRETS: SecretSpec[] = [
     key: 'SLACK_USER_TOKEN',
     label: 'Slack user token (yours)',
     unlocks:
-      'The Copilot reading your whole Slack and searching it. Without it the cockpit only sees the channels its bot was invited to. It still posts as the cockpit, never as you.',
+      'Two things. The Copilot reads your whole Slack and searches it — without this the cockpit only sees the channels its bot was invited to. And the ASK button on a task sends "מה קורה עם זה?" as genuinely you, rather than as the bot wearing your name and picture.',
     where:
-      'api.slack.com → your Slack app → OAuth & Permissions → User Token Scopes: search:read, channels:history, channels:read, groups:history, groups:read, im:history, mpim:history → Reinstall → copy the token starting xoxp-.',
+      'api.slack.com → your Slack app → OAuth & Permissions → User Token Scopes: chat:write (this is the one that sends as you), search:read, channels:history, channels:read, groups:history, groups:read, im:history, mpim:history → Reinstall → copy the token starting xoxp-.',
     group: 'data',
     placeholder: 'xoxp-…',
   },

@@ -11,12 +11,19 @@ import {
 import { commentInputSchema, taskInputSchema, taskPatchSchema } from '@/lib/tasks/types';
 import { getTask, type TaskRow } from '@/lib/tasks/queries';
 import { editMirroredTask } from '@/lib/tasks/clickup-edit';
+import { setAssignees } from '@/lib/tasks/assignees';
 import { canEditTask, canSeePrivate, isAccountHolder } from '@/lib/tasks/access';
 import type { CockpitUser } from '@/lib/auth/session';
 
 export interface ActionResult {
   ok: boolean;
   error?: string;
+  /**
+   * Something worth saying about a save that DID happen — ClickUp not taking
+   * the copy it keeps, for instance. Not a failure: the edit is his and it is
+   * stored, so this must not colour the cell red or revert what he chose.
+   */
+  notice?: string;
   /** Field-level messages, keyed by field name. */
   fieldErrors?: Record<string, string[]>;
   id?: string;
@@ -122,26 +129,38 @@ export async function updateTaskAction(formData: FormData): Promise<ActionResult
   if (formData.has('tags')) raw.tags = parseTags(formData.get('tags'));
   if (formData.has('moneyImpact')) raw.moneyImpactCents = parseMoney(formData.get('moneyImpact'));
 
+  /*
+   * Several people on one task.
+   *
+   * The multi-select posts every name it has ticked, and the first of them is
+   * the lead — the one the row groups under and the one heat scoring reads. It
+   * is folded into the patch rather than written afterwards so that both write
+   * paths below set and pin it the same way: a mirrored task whose owner is
+   * written outside the patch would have its lead reverted by the next poll.
+   */
+  const picked = formData.has('assignees') ? formData.getAll('assignees').map(String) : null;
+  if (picked) raw.ownerPersonId = picked.find((id) => id.trim() !== '') ?? '';
+
   const parsed = taskPatchSchema.safeParse(raw);
   if (!parsed.success) return fromZod(parsed.error);
 
   const gate = await forEdit(user, parsed.data.id);
   if (gate.error) return gate.error;
 
+  if (picked) await setAssignees(parsed.data.id, picked);
+
   /*
-   * Nearly every task on his board is mirrored from ClickUp, and ClickUp stays
-   * the system of record — so an edit to one is written there first and
-   * mirrored only once it is accepted.
-   *
-   * This used to throw instead, which was fine while mirrored tasks were only
-   * edited through their own screen, and stopped being fine the moment the
-   * table let him change a status in the cell: 209 of his 222 tasks are
-   * mirrored, so moving one to done failed silently on all but thirteen.
+   * Nearly every task on his board is mirrored from ClickUp, and until now an
+   * edit to one had to be accepted by ClickUp before it was kept here. It does
+   * not any more — he does not work in ClickUp — so the mirrored path saves
+   * the edit and only TELLS ClickUp, reporting back when it would not listen.
    */
+  let notice: string | undefined;
   if (gate.task.layer === 'company') {
     const { id, ...patch } = parsed.data;
     const pushed = await editMirroredTask(id, patch, user.email);
     if (!pushed.ok) return { ok: false, error: pushed.error };
+    if (pushed.clickupError) notice = pushed.clickupError;
   } else {
     try {
       await updateTask(parsed.data, user.email);
@@ -160,7 +179,7 @@ export async function updateTaskAction(formData: FormData): Promise<ActionResult
   revalidatePath('/tasks');
   revalidatePath(`/tasks/${parsed.data.id}`);
   revalidatePath('/');
-  return { ok: true, id: parsed.data.id };
+  return { ok: true, id: parsed.data.id, ...(notice ? { notice } : {}) };
 }
 
 const idSchema = z.object({ id: z.string().uuid() });

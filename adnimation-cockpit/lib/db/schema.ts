@@ -109,6 +109,58 @@ export const tasks = pgTable(
   ],
 );
 
+/**
+ * Everyone on a task, not only the first.
+ *
+ * The board had one owner because ClickUp's first assignee was all the mirror
+ * kept, and real work here is shared — so a task two people ran showed one
+ * name and the other vanished. `tasks.ownerPersonId` stays as the LEAD, the
+ * name the row groups and sorts under and the one heat scoring reads; this
+ * holds everyone, the lead included, so there is one answer to "who is on
+ * this" rather than two that can disagree.
+ */
+export const taskAssignees = pgTable(
+  'task_assignees',
+  {
+    taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+    personId: uuid('person_id').notNull().references(() => people.id, { onDelete: 'cascade' }),
+    /** 0 is the lead — the one mirrored into tasks.ownerPersonId. */
+    position: integer('position').notNull().default(0),
+    addedAt: timestamptz('added_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.taskId, t.personId] }),
+    index('idx_task_assignees_person').on(t.personId),
+  ],
+);
+
+/**
+ * "What's happening with this?", sent and remembered.
+ *
+ * Recorded rather than fired and forgotten, because the question he asks right
+ * after pressing it is whether he already chased them and when — and a button
+ * that cannot answer that gets pressed three times on a Tuesday.
+ */
+export const taskNudges = pgTable(
+  'task_nudges',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+    personId: uuid('person_id').notNull().references(() => people.id, { onDelete: 'cascade' }),
+    actor: text('actor').notNull(),
+    body: text('body').notNull(),
+    delivered: boolean('delivered').notNull().default(false),
+    error: text('error'),
+    messageUrl: text('message_url'),
+    channelId: text('channel_id'),
+    messageTs: text('message_ts'),
+    /** True when it went out under his own Slack identity, not the bot's. */
+    asHimself: boolean('as_himself').notNull().default(false),
+    sentAt: timestamptz('sent_at').notNull().defaultNow(),
+  },
+  (t) => [index('idx_task_nudges_task').on(t.taskId, t.sentAt)],
+);
+
 export const taskComments = pgTable('task_comments', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
