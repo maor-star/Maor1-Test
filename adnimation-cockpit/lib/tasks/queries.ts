@@ -25,6 +25,8 @@ export interface TaskRow {
   moneyImpactCents: number | null;
   blockedPeople: string[];
   parentId: string | null;
+  /** Starred as his alone. */
+  isPrivate: boolean;
   clickupUrl: string | null;
   source: string;
   createdAt: Date;
@@ -60,6 +62,7 @@ const selection = {
   moneyImpactCents: tasks.moneyImpactCents,
   blockedPeople: tasks.blockedPeople,
   parentId: tasks.parentId,
+  isPrivate: tasks.isPrivate,
   clickupUrl: tasks.clickupUrl,
   source: tasks.source,
   createdAt: tasks.createdAt,
@@ -81,6 +84,11 @@ const baseQuery = () =>
     .leftJoin(people, eq(tasks.ownerPersonId, people.id));
 
 export interface TaskFilter {
+  /**
+   * Set only for the owner. Everything else — the operator, a collaborator, a
+   * job with no session at all — leaves it unset and sees no starred tasks.
+   */
+  canSeePrivate?: boolean;
   layer?: 'mine' | 'company';
   status?: TaskStatus[];
   priority?: TaskPriority[];
@@ -119,6 +127,17 @@ function ordering(sort: TaskSort = 'newest') {
 export async function listTasks(filter: TaskFilter = {}): Promise<TaskRow[]> {
   const conditions = [isNull(tasks.archivedAt)];
 
+  /*
+   * A starred task never leaves the database for anybody but him.
+   *
+   * Filtered here rather than after the rows arrive, because a task nobody
+   * else may see must not reach a page that then decides not to draw it — one
+   * forgotten `.filter()` in a component, one JSON payload, one search index,
+   * and it is out. The default is the strict one: a caller that says nothing
+   * about who is asking gets no private tasks.
+   */
+  if (!filter.canSeePrivate) conditions.push(eq(tasks.isPrivate, false));
+
   if (filter.layer) conditions.push(eq(tasks.layer, filter.layer));
   if (filter.status?.length) conditions.push(inArray(tasks.status, filter.status));
   else if (!filter.includeDone) conditions.push(ne(tasks.status, 'done'));
@@ -139,14 +158,26 @@ export async function listTasks(filter: TaskFilter = {}): Promise<TaskRow[]> {
     .limit(filter.limit ?? 500) as Promise<TaskRow[]>;
 }
 
-export async function getTask(id: string): Promise<TaskRow | null> {
-  const [row] = await baseQuery().where(eq(tasks.id, id)).limit(1);
+/**
+ * One task by id — and not a private one unless the asker is him.
+ *
+ * The list is not the only way in. `/tasks/<id>` typed into the address bar
+ * reaches this directly, so the same rule has to live here or the filter on
+ * the list is a curtain rather than a wall.
+ */
+export async function getTask(id: string, canSeePrivate = false): Promise<TaskRow | null> {
+  const conditions = [eq(tasks.id, id)];
+  if (!canSeePrivate) conditions.push(eq(tasks.isPrivate, false));
+  const [row] = await baseQuery().where(and(...conditions)).limit(1);
   return (row as TaskRow | undefined) ?? null;
 }
 
-export async function getSubtasks(parentId: string): Promise<TaskRow[]> {
+/** Subtasks, under the same rule — a private one does not surface under a parent. */
+export async function getSubtasks(parentId: string, canSeePrivate = false): Promise<TaskRow[]> {
+  const conditions = [eq(tasks.parentId, parentId), isNull(tasks.archivedAt)];
+  if (!canSeePrivate) conditions.push(eq(tasks.isPrivate, false));
   return baseQuery()
-    .where(and(eq(tasks.parentId, parentId), isNull(tasks.archivedAt)))
+    .where(and(...conditions))
     .orderBy(asc(tasks.createdAt)) as Promise<TaskRow[]>;
 }
 
@@ -154,7 +185,7 @@ export async function getSubtasks(parentId: string): Promise<TaskRow[]> {
  * Cockpit strip 2 (spec §5) — up to seven P0/P1 tasks due today or overdue,
  * hottest first, plus a count of everything else still open.
  */
-export async function burningToday(today: string, limit = 7) {
+export async function burningToday(today: string, limit = 7, canSeePrivate = false) {
   const conditions = [
     isNull(tasks.archivedAt),
     ne(tasks.status, 'done'),
@@ -162,6 +193,9 @@ export async function burningToday(today: string, limit = 7) {
     lte(tasks.dueDate, today),
     or(isNull(tasks.snoozeUntil), lte(tasks.snoozeUntil, new Date()))!,
   ];
+  // The strip on the overview, and the morning brief behind it. A private task
+  // must not appear in either for anybody but him.
+  if (!canSeePrivate) conditions.push(eq(tasks.isPrivate, false));
 
   const rows = (await baseQuery()
     .where(and(...conditions))

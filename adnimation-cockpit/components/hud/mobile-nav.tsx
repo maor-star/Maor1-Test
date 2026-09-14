@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { NAV } from './nav-items';
+import { mayReach } from '@/lib/tasks/access';
 
 /**
  * Navigation on a phone.
@@ -19,7 +20,7 @@ export function MobileNav({
   signOutAction,
 }: {
   userName: string;
-  userRole: 'owner' | 'operator';
+  userRole: 'owner' | 'operator' | 'collaborator';
   signOutAction: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -56,7 +57,7 @@ export function MobileNav({
       {open ? (
         <nav id="mobile-nav-sheet" className="sticky top-[61px] z-30 border-b border-line bg-card">
           <ul className="grid grid-cols-2">
-            {NAV.map((item) =>
+            {NAV.filter((item) => mayReach(item.href, { role: userRole })).map((item) =>
               item.ready ? (
                 <li key={item.href}>
                   <Link
@@ -85,7 +86,7 @@ export function MobileNav({
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <span className="flex min-w-0 items-center gap-2">
               <span className="inline-flex h-7 w-7 flex-none items-center justify-center rounded-full bg-neutral-200 text-[11px] font-bold text-neutral-700">
-                {userRole === 'owner' ? 'CEO' : 'COS'}
+                {userRole === 'owner' ? 'CEO' : userRole === 'operator' ? 'COS' : 'GUEST'}
               </span>
               <span className="truncate text-[14px] font-semibold">{userName}</span>
             </span>

@@ -10,6 +10,8 @@ import {
 } from '@/lib/tasks/mutations';
 import { commentInputSchema, taskInputSchema, taskPatchSchema } from '@/lib/tasks/types';
 import { getTask } from '@/lib/tasks/queries';
+import { canEditTask, canSeePrivate, isAccountHolder } from '@/lib/tasks/access';
+import type { CockpitUser } from '@/lib/auth/session';
 
 export interface ActionResult {
   ok: boolean;
@@ -29,6 +31,31 @@ function fromZod(error: z.ZodError): ActionResult {
   };
 }
 
+/**
+ * Whether this person may change this particular task.
+ *
+ * Every mutation below goes through it, because a server action is an HTTP
+ * endpoint. The screen already hides what somebody cannot do, but a hidden
+ * button is not a closed door: anyone who can reach the board can post an id
+ * they typed themselves.
+ *
+ * It reads the task as the owner deliberately. Asking for it as the caller
+ * would make a private task come back empty and read as "no such task", and
+ * the answer to "may I edit this" would be the same whether it did not exist
+ * or was simply not theirs — which is the right answer to give them, but the
+ * wrong one to decide on.
+ */
+async function mayEdit(user: CockpitUser, id: string): Promise<ActionResult | null> {
+  const task = await getTask(id, true);
+  if (!task) return { ok: false, error: 'No task with that id' };
+  if (!canEditTask(task, user)) {
+    // The same words either way, so this never becomes a way to find out that
+    // a private task exists.
+    return { ok: false, error: 'No task with that id' };
+  }
+  return null;
+}
+
 const parseTags = (raw: FormDataEntryValue | null): string[] =>
   String(raw ?? '')
     .split(',')
@@ -46,6 +73,10 @@ const parseMoney = (raw: FormDataEntryValue | null): number | null => {
 
 export async function createTaskAction(formData: FormData): Promise<ActionResult> {
   const user = await requireUser();
+  // A guest who may only read the board does not add to it.
+  if (!isAccountHolder(user) && user.taskLevel !== 'edit') {
+    return { ok: false, error: 'You have view-only access to this board' };
+  }
   const parsed = taskInputSchema.safeParse({
     title: formData.get('title'),
     description: formData.get('description'),
@@ -84,6 +115,9 @@ export async function updateTaskAction(formData: FormData): Promise<ActionResult
   const parsed = taskPatchSchema.safeParse(raw);
   if (!parsed.success) return fromZod(parsed.error);
 
+  const denied = await mayEdit(user, parsed.data.id);
+  if (denied) return denied;
+
   try {
     await updateTask(parsed.data, user.email);
   } catch (e) {
@@ -109,6 +143,8 @@ export async function completeTaskAction(formData: FormData): Promise<ActionResu
   const user = await requireUser();
   const parsed = idSchema.safeParse({ id: formData.get('id') });
   if (!parsed.success) return fromZod(parsed.error);
+  const denied = await mayEdit(user, parsed.data.id);
+  if (denied) return denied;
   try {
     await completeTask(parsed.data.id, user.email);
   } catch (e) {
@@ -125,6 +161,8 @@ export async function snoozeTaskAction(formData: FormData): Promise<ActionResult
   const user = await requireUser();
   const parsed = snoozeSchema.safeParse({ id: formData.get('id'), days: formData.get('days') });
   if (!parsed.success) return fromZod(parsed.error);
+  const denied = await mayEdit(user, parsed.data.id);
+  if (denied) return denied;
   try {
     await snoozeTask(parsed.data.id, addDays(new Date(), parsed.data.days), user.email);
   } catch (e) {
@@ -139,6 +177,8 @@ export async function archiveTaskAction(formData: FormData): Promise<ActionResul
   const user = await requireUser();
   const parsed = idSchema.safeParse({ id: formData.get('id') });
   if (!parsed.success) return fromZod(parsed.error);
+  const denied = await mayEdit(user, parsed.data.id);
+  if (denied) return denied;
   try {
     await archiveTask(parsed.data.id, user.email);
   } catch (e) {
@@ -156,6 +196,8 @@ export async function addCommentAction(formData: FormData): Promise<ActionResult
     body: formData.get('body'),
   });
   if (!parsed.success) return fromZod(parsed.error);
+  const denied = await mayEdit(user, parsed.data.taskId);
+  if (denied) return denied;
   await addComment(parsed.data.taskId, parsed.data.body, user.email);
   revalidatePath(`/tasks/${parsed.data.taskId}`);
   return { ok: true };
@@ -170,11 +212,19 @@ export async function addCommentAction(formData: FormData): Promise<ActionResult
  * and only when he actually wants to change something.
  */
 export async function taskForEditAction(id: string) {
-  await requireUser();
+  const user = await requireUser();
   const parsed = z.string().uuid().safeParse(id);
   if (!parsed.success) return { ok: false as const, error: 'Not a task' };
 
-  const task = await getTask(parsed.data);
+  /*
+   * The editor loads a task by id, so it is a way in of its own. Without this
+   * it would hand a collaborator the whole of a private task to fill a form
+   * they could never have opened from the list.
+   */
+  const denied = await mayEdit(user, parsed.data);
+  if (denied) return { ok: false as const, error: denied.error ?? 'No such task' };
+
+  const task = await getTask(parsed.data, canSeePrivate(user));
   if (!task) return { ok: false as const, error: 'No such task' };
 
   return {

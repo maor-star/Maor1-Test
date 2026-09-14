@@ -17,6 +17,10 @@ import { linesForMany, PILLAR_OPTIONS } from '@/lib/control/tagging';
 import { PillarFilter } from '@/components/hud/pillar-filter';
 import { GROUP_BY_LABEL, isGroupBy, TASK_GROUP_BYS, type TaskGroupBy } from '@/lib/tasks/grouping';
 import { delegationsForMany, type DelegationMark } from '@/lib/delegation/for-many';
+import { requireUser } from '@/lib/auth/session';
+import { canManageAccess, canSeePrivate } from '@/lib/tasks/access';
+import { listGrants } from '@/lib/tasks/access-service';
+import { TaskAccessPanel } from '@/components/tasks/access-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,6 +61,7 @@ export default async function TasksPage({
   searchParams: Promise<SearchParams>;
 }) {
   const sp = await searchParams;
+  const viewer = await requireUser();
   const view: View = VIEWS.includes(sp.view as View) ? (sp.view as View) : 'table';
   /*
    * Which column the groups come from. Status by default, because that is the
@@ -92,6 +97,9 @@ export default async function TasksPage({
 
   const [all, departments, people] = await Promise.all([
     listTasks({
+      // The starred ones come back only for him. Everybody else — the
+      // operator included — never receives them from the database at all.
+      canSeePrivate: canSeePrivate(viewer),
       layer,
       search: sp.q,
       priority,
@@ -103,6 +111,13 @@ export default async function TasksPage({
     listDepartments(),
     listPeople(),
   ]);
+
+  /*
+   * The guest list, and whether this viewer is the one who keeps it. Loaded
+   * only for him — nobody else has anything to do with it, and it is not a
+   * list a guest should be able to read.
+   */
+  const grants = canManageAccess(viewer) ? await listGrants() : [];
 
   // Which pillars each task belongs to, and who is holding it — one query
   // each for the whole list rather than one per row.
@@ -146,7 +161,16 @@ export default async function TasksPage({
         kicker="TASKS / 02"
         title="Tasks"
         action={
-          <nav className="segmented">
+          <div className="flex flex-wrap items-center gap-2">
+            {canManageAccess(viewer) ? (
+              <TaskAccessPanel
+                grants={grants}
+                people={people
+                  .filter((p) => !p.email.endsWith('@slack.local'))
+                  .map((p) => ({ id: p.id, label: p.name, email: p.email }))}
+              />
+            ) : null}
+            <nav className="segmented">
             {VIEWS.map((v) => (
               <Link
                 key={v}
@@ -156,7 +180,8 @@ export default async function TasksPage({
                 {VIEW_LABEL[v]}
               </Link>
             ))}
-          </nav>
+            </nav>
+          </div>
         }
       />
 
@@ -218,6 +243,7 @@ export default async function TasksPage({
         groupBy={groupBy}
         today={todayInTz()}
         delegated={delegated}
+        canStar={canManageAccess(viewer)}
       />
     </div>
   );
@@ -232,6 +258,7 @@ function TaskViewSwitch({
   groupBy,
   today,
   delegated,
+  canStar,
 }: {
   view: View;
   rows: TaskRow[];
@@ -241,6 +268,7 @@ function TaskViewSwitch({
   groupBy: TaskGroupBy;
   today: string;
   delegated: Map<string, DelegationMark>;
+  canStar: boolean;
 }) {
   if (view === 'board') return <TaskBoardView rows={rows} people={people} departments={departments} />;
   if (view === 'calendar') return <TaskCalendarView rows={rows} today={today} />;
@@ -255,6 +283,7 @@ function TaskViewSwitch({
       groupBy={groupBy}
       today={today}
       delegated={delegated}
+      canStar={canStar}
     />
   );
 }

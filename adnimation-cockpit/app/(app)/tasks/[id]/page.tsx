@@ -14,16 +14,25 @@ import { ClickUpStatus } from '@/components/tasks/clickup-status';
 import { Attachments } from '@/components/attachments';
 import { NewTaskForm } from '@/components/tasks/new-task-form';
 import { DelegateButton } from '@/components/tasks/delegate-button';
+import { requireUser } from '@/lib/auth/session';
+import { canSeePrivate } from '@/lib/tasks/access';
 
 export const dynamic = 'force-dynamic';
 
 export default async function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const task = await getTask(id);
+  const viewer = await requireUser();
+  const mine = canSeePrivate(viewer);
+
+  /*
+   * A private task 404s for everybody but him — the same answer a task that
+   * does not exist gets, so this page is not a way to learn that one exists.
+   */
+  const task = await getTask(id, mine);
   if (!task) notFound();
 
   const [subtasks, comments, departments, people] = await Promise.all([
-    getSubtasks(id),
+    getSubtasks(id, mine),
     listComments(id),
     listDepartments(),
     listPeople(),

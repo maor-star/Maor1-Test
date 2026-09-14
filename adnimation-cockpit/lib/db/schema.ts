@@ -55,6 +55,13 @@ export const tasks = pgTable(
   {
     id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
     layer: taskLayer('layer').notNull(),
+    /**
+     * Starred as private — his alone.
+     *
+     * Enforced in the queries rather than in the rendering: a task nobody else
+     * may see must not reach a page that then decides not to draw it.
+     */
+    isPrivate: boolean('is_private').notNull().default(false),
     clickupId: text('clickup_id').unique(),
     clickupUrl: text('clickup_url'),
     parentId: uuid('parent_id'),
@@ -914,3 +921,26 @@ export const agentRuns = pgTable('agent_runs', {
 
 export type Agent = typeof agents.$inferSelect;
 export type AgentRun = typeof agentRuns.$inferSelect;
+
+/**
+ * Who he has let into the tasks board.
+ *
+ * A grant reaches the tasks board and nothing else. It is not a cockpit
+ * account: the revenue, the contracts, the mail and the pipeline stay his, and
+ * the middleware enforces that rather than the navigation merely hiding them.
+ *
+ * Revoked, never deleted — who had access to what, and when it was taken back,
+ * is the history most worth keeping on a table like this.
+ */
+export const taskAccess = pgTable('task_access', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  /** What they sign in with; the gate has nothing but an email to go on. */
+  email: text('email').notNull(),
+  personId: uuid('person_id').references(() => people.id),
+  /** 'view' reads the board, 'edit' may change it. Neither sees a starred task. */
+  level: text('level').notNull().default('view'),
+  grantedBy: text('granted_by').notNull(),
+  grantedAt: timestamptz('granted_at').notNull().defaultNow(),
+  revokedAt: timestamptz('revoked_at'),
+  revokedBy: text('revoked_by'),
+});

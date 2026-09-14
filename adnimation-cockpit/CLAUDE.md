@@ -8,7 +8,10 @@ You are building a **single-user internal web application** for the CEO of Adnim
 
 A private command centre for one person. It aggregates all company data (revenue, demand/supply partner health, sales pipeline, contracts, sites, tasks) into one interface, and lets the CEO act from it — delegating work to the team via Slack, filing contracts to Google Drive, and running configurable **agents** that perform recurring tasks on his behalf.
 
-**Two users total.** The CEO (owner) and his Chief of Staff (operator). The team never logs in — they receive Slack messages and emails.
+**Two accounts total.** The CEO (owner) and his Chief of Staff (operator). The
+team does not log in — they receive Slack messages and emails — with one
+exception he asked for: people he grants access to can reach the **tasks board
+and nothing else**, and never see a task he has starred private.
 
 ## 2. Non-goals — do not build these
 
@@ -16,7 +19,12 @@ A private command centre for one person. It aggregates all company data (revenue
 - A replacement for ClickUp. The team keeps using ClickUp; we mirror it read-mostly.
 - A public-facing site, marketing pages, or a landing page.
 - A mobile native app. A responsive web app is sufficient.
-- Role-based permissions beyond the two hardcoded users.
+- Multi-tenant anything, still. **One exception, added at his request:** he can
+  grant named people access to the **tasks board only**, and star a task to keep
+  it to himself. That is a guest list on one screen, not a permissions system —
+  a grant reaches `/tasks` and nothing else, enforced in the middleware and in
+  the queries. See `lib/tasks/access.ts`. Do not widen it to other screens
+  without him asking.
 - Anything that deletes data. Archive only, everywhere.
 
 ---

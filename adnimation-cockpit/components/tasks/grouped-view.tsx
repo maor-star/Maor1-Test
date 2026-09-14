@@ -10,6 +10,7 @@ import {
 } from '@/lib/tasks/grouping';
 import { CellDate, CellSelect } from '@/components/tasks/cell-select';
 import { DelegateCell } from '@/components/hud/delegate-cell';
+import { StarCell } from '@/components/tasks/star-cell';
 import type { DelegationMark } from '@/lib/delegation/for-many';
 import { InstantFilter } from '@/components/hud/instant-filter';
 import { Num } from '@/components/num';
@@ -32,7 +33,8 @@ import { foldForSearch } from '@/lib/search';
  */
 
 /** The columns, and the width each one gets. Owner and status carry the eye. */
-const COLS = 'minmax(0,1fr) 9rem 9.5rem 8.5rem 8rem 8rem 9rem';
+const COLS_OWNER = '2rem minmax(0,1fr) 9rem 9.5rem 8.5rem 8rem 8rem 9rem';
+const COLS_GUEST = 'minmax(0,1fr) 9rem 9.5rem 8.5rem 8rem 8rem 9rem';
 
 export function TaskGroupedView({
   rows,
@@ -41,6 +43,7 @@ export function TaskGroupedView({
   groupBy,
   today,
   delegated,
+  canStar,
 }: {
   rows: TaskRow[];
   people: { id: string; label: string }[];
@@ -49,6 +52,12 @@ export function TaskGroupedView({
   today: string;
   /** Task id → who is holding it, fetched for the whole list at once. */
   delegated: Map<string, DelegationMark>;
+  /**
+   * Whether the star is his to press. Only the owner marks a task private, so
+   * for anyone else the column is not there at all rather than disabled — a
+   * task they can see is by definition one that is not private.
+   */
+  canStar: boolean;
 }) {
   if (rows.length === 0) {
     return (
@@ -83,6 +92,7 @@ export function TaskGroupedView({
           today={today}
           people={people}
           delegated={delegated}
+          canStar={canStar}
         />
       ))}
       <p className="px-1 text-[12.5px] text-muted">
@@ -104,6 +114,7 @@ function Group({
   today,
   people,
   delegated,
+  canStar,
 }: {
   group: TaskGroup<TaskRow>;
   statusOptions: { value: string; label: string }[];
@@ -113,6 +124,7 @@ function Group({
   today: string;
   people: { id: string; label: string }[];
   delegated: Map<string, DelegationMark>;
+  canStar: boolean;
 }) {
   const [open, setOpen] = useState(true);
   const colour = GROUP_COLOR[group.tone];
@@ -150,14 +162,18 @@ function Group({
         <>
           <div
             className="hidden border-b border-line px-[14px] py-1.5 md:grid"
-            style={{ gridTemplateColumns: COLS }}
+            style={{ gridTemplateColumns: canStar ? COLS_OWNER : COLS_GUEST }}
           >
-            {['TASK', 'OWNER', 'STATUS', 'PRIORITY', 'DUE', 'DEPARTMENT', 'DELEGATED TO'].map((h, i) => (
+            {(canStar
+              ? ['', 'TASK', 'OWNER', 'STATUS', 'PRIORITY', 'DUE', 'DEPARTMENT', 'DELEGATED TO']
+              : ['TASK', 'OWNER', 'STATUS', 'PRIORITY', 'DUE', 'DEPARTMENT', 'DELEGATED TO']
+            ).map((h, i) => (
               <span
-                key={h}
-                className={`hud-label text-[10.5px] ${i === 0 ? 'text-start' : 'text-center'}`}
+                key={h || 'star'}
+                className={`hud-label text-[10.5px] ${h === 'TASK' ? 'text-start' : 'text-center'}`}
+                title={h === '' ? 'Private' : undefined}
               >
-                {h}
+                {h === '' ? '★' : h}
               </span>
             ))}
           </div>
@@ -174,6 +190,7 @@ function Group({
                 today={today}
                 people={people}
                 mark={delegated.get(t.id)}
+                canStar={canStar}
               />
             ))}
           </ul>
@@ -219,6 +236,7 @@ function Row({
   today,
   people,
   mark,
+  canStar,
 }: {
   task: TaskRow;
   statusOptions: { value: string; label: string }[];
@@ -228,6 +246,7 @@ function Row({
   today: string;
   people: { id: string; label: string }[];
   mark: DelegationMark | undefined;
+  canStar: boolean;
 }) {
   const overdue = task.dueDate !== null && task.dueDate < today && task.status !== 'done';
   const statusColour = GROUP_COLOR[toneForStatus(task.status)];
@@ -249,8 +268,10 @@ function Row({
         ...task.tags,
       )}
       className="grid items-center gap-x-2 gap-y-1 border-b border-line px-[14px] py-1.5 last:border-b-0 hover:bg-neutral-50 md:gap-y-0"
-      style={{ gridTemplateColumns: COLS }}
+      style={{ gridTemplateColumns: canStar ? COLS_OWNER : COLS_GUEST }}
     >
+      {canStar ? <StarCell taskId={task.id} isPrivate={task.isPrivate} /> : null}
+
       <span className="col-span-full min-w-0 md:col-span-1">
         <Link
           href={`/tasks/${task.id}`}

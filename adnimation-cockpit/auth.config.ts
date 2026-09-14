@@ -2,6 +2,7 @@ import type { NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import { isAllowedEmail, roleForEmail } from '@/lib/auth/allowlist';
+import { mayReach } from '@/lib/tasks/access';
 import { verifyPassword } from '@/lib/auth/password';
 
 /**
@@ -90,7 +91,19 @@ export const authConfig = {
       const { pathname } = request.nextUrl;
       if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return true;
       // A session only exists here if the cookie decoded and verified.
-      return Boolean(auth?.user?.email);
+      if (!auth?.user?.email) return false;
+
+      /*
+       * Somebody he granted the tasks board to gets the tasks board.
+       *
+       * Enforced here, in the middleware, rather than by leaving the other
+       * links out of the navigation — a hidden link is not a closed door, and
+       * the revenue, the contracts, the mail and the pipeline are not tasks.
+       *
+       * The role travels in the verified session token, so this needs no
+       * database and stays edge-safe.
+       */
+      return mayReach(pathname, { role: auth.user.role ?? 'operator' });
     },
 
     /**
@@ -114,7 +127,8 @@ export const authConfig = {
     session({ session, token }) {
       if (session.user) {
         session.user.id = (token.uid as string | undefined) ?? '';
-        session.user.role = (token.role as 'owner' | 'operator') ?? 'operator';
+        session.user.role = (token.role as 'owner' | 'operator' | 'collaborator') ?? 'operator';
+        session.user.taskLevel = token.taskLevel as 'view' | 'edit' | undefined;
       }
       return session;
     },

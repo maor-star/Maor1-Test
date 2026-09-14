@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { NAV } from './nav-items';
+import { mayReach } from '@/lib/tasks/access';
 
 /**
  * The rail, in the design package's language: a white column against the
@@ -17,7 +18,7 @@ export function Rail({
   signOutAction,
 }: {
   userName: string;
-  userRole: 'owner' | 'operator';
+  userRole: 'owner' | 'operator' | 'collaborator';
   signOutAction: () => Promise<void>;
 }) {
   return (
@@ -38,7 +39,7 @@ export function Rail({
       </div>
 
       <nav className="flex flex-col gap-[2px] px-3">
-        {NAV.map((item) =>
+        {NAV.filter((item) => mayReach(item.href, { role: userRole })).map((item) =>
           item.ready ? (
             <Link
               key={item.href}
@@ -63,7 +64,7 @@ export function Rail({
         <div className="h-px bg-line" />
         <div className="flex items-center gap-3">
           <span className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-full bg-neutral-200 text-[11.5px] font-bold text-neutral-700">
-            {userRole === 'owner' ? 'CEO' : 'COS'}
+            {userRole === 'owner' ? 'CEO' : userRole === 'operator' ? 'COS' : 'GUEST'}
           </span>
           <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{userName}</span>
           <form action={signOutAction}>
