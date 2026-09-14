@@ -215,6 +215,29 @@ async function main() {
       dropped = gone.length;
     }
 
+    /*
+     * Tasks ClickUp no longer has at all.
+     *
+     * A task deleted in ClickUp simply stops coming back, and nothing here
+     * noticed: one deleted in September was still on his board a fortnight
+     * later, in a status it had not been in for as long. This fetch is the
+     * whole workspace, not a delta, so anything mirrored that it did not
+     * return is either gone or in a list this token can no longer read.
+     *
+     * The week's grace is the guard on the second case: a page that failed or
+     * a permission that lapsed for one run drops nothing, because the next
+     * successful run touches the row again. Only a row untouched for seven
+     * consecutive runs of this — daily — goes.
+     */
+    const seen = raw.map((t) => String(t.id));
+    const vanished = seen.length === 0 ? [] : await sql`
+      delete from tasks
+       where layer = 'company' and clickup_id is not null
+         and not (clickup_id = any(${seen}))
+         and last_synced_at < now() - interval '7 days'
+      returning id
+    `;
+
     // Long-finished tasks nobody is going to reopen. Thirty days, because a
     // task closed by mistake is noticed in a day or two, not a month.
     const swept = await sql`
@@ -236,7 +259,8 @@ async function main() {
     const [{ count }] = await sql`select count(*)::int as count from tasks where layer = 'company'`;
     console.log(
       `open mirrored: ${upserted}; theirs: ${notHis.length} (${dropped} removed); ` +
-        `closed: ${removed}; long-done cleared: ${swept.length}; ` +
+        `closed: ${removed}; gone from ClickUp: ${vanished.length}; ` +
+        `long-done cleared: ${swept.length}; ` +
         `mirror now holds ${count} company tasks`,
     );
   } catch (e) {
