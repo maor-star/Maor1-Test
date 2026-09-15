@@ -385,3 +385,41 @@ describe('never messaging the person doing it', () => {
     expect(slack.sent.map((m) => m.target).sort()).toEqual(['U-MAOR', 'U-TOMER']);
   });
 });
+
+/**
+ * Chasing the same task twice, which is most chases.
+ *
+ * The button read ASK whether or not he had already sent one, so a row he had
+ * chased looked finished and the repeat looked unavailable. Sending again was
+ * always possible; nothing said so.
+ */
+describe('asking again', () => {
+  it('sends a second time, and counts the pushes rather than the messages', async () => {
+    const { maor, tomer, t } = await scene();
+    await setAssignees(t.id, [maor.id, tomer.id]);
+    const slack = new FakeSlackAdapter();
+
+    await nudgeTask(t.id, OUTSIDER, null, { slack });
+    const first = (await lastNudges([t.id])).get(t.id);
+    // Two people, one press — that is one chase, not two.
+    expect(first?.times).toBe(1);
+    expect(slack.sent).toHaveLength(2);
+
+    await nudgeTask(t.id, OUTSIDER, null, { slack });
+    const second = (await lastNudges([t.id])).get(t.id);
+
+    expect(slack.sent).toHaveLength(4);
+    expect(second?.times).toBe(2);
+    expect(second?.sentAt.getTime()).toBeGreaterThanOrEqual(first!.sentAt.getTime());
+  });
+
+  it('counts nothing on a task he has only handed over', async () => {
+    const { maor, tomer, t } = await scene();
+    await setAssignees(t.id, [maor.id, tomer.id]);
+    const slack = new FakeSlackAdapter();
+
+    await notifyAssigned(t.id, [tomer.id], OUTSIDER, { slack });
+
+    expect((await lastNudges([t.id])).get(t.id)).toBeUndefined();
+  });
+});

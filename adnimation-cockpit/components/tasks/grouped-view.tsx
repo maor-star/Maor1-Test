@@ -372,6 +372,7 @@ function Row({
         taskId={task.id}
         people={on}
         lastAsked={nudge?.sentAt ?? null}
+        timesAsked={nudge?.times ?? 0}
       />
 
       <QuickEditToggle

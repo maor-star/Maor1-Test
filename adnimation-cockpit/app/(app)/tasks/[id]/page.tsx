@@ -66,6 +66,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
               taskId={task.id}
               people={onIt}
               lastAsked={nudged.get(task.id)?.sentAt ?? null}
+              timesAsked={nudged.get(task.id)?.times ?? 0}
             />
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">

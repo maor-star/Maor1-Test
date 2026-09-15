@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db, people, taskNudges, tasks } from '@/lib/db';
 import { writeAudit } from '@/lib/audit';
 import { createSlackAdapter } from '@/lib/integrations/slack';
@@ -221,6 +221,7 @@ export async function notifyAssigned(
   const base = process.env.APP_URL ?? process.env.AUTH_URL ?? null;
   const link = base ? `${base.replace(/\/+$/, '')}/tasks/${task.id}` : null;
 
+  const sentAt = new Date();
   const sent: NudgeOutcome[] = [];
   for (const person of newcomers) {
     const body = assignedMessage(
@@ -235,7 +236,7 @@ export async function notifyAssigned(
         ok: false,
         messageUrl: null,
         error: 'no_slack_id',
-      }, 'assigned');
+      }, 'assigned', sentAt);
       continue;
     }
 
@@ -262,7 +263,7 @@ export async function notifyAssigned(
       ok: result.ok,
       ...(result.ok ? { messageUrl: result.messageUrl } : { error: result.error }),
     });
-    await record(task.id, person.id, actor, body, chosen.asHimself, result, 'assigned');
+    await record(task.id, person.id, actor, body, chosen.asHimself, result, 'assigned', sentAt);
   }
 
   await writeAudit({
@@ -299,6 +300,7 @@ export async function nudgeTask(
     : await signer();
 
   const body = nudgeMessage(task.title, note);
+  const sentAt = new Date();
   const sent: NudgeOutcome[] = [];
 
   for (const person of who) {
@@ -308,7 +310,7 @@ export async function nudgeTask(
         ok: false,
         messageUrl: null,
         error: 'no_slack_id',
-      });
+      }, 'nudge', sentAt);
       continue;
     }
 
@@ -340,7 +342,7 @@ export async function nudgeTask(
       ok: result.ok,
       ...(result.ok ? { messageUrl: result.messageUrl } : { error: result.error }),
     });
-    await record(task.id, person.id, actor, body, chosen.asHimself, result);
+    await record(task.id, person.id, actor, body, chosen.asHimself, result, 'nudge', sentAt);
   }
 
   const anyOk = sent.some((s) => s.ok);
@@ -369,6 +371,16 @@ async function record(
   asHimself: boolean,
   result: { ok: boolean; messageUrl?: string | null; error?: string; channelId?: string | null; ts?: string | null },
   kind: 'nudge' | 'assigned' = 'nudge',
+  /*
+   * One press, one timestamp — shared by every row it writes.
+   *
+   * A press sends a message per person, and those inserts land microseconds
+   * apart. Letting each take its own now() made "how many times did I chase
+   * this" a question about clock ticks: counting rows said four for two
+   * presses on a shared task, and rounding to the minute said one for two
+   * presses a moment apart. Stamping the push once makes the count exact.
+   */
+  sentAt: Date = new Date(),
 ): Promise<void> {
   await db.insert(taskNudges).values({
     taskId,
@@ -376,6 +388,7 @@ async function record(
     actor,
     kind,
     body,
+    sentAt,
     asHimself,
     delivered: result.ok,
     error: result.ok ? null : (result.error ?? 'unknown'),
@@ -389,6 +402,15 @@ export interface NudgeMark {
   sentAt: Date;
   names: string[];
   delivered: boolean;
+  /**
+   * How many separate times he has chased this task.
+   *
+   * Worth counting rather than just dating: "asked 3 times" is a fact about
+   * the task, not about the button. A thing he has had to chase three times
+   * is not waiting on the other person's inbox any more, and the row should
+   * say so out loud instead of making him remember it.
+   */
+  times: number;
 }
 
 /**
@@ -417,6 +439,23 @@ export async function lastNudges(taskIds: string[]): Promise<Map<string, NudgeMa
     .where(and(inArray(taskNudges.taskId, taskIds), eq(taskNudges.kind, 'nudge')))
     .orderBy(desc(taskNudges.sentAt));
 
+  /*
+   * How many separate presses, not how many messages.
+   *
+   * One press sends a message per person and stamps every row it writes with
+   * the same instant (see record), so distinct timestamps are exactly the
+   * presses — two people chased twice is 2, not 4.
+   */
+  const pushes = await db
+    .select({
+      taskId: taskNudges.taskId,
+      times: sql<number>`count(distinct ${taskNudges.sentAt})::int`,
+    })
+    .from(taskNudges)
+    .where(and(inArray(taskNudges.taskId, taskIds), eq(taskNudges.kind, 'nudge')))
+    .groupBy(taskNudges.taskId);
+  const timesByTask = new Map(pushes.map((p) => [p.taskId, p.times]));
+
   for (const row of rows) {
     const held = out.get(row.taskId);
     // Rows arrive newest first, so the first one seen for a task is the last
@@ -426,8 +465,10 @@ export async function lastNudges(taskIds: string[]): Promise<Map<string, NudgeMa
         sentAt: row.sentAt,
         names: [row.name],
         delivered: row.delivered,
+        times: timesByTask.get(row.taskId) ?? 1,
       });
-    } else if (held.sentAt.getTime() - row.sentAt.getTime() < 60_000) {
+    } else if (held.sentAt.getTime() === row.sentAt.getTime()) {
+      // Same press, another recipient — rows of one press share the stamp.
       held.names.push(row.name);
       held.delivered = held.delivered || row.delivered;
     }
