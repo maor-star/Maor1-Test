@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db, users } from '@/lib/db';
 import { isAccountRole, reconcileAccountRow } from '@/lib/auth/reconcile';
+import { authConfig, oauthProviders } from '@/auth.config';
 
 /**
  * Signing in as somebody who was granted the tasks board.
@@ -55,5 +56,49 @@ describe('the account row behind a sign-in', () => {
     expect(isAccountRole('owner')).toBe(true);
     expect(isAccountRole('operator')).toBe(true);
     expect(isAccountRole('collaborator')).toBe(false);
+  });
+});
+
+/**
+ * One provider per id.
+ *
+ * auth.ts swaps this file's password provider for one that can reach the
+ * database — the edge copy accepts the owner address and nothing else, so a
+ * collaborator signing in through it is refused however good their password
+ * is. It used to drop the edge copy with `filter(p => p.id !== 'password')`,
+ * which matched nothing: a provider's id is not resolved on the config object
+ * at that point. Both were registered, Auth.js said
+ * `Available providers: [password, password]`, and which one answered was a
+ * coin toss.
+ */
+type RawProvider = { id?: string; options?: { id?: string } };
+
+/*
+ * The id a provider will ANSWER to, which is not the id on the object.
+ *
+ * Auth.js keeps the caller's `id` in `options` and leaves `.id` at the
+ * factory default — `Credentials({ id: 'password' })` reads back as
+ * `id: 'credentials'`, `options.id: 'password'`, and only merges the two when
+ * the config is initialised. Reading `.id` alone is what made the old filter a
+ * no-op, so the resolution is written down here once and tested.
+ */
+const answersTo = (p: RawProvider): string | undefined => p.options?.id ?? p.id;
+
+describe('the sign-in providers', () => {
+  it('resolves an id the way Auth.js does, not the way the object reads', () => {
+    const edge = authConfig.providers[0] as RawProvider;
+    // The trap, asserted: the object says one thing and answers to another.
+    expect(edge.id).toBe('credentials');
+    expect(answersTo(edge)).toBe('password');
+  });
+
+  it('offers the password provider exactly once', () => {
+    const ids = [...(authConfig.providers as RawProvider[]), ...(oauthProviders as RawProvider[])]
+      .map(answersTo);
+    expect(ids.filter((id) => id === 'password')).toHaveLength(1);
+  });
+
+  it('keeps the OAuth list free of it, so auth.ts can add its own without a duplicate', () => {
+    for (const p of oauthProviders as RawProvider[]) expect(answersTo(p)).not.toBe('password');
   });
 });

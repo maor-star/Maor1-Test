@@ -1,6 +1,6 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { authConfig } from '@/auth.config';
+import { authConfig, oauthProviders } from '@/auth.config';
 import { isAllowedEmail, roleForEmail } from '@/lib/auth/allowlist';
 import { verifyPassword } from '@/lib/auth/password';
 
@@ -51,7 +51,9 @@ const password = Credentials({
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  providers: [password, ...authConfig.providers.filter((p) => p.id !== 'password')],
+  // The db-aware password provider REPLACES the edge one, plus whatever OAuth
+  // is configured. Named explicitly: filtering by id registered both copies.
+  providers: [password, ...oauthProviders],
   callbacks: {
     ...authConfig.callbacks,
 

@@ -73,19 +73,31 @@ const ownerPassword = Credentials({
 /** Google is only offered when an OAuth client is actually configured. */
 const googleConfigured = Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET);
 
+/**
+ * Everything that is NOT the password provider, exported on its own.
+ *
+ * `auth.ts` replaces the password provider with a version that can reach the
+ * database, and it needs to drop this file's copy when it does. It used to do
+ * that by filtering on `p.id !== 'password'` — which quietly matched nothing,
+ * because a provider's id is not resolved on the config object at that point.
+ * Both copies were registered, Auth.js reported
+ * `Available providers: [password, password]`, and which of the two answered a
+ * sign-in was a coin toss: this file's copy accepts the owner and nobody else.
+ *
+ * Handing over the list explicitly cannot drift the way a predicate can.
+ */
+export const oauthProviders = googleConfigured
+  ? [
+      Google({
+        clientId: process.env.AUTH_GOOGLE_ID,
+        clientSecret: process.env.AUTH_GOOGLE_SECRET,
+        authorization: { params: { prompt: 'select_account', hd: 'adnimation.com' } },
+      }),
+    ]
+  : [];
+
 export const authConfig = {
-  providers: [
-    ownerPassword,
-    ...(googleConfigured
-      ? [
-          Google({
-            clientId: process.env.AUTH_GOOGLE_ID,
-            clientSecret: process.env.AUTH_GOOGLE_SECRET,
-            authorization: { params: { prompt: 'select_account', hd: 'adnimation.com' } },
-          }),
-        ]
-      : []),
-  ],
+  providers: [ownerPassword, ...oauthProviders],
   session: {
     strategy: 'jwt',
     // Spec 2.2 — automatic disconnect after inactivity.
