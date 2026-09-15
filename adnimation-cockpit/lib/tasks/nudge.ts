@@ -119,6 +119,16 @@ export async function senderIdentity(
   return iconUrl ? { name, iconUrl } : { name };
 }
 
+/**
+ * Whether this assignee is the person doing the assigning.
+ *
+ * Matched on the address rather than an id, because the actor is the email
+ * from the session and the assignee is a row in `people` — the two only ever
+ * meet by address.
+ */
+const isActor = (person: { email: string }, actor: string): boolean =>
+  person.email.trim().toLowerCase() === actor.trim().toLowerCase();
+
 export interface NudgeOutcome {
   personId: string;
   name: string;
@@ -189,8 +199,19 @@ export async function notifyAssigned(
    */
   if (task.isPrivate) return [];
 
+  /*
+   * Never himself.
+   *
+   * Putting his own name on a task is not handing it to anybody, and the
+   * cockpit sent him "over to you please, thanks, Maor" from himself the first
+   * morning this ran. A message a person sends themselves is pure noise, and
+   * it is the kind that teaches people to stop reading the channel it arrives
+   * in.
+   */
   const everyone = await assigneesOf(taskId);
-  const newcomers = everyone.filter((p) => personIds.includes(p.id));
+  const newcomers = everyone.filter(
+    (p) => personIds.includes(p.id) && !isActor(p, actor),
+  );
   if (newcomers.length === 0) return [];
 
   const chosen = deps?.slack
@@ -269,7 +290,10 @@ export async function nudgeTask(
     .limit(1);
   if (!task) throw new Error('No task with that id');
 
-  const who = await assigneesOf(taskId);
+  // Chasing himself is the same noise as handing himself a task; see above.
+  const who = (await assigneesOf(taskId)).filter((p) => !isActor(p, actor));
+  if (who.length === 0) return { sent: [], asHimself: false };
+
   const chosen = deps?.slack
     ? { slack: deps.slack, asHimself: deps.asHimself ?? false }
     : await signer();

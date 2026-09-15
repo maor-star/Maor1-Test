@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { signIn } from 'next-auth/react';
+import { getSession, signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 
@@ -46,7 +46,15 @@ export function SignInForm({
               setError('Incorrect email or password.');
               return;
             }
-            window.location.assign('/');
+            /*
+             * Where they land depends on who they are. Somebody granted the
+             * tasks board cannot reach `/`, so sending everybody there put a
+             * collaborator straight back on this form the moment their
+             * password was accepted — which reads as the password being
+             * refused, and is the report that found this.
+             */
+            const session = await getSession();
+            window.location.assign(session?.user?.role === 'collaborator' ? '/tasks' : '/');
           });
         }}
       >

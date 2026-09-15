@@ -8,7 +8,7 @@ import { Num } from '@/components/num';
 import { fmtDate } from '@/lib/utils';
 import { ACCESS_LEVELS, LEVEL_LABEL, type Grant } from '@/lib/tasks/access';
 import { grantTaskAccessAction, revokeTaskAccessAction } from '@/app/actions/task-access';
-import { inviteToTasksAction, revokeInviteAction } from '@/app/actions/invite';
+import { inviteToTasksAction, resendInviteAction, revokeInviteAction } from '@/app/actions/invite';
 import type { PendingInvite } from '@/lib/tasks/invite-service';
 
 /**
@@ -156,6 +156,12 @@ export function TaskAccessPanel({
                       {i.taskTitle ? ` · ${i.taskTitle}` : ''}
                     </span>
                   </span>
+                  <form action={(data) => run(resendInviteAction, data, `A new link is on its way to ${i.email}.`)}>
+                    <input type="hidden" name="email" value={i.email} />
+                    <Button type="submit" size="xs" variant="outline" disabled={pending}>
+                      Send again
+                    </Button>
+                  </form>
                   <form action={(data) => run(revokeInviteAction, data)}>
                     <input type="hidden" name="id" value={i.id} />
                     <Button type="submit" size="xs" variant="ghost" disabled={pending}>
@@ -222,6 +228,23 @@ export function TaskAccessPanel({
                       <Num>{fmtDate(g.grantedAt)}</Num>
                     </span>
                   </span>
+                  {/*
+                    The button for "I set a password and it will not let me in".
+                    A link works once, so the answer is always a fresh one —
+                    which is also the answer to "it never arrived".
+                  */}
+                  <form action={(data) => run(resendInviteAction, data, `A new link is on its way to ${g.email}.`)}>
+                    <input type="hidden" name="email" value={g.email} />
+                    <Button
+                      type="submit"
+                      size="xs"
+                      variant="outline"
+                      disabled={pending}
+                      title="Mails them a fresh sign-up link. Use this if they cannot get in."
+                    >
+                      Send again
+                    </Button>
+                  </form>
                   <form action={(data) => run(revokeTaskAccessAction, data)}>
                     <input type="hidden" name="email" value={g.email} />
                     <Button type="submit" size="xs" variant="ghost" disabled={pending}>

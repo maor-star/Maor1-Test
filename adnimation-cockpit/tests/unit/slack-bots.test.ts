@@ -61,16 +61,27 @@ describe('slack bots — who speaks for whom', () => {
     for (const bot of BOTS) expect(bot.carrier).not.toBe('mail');
   });
 
-  it('falls back to the shared token, and does not pretend to be the bot', () => {
+  /*
+   * This asserted the opposite until the shared token was given
+   * chat:write.customize. Slack ignores a username on a token without that
+   * scope, so asking for one produced a message under the wrong name with
+   * nothing to say why — and the honest answer was to not ask. The scope is
+   * there now, so a fallback arrives as the bot it is standing in for rather
+   * than as "claud".
+   */
+  it('falls back to the shared token, wearing the right name', () => {
     const resolved = resolveBot('invoice-forwarder', {
       SLACK_BOT_TOKEN: 'shared',
     });
     expect(resolved.token).toBe('shared');
     expect(resolved.ownToken).toBe(false);
+    // Still worth reading: this is one bot wearing a name, not a separate app.
     expect(resolved.posture).toBe('shared');
-    // Asking the shared bot to rename itself either fails or is ignored, and a
-    // notification that fails to send is worse than one under the wrong name.
-    expect(postingIdentity(resolved)).toBeNull();
+    expect(postingIdentity(resolved)).toEqual({ username: 'Ledger', icon: ':bar_chart:' });
+  });
+
+  it('carries no name when there is no token to post with at all', () => {
+    expect(postingIdentity(resolveBot('invoice-forwarder', {}))).toBeNull();
   });
 
   it('reports nothing rather than guessing when no token exists at all', () => {

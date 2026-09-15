@@ -1,3 +1,4 @@
+import { NextResponse } from 'next/server';
 import type { NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
@@ -110,7 +111,20 @@ export const authConfig = {
        * The role travels in the verified session token, so this needs no
        * database and stays edge-safe.
        */
-      return mayReach(pathname, { role: auth.user.role ?? 'operator' });
+      const role = auth.user.role ?? 'operator';
+      if (mayReach(pathname, { role })) return true;
+
+      /*
+       * A signed-in person who has landed somewhere they cannot go is sent to
+       * the page they CAN go to, not to the login form.
+       *
+       * Returning false here means "sign in", and that is a lie to somebody
+       * who just did. It is also what made a working invitation look broken:
+       * the sign-in form lands everybody on `/`, a collaborator cannot reach
+       * `/`, so they were bounced to /login the instant their password was
+       * accepted — and read that as the password being refused.
+       */
+      return NextResponse.redirect(new URL('/tasks', request.nextUrl));
     },
 
     /**

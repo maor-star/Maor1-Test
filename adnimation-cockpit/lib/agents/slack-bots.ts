@@ -165,15 +165,22 @@ export function resolveBot(agentName: string, env: EnvLike = process.env) {
 /**
  * The name and icon to post under, or null when the token cannot carry them.
  *
- * Only the tokens we know hold `chat:write.customize` are asked to rename
- * themselves. Asking the shared bot to do it would either be ignored or
- * refused, and a notification that fails to send is worse than one that arrives
- * under the wrong name.
+ * This used to answer null for the shared bot, because the shared token held
+ * `chat:write` alone: Slack ignores a username on a token without
+ * `chat:write.customize`, so asking for one produced a message under the wrong
+ * name with nothing to say why. The shared token now holds that scope, so
+ * every posture can carry its identity and an agent falling back to the shared
+ * bot arrives as itself rather than as "claud".
+ *
+ * `posture` is still worth reading at the call site: only `own` and `carried`
+ * are a genuinely separate app. `shared` is the same bot wearing a name, which
+ * is the right thing on a notification and the wrong thing to lean on for
+ * anything that has to be provably from someone.
  */
 export function postingIdentity(resolved: {
   identity: BotIdentity;
   posture: string;
 }): { username: string; icon: string } | null {
-  if (resolved.posture !== 'own' && resolved.posture !== 'carried') return null;
+  if (resolved.posture === 'none') return null;
   return { username: resolved.identity.username, icon: resolved.identity.icon };
 }

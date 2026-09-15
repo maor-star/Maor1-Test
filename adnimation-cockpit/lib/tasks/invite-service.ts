@@ -4,7 +4,7 @@ import { writeAudit } from '@/lib/audit';
 import { hashPassword } from '@/lib/auth/password';
 import { sendMail } from '@/lib/mail/send';
 import { normaliseEmail, type AccessLevel } from '@/lib/tasks/access';
-import { grantAccess } from '@/lib/tasks/access-service';
+import { grantAccess, grantFor } from '@/lib/tasks/access-service';
 import { assigneesOf } from '@/lib/tasks/assignees';
 import { inviteLetter, type InviteTask } from '@/lib/tasks/invite-message';
 
@@ -196,6 +196,14 @@ async function taskForInvite(taskId: string): Promise<InviteTask | null> {
   };
 }
 
+/**
+ * Everybody he has let in, whether or not they have taken it up.
+ *
+ * The panel used to list only the ones still waiting, which hid the case that
+ * actually needs a button: somebody who accepted, set a password, and then
+ * could not get in. There was nothing on screen to send them a fresh link
+ * with — see resendInvite.
+ */
 export interface PendingInvite {
   id: string;
   email: string;
@@ -400,4 +408,45 @@ export async function revokeInvite(id: string, actor: string): Promise<{ ok: boo
     after: null,
   });
   return { ok: true };
+}
+
+/**
+ * Send it again.
+ *
+ * A link works once and expires, so "it did not arrive" and "I set a password
+ * and cannot get in" have the same answer: a new link. This mints a fresh one
+ * rather than re-mailing the old — an accepted or expired token is worth
+ * nothing, and sending it again would be sending a dead link twice.
+ *
+ * The person is looked up by address rather than by invitation id, so it works
+ * the same for one that was never opened, one already taken up, and one that
+ * has lapsed.
+ */
+export async function resendInvite(
+  email: string,
+  actor: string,
+  actorName: string,
+): Promise<SendInviteResult> {
+  const clean = normaliseEmail(email);
+
+  // The level and the task from the most recent invitation to this address, so
+  // a resend is the same invitation rather than a narrower new one.
+  const [last] = await db
+    .select({ level: taskInvites.level, taskId: taskInvites.taskId, name: taskInvites.name })
+    .from(taskInvites)
+    .where(sql`lower(${taskInvites.email}) = ${clean}`)
+    .orderBy(desc(taskInvites.createdAt))
+    .limit(1);
+
+  // Failing that, whatever access they hold now.
+  const held = await grantFor(clean);
+
+  return inviteToTasks({
+    email: clean,
+    name: last?.name ?? null,
+    level: (last?.level === 'edit' ? 'edit' : last?.level === 'view' ? 'view' : null) ?? held?.level ?? 'view',
+    taskId: last?.taskId ?? null,
+    actor,
+    actorName,
+  });
 }

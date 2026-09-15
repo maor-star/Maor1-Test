@@ -13,12 +13,21 @@ import { assignedMessage, lastNudges, notifyAssigned, nudgeMessage, nudgeTask } 
  * and "who is carrying this" was answered wrongly on every shared task.
  */
 const STAMP = Date.now();
-const ACTOR = 'maor@adnimation.com';
+// Scoped to this run: the fixture inserts a people row for the actor, and the
+// real address already exists in the database the tests run against.
+const ACTOR = `maor-${STAMP}@test.local`;
+/*
+ * Somebody who is not on the task, for the cases that are about delivery
+ * rather than about who is skipped. The actor is never messaged — see the
+ * last block — so a test that wants everyone to hear about it cannot act as
+ * one of them.
+ */
+const OUTSIDER = `chief-${STAMP}@test.local`;
 
-async function person(name: string, slackId: string | null) {
+async function person(name: string, slackId: string | null, email?: string) {
   const [row] = await db
     .insert(people)
-    .values({ name, email: `${name.toLowerCase()}-${STAMP}@test.local`, slackId })
+    .values({ name, email: email ?? `${name.toLowerCase()}-${STAMP}@test.local`, slackId })
     .returning();
   return row!;
 }
@@ -42,7 +51,8 @@ afterEach(async () => {
 });
 
 async function scene() {
-  const maor = await person(`Maor${STAMP}`, 'U-MAOR');
+  // The actor's own row, so "never himself" can be tested for real.
+  const maor = await person(`Maor${STAMP}`, 'U-MAOR', ACTOR);
   const tomer = await person(`Tomer${STAMP}`, 'U-TOMER');
   const silent = await person(`Silent${STAMP}`, null);
   const t = await task();
@@ -139,7 +149,7 @@ describe('asking what is happening with it', () => {
     await setAssignees(t.id, [maor.id, tomer.id]);
     const slack = new FakeSlackAdapter();
 
-    const result = await nudgeTask(t.id, ACTOR, null, { slack });
+    const result = await nudgeTask(t.id, OUTSIDER, null, { slack });
 
     expect(result.sent.every((s) => s.ok)).toBe(true);
     expect(slack.sent).toHaveLength(2);
@@ -153,7 +163,7 @@ describe('asking what is happening with it', () => {
     await setAssignees(t.id, [maor.id]);
     const slack = new FakeSlackAdapter();
 
-    await nudgeTask(t.id, ACTOR, null, {
+    await nudgeTask(t.id, OUTSIDER, null, {
       slack,
       asHimself: false,
       sender: { name: 'Maor Davidovich', iconUrl: 'https://slack.test/avatar.png' },
@@ -168,7 +178,7 @@ describe('asking what is happening with it', () => {
     await setAssignees(t.id, [maor.id]);
     const slack = new FakeSlackAdapter();
 
-    await nudgeTask(t.id, ACTOR, null, { slack, asHimself: true, sender: { name: 'Maor' } });
+    await nudgeTask(t.id, OUTSIDER, null, { slack, asHimself: true, sender: { name: 'Maor' } });
 
     // His own token is already him; a username on a user post is not honoured.
     expect(slack.sent[0]?.username).toBeUndefined();
@@ -186,7 +196,7 @@ describe('asking what is happening with it', () => {
     await setAssignees(t.id, [maor.id, silent.id]);
     const slack = new FakeSlackAdapter();
 
-    const result = await nudgeTask(t.id, ACTOR, null, { slack });
+    const result = await nudgeTask(t.id, OUTSIDER, null, { slack });
 
     expect(slack.sent).toHaveLength(1);
     expect(result.sent.find((s) => s.personId === silent.id)?.ok).toBe(false);
@@ -201,7 +211,7 @@ describe('asking what is happening with it', () => {
     const { maor, tomer, t } = await scene();
     await setAssignees(t.id, [maor.id, tomer.id]);
     const slack = new FakeSlackAdapter();
-    await nudgeTask(t.id, ACTOR, null, { slack });
+    await nudgeTask(t.id, OUTSIDER, null, { slack });
 
     const mark = (await lastNudges([t.id])).get(t.id);
 
@@ -237,7 +247,7 @@ describe('telling somebody he has put them on a task', () => {
     await setAssignees(t.id, [maor.id, tomer.id]);
     const slack = new FakeSlackAdapter();
 
-    const told = await notifyAssigned(t.id, [tomer.id], ACTOR, { slack });
+    const told = await notifyAssigned(t.id, [tomer.id], OUTSIDER, { slack });
 
     expect(told).toHaveLength(1);
     expect(told[0]?.ok).toBe(true);
@@ -254,7 +264,7 @@ describe('telling somebody he has put them on a task', () => {
     await setAssignees(t.id, [maor.id, tomer.id]);
     const slack = new FakeSlackAdapter();
 
-    await notifyAssigned(t.id, [tomer.id], ACTOR, { slack });
+    await notifyAssigned(t.id, [tomer.id], OUTSIDER, { slack });
 
     expect(slack.sent.map((m) => m.target)).toEqual(['U-TOMER']);
   });
@@ -265,7 +275,7 @@ describe('telling somebody he has put them on a task', () => {
     await setAssignees(t.id, [maor.id]);
     const slack = new FakeSlackAdapter();
 
-    const told = await notifyAssigned(t.id, [maor.id], ACTOR, { slack });
+    const told = await notifyAssigned(t.id, [maor.id], OUTSIDER, { slack });
 
     // The star means it is his alone; announcing it in Slack is out of his
     // hands the moment it is sent.
@@ -278,7 +288,7 @@ describe('telling somebody he has put them on a task', () => {
     await setAssignees(t.id, [silent.id]);
     const slack = new FakeSlackAdapter();
 
-    const told = await notifyAssigned(t.id, [silent.id], ACTOR, { slack });
+    const told = await notifyAssigned(t.id, [silent.id], OUTSIDER, { slack });
 
     expect(told[0]?.ok).toBe(false);
     expect(told[0]?.error).toBe('no_slack_id');
@@ -295,11 +305,11 @@ describe('telling somebody he has put them on a task', () => {
     await setAssignees(t.id, [maor.id]);
     const slack = new FakeSlackAdapter();
 
-    await notifyAssigned(t.id, [maor.id], ACTOR, { slack });
+    await notifyAssigned(t.id, [maor.id], OUTSIDER, { slack });
 
     expect((await lastNudges([t.id])).get(t.id)).toBeUndefined();
 
-    await nudgeTask(t.id, ACTOR, null, { slack });
+    await nudgeTask(t.id, OUTSIDER, null, { slack });
     expect((await lastNudges([t.id])).get(t.id)).toBeDefined();
   });
 
@@ -322,5 +332,56 @@ describe('telling somebody he has put them on a task', () => {
     expect(bare).not.toContain('עד:');
     expect(bare).not.toContain('גם על זה');
     expect(bare).toContain('תודה,\nמאור');
+  });
+});
+
+/**
+ * A message he sends himself is noise, and it is the kind that teaches people
+ * to stop reading the channel it arrives in.
+ *
+ * It really happened: the first morning the hand-over ran, he put himself and
+ * Assaf on a task and the cockpit sent him "over to you please, thanks, Maor"
+ * from himself.
+ */
+describe('never messaging the person doing it', () => {
+  it('skips him on a task he put himself on', async () => {
+    const { maor, tomer, t } = await scene();
+    await setAssignees(t.id, [maor.id, tomer.id]);
+    const slack = new FakeSlackAdapter();
+
+    const told = await notifyAssigned(t.id, [maor.id, tomer.id], ACTOR, { slack });
+
+    expect(slack.sent.map((m) => m.target)).toEqual(['U-TOMER']);
+    expect(told.map((s) => s.personId)).toEqual([tomer.id]);
+  });
+
+  it('sends nothing at all when he is the only one on it', async () => {
+    const { maor, t } = await scene();
+    await setAssignees(t.id, [maor.id]);
+    const slack = new FakeSlackAdapter();
+
+    expect(await notifyAssigned(t.id, [maor.id], ACTOR, { slack })).toEqual([]);
+    expect(slack.sent).toHaveLength(0);
+  });
+
+  it('does not chase him either', async () => {
+    const { maor, tomer, t } = await scene();
+    await setAssignees(t.id, [maor.id, tomer.id]);
+    const slack = new FakeSlackAdapter();
+
+    const result = await nudgeTask(t.id, ACTOR, null, { slack });
+
+    expect(slack.sent.map((m) => m.target)).toEqual(['U-TOMER']);
+    expect(result.sent).toHaveLength(1);
+  });
+
+  it('still reaches everybody when somebody else is the one acting', async () => {
+    const { maor, tomer, t } = await scene();
+    await setAssignees(t.id, [maor.id, tomer.id]);
+    const slack = new FakeSlackAdapter();
+
+    await notifyAssigned(t.id, [maor.id, tomer.id], 'mor@adnimation.com', { slack });
+
+    expect(slack.sent.map((m) => m.target).sort()).toEqual(['U-MAOR', 'U-TOMER']);
   });
 });

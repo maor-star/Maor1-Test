@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
 import { canManageAccess, ACCESS_LEVELS } from '@/lib/tasks/access';
-import { acceptInvite, inviteToTasks, revokeInvite } from '@/lib/tasks/invite-service';
+import { acceptInvite, inviteToTasks, resendInvite, revokeInvite } from '@/lib/tasks/invite-service';
 import { MIN_PASSWORD } from '@/lib/tasks/invite-limits';
 
 /**
@@ -57,6 +57,28 @@ export async function inviteToTasksAction(formData: FormData): Promise<InviteRes
     actorName: user.name || user.email,
   });
 
+  revalidatePath('/tasks');
+  return result.ok
+    ? { ok: true }
+    : { ok: false, error: result.error, ...(result.link ? { link: result.link } : {}) };
+}
+
+/**
+ * A fresh link for somebody who already has access.
+ *
+ * The case this exists for is not "it never arrived" — it is "I set a password
+ * and it will not let me in". Both have the same answer, and a link that has
+ * been used is worth nothing, so this mints a new one.
+ */
+export async function resendInviteAction(formData: FormData): Promise<InviteResult> {
+  const user = await requireUser();
+  if (!canManageAccess(user)) {
+    return { ok: false, error: 'Only the owner invites people to this board' };
+  }
+  const email = String(formData.get('email') ?? '').trim();
+  if (!email) return { ok: false, error: 'Nobody to send to' };
+
+  const result = await resendInvite(email, user.email, user.name || user.email);
   revalidatePath('/tasks');
   return result.ok
     ? { ok: true }
