@@ -8,6 +8,8 @@ import { Input, Select, Textarea } from '@/components/ui/input';
 import { PRIORITY_META, TASK_PRIORITIES } from '@/lib/tasks/types';
 import type { AssigneeChip } from '@/lib/tasks/assignee-chip';
 import { InviteToTask } from '@/components/tasks/invite-to-task';
+import { TaskUpdates } from '@/components/tasks/task-updates';
+import type { UpdateTrail } from '@/lib/tasks/update-shape';
 import { PeoplePicker } from '@/components/tasks/people-picker';
 
 /**
@@ -52,6 +54,8 @@ export function QuickEditPanel({
   people,
   assignees,
   deptOptions,
+  updates,
+  roster,
   canInvite,
   onClose,
 }: {
@@ -61,6 +65,10 @@ export function QuickEditPanel({
   /** Who is on it now — the boxes that start ticked. */
   assignees: AssigneeChip[];
   deptOptions: { value: string; label: string }[];
+  /** What has been written on it, newest first, and how many there are. */
+  updates: UpdateTrail;
+  /** Addresses to names, so an update is signed by a person. */
+  roster: { email: string; name: string }[];
   /** Only the owner hands out access, so only he sees the way to. */
   canInvite: boolean;
   onClose: () => void;
@@ -189,6 +197,19 @@ export function QuickEditPanel({
           he actually hands work to rather than by name. */}
       <PeoplePicker people={people} value={picked} onChange={setPicked} />
 
+      {/* What has happened on it since it was written — and room to add. The
+          updates used to live only on the task's own page, which is the one
+          place he is not when he thinks of one. */}
+      <div className="rounded-[10px] bg-neutral-100/70 p-3">
+        <TaskUpdates
+          taskId={task.id}
+          updates={updates.latest}
+          total={updates.total}
+          people={roster}
+          canNotify={assignees.length > 0}
+        />
+      </div>
+
       {/* Somebody outside the cockpit, sent this task and a way in to see it. */}
       {canInvite ? <InviteToTask taskId={task.id} isPrivate={task.isPrivate} /> : null}
 
@@ -219,21 +240,39 @@ export function QuickEditToggle({
   open,
   onToggle,
   title,
+  updates = 0,
 }: {
   open: boolean;
   onToggle: () => void;
   title: string;
+  /** How much has been written on it — a dot rather than a number, so a dense
+      row gains a signal without gaining a column. */
+  updates?: number;
 }) {
   return (
     <button
       type="button"
       aria-expanded={open}
-      aria-label={`Quick edit — ${title}`}
-      title="Edit everything on this task without opening it"
+      aria-label={
+        updates > 0
+          ? `Quick edit — ${title} — ${updates} ${updates === 1 ? 'update' : 'updates'}`
+          : `Quick edit — ${title}`
+      }
+      title={
+        updates > 0
+          ? `Edit it, and read the ${updates} ${updates === 1 ? 'update' : 'updates'} written on it`
+          : 'Edit everything on this task, and write an update'
+      }
       onClick={onToggle}
-      className="justify-self-center rounded-[5px] px-1.5 py-1 text-[11px] leading-none text-muted hover:bg-neutral-100 hover:text-ink"
+      className="relative justify-self-center rounded-[5px] px-1.5 py-1 text-[11px] leading-none text-muted hover:bg-neutral-100 hover:text-ink"
     >
       {open ? '▴' : '▾'}
+      {updates > 0 && !open ? (
+        <span
+          aria-hidden
+          className="absolute end-0.5 top-0.5 block h-[5px] w-[5px] rounded-full bg-info"
+        />
+      ) : null}
     </button>
   );
 }

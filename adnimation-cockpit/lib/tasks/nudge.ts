@@ -278,6 +278,106 @@ export async function notifyAssigned(
   return sent;
 }
 
+/**
+ * An update he wrote, passed on to the people carrying the task.
+ *
+ * Writing it down and telling them are two different acts, so this is opt-in:
+ * the note is saved either way, and the checkbox decides whether it also
+ * leaves the building. Most updates are for the record; the ones worth a
+ * message are the ones he ticks.
+ *
+ * Never to himself, and never about a starred task — the same two rules the
+ * hand-over and the chase follow.
+ */
+export function updateMessage(title: string, body: string, link: string | null): string {
+  return [
+    `*${title.trim()}*`,
+    '',
+    body.trim(),
+    link ? `\n${link}` : '',
+    '',
+    'מאור',
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
+export async function notifyUpdate(
+  taskId: string,
+  body: string,
+  actor: string,
+  deps?: { slack?: SlackAdapter; asHimself?: boolean; sender?: { name: string; iconUrl?: string } },
+): Promise<NudgeOutcome[]> {
+  const [task] = await db
+    .select({ id: tasks.id, title: tasks.title, isPrivate: tasks.isPrivate })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+  if (!task || task.isPrivate) return [];
+
+  const who = (await assigneesOf(taskId)).filter((p) => !isActor(p, actor));
+  if (who.length === 0) return [];
+
+  const chosen = deps?.slack
+    ? { slack: deps.slack, asHimself: deps.asHimself ?? false }
+    : await signer();
+
+  const base = process.env.APP_URL ?? process.env.AUTH_URL ?? null;
+  const text = updateMessage(
+    task.title,
+    body,
+    base ? `${base.replace(/\/+$/, '')}/tasks/${task.id}` : null,
+  );
+  const sentAt = new Date();
+  const sent: NudgeOutcome[] = [];
+
+  for (const person of who) {
+    if (!person.slackId) {
+      sent.push({ personId: person.id, name: person.name, ok: false, error: 'no_slack_id' });
+      await record(task.id, person.id, actor, text, chosen.asHimself, {
+        ok: false, messageUrl: null, error: 'no_slack_id',
+      }, 'update', sentAt);
+      continue;
+    }
+
+    const result = await chosen.slack
+      .postMessage({
+        target: person.slackId,
+        text,
+        ...(chosen.asHimself
+          ? {}
+          : {
+              username: deps?.sender?.name ?? 'מאור',
+              ...(deps?.sender?.iconUrl ? { iconUrl: deps.sender.iconUrl } : { icon: ':wave:' }),
+            }),
+      })
+      .catch((e: unknown) => ({
+        ok: false as const,
+        messageUrl: null,
+        error: e instanceof Error ? e.message : 'unknown',
+      }));
+
+    sent.push({
+      personId: person.id,
+      name: person.name,
+      ok: result.ok,
+      ...(result.ok ? { messageUrl: result.messageUrl } : { error: result.error }),
+    });
+    await record(task.id, person.id, actor, text, chosen.asHimself, result, 'update', sentAt);
+  }
+
+  await writeAudit({
+    actor,
+    action: 'task.update_notified',
+    entityType: 'task',
+    entityId: task.id,
+    before: null,
+    after: { to: sent.map((x) => ({ name: x.name, ok: x.ok, error: x.error })) },
+  });
+
+  return sent;
+}
+
 export async function nudgeTask(
   taskId: string,
   actor: string,
@@ -370,7 +470,7 @@ async function record(
   body: string,
   asHimself: boolean,
   result: { ok: boolean; messageUrl?: string | null; error?: string; channelId?: string | null; ts?: string | null },
-  kind: 'nudge' | 'assigned' = 'nudge',
+  kind: 'nudge' | 'assigned' | 'update' = 'nudge',
   /*
    * One press, one timestamp — shared by every row it writes.
    *

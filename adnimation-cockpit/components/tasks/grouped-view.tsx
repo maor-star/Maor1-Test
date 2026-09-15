@@ -16,6 +16,7 @@ import { AssigneeCell } from '@/components/tasks/assignee-cell';
 import { NudgeButton } from '@/components/tasks/nudge-button';
 import { chipsFor, type AssigneeChip } from '@/lib/tasks/assignee-chip';
 import type { NudgeMark } from '@/lib/tasks/nudge';
+import type { UpdateTrail } from '@/lib/tasks/update-shape';
 import type { DelegationMark } from '@/lib/delegation/for-many';
 import { InstantFilter } from '@/components/hud/instant-filter';
 import { Num } from '@/components/num';
@@ -50,6 +51,8 @@ export function TaskGroupedView({
   delegated,
   assignees,
   nudges,
+  updates,
+  roster,
   canStar,
 }: {
   rows: TaskRow[];
@@ -63,6 +66,10 @@ export function TaskGroupedView({
   assignees: Map<string, AssigneeChip[]>;
   /** Task id → when he last asked what was happening with it. */
   nudges: Map<string, NudgeMark>;
+  /** Task id → what has been written on it, newest first. */
+  updates: Map<string, UpdateTrail>;
+  /** Addresses to names, so an update is signed by a person. */
+  roster: { email: string; name: string }[];
   /**
    * Whether the star is his to press. Only the owner marks a task private, so
    * for anyone else the column is not there at all rather than disabled — a
@@ -112,6 +119,8 @@ export function TaskGroupedView({
           delegated={delegated}
           assignees={assignees}
           nudges={nudges}
+          updates={updates}
+          roster={roster}
           canStar={canStar}
         />
       ))}
@@ -135,6 +144,8 @@ function Group({
   delegated,
   assignees,
   nudges,
+  updates,
+  roster,
   canStar,
 }: {
   group: TaskGroup<TaskRow>;
@@ -146,6 +157,8 @@ function Group({
   delegated: Map<string, DelegationMark>;
   assignees: Map<string, AssigneeChip[]>;
   nudges: Map<string, NudgeMark>;
+  updates: Map<string, UpdateTrail>;
+  roster: { email: string; name: string }[];
   canStar: boolean;
 }) {
   const [open, setOpen] = useState(true);
@@ -213,6 +226,8 @@ function Group({
                 mark={delegated.get(t.id)}
                 on={chipsFor(t, assignees.get(t.id))}
                 nudge={nudges.get(t.id) ?? null}
+                trail={updates.get(t.id) ?? { latest: [], total: 0 }}
+                roster={roster}
                 canStar={canStar}
               />
             ))}
@@ -260,6 +275,8 @@ function Row({
   mark,
   on,
   nudge,
+  trail,
+  roster,
   canStar,
 }: {
   task: TaskRow;
@@ -272,6 +289,8 @@ function Row({
   /** Everyone on this task, lead first. */
   on: AssigneeChip[];
   nudge: NudgeMark | null;
+  trail: UpdateTrail;
+  roster: { email: string; name: string }[];
   canStar: boolean;
 }) {
   const [editing, setEditing] = useState(false);
@@ -378,6 +397,7 @@ function Row({
       <QuickEditToggle
         open={editing}
         title={task.title}
+        updates={trail.total}
         onToggle={() => setEditing((v) => !v)}
       />
     </li>
@@ -390,6 +410,8 @@ function Row({
           people={people}
           assignees={on}
           deptOptions={deptOptions}
+          updates={trail}
+          roster={roster}
           canInvite={canStar}
           onClose={() => setEditing(false)}
         />

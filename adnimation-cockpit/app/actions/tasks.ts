@@ -12,7 +12,7 @@ import { commentInputSchema, taskInputSchema, taskPatchSchema } from '@/lib/task
 import { getTask, type TaskRow } from '@/lib/tasks/queries';
 import { editMirroredTask } from '@/lib/tasks/clickup-edit';
 import { assigneesOf, setAssignees } from '@/lib/tasks/assignees';
-import { notifyAssigned, senderIdentity } from '@/lib/tasks/nudge';
+import { notifyAssigned, notifyUpdate, senderIdentity } from '@/lib/tasks/nudge';
 import { canEditTask, canSeePrivate, isAccountHolder } from '@/lib/tasks/access';
 import type { CockpitUser } from '@/lib/auth/session';
 
@@ -306,8 +306,39 @@ export async function addCommentAction(formData: FormData): Promise<ActionResult
   const denied = await mayEdit(user, parsed.data.taskId);
   if (denied) return denied;
   await addComment(parsed.data.taskId, parsed.data.body, user.email);
+
+  /*
+   * Writing it down and telling them are two different acts.
+   *
+   * The note is saved either way; the tick decides whether it also leaves the
+   * building. Most updates are for the record, and a system that Slacked every
+   * one of them would teach the team to stop reading the ones that matter.
+   * Same rule as everywhere else here: his click is what sends.
+   */
+  let notice: string | undefined;
+  if (formData.get('notify') === 'on' || formData.get('notify') === 'true') {
+    const told = await notifyUpdate(
+      parsed.data.taskId,
+      parsed.data.body,
+      user.email,
+      { sender: await senderIdentity(user.email) },
+    ).catch(() => []);
+
+    const failed = told.filter((t) => !t.ok);
+    if (told.length === 0) {
+      notice = 'Saved. Nobody else is on this task, so there was no one to tell.';
+    } else if (failed.length > 0) {
+      notice = `Saved. Slack did not reach everyone — ${failed
+        .map((f) => (f.error === 'no_slack_id' ? `${f.name} has no Slack account on file` : `${f.name}: ${f.error}`))
+        .join('; ')}.`;
+    } else {
+      notice = `Saved, and sent to ${told.map((t) => t.name).join(', ')}.`;
+    }
+  }
+
+  revalidatePath('/tasks');
   revalidatePath(`/tasks/${parsed.data.taskId}`);
-  return { ok: true };
+  return { ok: true, ...(notice ? { notice } : {}) };
 }
 
 /**

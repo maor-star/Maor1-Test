@@ -25,6 +25,8 @@ import { listGrants } from '@/lib/tasks/access-service';
 import { TaskAccessPanel } from '@/components/tasks/access-panel';
 import { pendingInvites } from '@/lib/tasks/invite-service';
 import { peopleByUse } from '@/lib/tasks/people-order';
+import { updatesForMany } from '@/lib/tasks/updates';
+import type { UpdateTrail } from '@/lib/tasks/update-shape';
 
 export const dynamic = 'force-dynamic';
 
@@ -127,11 +129,13 @@ export default async function TasksPage({
   // Which pillars each task belongs to, and who is holding it — one query
   // each for the whole list rather than one per row.
   const ids = all.map((r) => r.id);
-  const [pillars, delegated, assignees, nudges, ranked] = await Promise.all([
+  const [pillars, delegated, assignees, nudges, updates, ranked] = await Promise.all([
     linesForMany('task', ids),
     delegationsForMany('task', ids),
     assigneesForMany(ids),
     lastNudges(ids),
+    // What has been written on each, newest first — one query for the board.
+    updatesForMany(ids),
     // The team in the order he actually uses them, so the picker opens on the
     // four names that carry the board rather than on the alphabet.
     peopleByUse(),
@@ -256,6 +260,8 @@ export default async function TasksPage({
         delegated={delegated}
         assignees={assignees}
         nudges={nudges}
+        updates={updates}
+        roster={people.map((p) => ({ email: p.email, name: p.name }))}
         canStar={canManageAccess(viewer)}
       />
     </div>
@@ -273,6 +279,8 @@ function TaskViewSwitch({
   delegated,
   assignees,
   nudges,
+  updates,
+  roster,
   canStar,
 }: {
   view: View;
@@ -285,6 +293,8 @@ function TaskViewSwitch({
   delegated: Map<string, DelegationMark>;
   assignees: Map<string, AssigneeChip[]>;
   nudges: Map<string, NudgeMark>;
+  updates: Map<string, UpdateTrail>;
+  roster: { email: string; name: string }[];
   canStar: boolean;
 }) {
   if (view === 'board') return <TaskBoardView rows={rows} people={people} departments={departments} />;
@@ -302,6 +312,8 @@ function TaskViewSwitch({
       delegated={delegated}
       assignees={assignees}
       nudges={nudges}
+      updates={updates}
+      roster={roster}
       canStar={canStar}
     />
   );
