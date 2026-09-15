@@ -1,6 +1,5 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { eq } from 'drizzle-orm';
 import { authConfig } from '@/auth.config';
 import { isAllowedEmail, roleForEmail } from '@/lib/auth/allowlist';
 import { verifyPassword } from '@/lib/auth/password';
@@ -102,20 +101,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.taskLevel = grant?.level ?? 'view';
       }
 
-      // Reconcile the users row on first sign-in so audit rows and alert
-      // acknowledgements have a real user id to point at.
+      /*
+       * The account row, for the two people who have an account.
+       *
+       * This used to write a row for everybody, with whatever role the token
+       * carried — and `users` accepts only 'owner' or 'operator', by a CHECK
+       * constraint that is the spec rather than an oversight. A collaborator
+       * therefore blew up here, the exception came out of this callback, and
+       * Auth.js turned the whole sign-in into error=Configuration: no session,
+       * a bounce back to /login, and somebody who had just typed the right
+       * password being told in effect that it was wrong.
+       */
       if (profile || user) {
-        const { db, users } = await import('@/lib/db');
-        const existing = await db.select().from(users).where(eq(users.email, email)).limit(1);
-        if (existing.length === 0) {
-          const [created] = await db
-            .insert(users)
-            .values({ email, name: profile?.name ?? user?.name ?? email, role: token.role as string })
-            .returning();
-          token.uid = created?.id;
-        } else {
-          token.uid = existing[0]?.id;
-        }
+        const { reconcileAccountRow } = await import('@/lib/auth/reconcile');
+        token.uid = await reconcileAccountRow(
+          email,
+          profile?.name ?? user?.name ?? email,
+          token.role as 'owner' | 'operator' | 'collaborator',
+        );
       }
       return token;
     },
