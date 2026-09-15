@@ -139,6 +139,25 @@ export const TARGETS = [
     ],
   },
   {
+    src: new URL('../lib/tasks/invite-message.ts', import.meta.url),
+    out: new URL('./invite-message.mjs', import.meta.url),
+    from: 'lib/tasks/invite-message.ts',
+    test: 'tests/unit/invite-message-parity.test.ts',
+    rewrites: [
+      [/export interface InviteTask \{[\s\S]*?\n\}\n\n/, ''],
+      [/export interface InviteLetter \{[\s\S]*?\n\}\n\n/, ''],
+      ['const PRIORITY_WORD: Record<string, string> = {', 'const PRIORITY_WORD = {'],
+      ['const readable = (status: string) =>', 'const readable = (status) =>'],
+      ['function trimmed(text: string, limit = 600): string {', 'function trimmed(text, limit = 600) {'],
+      [
+        /export function inviteLetter\(input: \{[\s\S]*?\n\}\): InviteLetter \{/,
+        'export function inviteLetter(input) {',
+      ],
+      ['  const lines: string[] = [];', '  const lines = [];'],
+      ['    const facts: string[] = [`Status: ${readable(task.status)}`];', '    const facts = [`Status: ${readable(task.status)}`];'],
+    ],
+  },
+  {
     src: new URL('../lib/sync/mirror-skip.ts', import.meta.url),
     out: new URL('./mirror-skip.mjs', import.meta.url),
     from: 'lib/sync/mirror-skip.ts',

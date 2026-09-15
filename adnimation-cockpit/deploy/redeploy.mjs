@@ -95,6 +95,10 @@ async function main() {
     'invoice-forward.mjs', 'internal-mail.mjs', 'mailbox-tidy.mjs', 'mailbox-rules.mjs', 'mail-answer.mjs', 'autoreply-rules.mjs', 'drive-find.mjs', 'gmail-send-check.mjs', 'claude-check.mjs', 'contract-backfill.mjs',
     // Whose ClickUp tasks are his, shared by the mirror.
     'mirror-skip.mjs',
+    // Inviting somebody to the board from the server, for when the screen
+    // cannot do it — invite-send uses the generated copy of the wording so its
+    // mail is word for word the one the button sends.
+    'invite-send.mjs', 'invite-message.mjs',
     // Reading the people out of the mailbox and into the CRM.
     'crm-harvest.mjs', 'crm-from-mail.mjs',
     // Who speaks in Slack, shared by the jobs that report what they did.
