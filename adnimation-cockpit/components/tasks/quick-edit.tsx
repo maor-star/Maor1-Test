@@ -71,10 +71,10 @@ export function QuickEditPanel({
   roster: { email: string; name: string }[];
   /** Only the owner hands out access, so only he sees the way to. */
   canInvite: boolean;
-  onClose: () => void;
+  /** Carries anything worth saying about the save back to the row. */
+  onClose: (notice?: string | null) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [picked, setPicked] = useState<string[]>(() => assignees.map((a) => a.id));
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -103,17 +103,22 @@ export function QuickEditPanel({
     else for (const id of picked) data.append('assignees', id);
 
     setError(null);
-    setNotice(null);
     startTransition(async () => {
       const result = await updateTaskAction(data);
       if (!result.ok) {
         setError(result.error ?? 'That did not save');
         return;
       }
-      // Saved — but ClickUp may not have taken its copy, which is worth saying
-      // and is not a reason to keep the panel open.
-      if (result.notice) setNotice(result.notice);
-      else onClose();
+      /*
+       * Save closes it, always.
+       *
+       * It used to stay open whenever there was something to mention — ClickUp
+       * not taking its copy, Slack not reaching somebody — which left him on a
+       * form he had finished with, having to shut it himself. The note is
+       * worth reading and is not worth a second click: it goes to the row he
+       * is returning to, and the panel gets out of the way.
+       */
+      onClose(result.notice ?? null);
       router.refresh();
     });
   };
@@ -214,7 +219,6 @@ export function QuickEditPanel({
       {canInvite ? <InviteToTask taskId={task.id} isPrivate={task.isPrivate} /> : null}
 
       {error ? <p className="text-[12.5px] text-neg">{error}</p> : null}
-      {notice ? <p className="text-[12.5px] text-warn">{notice}</p> : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
         <span className="text-[11.5px] text-muted">
@@ -223,7 +227,7 @@ export function QuickEditPanel({
             : 'Yours, saved here.'}
         </span>
         <span className="flex gap-2">
-          <Button type="button" size="xs" variant="outline" onClick={onClose}>
+          <Button type="button" size="xs" variant="outline" onClick={() => onClose()}>
             CANCEL
           </Button>
           <Button type="submit" size="xs" disabled={pending}>

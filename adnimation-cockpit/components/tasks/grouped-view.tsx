@@ -294,6 +294,14 @@ function Row({
   canStar: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  /*
+   * What the save had to say, shown on the row he lands back on.
+   *
+   * Save closes the panel, so anything worth mentioning — ClickUp not taking
+   * its copy, Slack not reaching somebody — has nowhere to live unless the row
+   * carries it. It clears on the next thing he does to the row.
+   */
+  const [afterSave, setAfterSave] = useState<string | null>(null);
   const overdue = task.dueDate !== null && task.dueDate < today && task.status !== 'done';
   const statusColour = GROUP_COLOR[toneForStatus(task.status)];
   const priorityColour = GROUP_COLOR[toneForPriority(task.priority)];
@@ -398,9 +406,27 @@ function Row({
         open={editing}
         title={task.title}
         updates={trail.total}
-        onToggle={() => setEditing((v) => !v)}
+        onToggle={() => {
+          setAfterSave(null);
+          setEditing((v) => !v);
+        }}
       />
     </li>
+
+    {afterSave ? (
+      <li className="border-b border-line px-[14px] py-1.5 last:border-b-0">
+        <span className="flex flex-wrap items-center gap-2 text-[12px] text-warn">
+          {afterSave}
+          <button
+            type="button"
+            onClick={() => setAfterSave(null)}
+            className="rounded-[4px] border border-line px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted hover:bg-neutral-100"
+          >
+            Got it
+          </button>
+        </span>
+      </li>
+    ) : null}
 
     {editing ? (
       <li className="border-b border-line last:border-b-0">
@@ -413,7 +439,10 @@ function Row({
           updates={trail}
           roster={roster}
           canInvite={canStar}
-          onClose={() => setEditing(false)}
+          onClose={(notice) => {
+            setEditing(false);
+            setAfterSave(notice ?? null);
+          }}
         />
       </li>
     ) : null}

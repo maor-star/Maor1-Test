@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { getSubtasks, getTask, listDepartments, listPeople } from '@/lib/tasks/queries';
+import { getSubtasks, getTask, listDepartments } from '@/lib/tasks/queries';
 import { listComments, isZombie } from '@/lib/tasks/mutations';
 import { daysOverdue } from '@/lib/scoring/heat-score';
 import { fmtDateTime, fmtMoney } from '@/lib/utils';
@@ -35,21 +35,26 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
   const task = await getTask(id, mine);
   if (!task) notFound();
 
-  const [subtasks, comments, departments, people, assigned, nudged] = await Promise.all([
+  const [subtasks, comments, departments, ranked, assigned, nudged] = await Promise.all([
     getSubtasks(id, mine),
     listComments(id),
     listDepartments(),
-    listPeople(),
+    // Ordered by who he actually hands work to, not by the alphabet.
+    peopleByUse(),
     assigneesOf(id),
     lastNudges([id]),
   ]);
-  const ranked = await peopleByUse();
 
   // A mirrored task has an owner and no picked assignees, so an empty list
   // means the lead alone — the same rule the board's rows use.
   const onIt = chipsFor(task, assigned);
   const isMirror = task.layer === 'company';
-  const peopleOptions = people.map((p) => ({ id: p.id, label: p.name }));
+  /*
+   * Every picker on this page takes the ranked list, not the alphabet — the
+   * order he reaches for people in does not change because he opened a task
+   * instead of the board.
+   */
+  const peopleOptions = ranked;
 
   return (
     <div className="space-y-3">

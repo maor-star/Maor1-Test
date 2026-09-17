@@ -22,7 +22,7 @@ import {
 } from '@/lib/contracts/intake-module';
 import { ContractCard } from '@/components/contracts/contract-card';
 import { ContractGroupedView } from '@/components/contracts/grouped-view';
-import { listPeople } from '@/lib/tasks/queries';
+import { peopleByUse } from '@/lib/tasks/people-order';
 import { delegationsForMany } from '@/lib/delegation/for-many';
 import {
   CONTRACT_GROUP_BYS, CONTRACT_GROUP_BY_LABEL, isContractGroupBy, type ContractGroupBy,
@@ -65,10 +65,11 @@ export default async function ContractsPage({
   // Only one of the seven, and only if it is one of the seven.
   const pillar = PILLAR_OPTIONS.some((p) => p.line === sp.pillar) ? (sp.pillar ?? null) : null;
 
-  const [board, departments, staff, intake, counts, drive] = await Promise.all([
+  const [board, departments, people, intake, counts, drive] = await Promise.all([
     contractBoard(),
     listDepartments(),
-    listPeople(),
+    // Ordered by who he actually hands work to, not by the alphabet.
+    peopleByUse(),
     listIntake(intakeView),
     contractCounts(),
     driveStatus().catch(() => ({ configured: false, authorised: false, reason: 'unknown' })),
@@ -148,7 +149,6 @@ export default async function ContractsPage({
 
   // Who is holding each contract, in one query for the whole list.
   const delegated = await delegationsForMany('contract', rows.map((c) => c.id));
-  const people = staff.map((p) => ({ id: p.id, label: p.name }));
 
   return (
     <div className="space-y-5">

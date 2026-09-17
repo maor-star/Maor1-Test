@@ -6,10 +6,11 @@ import { useState } from 'react';
  * Who is on a task — pick as many as it takes.
  *
  * The order is the point. Alphabetical is the order nobody wants: four or five
- * names carry almost every task on this board, so sorting by name puts the
- * person he needs eighth and somebody he has never assigned anything to first.
- * The list arrives already ranked by how much live work each person is
- * carrying (see lib/tasks/people-order.ts), and this draws it in that order.
+ * names carry almost every hand-over on this board, so sorting by name puts
+ * the person he needs eighth and somebody he has never given anything to
+ * first. The list arrives already ranked by how often he has CHOSEN each
+ * person — every task he put them on plus every hand-over he sent them (see
+ * lib/tasks/people-order.ts) — and this draws it in that order.
  *
  * The first name ticked is the LEAD — the one the row sorts under and the one
  * the heat score reads — so the position is shown on the chip rather than left
@@ -28,7 +29,7 @@ export function PeoplePicker({
   /** How many to show before "more"; the rest are one click away. */
   visible = 6,
 }: {
-  people: { id: string; label: string; onTasks?: number }[];
+  people: { id: string; label: string; picks?: number; onTasks?: number }[];
   value: string[];
   onChange: (next: string[]) => void;
   label?: string;
@@ -62,11 +63,16 @@ export function PeoplePicker({
               type="button"
               aria-pressed={on}
               onClick={() => toggle(p.id)}
-              title={
-                p.onTasks !== undefined && p.onTasks > 0
-                  ? `${p.label} — on ${p.onTasks} open ${p.onTasks === 1 ? 'task' : 'tasks'}`
-                  : p.label
-              }
+              /* Why this name is where it is, and what they are carrying now
+                 — the sort key and the workload are different facts, so the
+                 hover says both rather than implying one from the other. */
+              title={[
+                p.label,
+                p.picks ? `picked ${p.picks} times` : null,
+                p.onTasks ? `on ${p.onTasks} open ${p.onTasks === 1 ? 'task' : 'tasks'} now` : null,
+              ]
+                .filter(Boolean)
+                .join(' — ')}
               className={`rounded-full border px-2.5 py-1 text-[12px] ${
                 on
                   ? 'border-accent bg-accent/10 font-semibold text-accent'
