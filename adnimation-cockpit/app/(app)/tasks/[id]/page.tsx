@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { getSubtasks, getTask, listDepartments } from '@/lib/tasks/queries';
 import { listComments, isZombie } from '@/lib/tasks/mutations';
 import { daysOverdue } from '@/lib/scoring/heat-score';
-import { fmtDateTime, fmtMoney } from '@/lib/utils';
+import { fmtDateTime } from '@/lib/utils';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
@@ -142,10 +142,10 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                   deptId: task.deptId,
                   ownerPersonId: task.ownerPersonId,
                   tags: task.tags,
-                  moneyImpactCents: task.moneyImpactCents,
                 }}
                 departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
                 people={peopleOptions}
+                assignees={onIt.map((p) => p.id)}
               />
             </div>
           </HudCard>
@@ -195,7 +195,6 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                   label={onIt.length > 1 ? 'On it' : 'Owner'}
                   value={onIt.length > 0 ? onIt.map((p) => p.name).join(', ') : 'Unowned'}
                 />
-                <Field label="Money impact" value={fmtMoney(task.moneyImpactCents)} ltr />
                 <Field label="Source" value={task.source} ltr />
                 <Field label="Snoozed" value={`${task.snoozeCount} times`} />
                 <Field label="Created" value={fmtDateTime(task.createdAt)} ltr />

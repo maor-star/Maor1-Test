@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { PILLAR_OPTIONS } from '@/lib/control/pillars';
+import type { PillarOption } from '@/lib/control/pillars';
 
 /**
  * Reading a screen one pillar at a time.
@@ -11,17 +11,33 @@ import { PILLAR_OPTIONS } from '@/lib/control/pillars';
 export function PillarFilter({
   current,
   href,
+  options,
+  manage,
 }: {
   current: string | null;
   /** Builds the URL for one pillar, or for none. */
   href: (line: string | null) => string;
+  /** The pillars as he has them now, read from the table by the page. */
+  options: PillarOption[];
+  /** Where the list itself is edited. Omitted for anyone who may not. */
+  manage?: string;
 }) {
   return (
     <nav className="flex flex-wrap gap-1" aria-label="Filter by pillar">
       <Chip label="Every pillar" to={href(null)} on={current === null} />
-      {PILLAR_OPTIONS.map((p) => (
+      {options.map((p) => (
         <Chip key={p.line} label={p.label} to={href(p.line)} on={current === p.line} />
       ))}
+      {/* The list is his to change, so the way to change it sits with it —
+          finding it under Settings means knowing it is there. */}
+      {manage ? (
+        <Link
+          href={manage}
+          className="hud-label rounded-full border border-dashed border-line px-2.5 py-[6px] text-[11px] text-muted hover:border-neutral-300 hover:text-ink"
+        >
+          + EDIT PILLARS
+        </Link>
+      ) : null}
     </nav>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { PILLAR_OPTIONS } from '@/lib/control/pillars';
+import { usePillars } from './pillars-context';
 
 /**
  * Which pillars a thing belongs to — ticked, not chosen from a list.
@@ -23,6 +23,7 @@ export function PillarPicker({
   /** Unique per form — two editors can be open on one screen. */
   id: string;
 }) {
+  const options = usePillars();
   const [on, setOn] = useState<string[]>([...selected]);
 
   const toggle = (line: string) =>
@@ -34,7 +35,7 @@ export function PillarPicker({
         <input key={line} type="hidden" name={name} value={line} />
       ))}
       <div className="flex flex-wrap gap-1">
-        {PILLAR_OPTIONS.map((p) => {
+        {options.map((p) => {
           const picked = on.includes(p.line);
           return (
             <button
@@ -60,8 +61,9 @@ export function PillarPicker({
 
 /** The pillars on a card, read-only. */
 export function PillarTags({ lines }: { lines: readonly string[] }) {
+  const options = usePillars();
   if (lines.length === 0) return null;
-  const labels = PILLAR_OPTIONS.filter((p) => lines.includes(p.line));
+  const labels = options.filter((p) => lines.includes(p.line));
   return (
     <>
       {labels.map((p) => (

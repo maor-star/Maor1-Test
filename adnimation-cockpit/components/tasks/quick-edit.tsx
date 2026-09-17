@@ -43,7 +43,6 @@ export interface QuickEditTask {
   deptId: string | null;
   ownerPersonId: string | null;
   tags: string[];
-  moneyImpactCents: number | null;
   layer: 'mine' | 'company';
   isPrivate: boolean;
 }
@@ -185,16 +184,6 @@ export function QuickEditPanel({
 
         <Field label="Tags">
           <Input name="tags" defaultValue={task.tags.join(', ')} placeholder="comma separated" />
-        </Field>
-        <Field label="Money impact ($)">
-          <Input
-            type="number"
-            dir="ltr"
-            min={0}
-            step="0.01"
-            name="moneyImpact"
-            defaultValue={task.moneyImpactCents === null ? '' : task.moneyImpactCents / 100}
-          />
         </Field>
       </div>
 

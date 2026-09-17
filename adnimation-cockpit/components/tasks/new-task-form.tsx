@@ -107,10 +107,6 @@ export function NewTaskForm({
               ))}
             </Select>
           </div>
-          <div>
-            <Label htmlFor="new-task-money">Money impact (USD)</Label>
-            <Input id="new-task-money" name="moneyImpact" type="number" min="0" step="1" dir="ltr" />
-          </div>
           <div className="md:col-span-2">
             <Label htmlFor="new-task-tags">Tags (comma separated)</Label>
             <Input id="new-task-tags" name="tags" placeholder="supply, ctv" />

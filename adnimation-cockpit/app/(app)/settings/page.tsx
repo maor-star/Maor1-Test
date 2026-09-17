@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireOwner } from '@/lib/auth/session';
 import { HudCard, HudCardHeader } from '@/components/hud/card';
 import { PageHeader } from '@/components/hud/page-header';
@@ -37,7 +38,10 @@ export default async function SettingsPage() {
         kicker="SETTINGS"
         title="Keys"
         action={
-          <span className="font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
+          <span className="flex items-center gap-3 font-semi text-[11.5px] tracking-[0.14em] text-neutral-500">
+            <Link href="/settings/pillars" className="text-info hover:underline">
+              PILLARS →
+            </Link>
             {missing === 0 ? (
               'EVERYTHING IS SET'
             ) : (

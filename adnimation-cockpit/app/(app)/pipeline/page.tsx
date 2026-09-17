@@ -15,7 +15,7 @@ import {
 } from '@/lib/pipeline/types';
 import { fmtMoney, fmtNumber } from '@/lib/utils';
 import { foldForSearch } from '@/lib/search';
-import { linesForMany, PILLAR_OPTIONS } from '@/lib/control/tagging';
+import { linesForMany, pillarOptions } from '@/lib/control/tagging';
 import { PillarFilter } from '@/components/hud/pillar-filter';
 import { InstantFilter } from '@/components/hud/instant-filter';
 import {
@@ -92,7 +92,8 @@ export default async function PipelinePage({
   // Only one of the seven, and only if it is one of the seven. A deal nobody
   // has tagged is not an answer to "what is on Exchange CTV", so it drops out
   // of the board while the filter is on.
-  const pillar = PILLAR_OPTIONS.some((p) => p.line === sp.pillar) ? (sp.pillar ?? null) : null;
+  const pillarList = await pillarOptions();
+  const pillar = pillarList.some((p) => p.line === sp.pillar) ? (sp.pillar ?? null) : null;
   const board = buildBoard(
     pillar ? rows.filter((r) => (pillars.get(r.id) ?? []).some((l) => l === pillar)) : rows,
   );
@@ -217,7 +218,12 @@ export default async function PipelinePage({
 
       {/* The whole company by department: the same board, read one pillar at a
           time, in the URL so a narrowed screen is a link he can send. */}
-      <PillarFilter current={pillar} href={(line) => href({ pillar: line ?? undefined })} />
+      <PillarFilter
+        current={pillar}
+        href={(line) => href({ pillar: line ?? undefined })}
+        options={pillarList}
+        manage="/settings/pillars"
+      />
 
       <HudCard>
         <HudCardHeader

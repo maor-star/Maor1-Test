@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, entityLines } from '@/lib/db';
-import type { ActivityLine } from './lines';
+import { knownLines } from './pillar-store';
 import { cleanLines, type Taggable } from './pillars';
 
 /**
@@ -18,12 +18,15 @@ import { cleanLines, type Taggable } from './pillars';
  */
 
 /** The pillars on one thing. */
-export async function linesFor(type: Taggable, id: string): Promise<ActivityLine[]> {
-  const rows = await db
-    .select({ line: entityLines.line })
-    .from(entityLines)
-    .where(and(eq(entityLines.entityType, type), eq(entityLines.entityId, id)));
-  return cleanLines(rows.map((r) => r.line));
+export async function linesFor(type: Taggable, id: string): Promise<string[]> {
+  const [rows, known] = await Promise.all([
+    db
+      .select({ line: entityLines.line })
+      .from(entityLines)
+      .where(and(eq(entityLines.entityType, type), eq(entityLines.entityId, id))),
+    knownLines(),
+  ]);
+  return cleanLines(rows.map((r) => r.line), known);
 }
 
 /**
@@ -36,14 +39,17 @@ export async function linesFor(type: Taggable, id: string): Promise<ActivityLine
 export async function linesForMany(
   type: Taggable,
   ids: string[],
-): Promise<Map<string, ActivityLine[]>> {
-  const out = new Map<string, ActivityLine[]>();
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
   if (ids.length === 0) return out;
 
-  const rows = await db
-    .select({ id: entityLines.entityId, line: entityLines.line })
-    .from(entityLines)
-    .where(and(eq(entityLines.entityType, type), inArray(entityLines.entityId, ids)));
+  const [rows, known] = await Promise.all([
+    db
+      .select({ id: entityLines.entityId, line: entityLines.line })
+      .from(entityLines)
+      .where(and(eq(entityLines.entityType, type), inArray(entityLines.entityId, ids))),
+    knownLines(),
+  ]);
 
   const gathered = new Map<string, string[]>();
   for (const r of rows) {
@@ -51,7 +57,7 @@ export async function linesForMany(
     list.push(r.line);
     gathered.set(r.id, list);
   }
-  for (const [id, list] of gathered) out.set(id, cleanLines(list));
+  for (const [id, list] of gathered) out.set(id, cleanLines(list, known));
   return out;
 }
 
@@ -61,8 +67,10 @@ export async function setLines(
   id: string,
   lines: readonly string[],
   actor: string,
-): Promise<ActivityLine[]> {
-  const wanted = cleanLines(lines);
+): Promise<string[]> {
+  // Checked against every pillar, hidden ones included: hiding a pillar takes
+  // it off the chip row, it does not strip it off the work already carrying it.
+  const wanted = cleanLines(lines, await knownLines());
 
   await db
     .delete(entityLines)
@@ -104,4 +112,5 @@ export async function workPerLine(): Promise<Map<string, Record<Taggable, number
 
 // The browser-safe half — the seven, their labels, and what a form may send —
 // lives in ./pillars, and is re-exported so server callers have one import.
-export { cleanLines, PILLAR_OPTIONS, TAGGABLE, type Taggable } from './pillars';
+export { cleanLines, PILLAR_OPTIONS, TAGGABLE, type PillarOption, type Taggable } from './pillars';
+export { allPillars, knownLines, livePillars, pillarLabels, pillarOptions } from './pillar-store';

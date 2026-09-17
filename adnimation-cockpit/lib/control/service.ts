@@ -2,8 +2,9 @@ import { and, desc, gte, sql } from 'drizzle-orm';
 import { activityDaily, companyDaily, coreClientsDaily, db } from '@/lib/db';
 import { todayInTz } from '@/lib/utils';
 import { addDays, rangeFor, type Period, type PeriodRange } from '@/lib/revenue/periods';
+import { livePillars } from './pillar-store';
 import {
-  ACTIVITY_LINES, rankCoreClients, summariseLineOver,
+  ACTIVITY_LINES, LINE_SOURCE, rankCoreClients, summariseLineOver,
   type ActivityLine, type CoreClient, type CoreClientDay, type LineDay, type LinePeriodSummary,
 } from './lines';
 
@@ -41,7 +42,7 @@ export async function loadControlPanel(period: Period = '30D'): Promise<ControlP
   const fiveWeeksAgo = addDays(today, -WINDOW_DAYS);
   const since = range.previous.from < fiveWeeksAgo ? range.previous.from : fiveWeeksAgo;
 
-  const [lineRows, clientRows, bidderRows, [meta]] = await Promise.all([
+  const [lineRows, clientRows, bidderRows, [meta], pillars] = await Promise.all([
     db.select().from(activityDaily).where(gte(activityDaily.date, since)),
     db.select().from(coreClientsDaily).where(gte(coreClientsDaily.date, since)),
     /*
@@ -65,7 +66,20 @@ export async function loadControlPanel(period: Period = '30D'): Promise<ControlP
     db
       .select({ pulledAt: sql<Date | null>`max(pulled_at)` })
       .from(activityDaily),
+    livePillars(),
   ]);
+
+  /*
+   * A tile per pillar he can see figures for.
+   *
+   * Only the pillars the activity sync reports against get one: a pillar he
+   * added himself is a real pillar everywhere work is tagged and filtered, and
+   * has no source behind it here. A tile for it would show a permanent zero,
+   * which on this screen reads as a line that collapsed.
+   */
+  const tiles = pillars.filter(
+    (p) => p.hasRevenue && (ACTIVITY_LINES as readonly string[]).includes(p.line),
+  );
 
   const days: LineDay[] = lineRows
     .filter((r): r is typeof r & { line: ActivityLine } =>
@@ -103,7 +117,13 @@ export async function loadControlPanel(period: Period = '30D'): Promise<ControlP
   return {
     period,
     range,
-    lines: ACTIVITY_LINES.map((line) => summariseLineOver(line, days, range, today)),
+    lines: tiles.map((p) => ({
+      ...summariseLineOver(p.line as ActivityLine, days, range, today),
+      // The name and the words under it are his, read from the list he edits.
+      label: p.label,
+      unit: p.unit,
+      source: p.sourceNote ?? LINE_SOURCE[p.line as ActivityLine] ?? '',
+    })),
     coreClients: rankCoreClients(clients, today),
     pulledAt: meta?.pulledAt ? new Date(meta.pulledAt) : null,
     empty: lineRows.length === 0 && clientRows.length === 0 && bidderRows.length === 0,

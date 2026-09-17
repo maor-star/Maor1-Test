@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { TaskRow } from '@/lib/tasks/queries';
 import { daysOverdue } from '@/lib/scoring/heat-score';
 import { isZombie } from '@/lib/tasks/types';
-import { fmtDate, fmtMoney } from '@/lib/utils';
+import { fmtDate } from '@/lib/utils';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { Button } from '@/components/ui/button';
@@ -47,13 +47,16 @@ export function TaskListRow({
   now,
   search,
   lines = [],
+  assignees,
 }: {
   task: TaskRow;
-  people: { id: string; label: string }[];
+  people: { id: string; label: string; picks?: number; onTasks?: number }[];
   departments: { id: string; label: string }[];
   now: Date;
   /** The pillars it belongs to. */
   lines?: readonly string[];
+  /** Everyone on it, lead first — the editor opens with them already ticked. */
+  assignees?: readonly string[];
   /** The row's searchable text, folded — the list narrows on it as he types. */
   search?: string;
 }) {
@@ -92,12 +95,6 @@ export function TaskListRow({
             {t.dueDate ? <OverdueChip days={late} /> : null}
             {' · added '}
             <Num>{fmtDate(t.createdAt)}</Num>
-            {t.moneyImpactCents ? (
-              <>
-                {' · worth '}
-                <Num>{fmtMoney(t.moneyImpactCents)}</Num>
-              </>
-            ) : null}
           </p>
 
           {/*
@@ -195,11 +192,11 @@ export function TaskListRow({
               deptId: t.deptId,
               ownerPersonId: t.ownerPersonId,
               tags: t.tags,
-              moneyImpactCents: t.moneyImpactCents,
             }}
             departments={departments}
             people={people}
             lines={lines}
+            assignees={assignees}
             onDone={() => setEditing(false)}
           />
         </div>

@@ -13,7 +13,7 @@ import { TaskBoardView } from '@/components/tasks/board-view';
 import { TaskCalendarView } from '@/components/tasks/calendar-view';
 import { TaskFilters } from '@/components/tasks/filters';
 import { NewTaskForm } from '@/components/tasks/new-task-form';
-import { linesForMany, PILLAR_OPTIONS } from '@/lib/control/tagging';
+import { linesForMany, pillarOptions } from '@/lib/control/tagging';
 import { PillarFilter } from '@/components/hud/pillar-filter';
 import { GROUP_BY_LABEL, isGroupBy, TASK_GROUP_BYS, type TaskGroupBy } from '@/lib/tasks/grouping';
 import { delegationsForMany, type DelegationMark } from '@/lib/delegation/for-many';
@@ -141,8 +141,10 @@ export default async function TasksPage({
     peopleByUse(),
   ]);
 
-  // Only one of the seven, and only if it is one of the seven.
-  const pillar = PILLAR_OPTIONS.some((p) => p.line === sp.pillar) ? (sp.pillar ?? null) : null;
+  // One pillar at a time, and only one he actually has — the list is his to
+  // edit, so what counts as a pillar is read, not compiled in.
+  const pillarList = await pillarOptions();
+  const pillar = pillarList.some((p) => p.line === sp.pillar) ? (sp.pillar ?? null) : null;
 
   // Narrowed to one pillar when he asked for one. A task nobody has tagged is
   // not an answer to "what is on Exchange CTV", so it drops out.
@@ -209,7 +211,13 @@ export default async function TasksPage({
 
       {/* The whole company by department: the same list, read one pillar at a
           time, in the URL so a narrowed screen is a link he can send. */}
-      <PillarFilter current={pillar} href={pillarHref} />
+      <PillarFilter
+        current={pillar}
+        href={pillarHref}
+        options={pillarList}
+        // A guest reads the board; the list itself is his.
+        manage={canManageAccess(viewer) ? '/settings/pillars' : undefined}
+      />
 
       <TaskFilters
         departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
@@ -300,7 +308,15 @@ function TaskViewSwitch({
   if (view === 'board') return <TaskBoardView rows={rows} people={people} departments={departments} />;
   if (view === 'calendar') return <TaskCalendarView rows={rows} today={today} />;
   if (view === 'list') {
-    return <TaskListView rows={rows} people={people} departments={departments} lines={lines} />;
+    return (
+      <TaskListView
+        rows={rows}
+        people={people}
+        departments={departments}
+        lines={lines}
+        assignees={assignees}
+      />
+    );
   }
   return (
     <TaskGroupedView

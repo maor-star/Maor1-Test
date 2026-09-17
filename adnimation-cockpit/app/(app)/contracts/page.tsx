@@ -28,7 +28,7 @@ import {
   CONTRACT_GROUP_BYS, CONTRACT_GROUP_BY_LABEL, isContractGroupBy, type ContractGroupBy,
 } from '@/lib/contracts/grouping';
 import { driveStatus } from '@/lib/integrations/drive';
-import { linesForMany, PILLAR_OPTIONS } from '@/lib/control/tagging';
+import { linesForMany, pillarOptions } from '@/lib/control/tagging';
 import { PillarFilter } from '@/components/hud/pillar-filter';
 
 export const dynamic = 'force-dynamic';
@@ -62,8 +62,9 @@ export default async function ContractsPage({
   /* Which column carries the groups. "Waiting on" first — it is the question
      the screen exists to answer. */
   const groupBy: ContractGroupBy = isContractGroupBy(sp.group) ? sp.group : 'waiting';
-  // Only one of the seven, and only if it is one of the seven.
-  const pillar = PILLAR_OPTIONS.some((p) => p.line === sp.pillar) ? (sp.pillar ?? null) : null;
+  // One pillar at a time, and only one he actually has.
+  const pillarList = await pillarOptions();
+  const pillar = pillarList.some((p) => p.line === sp.pillar) ? (sp.pillar ?? null) : null;
 
   const [board, departments, people, intake, counts, drive] = await Promise.all([
     contractBoard(),
@@ -259,7 +260,12 @@ export default async function ContractsPage({
             }
           />
           <div className="mt-3 space-y-3">
-            <PillarFilter current={pillar} href={pillarHref} />
+            <PillarFilter
+              current={pillar}
+              href={pillarHref}
+              options={pillarList}
+              manage="/settings/pillars"
+            />
 
             <div className="flex flex-wrap items-center gap-3">
               <nav className="segmented" aria-label="Layout">

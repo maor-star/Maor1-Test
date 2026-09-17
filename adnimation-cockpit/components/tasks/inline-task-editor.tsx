@@ -23,12 +23,13 @@ export function InlineTaskEditor({
 }: {
   taskId: string;
   departments: { id: string; label: string }[];
-  people: { id: string; label: string }[];
+  people: { id: string; label: string; picks?: number; onTasks?: number }[];
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [onIt, setOnIt] = useState<string[]>([]);
   const [task, setTask] = useState<{
     id: string;
     layer: string;
@@ -44,7 +45,6 @@ export function InlineTaskEditor({
     deptId: string | null;
     ownerPersonId: string | null;
     tags: string[];
-    moneyImpactCents: number | null;
   } | null>(null);
 
   const toggle = () => {
@@ -57,8 +57,10 @@ export function InlineTaskEditor({
     setLoading(true);
     taskForEditAction(taskId)
       .then((r) => {
-        if (r.ok) setTask(r.task);
-        else setError(r.error ?? 'Could not open it');
+        if (r.ok) {
+          setTask(r.task);
+          setOnIt(r.assignees);
+        } else setError(r.error ?? 'Could not open it');
       })
       .catch(() => setError('Could not open it'))
       .finally(() => setLoading(false));
@@ -82,6 +84,7 @@ export function InlineTaskEditor({
               task={task}
               departments={departments}
               people={people}
+              assignees={onIt}
               onDone={() => setOpen(false)}
             />
           ) : null}

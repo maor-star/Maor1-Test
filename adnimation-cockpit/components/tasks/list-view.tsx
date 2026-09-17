@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { TaskRow } from '@/lib/tasks/queries';
+import type { AssigneeChip } from '@/lib/tasks/assignee-chip';
 import { TaskListRow } from '@/components/tasks/list-row';
 import { InstantFilter } from '@/components/hud/instant-filter';
 import { Num } from '@/components/num';
@@ -19,12 +20,15 @@ export function TaskListView({
   people,
   departments,
   lines,
+  assignees,
 }: {
   rows: TaskRow[];
-  people: { id: string; label: string }[];
+  people: { id: string; label: string; picks?: number; onTasks?: number }[];
   departments: { id: string; label: string }[];
   /** Task id → the pillars it belongs to, fetched for the whole list at once. */
   lines?: Map<string, string[]>;
+  /** Task id → everyone on it, lead first. One query for the whole list. */
+  assignees?: Map<string, AssigneeChip[]>;
 }) {
   if (rows.length === 0) {
     return (
@@ -49,6 +53,7 @@ export function TaskListView({
             departments={departments}
             now={now}
             lines={lines?.get(t.id) ?? []}
+            assignees={(assignees?.get(t.id) ?? []).map((p) => p.id)}
             search={foldForSearch(
               t.title,
               t.description,

@@ -7,6 +7,8 @@ import { db, tasks } from '@/lib/db';
 import { requireUser } from '@/lib/auth/session';
 import { createClickUpAdapter } from '@/lib/integrations/clickup';
 import { editMirroredTask } from '@/lib/tasks/clickup-edit';
+import { assigneesOf, setAssignees } from '@/lib/tasks/assignees';
+import { notifyAssigned, senderIdentity } from '@/lib/tasks/nudge';
 import { TASK_PRIORITIES } from '@/lib/tasks/types';
 import { mapClickUpStatus } from '@/lib/sync/clickup-map';
 import { removeFinished } from '@/lib/sync/clickup-mirror';
@@ -157,7 +159,16 @@ export async function editClickUpTaskAction(formData: FormData): Promise<TaskAct
     .split(',')
     .map((t) => t.trim())
     .filter(Boolean);
-  const rawMoney = String(formData.get('moneyImpact') ?? '').trim();
+  /*
+   * Several people on one task, the same as an unmirrored one.
+   *
+   * The form posts one `assignees` value per person and the first is the lead.
+   * The lead is what goes into the patch — it is the field ClickUp mirrors and
+   * the one heat scoring reads — and the whole set is written here, which is
+   * the only place that can hold more than one name.
+   */
+  const picked = formData.has('assignees') ? formData.getAll('assignees').map(String) : null;
+  const lead = picked ? (picked.find((id) => id.trim() !== '') ?? null) : undefined;
 
   const parsed = editSchema.safeParse({
     taskId: formData.get('id'),
@@ -166,17 +177,48 @@ export async function editClickUpTaskAction(formData: FormData): Promise<TaskAct
     priority: formData.get('priority') ?? undefined,
     dueDate: emptyToNull(formData.get('dueDate')),
     deptId: emptyToNull(formData.get('deptId')),
-    ownerPersonId: emptyToNull(formData.get('ownerPersonId')),
+    ownerPersonId:
+      lead !== undefined ? lead : formData.has('ownerPersonId')
+        ? emptyToNull(formData.get('ownerPersonId'))
+        : undefined,
     tags: rawTags,
-    moneyImpactCents: rawMoney === '' ? null : Math.round(Number(rawMoney) * 100),
+    // Only when the form actually carries it. A form without the field must
+    // leave what is stored alone rather than clearing it to null.
+    moneyImpactCents: formData.has('moneyImpact')
+      ? (String(formData.get('moneyImpact') ?? '').trim() === ''
+          ? null
+          : Math.round(Number(formData.get('moneyImpact')) * 100))
+      : undefined,
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.flatten().formErrors[0] ?? 'That is not a valid edit' };
   }
 
   const { taskId, ...patch } = parsed.data;
+
+  /*
+   * Who was on it BEFORE the write, so only the newcomers are told.
+   * Re-saving a task must not send the same hand-over again to somebody who
+   * has had it a week — that is how a message people read becomes one they
+   * mute.
+   */
+  let newcomers: string[] = [];
+  if (picked) {
+    const before = new Set((await assigneesOf(taskId)).map((p) => p.id));
+    await setAssignees(taskId, picked);
+    newcomers = picked.filter((id) => id.trim() !== '' && !before.has(id));
+  }
+
   const result = await editMirroredTask(taskId, patch, user.email);
   if (!result.ok) return { ok: false, error: result.error };
+
+  if (newcomers.length > 0) {
+    // Best effort: the edit is saved either way, and a Slack outage must not
+    // read to him as an edit that failed.
+    await notifyAssigned(taskId, newcomers, user.email, {
+      sender: await senderIdentity(user.email),
+    }).catch(() => undefined);
+  }
 
   revalidatePath('/tasks');
   revalidatePath(`/tasks/${taskId}`);

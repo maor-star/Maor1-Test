@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { EditorActions, EditorField, EditorGrid } from '@/components/hud/editor-panel';
 import { PillarPicker } from '@/components/hud/pillar-picker';
+import { PeoplePicker } from '@/components/tasks/people-picker';
 import {
   PRIORITY_META, STATUS_LABEL, TASK_PRIORITIES, TASK_STATUSES, type TaskPriority,
 } from '@/lib/tasks/types';
@@ -27,7 +28,6 @@ interface EditableTask {
   deptId: string | null;
   ownerPersonId: string | null;
   tags: string[];
-  moneyImpactCents: number | null;
 }
 
 /**
@@ -50,16 +50,26 @@ export function EditTaskForm({
   /** Closes the editor. Absent on the task's own page, which has nothing to close. */
   onDone,
   lines = [],
+  assignees,
 }: {
   task: EditableTask;
   departments: { id: string; label: string }[];
-  people: { id: string; label: string }[];
+  /** Ranked by who he actually hands work to — see lib/tasks/people-order.ts. */
+  people: { id: string; label: string; picks?: number; onTasks?: number }[];
   mode?: 'mine' | 'clickup';
   onDone?: () => void;
   /** The pillars it already belongs to. */
   lines?: readonly string[];
+  /**
+   * Everyone already on it, lead first. Absent falls back to the lead alone —
+   * which is all a caller that never loaded the rest can honestly claim.
+   */
+  assignees?: readonly string[];
 }) {
   const mirrored = mode === 'clickup';
+  const [onIt, setOnIt] = useState<string[]>(
+    assignees ? [...assignees] : task.ownerPersonId ? [task.ownerPersonId] : [],
+  );
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -156,29 +166,19 @@ export function EditTaskForm({
           </Select>
         </EditorField>
 
-        <EditorField label="Owner" htmlFor={f('owner')}>
-          <Select
-            id={f('owner')}
-            name="ownerPersonId"
-            defaultValue={task.ownerPersonId ?? ''}
-            className="w-full"
-          >
-            <option value="">Me</option>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>{p.label}</option>
-            ))}
-          </Select>
-        </EditorField>
-
-        <EditorField label="What it is worth (USD)" htmlFor={f('money')}>
-          <Input
-            id={f('money')}
-            name="moneyImpact"
-            type="number"
-            min="0"
-            step="1"
-            dir="ltr"
-            defaultValue={task.moneyImpactCents === null ? '' : task.moneyImpactCents / 100}
+        {/*
+          Who is on it, here rather than behind another click.
+          A single Select was the mirror's limitation showing through: ClickUp
+          keeps one assignee, so a task two people run showed one name and lost
+          the other. This posts one `assignees` value per person — first is the
+          lead — and whoever is newly on it is told in Slack when it saves.
+        */}
+        <EditorField label="Who is on it" htmlFor={f('people')} span="full">
+          <PeoplePicker
+            people={people}
+            value={onIt}
+            onChange={setOnIt}
+            label={onIt.length === 0 ? 'Nobody yet — pick whoever it is for' : 'On this task'}
           />
         </EditorField>
 

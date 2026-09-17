@@ -636,6 +636,40 @@ export const lineTargets = pgTable(
 export type LineTargetRow = typeof lineTargets.$inferSelect;
 
 /**
+ * The pillars themselves — the list he edits, not a constant in the source.
+ *
+ * `line` is the key, the same word entity_lines and line_targets already carry
+ * and the same word the revenue source reports against, so renaming a pillar
+ * changes what the chip says and touches nothing that is stored.
+ *
+ * `hasRevenue` is true only for the seven the activity sync delivers figures
+ * for. One he adds himself is a real pillar everywhere work is tagged and
+ * filtered, and has no tile on the overview — there is no source behind it to
+ * read, and a tile showing a permanent zero would read as a line that died.
+ */
+export const pillars = pgTable(
+  'pillars',
+  {
+    line: text('line').primaryKey(),
+    label: text('label').notNull(),
+    /** What its tile counts — SITES, BUYERS — or nothing. */
+    unit: text('unit'),
+    /** Where its figures come from, said on the screen. */
+    sourceNote: text('source_note'),
+    sortOrder: integer('sort_order').notNull().default(100),
+    /** Hidden, never deleted: the tags on the work it carries stay put. */
+    active: boolean('active').notNull().default(true),
+    hasRevenue: boolean('has_revenue').notNull().default(false),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+    updatedBy: text('updated_by'),
+  },
+  (t) => [index('idx_pillars_order').on(t.active, t.sortOrder)],
+);
+
+export type PillarRow = typeof pillars.$inferSelect;
+
+/**
  * Which pillars a piece of work belongs to.
  *
  * One row per thing per pillar, because most of the work that matters belongs

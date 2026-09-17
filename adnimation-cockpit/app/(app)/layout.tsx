@@ -4,6 +4,8 @@ import { Rail } from '@/components/hud/rail';
 import { MobileNav } from '@/components/hud/mobile-nav';
 import { TelemetryStrip } from '@/components/hud/telemetry-strip';
 import { UndoProvider } from '@/components/ui/undo-bar';
+import { PillarsProvider } from '@/components/hud/pillars-context';
+import { pillarOptions } from '@/lib/control/pillar-store';
 
 // The telemetry strip is live operating data; nothing in this shell may be
 // cached between requests or the ticker silently shows yesterday.
@@ -19,6 +21,10 @@ export const revalidate = 0;
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  // Read once for the whole shell: the chips are ticked and shown in a dozen
+  // components across three screens, and each one asking would be a dozen
+  // queries for the same seven rows.
+  const pillars = await pillarOptions();
 
   const signOut = async () => {
     'use server';
@@ -27,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <UndoProvider>
+      <PillarsProvider value={pillars}>
       <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[248px_1fr]">
         <Rail userName={user.name} userRole={user.role} signOutAction={signOut} />
 
@@ -38,6 +45,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </main>
       </div>
+      </PillarsProvider>
     </UndoProvider>
   );
 }

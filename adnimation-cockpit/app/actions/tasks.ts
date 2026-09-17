@@ -365,8 +365,14 @@ export async function taskForEditAction(id: string) {
   const task = await getTask(parsed.data, canSeePrivate(user));
   if (!task) return { ok: false as const, error: 'No such task' };
 
+  // Everyone on it, lead first. The editor that opens from the home screen has
+  // nothing but an id to go on, and without this it would open showing one
+  // name and quietly drop the rest on the next save.
+  const onIt = await assigneesOf(task.id);
+
   return {
     ok: true as const,
+    assignees: onIt.map((p) => p.id),
     task: {
       id: task.id,
       layer: task.layer,
@@ -382,7 +388,6 @@ export async function taskForEditAction(id: string) {
       deptId: task.deptId,
       ownerPersonId: task.ownerPersonId,
       tags: task.tags,
-      moneyImpactCents: task.moneyImpactCents,
     },
   };
 }
