@@ -15,7 +15,6 @@ import { PageHeader } from '@/components/hud/page-header';
 import { Tag } from '@/components/hud/tag';
 import { Num } from '@/components/num';
 import { InlineTaskEditor } from '@/components/tasks/inline-task-editor';
-import { listDepartments } from '@/lib/tasks/queries';
 import { peopleByUse } from '@/lib/tasks/people-order';
 import { loadControlPanel } from '@/lib/control/service';
 import { ControlPanel } from '@/components/home/control-panel';
@@ -192,13 +191,11 @@ async function TopSeatsCard({ side }: { side: 'demand' | 'supply' }) {
 
 /** What needs doing now — overdue and burning work, from the ClickUp mirror. */
 async function UrgentCard() {
-  const [{ rows, overdue, burning, total }, departments, peopleOptions] = await Promise.all([
+  const [{ rows, overdue, burning, total }, peopleOptions] = await Promise.all([
     urgentWork(8),
-    listDepartments(),
     // Ordered by who he actually hands work to, not by the alphabet.
     peopleByUse(),
   ]);
-  const deptOptions = departments.map((d) => ({ id: d.id, label: d.nameHe }));
 
   return (
     <HudCard className="gap-0 p-0">
@@ -252,11 +249,7 @@ async function UrgentCard() {
                     doing. Walking into the task to move a due date means
                     losing the list that told him to.
                   */}
-                  <InlineTaskEditor
-                    taskId={t.id}
-                    departments={deptOptions}
-                    people={peopleOptions}
-                  />
+                  <InlineTaskEditor taskId={t.id} people={peopleOptions} />
                 </span>
               </div>
             </li>

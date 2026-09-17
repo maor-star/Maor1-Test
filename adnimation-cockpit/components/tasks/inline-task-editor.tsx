@@ -17,12 +17,10 @@ import { EditTaskForm } from '@/components/tasks/edit-task-form';
  */
 export function InlineTaskEditor({
   taskId,
-  departments,
   people,
   label = 'EDIT',
 }: {
   taskId: string;
-  departments: { id: string; label: string }[];
   people: { id: string; label: string; picks?: number; onTasks?: number }[];
   label?: string;
 }) {
@@ -82,7 +80,6 @@ export function InlineTaskEditor({
             <EditTaskForm
               mode={task.layer === 'company' ? 'clickup' : 'mine'}
               task={task}
-              departments={departments}
               people={people}
               assignees={onIt}
               onDone={() => setOpen(false)}

@@ -11,6 +11,7 @@ import { InviteToTask } from '@/components/tasks/invite-to-task';
 import { TaskUpdates } from '@/components/tasks/task-updates';
 import type { UpdateTrail } from '@/lib/tasks/update-shape';
 import { PeoplePicker } from '@/components/tasks/people-picker';
+import { PillarPicker } from '@/components/hud/pillar-picker';
 
 /**
  * The whole task, edited from its row.
@@ -52,7 +53,7 @@ export function QuickEditPanel({
   statusOptions,
   people,
   assignees,
-  deptOptions,
+  lines = [],
   updates,
   roster,
   canInvite,
@@ -63,7 +64,8 @@ export function QuickEditPanel({
   people: { id: string; label: string; onTasks?: number }[];
   /** Who is on it now — the boxes that start ticked. */
   assignees: AssigneeChip[];
-  deptOptions: { value: string; label: string }[];
+  /** The pillars it already carries — the picker opens on them. */
+  lines?: readonly string[];
   /** What has been written on it, newest first, and how many there are. */
   updates: UpdateTrail;
   /** Addresses to names, so an update is signed by a person. */
@@ -165,16 +167,6 @@ export function QuickEditPanel({
           </Select>
         </Field>
 
-        <Field label="Department">
-          <Select name="deptId" defaultValue={task.deptId ?? ''}>
-            {deptOptions.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
         <Field label="Start">
           <Input type="date" dir="ltr" name="startDate" defaultValue={task.startDate ?? ''} />
         </Field>
@@ -190,6 +182,13 @@ export function QuickEditPanel({
       {/* Several people on one task, because most of them are — ordered by who
           he actually hands work to rather than by name. */}
       <PeoplePicker people={people} value={picked} onChange={setPicked} />
+
+      {/* Which parts of the company — the department picker too, since he said
+          they were the same question asked twice. */}
+      <fieldset className="mt-2 space-y-1">
+        <legend className="hud-label text-[10.5px]">Which parts of the company</legend>
+        <PillarPicker id={`qe-${task.id}`} selected={lines} />
+      </fieldset>
 
       {/* What has happened on it since it was written — and room to add. The
           updates used to live only on the task's own page, which is the one

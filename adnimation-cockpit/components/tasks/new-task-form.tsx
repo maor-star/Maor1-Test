@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { PRIORITY_META, TASK_PRIORITIES } from '@/lib/tasks/types';
 import { PeoplePicker } from '@/components/tasks/people-picker';
+import { PillarPicker } from '@/components/hud/pillar-picker';
 
 /**
  * Spec 6.1.1 — native task creation, with the fields the heat score needs.
@@ -98,14 +99,12 @@ export function NewTaskForm({
             <Label htmlFor="new-task-description">Description</Label>
             <Textarea id="new-task-description" name="description" rows={2} />
           </div>
-          <div>
-            <Label htmlFor="new-task-dept">Department</Label>
-            <Select id="new-task-dept" name="deptId" defaultValue="" className="w-full">
-              <option value="">None</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.label}</option>
-              ))}
-            </Select>
+          {/* Which parts of the company — the department too, since he said
+              they were the same question asked twice. The first one picked
+              that is a department is where the task files. */}
+          <div className="md:col-span-3">
+            <Label htmlFor="new-task-lines-core_clients">Which parts of the company</Label>
+            <PillarPicker id="new-task-lines" selected={[]} />
           </div>
           <div className="md:col-span-2">
             <Label htmlFor="new-task-tags">Tags (comma separated)</Label>

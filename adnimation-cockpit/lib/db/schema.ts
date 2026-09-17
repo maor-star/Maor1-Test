@@ -586,6 +586,56 @@ export const mailThreads = pgTable(
 export type MailThread = typeof mailThreads.$inferSelect;
 
 /**
+ * The emails a task turned out to be about.
+ *
+ * Found by lib/tasks/mail-match.ts and refreshed by a job, so a task written
+ * on Sunday carries Thursday's thread without anybody filing it.
+ *
+ * The subject and counterpart are snapshot rather than joined: the mirror is a
+ * moving window over a very large mailbox, and a link that renders blank
+ * because its thread rolled out of the window is worse than one that still
+ * says what it was.
+ */
+export const taskMail = pgTable(
+  'task_mail',
+  {
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    threadId: text('thread_id').notNull(),
+    score: integer('score').notNull().default(0),
+    /** Why the matcher thinks so, shown on the row. */
+    reasons: text('reasons').array().notNull().default([]),
+    subject: text('subject'),
+    counterpart: text('counterpart'),
+    lastMessageAt: timestamptz('last_message_at'),
+    /** 'auto', or his address when he attached it himself. */
+    matchedBy: text('matched_by').notNull().default('auto'),
+    matchedAt: timestamptz('matched_at').notNull().defaultNow(),
+    /** Said not to belong. Never proposed again, and never deleted. */
+    dismissedAt: timestamptz('dismissed_at'),
+    dismissedBy: text('dismissed_by'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.taskId, t.threadId] }),
+    index('idx_task_mail_task').on(t.taskId, t.dismissedAt, t.score),
+    index('idx_task_mail_thread').on(t.threadId),
+  ],
+);
+
+export type TaskMailRow = typeof taskMail.$inferSelect;
+
+/** When the matcher last swept, so the screen can say how fresh this is. */
+export const taskMailRuns = pgTable('task_mail_runs', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  ranAt: timestamptz('ran_at').notNull().defaultNow(),
+  tasksSeen: integer('tasks_seen').notNull().default(0),
+  threadsSeen: integer('threads_seen').notNull().default(0),
+  linksAdded: integer('links_added').notNull().default(0),
+  note: text('note'),
+});
+
+/**
  * The Copilot desk's prepared answers.
  *
  * Keyed by the desk item's own id so a redraft replaces the old one; the
@@ -660,6 +710,16 @@ export const pillars = pgTable(
     /** Hidden, never deleted: the tags on the work it carries stay put. */
     active: boolean('active').notNull().default(true),
     hasRevenue: boolean('has_revenue').notNull().default(false),
+    /**
+     * The department this pillar IS, when it is one.
+     *
+     * Departments and pillars were two lists answering the same question, and
+     * he said so. They are one list now: the pillar is what he picks, and this
+     * is how `tasks.dept_id` still gets set — so the ClickUp mirror, the
+     * contracts screen, the cadence engine and the reports all keep reading
+     * the column they have always read.
+     */
+    deptId: uuid('dept_id').references(() => departments.id),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
     updatedBy: text('updated_by'),

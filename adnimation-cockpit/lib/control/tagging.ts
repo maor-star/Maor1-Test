@@ -113,4 +113,6 @@ export async function workPerLine(): Promise<Map<string, Record<Taggable, number
 // The browser-safe half — the seven, their labels, and what a form may send —
 // lives in ./pillars, and is re-exported so server callers have one import.
 export { cleanLines, PILLAR_OPTIONS, TAGGABLE, type PillarOption, type Taggable } from './pillars';
-export { allPillars, knownLines, livePillars, pillarLabels, pillarOptions } from './pillar-store';
+export {
+  allPillars, deptForLines, knownLines, lineForDept, livePillars, pillarLabels, pillarOptions,
+} from './pillar-store';

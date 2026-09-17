@@ -48,6 +48,7 @@ export function TaskGroupedView({
   departments,
   groupBy,
   today,
+  lines,
   delegated,
   assignees,
   nudges,
@@ -60,6 +61,8 @@ export function TaskGroupedView({
   departments: { id: string; label: string }[];
   groupBy: TaskGroupBy;
   today: string;
+  /** Task id → the pillars it carries, which is also its department. */
+  lines?: Map<string, string[]>;
   /** Task id → who is holding it, fetched for the whole list at once. */
   delegated: Map<string, DelegationMark>;
   /** Task id → everyone on it. Empty means the lead alone; see chipsFor. */
@@ -116,6 +119,7 @@ export function TaskGroupedView({
           deptOptions={deptOptions}
           today={today}
           people={people}
+          lines={lines}
           delegated={delegated}
           assignees={assignees}
           nudges={nudges}
@@ -139,6 +143,7 @@ function Group({
   statusOptions,
   priorityOptions,
   deptOptions,
+  lines,
   today,
   people,
   delegated,
@@ -152,6 +157,7 @@ function Group({
   statusOptions: { value: string; label: string }[];
   priorityOptions: { value: string; label: string }[];
   deptOptions: { value: string; label: string }[];
+  lines?: Map<string, string[]>;
   today: string;
   people: { id: string; label: string }[];
   delegated: Map<string, DelegationMark>;
@@ -221,6 +227,7 @@ function Group({
                 statusOptions={statusOptions}
                 priorityOptions={priorityOptions}
                 deptOptions={deptOptions}
+                lines={lines}
                 today={today}
                 people={people}
                 mark={delegated.get(t.id)}
@@ -270,6 +277,7 @@ function Row({
   statusOptions,
   priorityOptions,
   deptOptions,
+  lines,
   today,
   people,
   mark,
@@ -283,6 +291,7 @@ function Row({
   statusOptions: { value: string; label: string }[];
   priorityOptions: { value: string; label: string }[];
   deptOptions: { value: string; label: string }[];
+  lines?: Map<string, string[]>;
   today: string;
   people: { id: string; label: string }[];
   mark: DelegationMark | undefined;
@@ -435,7 +444,7 @@ function Row({
           statusOptions={statusOptions}
           people={people}
           assignees={on}
-          deptOptions={deptOptions}
+          lines={lines?.get(task.id) ?? []}
           updates={trail}
           roster={roster}
           canInvite={canStar}

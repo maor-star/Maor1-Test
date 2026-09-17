@@ -25,6 +25,13 @@ export interface Pillar {
   active: boolean;
   /** True for the seven the activity sync reports figures against. */
   hasRevenue: boolean;
+  /**
+   * The department this pillar is, when it is one.
+   *
+   * One list, because he said they were the same question asked twice. What he
+   * picks is the pillar; this is what still sets `tasks.dept_id` underneath.
+   */
+  deptId: string | null;
 }
 
 /** The built-in seven, in the shape the table stores them. */
@@ -36,6 +43,7 @@ export const SEEDED: Pillar[] = ACTIVITY_LINES.map((line, i) => ({
   sortOrder: (i + 1) * 10,
   active: true,
   hasRevenue: true,
+  deptId: null,
 }));
 
 async function rows(): Promise<Pillar[]> {
@@ -54,6 +62,7 @@ async function rows(): Promise<Pillar[]> {
       sortOrder: r.sortOrder,
       active: r.active,
       hasRevenue: r.hasRevenue,
+      deptId: r.deptId,
     }));
   } catch {
     // The table arrives in migration 0053. Until it has run, the app still works.
@@ -90,6 +99,35 @@ export async function knownLines(): Promise<string[]> {
 /** One pillar by key, for a screen that has only the key. */
 export async function pillarLabels(): Promise<Map<string, string>> {
   return new Map((await rows()).map((p) => [p.line, p.label]));
+}
+
+/**
+ * Which department a set of picked pillars means.
+ *
+ * `tasks.dept_id` is a single column and the picker is a multi-select, so the
+ * rule has to be stated rather than assumed: the FIRST picked pillar that is a
+ * department wins, in the order he ticked them. Tagging a task Exchange CTV and
+ * Finance files it under CTV and tags it Finance, which is what picking them in
+ * that order means.
+ *
+ * Returns undefined when none of the picked pillars is a department — that is
+ * "leave the column alone", not "clear it", because Google CTV is a pillar with
+ * no department behind it and picking it must not un-file the task.
+ */
+export async function deptForLines(lines: readonly string[]): Promise<string | undefined> {
+  if (lines.length === 0) return undefined;
+  const byLine = new Map((await allPillars()).map((p) => [p.line, p.deptId]));
+  for (const line of lines) {
+    const deptId = byLine.get(line);
+    if (deptId) return deptId;
+  }
+  return undefined;
+}
+
+/** The pillar that stands for a department, for filling the picker from one. */
+export async function lineForDept(deptId: string | null): Promise<string | null> {
+  if (!deptId) return null;
+  return (await allPillars()).find((p) => p.deptId === deptId)?.line ?? null;
 }
 
 /* ---------------------------------------------------------------- writing */

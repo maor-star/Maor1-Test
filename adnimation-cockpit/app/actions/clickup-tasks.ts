@@ -8,6 +8,7 @@ import { requireUser } from '@/lib/auth/session';
 import { createClickUpAdapter } from '@/lib/integrations/clickup';
 import { editMirroredTask } from '@/lib/tasks/clickup-edit';
 import { assigneesOf, setAssignees } from '@/lib/tasks/assignees';
+import { deptForLines, setLines } from '@/lib/control/tagging';
 import { notifyAssigned, senderIdentity } from '@/lib/tasks/nudge';
 import { TASK_PRIORITIES } from '@/lib/tasks/types';
 import { mapClickUpStatus } from '@/lib/sync/clickup-map';
@@ -170,13 +171,25 @@ export async function editClickUpTaskAction(formData: FormData): Promise<TaskAct
   const picked = formData.has('assignees') ? formData.getAll('assignees').map(String) : null;
   const lead = picked ? (picked.find((id) => id.trim() !== '') ?? null) : undefined;
 
+  /*
+   * One list, one control: the pillar picker is also the department picker.
+   * See app/actions/tasks.ts for why they stopped being two.
+   */
+  const lines = formData.has('lines') ? formData.getAll('lines').map(String) : null;
+  const deptFromLines = lines ? await deptForLines(lines) : undefined;
+
   const parsed = editSchema.safeParse({
     taskId: formData.get('id'),
     title: formData.get('title') ?? undefined,
     description: emptyToNull(formData.get('description')),
     priority: formData.get('priority') ?? undefined,
     dueDate: emptyToNull(formData.get('dueDate')),
-    deptId: emptyToNull(formData.get('deptId')),
+    deptId:
+      deptFromLines !== undefined
+        ? deptFromLines
+        : formData.has('deptId')
+          ? emptyToNull(formData.get('deptId'))
+          : undefined,
     ownerPersonId:
       lead !== undefined ? lead : formData.has('ownerPersonId')
         ? emptyToNull(formData.get('ownerPersonId'))
@@ -195,6 +208,8 @@ export async function editClickUpTaskAction(formData: FormData): Promise<TaskAct
   }
 
   const { taskId, ...patch } = parsed.data;
+
+  if (lines) await setLines('task', taskId, lines, user.email);
 
   /*
    * Who was on it BEFORE the write, so only the newcomers are told.

@@ -53,11 +53,7 @@ export function TaskBoardView({
                     <Num className="mt-1 block text-2xs text-neutral-500">{t.dueDate}</Num>
                   ) : null}
                   <div className="mt-1">
-                    <InlineTaskEditor
-                      taskId={t.id}
-                      departments={departments}
-                      people={people}
-                    />
+                    <InlineTaskEditor taskId={t.id} people={people} />
                   </div>
                 </li>
               ))

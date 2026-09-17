@@ -193,7 +193,6 @@ export function TaskListRow({
               ownerPersonId: t.ownerPersonId,
               tags: t.tags,
             }}
-            departments={departments}
             people={people}
             lines={lines}
             assignees={assignees}

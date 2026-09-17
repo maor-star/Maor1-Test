@@ -37,7 +37,6 @@ interface EditableTask {
  */
 export function EditTaskForm({
   task,
-  departments,
   people,
   /**
    * A mirrored ClickUp task edits through ClickUp: the fields it owns are
@@ -53,7 +52,6 @@ export function EditTaskForm({
   assignees,
 }: {
   task: EditableTask;
-  departments: { id: string; label: string }[];
   /** Ranked by who he actually hands work to — see lib/tasks/people-order.ts. */
   people: { id: string; label: string; picks?: number; onTasks?: number }[];
   mode?: 'mine' | 'clickup';
@@ -157,15 +155,6 @@ export function EditTaskForm({
           <Input id={f('start')} name="startDate" type="date" defaultValue={task.startDate ?? ''} />
         </EditorField>
 
-        <EditorField label="Department" htmlFor={f('dept')}>
-          <Select id={f('dept')} name="deptId" defaultValue={task.deptId ?? ''} className="w-full">
-            <option value="">None</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>{d.label}</option>
-            ))}
-          </Select>
-        </EditorField>
-
         {/*
           Who is on it, here rather than behind another click.
           A single Select was the mirror's limitation showing through: ClickUp
@@ -200,7 +189,7 @@ export function EditTaskForm({
           label="Which parts of the company"
           htmlFor={`${f('lines')}-core_clients`}
           span="full"
-          hint="Tag it to as many pillars as it touches — every screen can be read one pillar at a time"
+          hint="This is the department too — pick as many as it touches, and the first one that is a department is where it files"
         >
           <PillarPicker id={f('lines')} selected={lines} />
         </EditorField>

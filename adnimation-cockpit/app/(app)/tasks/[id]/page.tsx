@@ -13,6 +13,7 @@ import { EditTaskForm } from '@/components/tasks/edit-task-form';
 import { ClickUpStatus } from '@/components/tasks/clickup-status';
 import { NudgeButton } from '@/components/tasks/nudge-button';
 import { assigneesOf, chipsFor } from '@/lib/tasks/assignees';
+import { linesFor } from '@/lib/control/tagging';
 import { lastNudges } from '@/lib/tasks/nudge';
 import { peopleByUse } from '@/lib/tasks/people-order';
 import { Attachments } from '@/components/attachments';
@@ -35,7 +36,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
   const task = await getTask(id, mine);
   if (!task) notFound();
 
-  const [subtasks, comments, departments, ranked, assigned, nudged] = await Promise.all([
+  const [subtasks, comments, departments, ranked, assigned, nudged, taskLines] = await Promise.all([
     getSubtasks(id, mine),
     listComments(id),
     listDepartments(),
@@ -43,6 +44,8 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
     peopleByUse(),
     assigneesOf(id),
     lastNudges([id]),
+    // Which parts of the company it belongs to — which is also its department.
+    linesFor('task', id),
   ]);
 
   // A mirrored task has an owner and no picked assignees, so an empty list
@@ -143,9 +146,9 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                   ownerPersonId: task.ownerPersonId,
                   tags: task.tags,
                 }}
-                departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
                 people={peopleOptions}
                 assignees={onIt.map((p) => p.id)}
+                lines={taskLines}
               />
             </div>
           </HudCard>

@@ -34,6 +34,15 @@ export function NudgeButton({
 }) {
   const [pending, startTransition] = useTransition();
   const [armed, setArmed] = useState(false);
+  /*
+   * Armed, then left alone.
+   *
+   * The button disarmed itself silently, so pressing it once and walking away
+   * looked exactly like sending: the label went back to ASK and nothing on the
+   * screen said a message had not gone. He pressed it, believed Assaf had been
+   * asked, and nobody had. It says so now.
+   */
+  const [lapsed, setLapsed] = useState(false);
   const [said, setSaid] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const router = useRouter();
@@ -47,12 +56,23 @@ export function NudgeButton({
    */
   useEffect(() => {
     if (!armed) return;
-    const t = setTimeout(() => setArmed(false), 5000);
+    const t = setTimeout(() => {
+      setArmed(false);
+      setLapsed(true);
+    }, 8000);
     return () => clearTimeout(t);
   }, [armed]);
 
+  // The "nothing was sent" note clears itself; it is a correction, not a state.
+  useEffect(() => {
+    if (!lapsed) return;
+    const t = setTimeout(() => setLapsed(false), 6000);
+    return () => clearTimeout(t);
+  }, [lapsed]);
+
   const send = () => {
     setArmed(false);
+    setLapsed(false);
     const data = new FormData();
     data.set('taskId', taskId);
     setSaid(null);
@@ -92,7 +112,7 @@ export function NudgeButton({
         title={
           people.length === 0
             ? 'Nobody is on this task yet'
-            : `Slack ${people.map((p) => p.name).join(', ')} — "מה קורה עם זה?" — in your name${
+            : `Slack — not email — to ${people.map((p) => p.name).join(', ')}: "מה קורה עם זה?", in your name. Press twice: once to arm, once to send${
                 ago ? `. Last asked ${ago}` : ''
               }${timesAsked > 1 ? `, ${timesAsked} times in all.` : ago ? '.' : ''}`
         }
@@ -104,12 +124,17 @@ export function NudgeButton({
               : 'border-line text-info hover:bg-info/10'
         }`}
       >
-        {pending ? '…' : armed ? 'SEND' : idleLabel}
+        {pending ? '…' : armed ? 'SEND NOW' : idleLabel}
       </button>
       {armed && !pending ? (
-        <span className="text-[10px] text-accent">
-          → {people.map((p) => p.name).join(', ')}
+        <span className="text-[10px] font-semibold text-accent">
+          press again → {people.map((p) => p.name).join(', ')}
         </span>
+      ) : null}
+      {/* Pressed once and left. Nothing went out, and the row says so rather
+          than looking the same as a send. */}
+      {lapsed && !pending ? (
+        <span className="text-[10px] font-semibold text-warn">Not sent — press twice</span>
       ) : null}
       {said ? <span className="text-[10px] text-pos">{said}</span> : null}
       {problem ? (
@@ -123,7 +148,7 @@ export function NudgeButton({
         about the task rather than about the button, and it belongs where he
         is deciding whether to send a fourth.
       */}
-      {!said && ago ? (
+      {!said && !lapsed && ago ? (
         <span className={`text-[10px] ${timesAsked > 2 ? 'font-semibold text-warn' : 'text-muted'}`}>
           {ago}
           {timesAsked > 1 ? ` · ${timesAsked}×` : ''}

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { addDays } from 'date-fns';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
-import { setLines } from '@/lib/control/tagging';
+import { deptForLines, setLines } from '@/lib/control/tagging';
 import {
   addComment, archiveTask, completeTask, createTask, snoozeTask, updateTask,
 } from '@/lib/tasks/mutations';
@@ -99,6 +99,18 @@ export async function createTaskAction(formData: FormData): Promise<ActionResult
   const picked = formData.has('assignees') ? formData.getAll('assignees').map(String) : null;
   const lead = picked?.find((id) => id.trim() !== '') ?? null;
 
+  /*
+   * One list, one control.
+   *
+   * DEPARTMENT and WHICH PARTS OF THE COMPANY were two pickers answering the
+   * same question, and he said so. The pillar picker is the one on the form
+   * now; the department column is derived from it (lib/control/pillar-store.ts
+   * deptForLines) so the ClickUp mirror, contracts and the reports all keep
+   * reading the column they have always read.
+   */
+  const lines = formData.has('lines') ? formData.getAll('lines').map(String) : null;
+  const deptFromLines = lines ? await deptForLines(lines) : undefined;
+
   const parsed = taskInputSchema.safeParse({
     title: formData.get('title'),
     description: formData.get('description'),
@@ -108,7 +120,7 @@ export async function createTaskAction(formData: FormData): Promise<ActionResult
     startDate: formData.get('startDate'),
     nextStep: formData.get('nextStep'),
     nextStepDate: formData.get('nextStepDate'),
-    deptId: formData.get('deptId'),
+    deptId: deptFromLines ?? formData.get('deptId'),
     ownerPersonId: lead ?? formData.get('ownerPersonId'),
     parentId: formData.get('parentId'),
     tags: parseTags(formData.get('tags')),
@@ -119,6 +131,8 @@ export async function createTaskAction(formData: FormData): Promise<ActionResult
   if (!parsed.success) return fromZod(parsed.error);
 
   const task = await createTask(parsed.data, user.email);
+
+  if (lines) await setLines('task', task.id, lines, user.email);
 
   // Everyone the form put on it, and the first of them as the lead.
   if (picked) {
@@ -172,6 +186,17 @@ export async function updateTaskAction(formData: FormData): Promise<ActionResult
    */
   const picked = formData.has('assignees') ? formData.getAll('assignees').map(String) : null;
   if (picked) raw.ownerPersonId = picked.find((id) => id.trim() !== '') ?? '';
+
+  /*
+   * The pillar picker is the department picker. See createTaskAction above for
+   * why. A form without the picker leaves the column alone rather than
+   * clearing it: the quick editors do not show it, and a save from one must
+   * not silently un-file the task.
+   */
+  if (formData.has('lines')) {
+    const dept = await deptForLines(formData.getAll('lines').map(String));
+    if (dept !== undefined) raw.deptId = dept;
+  }
 
   const parsed = taskPatchSchema.safeParse(raw);
   if (!parsed.success) return fromZod(parsed.error);

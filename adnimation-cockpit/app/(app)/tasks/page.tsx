@@ -325,6 +325,7 @@ function TaskViewSwitch({
       departments={departments}
       groupBy={groupBy}
       today={today}
+      lines={lines}
       delegated={delegated}
       assignees={assignees}
       nudges={nudges}
