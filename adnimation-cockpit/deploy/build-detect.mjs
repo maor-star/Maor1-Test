@@ -31,6 +31,23 @@ export const TARGETS = [
     ],
   },
   {
+    src: new URL('../lib/tasks/mail-body.ts', import.meta.url),
+    out: new URL('./task-mail-body.mjs', import.meta.url),
+    from: 'lib/tasks/mail-body.ts',
+    test: 'tests/unit/task-mail-body-parity.test.ts',
+    rewrites: [
+      ['const QUOTE_MARKERS: RegExp[] = [', 'const QUOTE_MARKERS = ['],
+      ['const isQuoteStart = (line: string) => ', 'const isQuoteStart = (line) => '],
+      ['export function withoutQuotes(raw: string): string {', 'export function withoutQuotes(raw) {'],
+      ['export function normalise(raw: string): string {', 'export function normalise(raw) {'],
+      ['function tidy(text: string): string {', 'function tidy(text) {'],
+      [
+        'export function bodyToStore(raw: string, limit = 12_000): { body: string; truncated: boolean } {',
+        'export function bodyToStore(raw, limit = 12_000) {',
+      ],
+    ],
+  },
+  {
     src: new URL('../lib/tasks/mail-match.ts', import.meta.url),
     out: new URL('./task-mail-match.mjs', import.meta.url),
     from: 'lib/tasks/mail-match.ts',

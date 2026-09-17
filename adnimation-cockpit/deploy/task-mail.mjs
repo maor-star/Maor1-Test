@@ -32,6 +32,7 @@
 import { createSign } from 'node:crypto';
 import postgres from 'postgres';
 import { digestsIn, looseCandidates, othersOn, sweepMatches } from './task-mail-match.mjs';
+import { bodyToStore } from './task-mail-body.mjs';
 import { loadSecrets } from './job-secrets.mjs';
 
 const DB = process.env.DATABASE_URL;
@@ -160,8 +161,16 @@ async function copyThread(threadId) {
   for (const m of messages) {
     const hs = m.payload?.headers ?? [];
     const from = whoSent(headerOf(hs, 'from'));
+    /*
+     * The message, not the conversation it is replying to.
+     *
+     * Gmail's plain-text part carries the whole quoted history under every
+     * reply, so storing it as it came meant a thread of eight messages was the
+     * same words stored eight times — and the newest message, which is the one
+     * he opened the task to read, was the likeliest to hit the cap.
+     */
     const text = plainText(m.payload).join('\n').trim() || m.snippet || '';
-    const body = text.slice(0, BODY_CHARS);
+    const stored = bodyToStore(text, BODY_CHARS);
 
     await sql`
       insert into mail_messages
@@ -171,7 +180,7 @@ async function copyThread(threadId) {
         ${headerOf(hs, 'to')},
         ${m.internalDate ? new Date(Number(m.internalDate)) : null},
         ${Boolean(MAILBOX && from.email && from.email.includes(String(MAILBOX).toLowerCase()))},
-        ${body}, ${text.length > body.length}, ${hasFiles(m.payload)}
+        ${stored.body}, ${stored.truncated}, ${hasFiles(m.payload)}
       )
       on conflict (message_id) do update
         set body = excluded.body,
