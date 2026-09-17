@@ -2,9 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth/session';
-import { canEditTask } from '@/lib/tasks/access';
+import { canEditTask, isAccountHolder } from '@/lib/tasks/access';
 import { getTask } from '@/lib/tasks/queries';
-import { dismissMail, mailForTask, restoreMail, sweepTaskMail } from '@/lib/tasks/mail-links';
+import {
+  dismissMail, mailForTask, messagesIn, restoreMail, sweepTaskMail, type MailMessage,
+} from '@/lib/tasks/mail-links';
 
 /**
  * The mail hanging off a task, as the screen works it.
@@ -90,4 +92,38 @@ export async function mailForTaskAction(taskId: string) {
   const gate = await mayEdit(taskId);
   if (gate.error) return { ok: false as const, error: gate.error.error };
   return { ok: true as const, items: await mailForTask(taskId) };
+}
+
+/**
+ * The mail itself, read where the task is.
+ *
+ * Gated to the account holders and to nobody else. Everything else on this
+ * board is work — a title, a due date, who is on it — and a person he grants
+ * the board to is meant to see the work. The contents of his mailbox are a
+ * different kind of thing: a guest can see that a task has three emails on it
+ * and cannot read a word of them. That is a deliberate narrowing of the grant,
+ * not an oversight, and widening it would be his call to make explicitly.
+ *
+ * Fetched when he opens one rather than with the row — a board of forty tasks
+ * would otherwise carry a hundred emails to the browser to show two.
+ */
+export async function readMailAction(
+  taskId: string,
+  threadId: string,
+): Promise<{ ok: true; messages: MailMessage[] } | { ok: false; error: string }> {
+  const user = await requireUser();
+  if (!isAccountHolder(user)) return { ok: false, error: 'Not yours to read' };
+
+  const gate = await mayEdit(taskId);
+  if (gate.error) return { ok: false, error: gate.error.error };
+
+  /*
+   * And it must be a thread that is actually on this task. Without this, the
+   * action would read any thread in the mailbox for anyone who knows a task id
+   * — the task is the door, so the thread has to be behind it.
+   */
+  const onTask = (await mailForTask(taskId)).some((m) => m.threadId === threadId);
+  if (!onTask) return { ok: false, error: 'That email is not on this task' };
+
+  return { ok: true, messages: await messagesIn(threadId) };
 }

@@ -1,5 +1,7 @@
-import { and, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
-import { db, mailThreads, people, taskAssignees, taskMail, taskMailRuns, tasks } from '@/lib/db';
+import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
+import {
+  db, mailMessages, mailThreads, people, taskAssignees, taskMail, taskMailRuns, tasks,
+} from '@/lib/db';
 import { othersOn, sweepMatches, type TaskSeed, type ThreadSeed } from './mail-match';
 
 /**
@@ -21,19 +23,37 @@ export interface MailLink {
   /** Null for the matcher's own finds; his address when he attached it. */
   attachedBy: string | null;
   url: string;
+  /** How many messages of it have been copied in, if any. */
+  messages: number;
+}
+
+/** One message of a thread, as it was written. */
+export interface MailMessage {
+  id: string;
+  fromName: string | null;
+  fromEmail: string | null;
+  sentAt: Date | null;
+  fromMe: boolean;
+  body: string;
+  /** True when the stored copy is cut — said plainly rather than hidden. */
+  truncated: boolean;
+  hasFiles: boolean;
 }
 
 const gmailUrl = (threadId: string) => `https://mail.google.com/mail/u/0/#all/${threadId}`;
 
-function toLink(row: {
-  threadId: string;
-  subject: string | null;
-  counterpart: string | null;
-  lastMessageAt: Date | null;
-  score: number;
-  reasons: string[];
-  matchedBy: string;
-}): MailLink {
+function toLink(
+  row: {
+    threadId: string;
+    subject: string | null;
+    counterpart: string | null;
+    lastMessageAt: Date | null;
+    score: number;
+    reasons: string[];
+    matchedBy: string;
+  },
+  messages = 0,
+): MailLink {
   return {
     threadId: row.threadId,
     subject: row.subject ?? '(no subject)',
@@ -43,7 +63,53 @@ function toLink(row: {
     reasons: row.reasons,
     attachedBy: row.matchedBy === 'auto' ? null : row.matchedBy,
     url: gmailUrl(row.threadId),
+    messages,
   };
+}
+
+/**
+ * How many messages of each thread have been copied in.
+ *
+ * The row says "3 messages" rather than offering to open something that has
+ * not arrived yet — the job copies them in after the link is made, so for a
+ * minute or two a fresh link has none.
+ */
+async function countsFor(threadIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (threadIds.length === 0) return out;
+  const rows = await db
+    .select({ threadId: mailMessages.threadId, n: sql<number>`count(*)::int` })
+    .from(mailMessages)
+    .where(inArray(mailMessages.threadId, threadIds))
+    .groupBy(mailMessages.threadId);
+  for (const row of rows) out.set(row.threadId, row.n);
+  return out;
+}
+
+/**
+ * The messages of one thread, oldest first.
+ *
+ * Private mail. Every caller of this goes through the account-holder gate in
+ * app/actions/task-mail.ts — the people he grants the tasks board to can see
+ * that a task has mail on it and cannot read it.
+ */
+export async function messagesIn(threadId: string): Promise<MailMessage[]> {
+  const rows = await db
+    .select()
+    .from(mailMessages)
+    .where(eq(mailMessages.threadId, threadId))
+    .orderBy(asc(mailMessages.sentAt));
+
+  return rows.map((r) => ({
+    id: r.messageId,
+    fromName: r.fromName,
+    fromEmail: r.fromEmail,
+    sentAt: r.sentAt,
+    fromMe: r.fromMe,
+    body: r.body,
+    truncated: r.truncated,
+    hasFiles: r.hasFiles,
+  }));
 }
 
 /** The mail on one task, best first. */
@@ -53,7 +119,8 @@ export async function mailForTask(taskId: string): Promise<MailLink[]> {
     .from(taskMail)
     .where(and(eq(taskMail.taskId, taskId), isNull(taskMail.dismissedAt)))
     .orderBy(desc(taskMail.score), desc(taskMail.lastMessageAt));
-  return rows.map(toLink);
+  const counts = await countsFor(rows.map((r) => r.threadId));
+  return rows.map((r) => toLink(r, counts.get(r.threadId) ?? 0));
 }
 
 /**
@@ -72,9 +139,10 @@ export async function mailForMany(taskIds: string[]): Promise<Map<string, MailLi
     .where(and(inArray(taskMail.taskId, taskIds), isNull(taskMail.dismissedAt)))
     .orderBy(desc(taskMail.score), desc(taskMail.lastMessageAt));
 
+  const counts = await countsFor([...new Set(rows.map((r) => r.threadId))]);
   for (const row of rows) {
     const held = out.get(row.taskId) ?? [];
-    held.push(toLink(row));
+    held.push(toLink(row, counts.get(row.threadId) ?? 0));
     out.set(row.taskId, held);
   }
   return out;

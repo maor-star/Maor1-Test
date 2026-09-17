@@ -579,11 +579,46 @@ export const mailThreads = pgTable(
     labels: text('labels').array().notNull().default([]),
     syncedAt: timestamptz('synced_at').notNull().defaultNow(),
     dismissedAt: timestamptz('dismissed_at'),
+    /** When this thread's messages were last copied in, and how many. */
+    bodiesAt: timestamptz('bodies_at'),
+    bodiesCount: integer('bodies_count').notNull().default(0),
   },
   (t) => [index('idx_mail_recent_drz').on(t.lastMessageAt)],
 );
 
 export type MailThread = typeof mailThreads.$inferSelect;
+
+/**
+ * The emails themselves, copied in so a task can be read without leaving it.
+ *
+ * Only the threads a task is linked to are copied — the mirror holds three
+ * thousand and he will read the eighty that are on his work. Plain text only
+ * and capped: this is for reading what was said, not for reproducing the mail.
+ *
+ * Private mail, so the screens that show it are gated to the account holders,
+ * never to the people granted the tasks board (see lib/tasks/access.ts).
+ */
+export const mailMessages = pgTable(
+  'mail_messages',
+  {
+    messageId: text('message_id').primaryKey(),
+    threadId: text('thread_id').notNull(),
+    fromName: text('from_name'),
+    fromEmail: text('from_email'),
+    toLine: text('to_line'),
+    sentAt: timestamptz('sent_at'),
+    /** His own messages, so the screen can show a conversation. */
+    fromMe: boolean('from_me').notNull().default(false),
+    body: text('body').notNull(),
+    /** Said plainly rather than cut silently. */
+    truncated: boolean('truncated').notNull().default(false),
+    hasFiles: boolean('has_files').notNull().default(false),
+    fetchedAt: timestamptz('fetched_at').notNull().defaultNow(),
+  },
+  (t) => [index('idx_mail_messages_thread').on(t.threadId, t.sentAt)],
+);
+
+export type MailMessageRow = typeof mailMessages.$inferSelect;
 
 /**
  * The emails a task turned out to be about.

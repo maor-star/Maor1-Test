@@ -23,6 +23,7 @@ export function TaskListView({
   lines,
   assignees,
   mail,
+  canReadMail = false,
 }: {
   rows: TaskRow[];
   people: { id: string; label: string; picks?: number; onTasks?: number }[];
@@ -33,6 +34,8 @@ export function TaskListView({
   assignees?: Map<string, AssigneeChip[]>;
   /** Task id → the emails the sweep matched to it. */
   mail?: Map<string, MailLink[]>;
+  /** His mailbox is not part of what a guest on this board is granted. */
+  canReadMail?: boolean;
 }) {
   if (rows.length === 0) {
     return (
@@ -59,6 +62,7 @@ export function TaskListView({
             lines={lines?.get(t.id) ?? []}
             assignees={(assignees?.get(t.id) ?? []).map((p) => p.id)}
             mail={mail?.get(t.id) ?? []}
+            canReadMail={canReadMail}
             search={foldForSearch(
               t.title,
               t.description,

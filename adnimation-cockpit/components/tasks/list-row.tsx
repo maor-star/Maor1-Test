@@ -51,6 +51,7 @@ export function TaskListRow({
   lines = [],
   assignees,
   mail = [],
+  canReadMail = false,
 }: {
   task: TaskRow;
   people: { id: string; label: string; picks?: number; onTasks?: number }[];
@@ -62,6 +63,8 @@ export function TaskListRow({
   assignees?: readonly string[];
   /** The emails the sweep matched to it. */
   mail?: MailLink[];
+  /** Whether this viewer may read them, as opposed to see that they exist. */
+  canReadMail?: boolean;
   /** The row's searchable text, folded — the list narrows on it as he types. */
   search?: string;
 }) {
@@ -152,7 +155,7 @@ export function TaskListRow({
       </div>
 
       {/* What came in about it. Found by the sweep, not filed by hand. */}
-      <TaskMail taskId={t.id} items={mail} compact />
+      <TaskMail taskId={t.id} items={mail} compact canRead={canReadMail} />
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {/* A mirrored task is closed in ClickUp, not here — see

@@ -22,7 +22,7 @@ import { Attachments } from '@/components/attachments';
 import { NewTaskForm } from '@/components/tasks/new-task-form';
 import { DelegateButton } from '@/components/tasks/delegate-button';
 import { requireUser } from '@/lib/auth/session';
-import { canSeePrivate } from '@/lib/tasks/access';
+import { canSeePrivate, isAccountHolder } from '@/lib/tasks/access';
 
 export const dynamic = 'force-dynamic';
 
@@ -218,7 +218,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                 <HudCardHeader title="Email" index="T08" />
                 <Num className="text-2xs text-muted-foreground">{mail.length}</Num>
               </div>
-              <TaskMail taskId={task.id} items={mail} />
+              <TaskMail taskId={task.id} items={mail} canRead={isAccountHolder(viewer)} />
             </HudCard>
           ) : null}
 

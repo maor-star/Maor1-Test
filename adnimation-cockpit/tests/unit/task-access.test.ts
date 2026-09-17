@@ -129,3 +129,30 @@ describe('what role an address gets', () => {
     expect(roleFor('MAOR@ADNIMATION.COM', 'owner', null)?.email).toBe('maor@adnimation.com');
   });
 });
+
+/**
+ * The mail on a task is not part of the tasks-board grant.
+ *
+ * Everything else on that board is work — a title, a due date, who is on it —
+ * and a person he grants the board to is meant to see the work. The contents
+ * of his mailbox are a different kind of thing, and now that the emails
+ * themselves are copied into the cockpit the grant has to say so: a guest can
+ * see that a task has three emails on it and cannot read a word of them.
+ *
+ * Deliberate, and the strict reading of what he asked for (CLAUDE.md §2 — the
+ * grant reaches the tasks board and nothing else). Widening it is his call.
+ */
+describe('reading the mail on a task', () => {
+  it('is for the two account holders', () => {
+    expect(isAccountHolder({ role: 'owner' })).toBe(true);
+    expect(isAccountHolder({ role: 'operator' })).toBe(true);
+  });
+
+  it('is not for a collaborator, however much of the board they may edit', () => {
+    expect(isAccountHolder({ role: 'collaborator' })).toBe(false);
+    // Even one trusted with editing: editing a task and reading his mailbox
+    // are not the same permission.
+    expect(canEditTask({ isPrivate: false }, { role: 'collaborator', level: 'edit' })).toBe(true);
+    expect(isAccountHolder({ role: 'collaborator' })).toBe(false);
+  });
+});

@@ -52,6 +52,7 @@ export function TaskGroupedView({
   today,
   lines,
   mail,
+  canReadMail = false,
   delegated,
   assignees,
   nudges,
@@ -68,6 +69,8 @@ export function TaskGroupedView({
   lines?: Map<string, string[]>;
   /** Task id → the emails the sweep matched to it. */
   mail?: Map<string, MailLink[]>;
+  /** His mailbox is not part of what a guest on this board is granted. */
+  canReadMail?: boolean;
   /** Task id → who is holding it, fetched for the whole list at once. */
   delegated: Map<string, DelegationMark>;
   /** Task id → everyone on it. Empty means the lead alone; see chipsFor. */
@@ -126,6 +129,7 @@ export function TaskGroupedView({
           people={people}
           lines={lines}
           mail={mail}
+          canReadMail={canReadMail}
           delegated={delegated}
           assignees={assignees}
           nudges={nudges}
@@ -151,6 +155,7 @@ function Group({
   deptOptions,
   lines,
   mail,
+  canReadMail = false,
   today,
   people,
   delegated,
@@ -167,6 +172,8 @@ function Group({
   lines?: Map<string, string[]>;
   /** Task id → the emails the sweep matched to it. */
   mail?: Map<string, MailLink[]>;
+  /** His mailbox is not part of what a guest on this board is granted. */
+  canReadMail?: boolean;
   today: string;
   people: { id: string; label: string }[];
   delegated: Map<string, DelegationMark>;
@@ -238,6 +245,7 @@ function Group({
                 deptOptions={deptOptions}
                 lines={lines}
                 mail={mail}
+                canReadMail={canReadMail}
                 today={today}
                 people={people}
                 mark={delegated.get(t.id)}
@@ -289,6 +297,7 @@ function Row({
   deptOptions,
   lines,
   mail,
+  canReadMail = false,
   today,
   people,
   mark,
@@ -305,6 +314,8 @@ function Row({
   lines?: Map<string, string[]>;
   /** Task id → the emails the sweep matched to it. */
   mail?: Map<string, MailLink[]>;
+  /** His mailbox is not part of what a guest on this board is granted. */
+  canReadMail?: boolean;
   today: string;
   people: { id: string; label: string }[];
   mark: DelegationMark | undefined;
@@ -364,7 +375,7 @@ function Row({
         ) : null}
         {/* What came in about it. Found by the sweep, not filed by hand — the
             two most convincing threads, with the rest on the task itself. */}
-        <TaskMail taskId={task.id} items={mail?.get(task.id) ?? []} compact />
+        <TaskMail taskId={task.id} items={mail?.get(task.id) ?? []} compact canRead={canReadMail} />
       </span>
 
       <AssigneeCell people={on} onEdit={() => setEditing(true)} />

@@ -21,7 +21,7 @@ import { delegationsForMany, type DelegationMark } from '@/lib/delegation/for-ma
 import { assigneesForMany, type AssigneeChip } from '@/lib/tasks/assignees';
 import { lastNudges, type NudgeMark } from '@/lib/tasks/nudge';
 import { requireUser } from '@/lib/auth/session';
-import { canManageAccess, canSeePrivate } from '@/lib/tasks/access';
+import { canManageAccess, canSeePrivate, isAccountHolder } from '@/lib/tasks/access';
 import { listGrants } from '@/lib/tasks/access-service';
 import { TaskAccessPanel } from '@/components/tasks/access-panel';
 import { pendingInvites } from '@/lib/tasks/invite-service';
@@ -267,6 +267,7 @@ export default async function TasksPage({
         departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
         lines={pillars}
         mail={mail}
+        canReadMail={isAccountHolder(viewer)}
         groupBy={groupBy}
         today={todayInTz()}
         delegated={delegated}
@@ -287,6 +288,7 @@ function TaskViewSwitch({
   departments,
   lines,
   mail,
+  canReadMail,
   groupBy,
   today,
   delegated,
@@ -303,6 +305,8 @@ function TaskViewSwitch({
   lines?: Map<string, string[]>;
   /** Task id → the emails the sweep matched to it. */
   mail?: Map<string, MailLink[]>;
+  /** His mailbox is not part of what a guest on this board is granted. */
+  canReadMail: boolean;
   groupBy: TaskGroupBy;
   today: string;
   delegated: Map<string, DelegationMark>;
@@ -323,6 +327,7 @@ function TaskViewSwitch({
         lines={lines}
         assignees={assignees}
         mail={mail}
+        canReadMail={canReadMail}
       />
     );
   }
@@ -335,6 +340,7 @@ function TaskViewSwitch({
       today={today}
       lines={lines}
       mail={mail}
+      canReadMail={canReadMail}
       delegated={delegated}
       assignees={assignees}
       nudges={nudges}
