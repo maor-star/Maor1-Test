@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  digestsIn, looseCandidates, matchesFor, scoreThread, sweepMatches, words,
-  type TaskSeed, type ThreadSeed,
+  digestsIn, looseCandidates, matchesFor, othersOn, scoreThread, spreadOf, sweepMatches,
+  weightOf, words, type TaskSeed, type ThreadSeed,
 } from '@/lib/tasks/mail-match';
 // @ts-expect-error — the generated job copy is plain ESM with no types.
 import * as js from '@/deploy/task-mail-match.mjs';
@@ -89,6 +89,20 @@ describe('task mail parity', () => {
     expect(js.digestsIn(TASKS, THREADS)).toEqual(digestsIn(TASKS, THREADS));
     expect([...js.sweepMatches(TASKS, THREADS).entries()])
       .toEqual([...sweepMatches(TASKS, THREADS).entries()]);
+  });
+
+  it('weighs words by rarity identically', () => {
+    const spread = spreadOf(THREADS);
+    expect([...js.spreadOf(THREADS).entries()].sort()).toEqual([...spread.entries()].sort());
+    for (const word of ['nexxen', 'taboola', 'agreement', 'parking']) {
+      expect(js.weightOf(word, spread), word).toBe(weightOf(word, spread));
+    }
+  });
+
+  it('drops the mailbox owner the same way', () => {
+    expect(js.othersOn(['maor@adnimation.com', 'assaf@adnimation.com']))
+      .toEqual(othersOn(['maor@adnimation.com', 'assaf@adnimation.com']));
+    expect(js.othersOn(['a@x.com'], 'a@x.com')).toEqual(othersOn(['a@x.com'], 'a@x.com'));
   });
 
   it('exports the same threshold and noise list', () => {

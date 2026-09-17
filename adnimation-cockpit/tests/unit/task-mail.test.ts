@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  domainOf, looseCandidates, matchesFor, MAX_TASKS_PER_THREAD, MIN_SCORE,
-  scoreThread, sweepMatches, words, type TaskSeed, type ThreadSeed,
+  domainOf, looseCandidates, matchesFor, MAX_TASKS_PER_THREAD, MIN_SCORE, othersOn,
+  scoreThread, spreadOf, sweepMatches, weightOf, words, type TaskSeed, type ThreadSeed,
 } from '@/lib/tasks/mail-match';
 
 /**
@@ -129,7 +129,13 @@ describe('what must not match', () => {
     expect(hit).toBeNull();
   });
 
-  it('will not match on one weak word in common', () => {
+  it('will not match on one word that half the mailbox uses', () => {
+    // With a corpus to judge by, "endpoint" is furniture. Without one every
+    // word looks rare, which is the documented default and is why the sweep
+    // always passes the corpus.
+    const everyday: ThreadSeed[] = Array.from({ length: 120 }, (_, i) =>
+      thread({ threadId: `e${i}`, subject: `Endpoint monitoring ${i}` }),
+    );
     const hit = scoreThread(
       task({ title: 'Reconnect the CTV endpoint', people: [] }),
       thread({
@@ -138,6 +144,7 @@ describe('what must not match', () => {
         counterpartEmail: 'ops@vendor.io',
         participants: ['ops@vendor.io'],
       }),
+      spreadOf(everyday),
     );
     expect(hit).toBeNull();
   });
@@ -171,9 +178,22 @@ describe('the shortlist the model reads', () => {
   });
 
   it('hands over what the rules refused but a reader would ask about', () => {
+    /*
+     * The only word these two share is "ctv", and in his real mailbox "ctv" is
+     * in hundreds of subjects — so the rules are right to refuse it and wrong
+     * to be the last word. "לחבר את נקססן מחדש ל CTV" and "Nexxen CTV
+     * reconnect" are the same piece of work; only a reader of both languages
+     * can say so.
+     */
+    const mailbox: ThreadSeed[] = Array.from({ length: 150 }, (_, i) =>
+      thread({ threadId: `m${i}`, subject: `CTV numbers ${i}` }),
+    );
     const english = thread({ subject: 'Nexxen CTV reconnect' });
-    expect(scoreThread(hebrew, english)).toBeNull();
-    expect(looseCandidates(hebrew, [english]).map((c) => c.threadId)).toEqual(['th1']);
+    const spread = spreadOf([...mailbox, english]);
+
+    expect(scoreThread(hebrew, english, spread)).toBeNull();
+    expect(looseCandidates(hebrew, [english], 10, spread).map((c) => c.threadId))
+      .toEqual(['th1']);
   });
 
   it('still leaves out a thread with no signal at all', () => {
@@ -289,5 +309,70 @@ describe('the body cannot decide on its own', () => {
       thread({ subject: 'Nexxen CTV endpoint throughput', snippet: 'looking at it' }),
     );
     expect(withBody!.score).toBeGreaterThan(without!.score);
+  });
+});
+
+describe('a word is worth what it narrows down', () => {
+  /*
+   * The alternative was a hand-written list of words to ignore, and I started
+   * writing one before noticing it could not work: "ads" is furniture in this
+   * mailbox and "pangle" is the whole answer, and which is which changes every
+   * time the company signs a new partner.
+   */
+  const corpus: ThreadSeed[] = [
+    ...Array.from({ length: 200 }, (_, i) =>
+      thread({ threadId: `c${i}`, subject: `Weekly ads report ${i}` }),
+    ),
+    thread({ threadId: 'p1', subject: 'Pangle integration' }),
+    thread({ threadId: 'p2', subject: 'Pangle contract' }),
+  ];
+
+  it('counts how common each word is across the mailbox', () => {
+    const spread = spreadOf(corpus);
+    expect(spread.get('ads')).toBe(200);
+    expect(spread.get('pangle')).toBe(2);
+  });
+
+  it('pays full price for a rare word and almost nothing for a everywhere one', () => {
+    const spread = spreadOf(corpus);
+    expect(weightOf('pangle', spread)).toBe(1);
+    expect(weightOf('ads', spread)).toBeLessThan(0.1);
+  });
+
+  it('matches on one rare word and refuses one common one', () => {
+    const spread = spreadOf(corpus);
+    const bio = task({ title: 'Bio ads', people: [] });
+    const pangle = task({ title: 'Pangle — Yahoo', people: [] });
+
+    expect(scoreThread(bio, thread({ subject: 'schain and app-ads.txt declaration' }), spread))
+      .toBeNull();
+    expect(scoreThread(pangle, thread({ subject: 'Re: Pangle' }), spread)).not.toBeNull();
+  });
+
+  it('treats every word as rare when there is no corpus, so one pair still scores', () => {
+    expect(weightOf('anything', new Map())).toBe(1);
+  });
+});
+
+describe('whose mailbox it is', () => {
+  /*
+   * His own address is in every thread in his own mailbox. Counting it as
+   * "somebody on this task is in this conversation" handed fourteen points to
+   * the entire mailbox and turned a single common word into a match — which is
+   * exactly what the first live run did.
+   */
+  it('is not one of the people a thread can match on', () => {
+    expect(othersOn(['maor@adnimation.com', 'assaf@adnimation.com']))
+      .toEqual(['assaf@adnimation.com']);
+    expect(othersOn(['MAOR@Adnimation.com'])).toEqual([]);
+  });
+
+  it('takes whichever mailbox is actually being read', () => {
+    expect(othersOn(['a@x.com', 'b@x.com'], 'b@x.com')).toEqual(['a@x.com']);
+  });
+
+  it('leaves everyone else alone', () => {
+    expect(othersOn(['assaf@adnimation.com', 'ravit@adnimation.com']))
+      .toEqual(['assaf@adnimation.com', 'ravit@adnimation.com']);
   });
 });

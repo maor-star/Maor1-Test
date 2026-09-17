@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { db, mailThreads, people, taskAssignees, taskMail, taskMailRuns, tasks } from '@/lib/db';
-import { sweepMatches, type TaskSeed, type ThreadSeed } from './mail-match';
+import { othersOn, sweepMatches, type TaskSeed, type ThreadSeed } from './mail-match';
 
 /**
  * The emails hanging off a task, and the sweep that finds them.
@@ -178,8 +178,12 @@ export async function sweepTaskMail(now = new Date()): Promise<SweepResult> {
     description: task.description,
     nextStep: task.nextStep,
     tags: task.tags,
-    people: [task.ownerEmail, ...(peopleOn.get(task.id) ?? [])].filter(
-      (e): e is string => typeof e === 'string' && e.length > 0,
+    // His own address is in every thread in his own mailbox, so it is never
+    // evidence about a particular task — see othersOn in ./mail-match.
+    people: othersOn(
+      [task.ownerEmail, ...(peopleOn.get(task.id) ?? [])].filter(
+        (e): e is string => typeof e === 'string' && e.length > 0,
+      ),
     ),
     createdAt: task.createdAt.toISOString(),
   }));

@@ -28,7 +28,17 @@ export interface TaskSeed {
   description: string | null;
   nextStep: string | null;
   tags: string[];
-  /** Everyone on it, by email — the lead and the rest. */
+  /**
+   * Everyone on it, by email — the lead and the rest, WITHOUT the owner of the
+   * mailbox being read.
+   *
+   * His own address is in every thread in his own mailbox, so counting it as
+   * "somebody on this task is in this conversation" gave fourteen points to
+   * literally everything and turned a single common word into a match. The
+   * callers strip it (see MAILBOX_OWNER below); it is stated here because a
+   * caller that forgets makes the whole matcher wrong in a way that still
+   * looks like it is working.
+   */
   people: string[];
   /** ISO date. Used only to break ties between equally good threads. */
   createdAt: string;
@@ -104,6 +114,50 @@ const isHebrew = (word: string) => /[\u0590-\u05FF]/.test(word);
 /** Threshold a match has to clear before it is written down at all. */
 export const MIN_SCORE = 34;
 
+/**
+ * How common a word may be across the mailbox and still mean something.
+ *
+ * This replaces an argument I was about to lose. The first live run matched
+ * "Bio ads" to a thread about app-ads.txt on the word "ads", and I started
+ * adding words to the noise list — but "ads" is noise in this mailbox while
+ * "pangle" is the whole answer, and no hand-written list knows the difference
+ * for a company whose partners change every quarter.
+ *
+ * So rarity is measured instead of guessed: a word in three subjects out of
+ * three thousand is the name of something, and a word in two hundred is
+ * furniture. The counting is done by the sweep, which is the only pass that
+ * sees every thread.
+ */
+export const RARE = 6;
+const COMMON = 24;
+const EVERYWHERE = 80;
+
+/** Word → how many thread subjects it appears in. */
+export type WordSpread = Map<string, number>;
+
+/** What one shared word is worth, given how common it is. */
+export function weightOf(word: string, spread: WordSpread): number {
+  const seen = spread.get(word) ?? 0;
+  // No corpus to judge by: treat it as distinctive, which is what a caller
+  // scoring one pair in a test means.
+  if (seen === 0) return 1;
+  if (seen <= RARE) return 1;
+  if (seen <= COMMON) return 0.55;
+  if (seen <= EVERYWHERE) return 0.2;
+  return 0.05;
+}
+
+/** How often each word shows up in a subject, across the whole mailbox. */
+export function spreadOf(threads: ThreadSeed[]): WordSpread {
+  const spread: WordSpread = new Map();
+  for (const thread of threads) {
+    for (const word of new Set(words(thread.subject ?? ''))) {
+      spread.set(word, (spread.get(word) ?? 0) + 1);
+    }
+  }
+  return spread;
+}
+
 /** Letters and digits in any script, so a Hebrew title tokenises like an English one. */
 export function words(text: string): string[] {
   if (!text) return [];
@@ -126,6 +180,21 @@ export function words(text: string): string[] {
 export function domainOf(address: string): string {
   const at = address.indexOf('@');
   return at === -1 ? '' : address.slice(at + 1).toLowerCase().trim();
+}
+
+/**
+ * Whose mailbox this is.
+ *
+ * Every thread in it has him in it, so he is never evidence that a thread is
+ * about a particular task. Callers drop this address from a task's people
+ * before scoring.
+ */
+export const MAILBOX_OWNER = 'maor@adnimation.com';
+
+/** Everyone on a task except whoever's mailbox is being read. */
+export function othersOn(people: readonly string[], owner = MAILBOX_OWNER): string[] {
+  const mine = owner.toLowerCase().trim();
+  return people.filter((p) => p && p.toLowerCase().trim() !== mine);
 }
 
 /**
@@ -153,8 +222,12 @@ function daysApart(a: string, b: string): number {
  *
  * Returns null when it does not fit, which is the common answer.
  */
-export function scoreThread(task: TaskSeed, thread: ThreadSeed): MailMatch | null {
-  const signals = signalsFor(task, thread);
+export function scoreThread(
+  task: TaskSeed,
+  thread: ThreadSeed,
+  spread: WordSpread = new Map(),
+): MailMatch | null {
+  const signals = signalsFor(task, thread, spread);
   if (!signals.strong) return null;
   if (signals.score < MIN_SCORE) return null;
   return { threadId: thread.threadId, score: signals.score, reasons: signals.reasons };
@@ -166,7 +239,7 @@ interface Signals {
   strong: boolean;
 }
 
-function signalsFor(task: TaskSeed, thread: ThreadSeed): Signals {
+function signalsFor(task: TaskSeed, thread: ThreadSeed, spread: WordSpread): Signals {
   /*
    * The title against the subject is the signal. Everything else is a bonus.
    *
@@ -219,11 +292,28 @@ function signalsFor(task: TaskSeed, thread: ThreadSeed): Signals {
   const reasons = [];
   let score = 0;
 
+  /*
+   * Ranked by how much each shared word actually narrows things down, so
+   * "pangle" counts and "ads" barely does. Capped at four: a subject quoting
+   * the whole title is not five times as relevant as one naming the two words
+   * that matter.
+   */
+  const ranked = [...shared].sort((a, b) => weightOf(b, spread) - weightOf(a, spread));
+  const telling = ranked.filter((w) => weightOf(w, spread) >= 1);
+
   if (shared.length > 0) {
-    // Capped: a subject quoting the whole title is not five times as relevant
-    // as one naming the two words that matter.
-    score += Math.min(shared.length, 4) * 14;
-    reasons.push(`subject says ${shared.slice(0, 4).join(', ')}`);
+    /*
+     * The first word carries most of it. One rare word — a partner's name, a
+     * product — is the match; the ones after it corroborate. Weighting them
+     * equally meant a subject naming "pangle" scored the same as one naming
+     * "ads" twice.
+     */
+    score += Math.round(
+      ranked
+        .slice(0, 4)
+        .reduce((sum, w, i) => sum + (i === 0 ? 30 : 12) * weightOf(w, spread), 0),
+    );
+    reasons.push(`subject says ${ranked.slice(0, 4).join(', ')}`);
   }
   if (corroborating.length > 0) {
     score += Math.min(corroborating.length, 3) * 4;
@@ -260,18 +350,26 @@ function signalsFor(task: TaskSeed, thread: ThreadSeed): Signals {
    * bodies happening to share a word.
    */
   const strong =
-    shared.length >= 2 ||
-    (shared.length >= 1 && (onBoth.length > 0 || Boolean(domainHit) || Boolean(labelHit))) ||
+    // One word that names something — a partner, a product, a person.
+    telling.length >= 1 ||
+    // Or several ordinary ones, which together still say what it is about.
+    shared.length >= 3 ||
+    (shared.length >= 2 && (onBoth.length > 0 || Boolean(domainHit) || Boolean(labelHit))) ||
     Boolean(domainHit && onBoth.length > 0);
 
   return { score, reasons, strong: Boolean(strong) };
 }
 
 /** Per task, the best threads — most convincing first. */
-export function matchesFor(task: TaskSeed, threads: ThreadSeed[], limit = 5): MailMatch[] {
+export function matchesFor(
+  task: TaskSeed,
+  threads: ThreadSeed[],
+  limit = 5,
+  spread: WordSpread = spreadOf(threads),
+): MailMatch[] {
   const found = [];
   for (const thread of threads) {
-    const hit = scoreThread(task, thread);
+    const hit = scoreThread(task, thread, spread);
     if (hit) found.push(hit);
   }
   found.sort((a, b) => b.score - a.score || a.threadId.localeCompare(b.threadId));
@@ -296,10 +394,11 @@ export function looseCandidates(
   task: TaskSeed,
   threads: ThreadSeed[],
   limit = 10,
+  spread: WordSpread = spreadOf(threads),
 ): MailMatch[] {
   const found = [];
   for (const thread of threads) {
-    const s = signalsFor(task, thread);
+    const s = signalsFor(task, thread, spread);
     // Recency alone scores 6 and means nothing; something must have matched.
     if (s.reasons.length === 0) continue;
     found.push({ threadId: thread.threadId, score: s.score, reasons: s.reasons });
@@ -328,9 +427,11 @@ export function sweepMatches(
 ): Map<string, MailMatch[]> {
   const perTask = new Map<string, MailMatch[]>();
   const spread = new Map<string, number>();
+  // How common each word is across the whole mailbox, counted once.
+  const rarity = spreadOf(threads);
 
   for (const task of tasks) {
-    const found = matchesFor(task, threads, limit);
+    const found = matchesFor(task, threads, limit, rarity);
     if (found.length === 0) continue;
     perTask.set(task.id, found);
     for (const hit of found) spread.set(hit.threadId, (spread.get(hit.threadId) ?? 0) + 1);
@@ -351,8 +452,9 @@ export function sweepMatches(
 /** The threads this sweep judged to be digests, for the job's log. */
 export function digestsIn(tasks: TaskSeed[], threads: ThreadSeed[], limit = 5): string[] {
   const spread = new Map<string, number>();
+  const rarity = spreadOf(threads);
   for (const task of tasks) {
-    for (const hit of matchesFor(task, threads, limit)) {
+    for (const hit of matchesFor(task, threads, limit, rarity)) {
       spread.set(hit.threadId, (spread.get(hit.threadId) ?? 0) + 1);
     }
   }

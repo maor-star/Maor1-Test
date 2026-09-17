@@ -56,10 +56,36 @@ export const TARGETS = [
       [/interface Signals \{[\s\S]*?\n\}\n\n/, ''],
       ['function signalsFor(task: TaskSeed, thread: ThreadSeed): Signals {', 'function signalsFor(task, thread) {'],
       [
-        /export function looseCandidates\(\n  task: TaskSeed,\n  threads: ThreadSeed\[\],\n  limit = 10,\n\): MailMatch\[\] \{/,
-        'export function looseCandidates(task, threads, limit = 10) {',
+        /export function looseCandidates\(\n  task: TaskSeed,\n  threads: ThreadSeed\[\],\n  limit = 10,\n  spread: WordSpread = spreadOf\(threads\),\n\): MailMatch\[\] \{/,
+        'export function looseCandidates(task, threads, limit = 10, spread = spreadOf(threads)) {',
       ],
       ['const isHebrew = (word: string) => ', 'const isHebrew = (word) => '],
+      [
+        'export function weightOf(word: string, spread: WordSpread): number {',
+        'export function weightOf(word, spread) {',
+      ],
+      // Only the signature: stripTypeDeclarations has already rewritten the
+      // `const spread: WordSpread = …` line inside it.
+      [
+        'export function spreadOf(threads: ThreadSeed[]): WordSpread {',
+        'export function spreadOf(threads) {',
+      ],
+      [
+        'export function othersOn(people: readonly string[], owner = MAILBOX_OWNER): string[] {',
+        'export function othersOn(people, owner = MAILBOX_OWNER) {',
+      ],
+      [
+        /export function scoreThread\(\n  task: TaskSeed,\n  thread: ThreadSeed,\n  spread: WordSpread = new Map\(\),\n\): MailMatch \| null \{/,
+        'export function scoreThread(task, thread, spread = new Map()) {',
+      ],
+      [
+        'function signalsFor(task: TaskSeed, thread: ThreadSeed, spread: WordSpread): Signals {',
+        'function signalsFor(task, thread, spread) {',
+      ],
+      [
+        /export function matchesFor\(\n  task: TaskSeed,\n  threads: ThreadSeed\[\],\n  limit = 5,\n  spread: WordSpread = spreadOf\(threads\),\n\): MailMatch\[\] \{/,
+        'export function matchesFor(task, threads, limit = 5, spread = spreadOf(threads)) {',
+      ],
       [
         /export function sweepMatches\(\n  tasks: TaskSeed\[\],\n  threads: ThreadSeed\[\],\n  limit = 5,\n\): Map<string, MailMatch\[\]> \{/,
         'export function sweepMatches(tasks, threads, limit = 5) {',

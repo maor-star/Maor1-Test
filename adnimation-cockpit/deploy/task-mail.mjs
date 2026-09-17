@@ -30,7 +30,7 @@
  * It only ever READS the mailbox. Nothing here sends, labels or archives.
  */
 import postgres from 'postgres';
-import { looseCandidates, sweepMatches } from './task-mail-match.mjs';
+import { looseCandidates, othersOn, sweepMatches } from './task-mail-match.mjs';
 import { loadSecrets } from './job-secrets.mjs';
 
 const DB = process.env.DATABASE_URL;
@@ -233,7 +233,12 @@ async function main() {
     description: task.description,
     nextStep: task.next_step,
     tags: task.tags ?? [],
-    people: [task.owner_email, ...(peopleOn.get(task.id) ?? [])].filter(Boolean),
+    // His own address is in every thread in his own mailbox, so it says
+    // nothing about which task a thread is about.
+    people: othersOn(
+      [task.owner_email, ...(peopleOn.get(task.id) ?? [])].filter(Boolean),
+      process.env.GMAIL_MAILBOX,
+    ),
     createdAt: new Date(task.created_at).toISOString(),
   });
 
