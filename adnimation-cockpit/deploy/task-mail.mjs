@@ -30,7 +30,7 @@
  * It only ever READS the mailbox. Nothing here sends, labels or archives.
  */
 import postgres from 'postgres';
-import { looseCandidates, othersOn, sweepMatches } from './task-mail-match.mjs';
+import { digestsIn, looseCandidates, othersOn, sweepMatches } from './task-mail-match.mjs';
 import { loadSecrets } from './job-secrets.mjs';
 
 const DB = process.env.DATABASE_URL;
@@ -253,6 +253,18 @@ async function main() {
   const taskSeeds = queue.map(seedOf);
   const matched = sweepMatches(taskSeeds, threadSeeds, PER_TASK);
 
+  /*
+   * The digests, kept out of the model's shortlist too.
+   *
+   * The rules already drop a thread that is about everything, but the model
+   * was still being handed the Daily Summary — which quotes his task list —
+   * and answering, quite correctly, "ClickUp task matches exactly". It was
+   * right about the words and wrong about the question, because it could only
+   * see one task at a time. Neither pass sees them now.
+   */
+  const digests = new Set(digestsIn(taskSeeds, threadSeeds, PER_TASK));
+  if (digests.size > 0) console.log(`ignoring ${digests.size} threads that match half the board`);
+
   for (const task of queue) {
     const seed = seedOf(task);
 
@@ -264,7 +276,7 @@ async function main() {
     if (asked >= MODEL_MAX || !process.env.ANTHROPIC_API_KEY) continue;
 
     const shortlist = looseCandidates(seed, threadSeeds, SHORTLIST)
-      .filter((c) => !decided.has(`${task.id}|${c.threadId}`))
+      .filter((c) => !decided.has(`${task.id}|${c.threadId}`) && !digests.has(c.threadId))
       .map((c) => byThread.get(c.threadId))
       .filter(Boolean);
     if (shortlist.length === 0) continue;

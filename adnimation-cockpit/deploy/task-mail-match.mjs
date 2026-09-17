@@ -62,6 +62,24 @@ export const NOISE = new Set([
   'בדיקה', 'היום', 'מחר', 'אתמול', 'שבוע', 'חודש', 'שנה', 'דחוף', 'תודה', 'שלום',
   'היי', 'בבקשה', 'צריך', 'צריכה', 'צריכים', 'טוב', 'נראה', 'סתם', 'ממש', 'הרבה',
   'המון', 'אותה', 'אותו', 'אותם', 'שורה', 'דבר', 'משהו', 'מישהו', 'עכשיו', 'אז',
+  /*
+   * Everyday Hebrew business vocabulary.
+   *
+   * This is a list I said I did not want, and it earns its place on a
+   * distinction: partner names change every quarter and a list of them would
+   * rot, but "נתונים" and "הצעה" will mean the same thing in five years. It is
+   * a dictionary, not a register of who we work with.
+   *
+   * Each of these matched a task to an unrelated thread on its own in the
+   * fourth live run, because they are rare in a mailbox that is almost all
+   * English and therefore looked as distinctive as a company's name.
+   */
+  'נתונים', 'מידע', 'מספרים', 'דוח', 'דוחות', 'הצעה', 'הצעות', 'מחיר', 'מחירים',
+  'חשבונית', 'חשבוניות', 'תשלום', 'תשלומים', 'כספים', 'הכנסות', 'הוצאות', 'תקציב',
+  'הסכם', 'הסכמים', 'חוזה', 'חוזים', 'סיכום', 'סיכומים', 'תכנית', 'תוכנית', 'עבודה',
+  'פרויקט', 'לקוח', 'לקוחות', 'ספק', 'ספקים', 'חברה', 'חברות', 'צוות', 'מחלקה',
+  'אתר', 'אתרי', 'אתרים', 'מערכת', 'מערכות', 'תהליך', 'שאלה', 'שאלות', 'תשובה',
+  'מייל', 'מיילים', 'טלפון', 'קישור', 'קובץ', 'קבצים', 'מסמך', 'מסמכים',
 ]);
 
 /**
@@ -279,7 +297,22 @@ function signalsFor(task, thread, spread) {
    */
   const telling = ranked.filter((w) => {
     const seen = spread.get(w) ?? 0;
-    return seen === 0 || seen <= NAMES_SOMETHING;
+    if (seen > NAMES_SOMETHING) return false;
+    /*
+     * Rarity cannot judge a Hebrew word here.
+     *
+     * His mailbox is overwhelmingly English, so EVERY Hebrew word is rare in
+     * it — which made "עומד", "פגישת", "נתונים" and "לקראת" look as
+     * distinctive as a partner's name, and each of them matched a task to a
+     * thread on its own. The corpus has nothing to say about them.
+     *
+     * What it can go on instead is length. A transliterated company name is
+     * long — אאוטבריין, סטרימלויאל, מרקיטו — and Hebrew's everyday words are
+     * short. A short Hebrew word therefore needs the same corroboration any
+     * ordinary word needs: a second word, a person, a domain.
+     */
+    if (isHebrew(w) && w.length < 6) return false;
+    return true;
   });
 
   /*

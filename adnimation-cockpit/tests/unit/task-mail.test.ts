@@ -434,3 +434,55 @@ describe('rare is not the same as meaningful', () => {
     expect(hit).not.toBeNull();
   });
 });
+
+describe('Hebrew in a mostly-English mailbox', () => {
+  /*
+   * Rarity is measured against his mailbox and his mailbox is overwhelmingly
+   * English, so every Hebrew word in it looks rare — which made "עומד",
+   * "פגישת" and "נתונים" score like a partner's name and match a task to a
+   * thread on their own. The corpus has nothing to say about them, so length
+   * does: a transliterated company name is long and an everyday word is short.
+   */
+  const spread = spreadOf(
+    Array.from({ length: 300 }, (_, i) => thread({ threadId: `e${i}`, subject: `Report ${i}` })),
+  );
+
+  it('refuses a short everyday Hebrew word on its own', () => {
+    for (const word of ['עומד', 'פגישת', 'נתונים', 'לקראת', 'מדיה']) {
+      const hit = scoreThread(
+        task({ title: `Applovin לראות איפה ${word}`, people: [] }),
+        thread({ subject: `איפה ${word} ZETA?`, snippet: 'שאלה' }),
+        spread,
+      );
+      expect(hit, word).toBeNull();
+    }
+  });
+
+  it('accepts a long one, which is what a transliterated name looks like', () => {
+    const hit = scoreThread(
+      task({ title: 'לחדש הסכם אאוטבריין', people: [] }),
+      thread({ subject: 'אאוטבריין — חידוש', snippet: 'נשמח לסגור' }),
+      spread,
+    );
+    expect(hit).not.toBeNull();
+  });
+
+  it('still accepts a short one once a second word agrees with it', () => {
+    // One short Hebrew word is not enough; two that are most of both lines is
+    // the same conversation, whatever language it is in.
+    const hit = scoreThread(
+      task({ title: 'לקחת סיטים ממרקיטו', people: [] }),
+      thread({ subject: 'סיטים ממרקיטו — סטטוס', snippet: 'נסגור השבוע' }),
+      spread,
+    );
+    expect(hit).not.toBeNull();
+  });
+
+  it('drops the everyday business vocabulary before it can match at all', () => {
+    // A dictionary of words that will mean the same in five years — not a
+    // register of partners, which would rot.
+    for (const word of ['נתונים', 'הסכם', 'חוזה', 'תכנית', 'אתרי', 'הוצאות']) {
+      expect(words(`${word} משהו`), word).not.toContain(word);
+    }
+  });
+});
