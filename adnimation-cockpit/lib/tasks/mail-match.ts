@@ -132,6 +132,21 @@ export const RARE = 6;
 const COMMON = 24;
 const EVERYWHERE = 80;
 
+/**
+ * Rare enough that one of them is a match on its own.
+ *
+ * Not the same question as "is this word worth points". The third live run
+ * matched tasks to mail on a single shared word that WAS rare — "possible",
+ * "direct", "across", "ספטמבר" — and rare is not the same as meaningful:
+ * "pangle" is the name of a company and "ספטמבר" is a month, and a corpus of
+ * three thousand subjects contains few of either.
+ *
+ * So one word carries a match only when it is all but unique to the pair,
+ * which is what a partner's name looks like and what an ordinary word never
+ * does. Everything else needs a second word, or a person, or a domain.
+ */
+const NAMES_SOMETHING = 2;
+
 /** Word → how many thread subjects it appears in. */
 export type WordSpread = Map<string, number>;
 
@@ -299,7 +314,28 @@ function signalsFor(task: TaskSeed, thread: ThreadSeed, spread: WordSpread): Sig
    * that matter.
    */
   const ranked = [...shared].sort((a, b) => weightOf(b, spread) - weightOf(a, spread));
-  const telling = ranked.filter((w) => weightOf(w, spread) >= 1);
+  /*
+   * The words that could carry the match by themselves. With no corpus to
+   * judge by — one pair scored in isolation — every word counts, which is the
+   * documented default and why the sweep always passes the corpus.
+   */
+  const telling = ranked.filter((w) => {
+    const seen = spread.get(w) ?? 0;
+    return seen === 0 || seen <= NAMES_SOMETHING;
+  });
+
+  /*
+   * How much of the two short strings the overlap actually covers.
+   *
+   * Counting words alone cannot tell "Re: ADnimation Account Transition"
+   * against a task of the same name — two ordinary words, worth almost nothing
+   * each — from a task that merely contains the word "account" somewhere. The
+   * first is the same subject line; the second is a coincidence. Coverage is
+   * what separates them.
+   */
+  const coverage = shared.length === 0
+    ? 0
+    : shared.length / Math.max(1, Math.min(titleWords.size, subjectWords.size));
 
   if (shared.length > 0) {
     /*
@@ -313,6 +349,7 @@ function signalsFor(task: TaskSeed, thread: ThreadSeed, spread: WordSpread): Sig
         .slice(0, 4)
         .reduce((sum, w, i) => sum + (i === 0 ? 30 : 12) * weightOf(w, spread), 0),
     );
+    if (shared.length >= 2) score += Math.round(20 * coverage);
     reasons.push(`subject says ${ranked.slice(0, 4).join(', ')}`);
   }
   if (corroborating.length > 0) {
@@ -352,9 +389,12 @@ function signalsFor(task: TaskSeed, thread: ThreadSeed, spread: WordSpread): Sig
   const strong =
     // One word that names something — a partner, a product, a person.
     telling.length >= 1 ||
-    // Or several ordinary ones, which together still say what it is about.
+    // A word plus the company it belongs to, or a label he applied himself.
+    (shared.length >= 1 && (Boolean(domainHit) || Boolean(labelHit))) ||
+    // Two ordinary words that are most of both lines: the same subject.
+    (shared.length >= 2 && (coverage >= 0.6 || onBoth.length > 0)) ||
+    // Or enough ordinary words that they cannot all be coincidence.
     shared.length >= 3 ||
-    (shared.length >= 2 && (onBoth.length > 0 || Boolean(domainHit) || Boolean(labelHit))) ||
     Boolean(domainHit && onBoth.length > 0);
 
   return { score, reasons, strong: Boolean(strong) };

@@ -376,3 +376,61 @@ describe('whose mailbox it is', () => {
       .toEqual(['assaf@adnimation.com', 'ravit@adnimation.com']);
   });
 });
+
+describe('rare is not the same as meaningful', () => {
+  /*
+   * The third live run matched tasks to mail on a single shared word that was
+   * genuinely rare in a corpus of three thousand subjects — "possible",
+   * "direct", "ספטמבר". A month is rare and means nothing; a partner's name is
+   * rare and means everything. One word carries a match only when it is all
+   * but unique to the pair.
+   */
+  const corpus = (word: string, times: number): ThreadSeed[] =>
+    Array.from({ length: times }, (_, i) =>
+      thread({ threadId: `${word}${i}`, subject: `${word} note ${i}` }),
+    );
+
+  it('refuses a single ordinary word, however few threads use it', () => {
+    const spread = spreadOf([...corpus('possible', 5), ...corpus('other', 300)]);
+    const hit = scoreThread(
+      task({ title: 'AdMedia — possible follow up', people: [] }),
+      thread({ subject: 'Re: Possible', snippet: 'let us know' }),
+      spread,
+    );
+    expect(hit).toBeNull();
+  });
+
+  it('accepts a single word that is all but unique to the pair', () => {
+    const spread = spreadOf([...corpus('zander', 1), ...corpus('other', 300)]);
+    const hit = scoreThread(
+      task({ title: 'זאנדר — Zander renewal', people: [] }),
+      thread({ subject: 'Re: Zander', snippet: 'about the renewal' }),
+      spread,
+    );
+    expect(hit).not.toBeNull();
+  });
+
+  it('accepts an ordinary word once something else agrees with it', () => {
+    const spread = spreadOf([...corpus('account', 40), ...corpus('other', 300)]);
+    const withDomain = scoreThread(
+      task({ title: 'Adprime account transition', people: [] }),
+      thread({
+        subject: 'Re: Adnimation supply for account',
+        counterpartEmail: 'deals@adprime.com',
+        participants: ['deals@adprime.com'],
+      }),
+      spread,
+    );
+    expect(withDomain).not.toBeNull();
+  });
+
+  it('accepts two ordinary words, which is a subject in common', () => {
+    const spread = spreadOf([...corpus('account', 40), ...corpus('transition', 40)]);
+    const hit = scoreThread(
+      task({ title: 'Re: Adnimation Account Transition', people: [] }),
+      thread({ subject: 'Re: Adnimation Account Transition' }),
+      spread,
+    );
+    expect(hit).not.toBeNull();
+  });
+});
