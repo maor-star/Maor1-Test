@@ -107,6 +107,9 @@ async function main() {
     'agent-brief.mjs',
     // Learning how he writes, from a year of his own replies.
     'mail-learn.mjs',
+    // The tasks fishing their own mail out of the mailbox; task-mail imports
+    // the generated copy of the matching rules.
+    'task-mail.mjs', 'task-mail-match.mjs',
     // The meetings agent and the generated copy of its rules.
     'meeting-book.mjs', 'meeting-rules.mjs', 'calendly-check.mjs',
   ];

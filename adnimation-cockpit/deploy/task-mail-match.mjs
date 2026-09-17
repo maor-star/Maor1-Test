@@ -1,4 +1,14 @@
 /**
+ * GENERATED FROM lib/tasks/mail-match.ts — do not edit by hand.
+ *
+ * The jobs run as plain ESM outside the compiled app, so they need a
+ * JavaScript copy of these rules. tests/unit/task-mail-parity.test.ts
+ * feeds both this file and the TypeScript original the same inputs and fails
+ * if they ever disagree, so an edit to one without the other cannot ship.
+ *
+ * Regenerate with: node deploy/build-detect.mjs
+ */
+/**
  * Which emails belong to which task.
  *
  * He asked for the tasks to fish the relevant mail out of the mailbox and keep
@@ -21,36 +31,6 @@
  * Every match carries its reasons, and the screen shows them, so a wrong one
  * is an explained wrong one he can dismiss rather than a mystery.
  */
-
-export interface TaskSeed {
-  id: string;
-  title: string;
-  description: string | null;
-  nextStep: string | null;
-  tags: string[];
-  /** Everyone on it, by email — the lead and the rest. */
-  people: string[];
-  /** ISO date. Used only to break ties between equally good threads. */
-  createdAt: string;
-}
-
-export interface ThreadSeed {
-  threadId: string;
-  subject: string | null;
-  snippet: string | null;
-  counterpartName: string | null;
-  counterpartEmail: string | null;
-  participants: string[];
-  labels: string[];
-  /** ISO date. */
-  lastMessageAt: string;
-}
-
-export interface MailMatch {
-  threadId: string;
-  score: number;
-  reasons: string[];
-}
 
 /**
  * Words that carry no information in this mailbox.
@@ -78,7 +58,7 @@ export const NOISE = new Set([
 export const MIN_SCORE = 34;
 
 /** Letters and digits in any script, so a Hebrew title tokenises like an English one. */
-export function words(text: string): string[] {
+export function words(text) {
   if (!text) return [];
   const out = [];
   for (const raw of text.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
@@ -92,7 +72,7 @@ export function words(text: string): string[] {
 }
 
 /** The part after the @, which is the company rather than the person. */
-export function domainOf(address: string): string {
+export function domainOf(address) {
   const at = address.indexOf('@');
   return at === -1 ? '' : address.slice(at + 1).toLowerCase().trim();
 }
@@ -102,10 +82,10 @@ const PUBLIC_DOMAINS = new Set([
   'icloud.com', 'walla.co.il', 'walla.com', 'protonmail.com',
 ]);
 
-const dedupe = (list: string[]): string[] => [...new Set(list)];
+const dedupe = (list) => [...new Set(list)];
 
 /** Whole days between two ISO dates, either way round. */
-function daysApart(a: string, b: string): number {
+function daysApart(a, b) {
   const ms = Math.abs(Date.parse(a) - Date.parse(b));
   return Number.isNaN(ms) ? 999 : Math.floor(ms / 86400000);
 }
@@ -115,20 +95,14 @@ function daysApart(a: string, b: string): number {
  *
  * Returns null when it does not fit, which is the common answer.
  */
-export function scoreThread(task: TaskSeed, thread: ThreadSeed): MailMatch | null {
+export function scoreThread(task, thread) {
   const signals = signalsFor(task, thread);
   if (!signals.strong) return null;
   if (signals.score < MIN_SCORE) return null;
   return { threadId: thread.threadId, score: signals.score, reasons: signals.reasons };
 }
 
-interface Signals {
-  score: number;
-  reasons: string[];
-  strong: boolean;
-}
-
-function signalsFor(task: TaskSeed, thread: ThreadSeed): Signals {
+function signalsFor(task, thread) {
   const taskWords = new Set(words([task.title, task.description, task.nextStep, task.tags.join(' ')].filter(Boolean).join(' ')));
   const threadWords = new Set(words([thread.subject, thread.snippet].filter(Boolean).join(' ')));
 
@@ -212,7 +186,7 @@ function signalsFor(task: TaskSeed, thread: ThreadSeed): Signals {
 }
 
 /** Per task, the best threads — most convincing first. */
-export function matchesFor(task: TaskSeed, threads: ThreadSeed[], limit = 5): MailMatch[] {
+export function matchesFor(task, threads, limit = 5) {
   const found = [];
   for (const thread of threads) {
     const hit = scoreThread(task, thread);
@@ -236,11 +210,7 @@ export function matchesFor(task: TaskSeed, threads: ThreadSeed[], limit = 5): Ma
  * Deliberately loose: anything with a single signal at all, ranked. It is a
  * shortlist for a reader, not an answer.
  */
-export function looseCandidates(
-  task: TaskSeed,
-  threads: ThreadSeed[],
-  limit = 10,
-): MailMatch[] {
+export function looseCandidates(task, threads, limit = 10) {
   const found = [];
   for (const thread of threads) {
     const s = signalsFor(task, thread);

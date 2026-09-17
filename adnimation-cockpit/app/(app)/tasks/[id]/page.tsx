@@ -14,6 +14,8 @@ import { ClickUpStatus } from '@/components/tasks/clickup-status';
 import { NudgeButton } from '@/components/tasks/nudge-button';
 import { assigneesOf, chipsFor } from '@/lib/tasks/assignees';
 import { linesFor } from '@/lib/control/tagging';
+import { mailForTask } from '@/lib/tasks/mail-links';
+import { TaskMail } from '@/components/tasks/task-mail';
 import { lastNudges } from '@/lib/tasks/nudge';
 import { peopleByUse } from '@/lib/tasks/people-order';
 import { Attachments } from '@/components/attachments';
@@ -36,7 +38,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
   const task = await getTask(id, mine);
   if (!task) notFound();
 
-  const [subtasks, comments, departments, ranked, assigned, nudged, taskLines] = await Promise.all([
+  const [subtasks, comments, departments, ranked, assigned, nudged, taskLines, mail] = await Promise.all([
     getSubtasks(id, mine),
     listComments(id),
     listDepartments(),
@@ -46,6 +48,8 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
     lastNudges([id]),
     // Which parts of the company it belongs to — which is also its department.
     linesFor('task', id),
+    // The threads a job matched to this task, best first.
+    mailForTask(id),
   ]);
 
   // A mirrored task has an owner and no picked assignees, so an empty list
@@ -205,6 +209,18 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
               </dl>
             </div>
           </HudCard>
+
+          {/* The mail this task turned out to be about, found by the sweep
+              rather than filed by hand. */}
+          {mail.length > 0 ? (
+            <HudCard>
+              <div className="flex items-baseline justify-between gap-3">
+                <HudCardHeader title="Email" index="T08" />
+                <Num className="text-2xs text-muted-foreground">{mail.length}</Num>
+              </div>
+              <TaskMail taskId={task.id} items={mail} />
+            </HudCard>
+          ) : null}
 
           <HudCard>
             <div className="flex items-baseline justify-between gap-3">

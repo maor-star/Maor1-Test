@@ -14,6 +14,7 @@ import { TaskCalendarView } from '@/components/tasks/calendar-view';
 import { TaskFilters } from '@/components/tasks/filters';
 import { NewTaskForm } from '@/components/tasks/new-task-form';
 import { linesForMany, pillarOptions } from '@/lib/control/tagging';
+import { mailForMany, type MailLink } from '@/lib/tasks/mail-links';
 import { PillarFilter } from '@/components/hud/pillar-filter';
 import { GROUP_BY_LABEL, isGroupBy, TASK_GROUP_BYS, type TaskGroupBy } from '@/lib/tasks/grouping';
 import { delegationsForMany, type DelegationMark } from '@/lib/delegation/for-many';
@@ -129,7 +130,7 @@ export default async function TasksPage({
   // Which pillars each task belongs to, and who is holding it — one query
   // each for the whole list rather than one per row.
   const ids = all.map((r) => r.id);
-  const [pillars, delegated, assignees, nudges, updates, ranked] = await Promise.all([
+  const [pillars, delegated, assignees, nudges, updates, ranked, mail] = await Promise.all([
     linesForMany('task', ids),
     delegationsForMany('task', ids),
     assigneesForMany(ids),
@@ -139,6 +140,8 @@ export default async function TasksPage({
     // The team in the order he actually uses them, so the picker opens on the
     // four names that carry the board rather than on the alphabet.
     peopleByUse(),
+    // The threads the sweep matched to each task — one query for the board.
+    mailForMany(ids),
   ]);
 
   // One pillar at a time, and only one he actually has — the list is his to
@@ -263,6 +266,7 @@ export default async function TasksPage({
         people={ranked}
         departments={departments.map((d) => ({ id: d.id, label: d.nameHe }))}
         lines={pillars}
+        mail={mail}
         groupBy={groupBy}
         today={todayInTz()}
         delegated={delegated}
@@ -282,6 +286,7 @@ function TaskViewSwitch({
   people,
   departments,
   lines,
+  mail,
   groupBy,
   today,
   delegated,
@@ -296,6 +301,8 @@ function TaskViewSwitch({
   people: { id: string; label: string }[];
   departments: { id: string; label: string }[];
   lines?: Map<string, string[]>;
+  /** Task id → the emails the sweep matched to it. */
+  mail?: Map<string, MailLink[]>;
   groupBy: TaskGroupBy;
   today: string;
   delegated: Map<string, DelegationMark>;
@@ -315,6 +322,7 @@ function TaskViewSwitch({
         departments={departments}
         lines={lines}
         assignees={assignees}
+        mail={mail}
       />
     );
   }
@@ -326,6 +334,7 @@ function TaskViewSwitch({
       groupBy={groupBy}
       today={today}
       lines={lines}
+      mail={mail}
       delegated={delegated}
       assignees={assignees}
       nudges={nudges}

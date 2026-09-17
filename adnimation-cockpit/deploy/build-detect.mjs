@@ -31,6 +31,37 @@ export const TARGETS = [
     ],
   },
   {
+    src: new URL('../lib/tasks/mail-match.ts', import.meta.url),
+    out: new URL('./task-mail-match.mjs', import.meta.url),
+    from: 'lib/tasks/mail-match.ts',
+    test: 'tests/unit/task-mail-parity.test.ts',
+    rewrites: [
+      [/export interface TaskSeed \{[\s\S]*?\n\}\n\n/, ''],
+      [/export interface ThreadSeed \{[\s\S]*?\n\}\n\n/, ''],
+      [/export interface MailMatch \{[\s\S]*?\n\}\n\n/, ''],
+      ['export function words(text: string): string[] {', 'export function words(text) {'],
+      ['export function domainOf(address: string): string {', 'export function domainOf(address) {'],
+      ['const dedupe = (list: string[]): string[] => [...new Set(list)];', 'const dedupe = (list) => [...new Set(list)];'],
+      ['function daysApart(a: string, b: string): number {', 'function daysApart(a, b) {'],
+      [
+        'export function scoreThread(task: TaskSeed, thread: ThreadSeed): MailMatch | null {',
+        'export function scoreThread(task, thread) {',
+      ],
+      ['  const taskWords = new Set(words(', '  const taskWords = new Set(words('],
+      ['const threadWords = new Set(words(', 'const threadWords = new Set(words('],
+      [
+        'export function matchesFor(task: TaskSeed, threads: ThreadSeed[], limit = 5): MailMatch[] {',
+        'export function matchesFor(task, threads, limit = 5) {',
+      ],
+      [/interface Signals \{[\s\S]*?\n\}\n\n/, ''],
+      ['function signalsFor(task: TaskSeed, thread: ThreadSeed): Signals {', 'function signalsFor(task, thread) {'],
+      [
+        /export function looseCandidates\(\n  task: TaskSeed,\n  threads: ThreadSeed\[\],\n  limit = 10,\n\): MailMatch\[\] \{/,
+        'export function looseCandidates(task, threads, limit = 10) {',
+      ],
+    ],
+  },
+  {
     src: new URL('../lib/contracts/intake.ts', import.meta.url),
     out: new URL('./contract-intake.mjs', import.meta.url),
     from: 'lib/contracts/intake.ts',

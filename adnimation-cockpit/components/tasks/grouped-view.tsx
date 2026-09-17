@@ -12,6 +12,8 @@ import { CellDate, CellSelect } from '@/components/tasks/cell-select';
 import { DelegateCell } from '@/components/hud/delegate-cell';
 import { StarCell } from '@/components/tasks/star-cell';
 import { QuickEditPanel, QuickEditToggle } from '@/components/tasks/quick-edit';
+import { TaskMail } from '@/components/tasks/task-mail';
+import type { MailLink } from '@/lib/tasks/mail-links';
 import { AssigneeCell } from '@/components/tasks/assignee-cell';
 import { NudgeButton } from '@/components/tasks/nudge-button';
 import { chipsFor, type AssigneeChip } from '@/lib/tasks/assignee-chip';
@@ -49,6 +51,7 @@ export function TaskGroupedView({
   groupBy,
   today,
   lines,
+  mail,
   delegated,
   assignees,
   nudges,
@@ -63,6 +66,8 @@ export function TaskGroupedView({
   today: string;
   /** Task id → the pillars it carries, which is also its department. */
   lines?: Map<string, string[]>;
+  /** Task id → the emails the sweep matched to it. */
+  mail?: Map<string, MailLink[]>;
   /** Task id → who is holding it, fetched for the whole list at once. */
   delegated: Map<string, DelegationMark>;
   /** Task id → everyone on it. Empty means the lead alone; see chipsFor. */
@@ -120,6 +125,7 @@ export function TaskGroupedView({
           today={today}
           people={people}
           lines={lines}
+          mail={mail}
           delegated={delegated}
           assignees={assignees}
           nudges={nudges}
@@ -144,6 +150,7 @@ function Group({
   priorityOptions,
   deptOptions,
   lines,
+  mail,
   today,
   people,
   delegated,
@@ -158,6 +165,8 @@ function Group({
   priorityOptions: { value: string; label: string }[];
   deptOptions: { value: string; label: string }[];
   lines?: Map<string, string[]>;
+  /** Task id → the emails the sweep matched to it. */
+  mail?: Map<string, MailLink[]>;
   today: string;
   people: { id: string; label: string }[];
   delegated: Map<string, DelegationMark>;
@@ -228,6 +237,7 @@ function Group({
                 priorityOptions={priorityOptions}
                 deptOptions={deptOptions}
                 lines={lines}
+                mail={mail}
                 today={today}
                 people={people}
                 mark={delegated.get(t.id)}
@@ -278,6 +288,7 @@ function Row({
   priorityOptions,
   deptOptions,
   lines,
+  mail,
   today,
   people,
   mark,
@@ -292,6 +303,8 @@ function Row({
   priorityOptions: { value: string; label: string }[];
   deptOptions: { value: string; label: string }[];
   lines?: Map<string, string[]>;
+  /** Task id → the emails the sweep matched to it. */
+  mail?: Map<string, MailLink[]>;
   today: string;
   people: { id: string; label: string }[];
   mark: DelegationMark | undefined;
@@ -349,6 +362,9 @@ function Row({
             → {task.nextStep}
           </span>
         ) : null}
+        {/* What came in about it. Found by the sweep, not filed by hand — the
+            two most convincing threads, with the rest on the task itself. */}
+        <TaskMail taskId={task.id} items={mail?.get(task.id) ?? []} compact />
       </span>
 
       <AssigneeCell people={on} onEdit={() => setEditing(true)} />

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { TaskRow } from '@/lib/tasks/queries';
 import type { AssigneeChip } from '@/lib/tasks/assignee-chip';
+import type { MailLink } from '@/lib/tasks/mail-links';
 import { TaskListRow } from '@/components/tasks/list-row';
 import { InstantFilter } from '@/components/hud/instant-filter';
 import { Num } from '@/components/num';
@@ -21,6 +22,7 @@ export function TaskListView({
   departments,
   lines,
   assignees,
+  mail,
 }: {
   rows: TaskRow[];
   people: { id: string; label: string; picks?: number; onTasks?: number }[];
@@ -29,6 +31,8 @@ export function TaskListView({
   lines?: Map<string, string[]>;
   /** Task id → everyone on it, lead first. One query for the whole list. */
   assignees?: Map<string, AssigneeChip[]>;
+  /** Task id → the emails the sweep matched to it. */
+  mail?: Map<string, MailLink[]>;
 }) {
   if (rows.length === 0) {
     return (
@@ -54,6 +58,7 @@ export function TaskListView({
             now={now}
             lines={lines?.get(t.id) ?? []}
             assignees={(assignees?.get(t.id) ?? []).map((p) => p.id)}
+            mail={mail?.get(t.id) ?? []}
             search={foldForSearch(
               t.title,
               t.description,

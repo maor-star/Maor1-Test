@@ -15,6 +15,8 @@ import { ClickUpStatus } from '@/components/tasks/clickup-status';
 import { DelegateButton } from '@/components/tasks/delegate-button';
 import { EditTaskForm } from '@/components/tasks/edit-task-form';
 import { PillarTags } from '@/components/hud/pillar-picker';
+import { TaskMail } from '@/components/tasks/task-mail';
+import type { MailLink } from '@/lib/tasks/mail-links';
 
 /**
  * One task, in the shape the contracts screen uses: the thing itself and its
@@ -48,6 +50,7 @@ export function TaskListRow({
   search,
   lines = [],
   assignees,
+  mail = [],
 }: {
   task: TaskRow;
   people: { id: string; label: string; picks?: number; onTasks?: number }[];
@@ -57,6 +60,8 @@ export function TaskListRow({
   lines?: readonly string[];
   /** Everyone on it, lead first — the editor opens with them already ticked. */
   assignees?: readonly string[];
+  /** The emails the sweep matched to it. */
+  mail?: MailLink[];
   /** The row's searchable text, folded — the list narrows on it as he types. */
   search?: string;
 }) {
@@ -145,6 +150,9 @@ export function TaskListRow({
           </div>
         </div>
       </div>
+
+      {/* What came in about it. Found by the sweep, not filed by hand. */}
+      <TaskMail taskId={t.id} items={mail} compact />
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {/* A mirrored task is closed in ClickUp, not here — see
