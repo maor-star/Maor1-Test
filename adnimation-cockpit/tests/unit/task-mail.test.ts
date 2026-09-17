@@ -486,3 +486,34 @@ describe('Hebrew in a mostly-English mailbox', () => {
     }
   });
 });
+
+describe('Hebrew glues its prepositions to the front', () => {
+  /*
+   * "הלקוחות" is "לקוחות" and "בספטמבר" is "ספטמבר". The dictionary held the
+   * bare word and the mail held the prefixed one, so three tasks matched
+   * marketing mail on the name of a month.
+   */
+  it('recognises a noise word wearing a prefix', () => {
+    for (const word of ['הלקוחות', 'בספטמבר', 'להסכם', 'מהדוח', 'והחוזה']) {
+      expect(words(`${word} כאן`), word).not.toContain(word);
+    }
+  });
+
+  it('leaves a real word that happens to start with one alone', () => {
+    // מרקיטו starts with a mem and is a company, not "from קיטו".
+    expect(words('מרקיטו')).toContain('מרקיטו');
+    expect(words('מתכונים')).toContain('מתכונים');
+  });
+
+  it('does not let a prefix smuggle a short word past the length rule', () => {
+    const spread = spreadOf(
+      Array.from({ length: 300 }, (_, i) => thread({ threadId: `e${i}`, subject: `Report ${i}` })),
+    );
+    const hit = scoreThread(
+      task({ title: 'CMG לעקוב פגישה בספטמבר', people: [] }),
+      thread({ subject: 'DMEXCO-26 הארוע המוביל בספטמבר', snippet: 'הרשמה' }),
+      spread,
+    );
+    expect(hit).toBeNull();
+  });
+});

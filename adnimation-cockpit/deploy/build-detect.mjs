@@ -60,6 +60,8 @@ export const TARGETS = [
         'export function looseCandidates(task, threads, limit = 10, spread = spreadOf(threads)) {',
       ],
       ['const isHebrew = (word: string) => ', 'const isHebrew = (word) => '],
+      ['function stems(word: string): string[] {', 'function stems(word) {'],
+      ['function isNoise(word: string): boolean {', 'function isNoise(word) {'],
       [
         'export function weightOf(word: string, spread: WordSpread): number {',
         'export function weightOf(word, spread) {',

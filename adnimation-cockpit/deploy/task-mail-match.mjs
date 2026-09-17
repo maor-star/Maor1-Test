@@ -80,6 +80,12 @@ export const NOISE = new Set([
   'פרויקט', 'לקוח', 'לקוחות', 'ספק', 'ספקים', 'חברה', 'חברות', 'צוות', 'מחלקה',
   'אתר', 'אתרי', 'אתרים', 'מערכת', 'מערכות', 'תהליך', 'שאלה', 'שאלות', 'תשובה',
   'מייל', 'מיילים', 'טלפון', 'קישור', 'קובץ', 'קבצים', 'מסמך', 'מסמכים',
+  // Months. A date is never what a thread is about, and "ספטמבר" matched three
+  // separate tasks to marketing mail in the fourth run.
+  'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט',
+  'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
+  'january', 'february', 'march', 'april', 'june', 'july', 'august',
+  'september', 'october', 'november', 'december',
 ]);
 
 /**
@@ -98,6 +104,39 @@ export const MAX_TASKS_PER_THREAD = 4;
 
 /** Hebrew function words are short; three Latin letters can still be CTV. */
 const isHebrew = (word) => /[\u0590-\u05FF]/.test(word);
+
+/**
+ * Hebrew glues its prepositions onto the front of the word.
+ *
+ * "הלקוחות" is "לקוחות" and "בספטמבר" is "ספטמבר", and the fourth live run
+ * matched on both of them because the noise list held the bare word and the
+ * mail held the prefixed one. Stripping one leading ה/ו/ב/כ/ל/מ/ש is the whole
+ * of the morphology that matters here — it is what stops a dictionary being
+ * defeated by a single letter.
+ *
+ * Two letters at most, and the second only ever a ה behind a preposition —
+ * "מהדוח" is מ+ה+דוח. Anything deeper starts eating real words. Only the noise
+ * check sees the stripped form; the word itself is kept as written, so two
+ * threads that both say "בספטמבר" still share a word.
+ */
+const PREFIXES = 'הובכלמש';
+function stems(word) {
+  if (!isHebrew(word) || word.length < 4) return [word];
+  if (!PREFIXES.includes(word[0] ?? '')) return [word];
+
+  const once = word.slice(1);
+  // A preposition can carry the definite article with it — "מהדוח" is מ+ה+דוח
+  // — but ה never doubles, and both forms are tried because "להסכם" is the
+  // first and "מהדוח" is the second.
+  const out = [word, once];
+  if (word[0] !== 'ה' && once[0] === 'ה' && once.length >= 3) out.push(once.slice(1));
+  return out;
+}
+
+/** Is this word, under any of its prefixes, one of the words that mean nothing? */
+function isNoise(word) {
+  return stems(word).some((s) => NOISE.has(s));
+}
 
 /** Threshold a match has to clear before it is written down at all. */
 export const MIN_SCORE = 34;
@@ -170,7 +209,7 @@ export function words(text) {
     // three-letter Latin one that survives the noise list is an acronym that
     // means something here — CTV, IBV, SSP.
     if (isHebrew(raw) && raw.length < 4) continue;
-    if (NOISE.has(raw)) continue;
+    if (isNoise(raw)) continue;
     if (/^\d+$/.test(raw) && raw.length < 5) continue;
     out.push(raw);
   }
@@ -310,6 +349,12 @@ function signalsFor(task, thread, spread) {
      * long — אאוטבריין, סטרימלויאל, מרקיטו — and Hebrew's everyday words are
      * short. A short Hebrew word therefore needs the same corroboration any
      * ordinary word needs: a second word, a person, a domain.
+     */
+    /*
+     * Measured on the word as written, not on its stem: מרקיטו begins with a
+     * mem and is a company, and stripping it to רקיטו would make the name of a
+     * partner look like a four-letter fragment. The prefixed forms of words
+     * that mean nothing are caught by the noise list above instead.
      */
     if (isHebrew(w) && w.length < 6) return false;
     return true;
