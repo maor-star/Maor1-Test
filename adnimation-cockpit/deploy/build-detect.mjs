@@ -59,6 +59,18 @@ export const TARGETS = [
         /export function looseCandidates\(\n  task: TaskSeed,\n  threads: ThreadSeed\[\],\n  limit = 10,\n\): MailMatch\[\] \{/,
         'export function looseCandidates(task, threads, limit = 10) {',
       ],
+      ['const isHebrew = (word: string) => ', 'const isHebrew = (word) => '],
+      [
+        /export function sweepMatches\(\n  tasks: TaskSeed\[\],\n  threads: ThreadSeed\[\],\n  limit = 5,\n\): Map<string, MailMatch\[\]> \{/,
+        'export function sweepMatches(tasks, threads, limit = 5) {',
+      ],
+      ['  const perTask = new Map<string, MailMatch[]>();', '  const perTask = new Map();'],
+      [/ {2}const spread = new Map<string, number>\(\);/g, '  const spread = new Map();'],
+      ['  const out = new Map<string, MailMatch[]>();', '  const out = new Map();'],
+      [
+        'export function digestsIn(tasks: TaskSeed[], threads: ThreadSeed[], limit = 5): string[] {',
+        'export function digestsIn(tasks, threads, limit = 5) {',
+      ],
     ],
   },
   {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  looseCandidates, matchesFor, scoreThread, words,
+  digestsIn, looseCandidates, matchesFor, scoreThread, sweepMatches, words,
   type TaskSeed, type ThreadSeed,
 } from '@/lib/tasks/mail-match';
 // @ts-expect-error — the generated job copy is plain ESM with no types.
@@ -85,8 +85,15 @@ describe('task mail parity', () => {
     }
   });
 
+  it('drops the same digests, and keeps the same links after', () => {
+    expect(js.digestsIn(TASKS, THREADS)).toEqual(digestsIn(TASKS, THREADS));
+    expect([...js.sweepMatches(TASKS, THREADS).entries()])
+      .toEqual([...sweepMatches(TASKS, THREADS).entries()]);
+  });
+
   it('exports the same threshold and noise list', () => {
     expect(js.MIN_SCORE).toBe(34);
+    expect(js.MAX_TASKS_PER_THREAD).toBe(4);
     expect(js.NOISE.has('adnimation')).toBe(true);
     expect(js.NOISE.has('משימה')).toBe(true);
   });

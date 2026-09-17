@@ -68,11 +68,38 @@ export const NOISE = new Set([
   'task', 'tasks', 'meeting', 'meet', 'call', 'update', 'updates', 'status', 'check',
   'new', 'old', 'next', 'week', 'month', 'day', 'today', 'tomorrow', 'asap', 'urgent',
   'invite', 'invitation', 'accepted', 'declined', 'calendar', 'zoom', 'google',
-  // Hebrew furniture, and the words that sit on half his tasks.
-  'של', 'עם', 'על', 'את', 'אל', 'זה', 'זו', 'הוא', 'היא', 'לא', 'כן', 'יש', 'אין',
-  'משימה', 'משימות', 'פגישה', 'שיחה', 'עדכון', 'עדכונים', 'לבדוק', 'בדיקה', 'היום',
-  'מחר', 'שבוע', 'חודש', 'דחוף', 'תודה', 'שלום', 'היי', 'בבקשה', 'צריך', 'צריכה',
+  // Hebrew furniture, and the words that sit on half his tasks. The first
+  // version of this list was four lines long and it was not close to enough:
+  // "וסט משקולות" (a weight vest) matched a contract task on הזה / אני / אחד /
+  // כדי, all of which are function words that carry nothing.
+  'של', 'עם', 'על', 'את', 'אל', 'זה', 'זו', 'הזה', 'הזו', 'הוא', 'היא', 'הם', 'הן',
+  'לא', 'כן', 'יש', 'אין', 'אני', 'אתה', 'אנחנו', 'אתם', 'שלי', 'שלו', 'שלה', 'שלנו',
+  'שלהם', 'כדי', 'אחד', 'אחת', 'אחרי', 'לפני', 'למה', 'איך', 'מתי', 'איפה', 'מה',
+  'כל', 'לכל', 'עוד', 'גם', 'רק', 'אבל', 'או', 'כי', 'אם', 'כמו', 'בין', 'תחת',
+  'היה', 'היתה', 'להיות', 'עושה', 'לעשות', 'עשה', 'אמר', 'אומר', 'רוצה', 'יכול',
+  'לראות', 'ראיתי', 'לשלוח', 'שלחתי', 'שלח', 'לקבל', 'קיבלתי', 'מחכה', 'מחכים',
+  'משימה', 'משימות', 'פגישה', 'פגישות', 'שיחה', 'עדכון', 'עדכונים', 'לבדוק',
+  'בדיקה', 'היום', 'מחר', 'אתמול', 'שבוע', 'חודש', 'שנה', 'דחוף', 'תודה', 'שלום',
+  'היי', 'בבקשה', 'צריך', 'צריכה', 'צריכים', 'טוב', 'נראה', 'סתם', 'ממש', 'הרבה',
+  'המון', 'אותה', 'אותו', 'אותם', 'שורה', 'דבר', 'משהו', 'מישהו', 'עכשיו', 'אז',
 ]);
+
+/**
+ * How many tasks one thread may belong to before it belongs to none.
+ *
+ * The cockpit mails him a Daily Summary that lists his own tasks, so the first
+ * run matched that one thread to twenty-seven of them — a perfect word overlap
+ * and a completely useless answer. Meeting-notes mails and weekly invitations
+ * do the same thing more quietly.
+ *
+ * A digest is recognisable without a list of subjects to maintain: it is the
+ * thread that is about everything. Four is generous for a real conversation
+ * and far below what a digest scores.
+ */
+export const MAX_TASKS_PER_THREAD = 4;
+
+/** Hebrew function words are short; three Latin letters can still be CTV. */
+const isHebrew = (word: string) => /[\u0590-\u05FF]/.test(word);
 
 /** Threshold a match has to clear before it is written down at all. */
 export const MIN_SCORE = 34;
@@ -84,6 +111,10 @@ export function words(text: string): string[] {
   for (const raw of text.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
     // Two-letter words carry nothing on their own in either language.
     if (raw.length < 3) continue;
+    // Almost every three-letter Hebrew word is a function word; almost every
+    // three-letter Latin one that survives the noise list is an acronym that
+    // means something here — CTV, IBV, SSP.
+    if (isHebrew(raw) && raw.length < 4) continue;
     if (NOISE.has(raw)) continue;
     if (/^\d+$/.test(raw) && raw.length < 5) continue;
     out.push(raw);
@@ -96,6 +127,13 @@ export function domainOf(address: string): string {
   const at = address.indexOf('@');
   return at === -1 ? '' : address.slice(at + 1).toLowerCase().trim();
 }
+
+/**
+ * His own domain, which is in every internal thread and therefore names
+ * nothing. Without this, a task that says "Adnimation" anywhere matches the
+ * whole mailbox on the company's own address.
+ */
+const OURS = new Set(['adnimation.com']);
 
 const PUBLIC_DOMAINS = new Set([
   'gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'yahoo.com',
@@ -129,10 +167,25 @@ interface Signals {
 }
 
 function signalsFor(task: TaskSeed, thread: ThreadSeed): Signals {
-  const taskWords = new Set(words([task.title, task.description, task.nextStep, task.tags.join(' ')].filter(Boolean).join(' ')));
-  const threadWords = new Set(words([thread.subject, thread.snippet].filter(Boolean).join(' ')));
+  /*
+   * The title against the subject is the signal. Everything else is a bonus.
+   *
+   * The first version tokenised the task's notes and the thread's snippet into
+   * one bag with the title and the subject, and it matched a contract task to
+   * a mail about a weight vest because both bodies happened to contain the
+   * same four Hebrew function words. A task IS its title; a thread IS its
+   * subject. The bodies can corroborate and they can no longer decide.
+   */
+  const titleWords = new Set(words([task.title, task.nextStep, task.tags.join(' ')].filter(Boolean).join(' ')));
+  const bodyWords = new Set(words(task.description ?? ''));
+  const subjectWords = new Set(words(thread.subject ?? ''));
+  const snippetWords = new Set(words(thread.snippet ?? ''));
 
-  const shared = [...taskWords].filter((w) => threadWords.has(w));
+  const shared = [...titleWords].filter((w) => subjectWords.has(w));
+  const corroborating = [
+    ...[...titleWords].filter((w) => !subjectWords.has(w) && snippetWords.has(w)),
+    ...[...bodyWords].filter((w) => !titleWords.has(w) && subjectWords.has(w)),
+  ];
 
   const addresses = dedupe(
     [...thread.participants, thread.counterpartEmail]
@@ -148,12 +201,13 @@ function signalsFor(task: TaskSeed, thread: ThreadSeed): Signals {
    * The task says "Taboola integration"; the thread is with somebody at
    * taboola.com. That is the match a word overlap misses, because the word
    * only appears in the address. Free mail domains are excluded — everybody
-   * has a gmail.com in the thread.
+   * has a gmail.com in the thread — and so is his own, which is in every
+   * internal thread there is.
    */
-  const domains = dedupe(addresses.map(domainOf).filter((d) => d && !PUBLIC_DOMAINS.has(d)));
+  const domains = dedupe(addresses.map(domainOf).filter((d) => d && !PUBLIC_DOMAINS.has(d) && !OURS.has(d)));
   const domainHit = domains.find((d) => {
     const stem = d.split('.')[0] ?? '';
-    return stem.length >= 4 && taskWords.has(stem);
+    return stem.length >= 4 && titleWords.has(stem);
   });
 
   /** A label he applied by hand that the task also carries as a tag. */
@@ -166,20 +220,23 @@ function signalsFor(task: TaskSeed, thread: ThreadSeed): Signals {
   let score = 0;
 
   if (shared.length > 0) {
-    // Capped: a thread quoting the whole task body is not five times as
-    // relevant as one naming the two words that matter.
-    score += Math.min(shared.length, 5) * 11;
-    reasons.push(`says ${shared.slice(0, 4).join(', ')}`);
+    // Capped: a subject quoting the whole title is not five times as relevant
+    // as one naming the two words that matter.
+    score += Math.min(shared.length, 4) * 14;
+    reasons.push(`subject says ${shared.slice(0, 4).join(', ')}`);
+  }
+  if (corroborating.length > 0) {
+    score += Math.min(corroborating.length, 3) * 4;
   }
   if (onBoth.length > 0) {
-    score += 18;
+    score += 14;
     const name = thread.counterpartName && onBoth.includes(String(thread.counterpartEmail).toLowerCase())
       ? thread.counterpartName
       : onBoth[0];
     reasons.push(`with ${name}`);
   }
   if (domainHit) {
-    score += 22;
+    score += 24;
     reasons.push(`with ${domainHit}`);
   }
   if (labelHit) {
@@ -197,15 +254,14 @@ function signalsFor(task: TaskSeed, thread: ThreadSeed): Signals {
   else if (gap <= 45) score += 2;
 
   /*
-   * What makes it a match rather than a coincidence. At least one of these
-   * has to hold — none of them is recency, and none of them is a person on
-   * their own.
+   * What makes it a match rather than a coincidence. Every one of these needs
+   * the SUBJECT to have named something the task names — none of them is
+   * recency, none is a person on their own, and none can be carried by two
+   * bodies happening to share a word.
    */
   const strong =
-    shared.length >= 3 ||
-    (onBoth.length > 0 && shared.length >= 1) ||
-    (domainHit && shared.length >= 1) ||
-    (labelHit && shared.length >= 1) ||
+    shared.length >= 2 ||
+    (shared.length >= 1 && (onBoth.length > 0 || Boolean(domainHit) || Boolean(labelHit))) ||
     Boolean(domainHit && onBoth.length > 0);
 
   return { score, reasons, strong: Boolean(strong) };
@@ -250,4 +306,55 @@ export function looseCandidates(
   }
   found.sort((a, b) => b.score - a.score || a.threadId.localeCompare(b.threadId));
   return found.slice(0, limit);
+}
+
+/**
+ * The whole board at once, with the digests thrown out.
+ *
+ * This is the only pass that can recognise a digest, because a digest is not
+ * identifiable from one task: "Daily Summary | Adnimation" looks like a
+ * perfect match to each of the twenty-seven tasks it lists. It is only
+ * obviously wrong when you can see that it matched all of them.
+ *
+ * So the per-task rules run first and this drops any thread that came back for
+ * more than MAX_TASKS_PER_THREAD of them — which catches the cockpit's own
+ * daily mail, the meeting-notes mail that lists everything discussed, and the
+ * recurring invitation, without a list of subjects for anyone to maintain.
+ */
+export function sweepMatches(
+  tasks: TaskSeed[],
+  threads: ThreadSeed[],
+  limit = 5,
+): Map<string, MailMatch[]> {
+  const perTask = new Map<string, MailMatch[]>();
+  const spread = new Map<string, number>();
+
+  for (const task of tasks) {
+    const found = matchesFor(task, threads, limit);
+    if (found.length === 0) continue;
+    perTask.set(task.id, found);
+    for (const hit of found) spread.set(hit.threadId, (spread.get(hit.threadId) ?? 0) + 1);
+  }
+
+  const tooBroad = new Set(
+    [...spread.entries()].filter(([, n]) => n > MAX_TASKS_PER_THREAD).map(([id]) => id),
+  );
+
+  const out = new Map<string, MailMatch[]>();
+  for (const [taskId, found] of perTask) {
+    const kept = found.filter((hit) => !tooBroad.has(hit.threadId));
+    if (kept.length > 0) out.set(taskId, kept);
+  }
+  return out;
+}
+
+/** The threads this sweep judged to be digests, for the job's log. */
+export function digestsIn(tasks: TaskSeed[], threads: ThreadSeed[], limit = 5): string[] {
+  const spread = new Map<string, number>();
+  for (const task of tasks) {
+    for (const hit of matchesFor(task, threads, limit)) {
+      spread.set(hit.threadId, (spread.get(hit.threadId) ?? 0) + 1);
+    }
+  }
+  return [...spread.entries()].filter(([, n]) => n > MAX_TASKS_PER_THREAD).map(([id]) => id);
 }

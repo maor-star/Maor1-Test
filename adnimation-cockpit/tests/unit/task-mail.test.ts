@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  domainOf, looseCandidates, matchesFor, MIN_SCORE, scoreThread, words,
-  type TaskSeed, type ThreadSeed,
+  domainOf, looseCandidates, matchesFor, MAX_TASKS_PER_THREAD, MIN_SCORE,
+  scoreThread, sweepMatches, words, type TaskSeed, type ThreadSeed,
 } from '@/lib/tasks/mail-match';
 
 /**
@@ -192,5 +192,102 @@ describe('the shortlist the model reads', () => {
       thread({ threadId: `t${i}`, subject: `CTV note ${i}` }),
     );
     expect(looseCandidates(hebrew, many, 10)).toHaveLength(10);
+  });
+});
+
+describe('the digest that is about everything', () => {
+  /*
+   * The first live run matched the cockpit's own "Daily Summary | Adnimation"
+   * — which lists his open tasks — to twenty-seven of them. Each match was a
+   * perfect word overlap and every one of them was useless. A digest is only
+   * visible from a pass that can see the whole board.
+   */
+  const board: TaskSeed[] = [
+    'Nexxen CTV endpoint reconnect',
+    'Taboola agreement renewal',
+    'Magnite display integration',
+    'Sovrn payment reconciliation',
+    'Vidazoo bidder throughput',
+    'Criteo seat onboarding',
+  ].map((title, i) => task({ id: `t${i}`, title, people: [] }));
+
+  // The real one quotes the task titles. That is exactly why it matches.
+  const digest = thread({
+    threadId: 'digest',
+    subject:
+      'Daily Summary — Nexxen CTV endpoint reconnect, Taboola agreement renewal, ' +
+      'Magnite display integration, Sovrn payment reconciliation, ' +
+      'Vidazoo bidder throughput, Criteo seat onboarding',
+    snippet: 'everything open today',
+    counterpartEmail: 'reports@cockpit.example',
+    participants: ['reports@cockpit.example'],
+  });
+
+  it('matches every task one at a time, which is the trap', () => {
+    const hits = board.filter((t) => scoreThread(t, digest) !== null);
+    expect(hits.length).toBeGreaterThan(MAX_TASKS_PER_THREAD);
+  });
+
+  it('and is dropped from all of them by the sweep', () => {
+    const out = sweepMatches(board, [digest]);
+    for (const [, found] of out) {
+      expect(found.map((f) => f.threadId)).not.toContain('digest');
+    }
+  });
+
+  it('leaves a thread that is about one or two tasks alone', () => {
+    const real = thread({ threadId: 'real', subject: 'Nexxen CTV endpoint' });
+    const out = sweepMatches(board, [real, digest]);
+    expect(out.get('t0')?.map((f) => f.threadId)).toEqual(['real']);
+  });
+});
+
+describe('his own company is not a signal', () => {
+  it('will not match on the domain everybody internal shares', () => {
+    const hit = scoreThread(
+      task({ title: 'Adnimation brand refresh', people: [] }),
+      thread({
+        subject: 'Hello',
+        snippet: 'nothing to do with it',
+        counterpartEmail: 'someone@adnimation.com',
+        participants: ['someone@adnimation.com'],
+      }),
+    );
+    expect(hit).toBeNull();
+  });
+});
+
+describe('the body cannot decide on its own', () => {
+  it('will not match two notes that share only function words', () => {
+    // A contract task matched a mail about a weight vest on הזה / אני / אחד /
+    // כדי. The title against the subject is the signal; bodies corroborate.
+    const hit = scoreThread(
+      task({
+        title: 'חוזה של אביטל',
+        description: 'אני צריך את זה כדי לסגור את זה, אחד הדברים הכי דחופים',
+        people: [],
+      }),
+      thread({
+        subject: 'וסט משקולות',
+        snippet: 'אני חושב שזה הדבר הזה שאחד מהחברה המליץ עליו כדי להתאמן',
+        counterpartEmail: 'shop@sport.co.il',
+        participants: ['shop@sport.co.il'],
+      }),
+    );
+    expect(hit).toBeNull();
+  });
+
+  it('still lets the body strengthen a subject that already matched', () => {
+    // "throughput" is in the notes and in the subject, and in neither title —
+    // exactly the corroboration the body is allowed to give.
+    const withBody = scoreThread(
+      task({ title: 'Nexxen CTV endpoint reconnect', description: 'throughput has halved since Sunday' }),
+      thread({ subject: 'Nexxen CTV endpoint throughput', snippet: 'looking at it' }),
+    );
+    const without = scoreThread(
+      task({ title: 'Nexxen CTV endpoint reconnect', description: null }),
+      thread({ subject: 'Nexxen CTV endpoint throughput', snippet: 'looking at it' }),
+    );
+    expect(withBody!.score).toBeGreaterThan(without!.score);
   });
 });

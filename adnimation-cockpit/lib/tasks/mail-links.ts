@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { db, mailThreads, people, taskAssignees, taskMail, taskMailRuns, tasks } from '@/lib/db';
-import { matchesFor, type TaskSeed, type ThreadSeed } from './mail-match';
+import { sweepMatches, type TaskSeed, type ThreadSeed } from './mail-match';
 
 /**
  * The emails hanging off a task, and the sweep that finds them.
@@ -172,20 +172,29 @@ export async function sweepTaskMail(now = new Date()): Promise<SweepResult> {
   const byThread = new Map(threadRows.map((t) => [t.threadId, t]));
   let linksAdded = 0;
 
-  for (const task of taskRows) {
-    const seed: TaskSeed = {
-      id: task.id,
-      title: task.title,
-      description: task.description,
-      nextStep: task.nextStep,
-      tags: task.tags,
-      people: [task.ownerEmail, ...(peopleOn.get(task.id) ?? [])].filter(
-        (e): e is string => typeof e === 'string' && e.length > 0,
-      ),
-      createdAt: task.createdAt.toISOString(),
-    };
+  const seeds: TaskSeed[] = taskRows.map((task) => ({
+    id: task.id,
+    title: task.title,
+    description: task.description,
+    nextStep: task.nextStep,
+    tags: task.tags,
+    people: [task.ownerEmail, ...(peopleOn.get(task.id) ?? [])].filter(
+      (e): e is string => typeof e === 'string' && e.length > 0,
+    ),
+    createdAt: task.createdAt.toISOString(),
+  }));
 
-    const found = matchesFor(seed, threads, PER_TASK);
+  /*
+   * The whole board at once, so the digests can be recognised.
+   *
+   * A thread that matches half the board — the cockpit's own daily summary,
+   * which lists his tasks — is a perfect match to each of them one at a time
+   * and belongs to none of them. Only a pass that sees every task can tell.
+   */
+  const matched = sweepMatches(seeds, threads, PER_TASK);
+
+  for (const task of taskRows) {
+    const found = matched.get(task.id) ?? [];
     if (found.length === 0) continue;
 
     for (const hit of found) {

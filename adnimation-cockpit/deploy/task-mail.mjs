@@ -30,7 +30,7 @@
  * It only ever READS the mailbox. Nothing here sends, labels or archives.
  */
 import postgres from 'postgres';
-import { looseCandidates, matchesFor } from './task-mail-match.mjs';
+import { looseCandidates, sweepMatches } from './task-mail-match.mjs';
 import { loadSecrets } from './job-secrets.mjs';
 
 const DB = process.env.DATABASE_URL;
@@ -60,30 +60,72 @@ general area, is not enough — he will see a wrong one and stop reading them.
 Answer JSON only: {"about":[{"id":"<thread id>","why":"<four words, English>"}]}
 An empty list is the right answer most of the time.`;
 
+/**
+ * Ask the model, and be honest about what came back.
+ *
+ * The first live run failed twenty-five times with "Unexpected end of JSON
+ * input" — which was `res.json()` throwing on an empty body, not the model
+ * answering badly. The difference matters and the old code could not tell
+ * them apart, so this reads the text first and says what it actually got.
+ *
+ * One retry on a transient failure, then it gives up on that task rather than
+ * holding the whole sweep.
+ */
 async function askClaude(prompt) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return null;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-5',
-      max_tokens: 600,
-      system: SYSTEM,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  if (!res.ok) throw new Error(`claude: http_${res.status} ${(await res.text()).slice(0, 160)}`);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 1500));
 
-  const body = await res.json();
-  const text = (body.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join('');
-  const json = /\{[\s\S]*\}/.exec(text)?.[0] ?? text;
-  return JSON.parse(json);
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 1000,
+        system: SYSTEM,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    const raw = await res.text();
+    if (!res.ok) {
+      // 429 and 529 are worth one more go; a 400 never is.
+      if (attempt === 0 && (res.status === 429 || res.status >= 500)) continue;
+      throw new Error(`http_${res.status} ${raw.slice(0, 160)}`);
+    }
+    if (raw.trim() === '') {
+      if (attempt === 0) continue;
+      throw new Error('empty body from the model');
+    }
+
+    let body;
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      throw new Error(`unparseable response: ${raw.slice(0, 160)}`);
+    }
+
+    const text = (body.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join('');
+    const json = /\{[\s\S]*\}/.exec(text)?.[0];
+    if (!json) {
+      // No object at all is the model declining to answer in the shape asked
+      // for. That is "nothing matched" as far as this job is concerned, not a
+      // failure worth a line in the log for every task.
+      return { about: [] };
+    }
+    try {
+      return JSON.parse(json);
+    } catch {
+      throw new Error(`answer was not JSON: ${text.slice(0, 160)}`);
+    }
+  }
+  return null;
 }
 
 function prompt(task, candidates) {
@@ -143,7 +185,7 @@ async function main() {
   const decided = new Set(existing.map((r) => `${r.task_id}|${r.thread_id}`));
   const byThread = new Map(threads.map((t) => [t.thread_id, t]));
 
-  const seeds = threads.map((t) => ({
+  const threadSeeds = threads.map((t) => ({
     threadId: t.thread_id,
     subject: t.subject,
     snippet: t.snippet,
@@ -185,26 +227,38 @@ async function main() {
     return new Date(a.last_link ?? 0) - new Date(b.last_link ?? 0);
   });
 
-  for (const task of queue) {
-    const seed = {
-      id: task.id,
-      title: task.title,
-      description: task.description,
-      nextStep: task.next_step,
-      tags: task.tags ?? [],
-      people: [task.owner_email, ...(peopleOn.get(task.id) ?? [])].filter(Boolean),
-      createdAt: new Date(task.created_at).toISOString(),
-    };
+  const seedOf = (task) => ({
+    id: task.id,
+    title: task.title,
+    description: task.description,
+    nextStep: task.next_step,
+    tags: task.tags ?? [],
+    people: [task.owner_email, ...(peopleOn.get(task.id) ?? [])].filter(Boolean),
+    createdAt: new Date(task.created_at).toISOString(),
+  });
 
-    // Pass one: what the rules are sure of.
-    for (const hit of matchesFor(seed, seeds, PER_TASK)) {
+  /*
+   * Pass one, over the whole board at once rather than task by task.
+   *
+   * A digest — the cockpit's own Daily Summary, which lists his tasks — is a
+   * perfect match to each of the twenty-seven tasks it names and belongs to
+   * none of them. That is only visible from a pass that can see all of them,
+   * which is why this is not a loop.
+   */
+  const taskSeeds = queue.map(seedOf);
+  const matched = sweepMatches(taskSeeds, threadSeeds, PER_TASK);
+
+  for (const task of queue) {
+    const seed = seedOf(task);
+
+    for (const hit of matched.get(task.id) ?? []) {
       await write(task.id, hit.threadId, hit.score, hit.reasons, 'auto');
     }
 
     // Pass two: what only a reader of both languages can tell.
     if (asked >= MODEL_MAX || !process.env.ANTHROPIC_API_KEY) continue;
 
-    const shortlist = looseCandidates(seed, seeds, SHORTLIST)
+    const shortlist = looseCandidates(seed, threadSeeds, SHORTLIST)
       .filter((c) => !decided.has(`${task.id}|${c.threadId}`))
       .map((c) => byThread.get(c.threadId))
       .filter(Boolean);
